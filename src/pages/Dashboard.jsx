@@ -2,18 +2,17 @@ import { useState, useEffect } from 'react';
 import { MapPin, User } from 'lucide-react';
 import MascotDuo from '../components/MascotDuo';
 import logoTw from '../assets/logo-tw.png';
+import { getMyProfile } from '../lib/gameplay';
 
 export default function Dashboard() {
   const [firstName, setFirstName] = useState('Visitante');
 
   useEffect(() => {
-    const p = localStorage.getItem('facom_user_profile');
-    if (p) {
-      try {
-        const parsed = JSON.parse(p);
-        setFirstName(parsed.firstName || parsed.username || 'Visitante');
-      } catch(e) {}
-    }
+    getMyProfile()
+      .then(profile => {
+        if (profile) setFirstName(profile.first_name || profile.username || 'Visitante');
+      })
+      .catch(() => {});
   }, []);
 
   return (

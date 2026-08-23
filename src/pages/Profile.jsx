@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '../hooks/useUser';
+import { getMyProfile } from '../lib/gameplay';
 import { LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,10 +15,19 @@ export default function Profile() {
   });
 
   useEffect(() => {
-    const p = localStorage.getItem('facom_user_profile');
-    if (p) {
-      setProfile(JSON.parse(p));
-    }
+    getMyProfile()
+      .then(data => {
+        if (!data) return;
+        setProfile({
+          username: data.username,
+          firstName: data.first_name,
+          lastName: data.last_name,
+          course: data.course,
+          participantType: data.participant_type,
+          period: data.period
+        });
+      })
+      .catch(() => {});
   }, []);
 
   const handleLogout = () => {

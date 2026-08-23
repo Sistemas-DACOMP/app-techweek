@@ -49,12 +49,12 @@ export default function Challenges() {
     ]}
   ];
 
-  const handleSimulateChallenge = (challenge) => {
+  const handleSimulateChallenge = async (challenge) => {
     if (challenge.isAction) {
       if (challenge.id === 'instagram_story') navigate('/instagram-mission');
       return;
     }
-    
+
     if (challenge.type === 'auto') {
       navigate('/scanner');
       return;
@@ -66,13 +66,13 @@ export default function Challenges() {
       return;
     }
 
-    const success = completeChallenge(challenge.id, challenge.points);
+    const success = await completeChallenge(challenge.id, challenge.points);
     if (success) {
       alert(`Parabéns! Você completou o desafio e ganhou ${challenge.points} pontos.`);
     }
   };
 
-  const handleManualSubmit = (e) => {
+  const handleManualSubmit = async (e) => {
     e.preventDefault();
     if (activeManualChallenge) {
       if (activeManualChallenge.id === 'secret_password') {
@@ -83,11 +83,9 @@ export default function Challenges() {
         }
       }
 
-      const savedMissions = JSON.parse(localStorage.getItem('facom_manual_missions') || '{}');
-      savedMissions[activeManualChallenge.id] = manualForm;
-      localStorage.setItem('facom_manual_missions', JSON.stringify(savedMissions));
-
-      const success = completeChallenge(activeManualChallenge.id, activeManualChallenge.points);
+      // Respostas da missão manual vão como metadata do evento de pontos
+      // (Supabase), em vez de localStorage.facom_manual_missions.
+      const success = await completeChallenge(activeManualChallenge.id, activeManualChallenge.points, manualForm);
       if (success) {
         alert(`Missão concluída! Você ganhou ${activeManualChallenge.points} pontos.`);
       }

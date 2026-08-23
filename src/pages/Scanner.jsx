@@ -35,9 +35,9 @@ export default function Scanner() {
     };
   }, [scanResult]);
 
-  const handleScan = (data) => {
-    const result = registerCodeScan(data, 5);
-    
+  const handleScan = async (data) => {
+    const result = await registerCodeScan(data, 5);
+
     if (result && result.success) {
       if (result.unlockedChallenges && result.unlockedChallenges.length > 0) {
         setScanResult({ 

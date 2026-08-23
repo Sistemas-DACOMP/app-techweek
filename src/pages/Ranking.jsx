@@ -1,73 +1,76 @@
-import { Trophy, Medal, User } from 'lucide-react';
-import { useUser } from '../hooks/useUser';
+import { useState, useEffect } from 'react';
+import { User } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
+import { getRanking } from '../lib/gameplay';
 
 export default function Ranking() {
-  const { points } = useUser();
+  const [ranking, setRanking] = useState([]);
+  const [myUserId, setMyUserId] = useState(null);
 
-  const mockUsers = [
-    { name: 'Ana Silva', points: 340, rank: 1 },
-    { name: 'Lucas Santos', points: 295, rank: 2 },
-    { name: 'Você', points: points, rank: 3 }, // Dynamically injected
-    { name: 'Julia Costa', points: 150, rank: 4 },
-    { name: 'Pedro Alves', points: 95, rank: 5 },
-  ].sort((a, b) => b.points - a.points); // Resort based on user points
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMyUserId(data.user?.id ?? null));
 
-  // Re-assign ranks after sorting
-  mockUsers.forEach((user, index) => {
-    user.rank = index + 1;
-  });
+    getRanking()
+      .then(rows => {
+        // A view já vem ordenada por total_points desc, created_at asc
+        // (critério de desempate — ver PLAN.md).
+        const withRank = rows.map((row, index) => ({ ...row, rank: index + 1 }));
+        setRanking(withRank);
+      })
+      .catch(() => setRanking([]));
+  }, []);
 
   return (
     <div className="page-container animate-fade-in">
       <h2 style={{ textAlign: 'center', marginBottom: '8px', fontSize: '1.5rem', marginTop: '16px' }}>Ranking Top 10</h2>
       <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.9rem' }}>Competidores da FACOM Tech Week</p>
-      
+
       <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {mockUsers.map((user) => (
-          <div 
-            key={user.name} 
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              padding: '12px',
-              borderRadius: '8px',
-              background: user.name === 'Você' ? 'rgba(14, 165, 233, 0.2)' : 'rgba(255,255,255,0.05)',
-              border: user.name === 'Você' ? '1px solid var(--primary)' : '1px solid transparent'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ 
-                width: '32px', 
-                height: '32px', 
-                borderRadius: '50%', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                fontWeight: 'bold',
-                background: user.rank === 1 ? '#fbbf24' : user.rank === 2 ? '#94a3b8' : user.rank === 3 ? '#b45309' : 'rgba(255,255,255,0.1)',
-                color: user.rank <= 3 ? '#000' : 'white'
-              }}>
-                {user.rank}
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {user.name === 'Você' ? (
-                  <img src="/foto-perfil/shayene-f.jpg" alt="Você" style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }} />
-                ) : (
+        {ranking.slice(0, 10).map((user) => {
+          const isMe = user.user_id === myUserId;
+          const displayName = user.first_name || user.username || 'Participante';
+          return (
+            <div
+              key={user.user_id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px',
+                borderRadius: '8px',
+                background: isMe ? 'rgba(14, 165, 233, 0.2)' : 'rgba(255,255,255,0.05)',
+                border: isMe ? '1px solid var(--primary)' : '1px solid transparent'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 'bold',
+                  background: user.rank === 1 ? '#fbbf24' : user.rank === 2 ? '#94a3b8' : user.rank === 3 ? '#b45309' : 'rgba(255,255,255,0.1)',
+                  color: user.rank <= 3 ? '#000' : 'white'
+                }}>
+                  {user.rank}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px', borderRadius: '50%' }}>
                     <User size={16} />
                   </div>
-                )}
-                <span style={{ fontWeight: user.name === 'Você' ? 'bold' : 'normal' }}>{user.name}</span>
+                  <span style={{ fontWeight: isMe ? 'bold' : 'normal' }}>{isMe ? 'Você' : displayName}</span>
+                </div>
+              </div>
+
+              <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
+                {user.total_points} pts
               </div>
             </div>
-            
-            <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
-              {user.points} pts
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

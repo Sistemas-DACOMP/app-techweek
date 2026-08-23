@@ -190,7 +190,7 @@ export default function InstagramMission() {
       const file = new File([blob], 'techweek-story.png', { type: 'image/png' });
 
       if (!isComplete) {
-        completeChallenge('instagram_story', 50);
+        await completeChallenge('instagram_story', 50);
         setIsComplete(true);
       }
 
