@@ -38,10 +38,6 @@ export default function Scanner() {
   }, [scanResult]);
 
   const handleScan = async (data) => {
-<<<<<<< Updated upstream
-    const result = await registerCodeScan(data, 5);
-
-=======
     setIsLoading(true);
 
     let isUserQr = false;
@@ -83,9 +79,7 @@ export default function Scanner() {
       }
     }
 
-    const result = registerCodeScan(data, 5);
-    
->>>>>>> Stashed changes
+    const result = await registerCodeScan(data, 5);
     if (result && result.success) {
       if (result.unlockedChallenges && result.unlockedChallenges.length > 0) {
         setScanResult({ 
