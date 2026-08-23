@@ -10,5 +10,5 @@ Abra uma issue privada ou avise diretamente um dos mantenedores do repositório 
 
 ## Pendências conhecidas
 
-- `seed-admin.js` cria um usuário admin com credenciais fracas hardcoded (`admin@admin.com` / `12345678`). Recomenda-se: mover credenciais para variáveis de ambiente, usar senha forte gerada, e considerar remover este script do repositório após o uso inicial (ou movê-lo para fora do controle de versão).
+- `scripts/seed-admin.js` cria a conta de teste "admin" (atalho de login em `src/pages/Login.jsx`, que mapeia `admin` → `admin@admin.com`). Decisão registrada em 2026-08-23: manter esse atalho só para cenário de teste. A senha não é mais hardcoded — vem de `SEED_ADMIN_PASSWORD`, combinada à parte com o time, nunca commitada.
 - Branch protection em `main`/`homolog` ainda não configurada — requer acesso admin no repositório.
