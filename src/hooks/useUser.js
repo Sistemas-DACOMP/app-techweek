@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getMyProfile, updateMascot, getMyPointEvents, addPointEvent } from '../lib/gameplay';
+import { getMyProfile, updateMascot, uploadAvatar, getMyPointEvents, addPointEvent } from '../lib/gameplay';
 
 export function useUser() {
   const [profile, setProfile] = useState(null);
@@ -28,6 +28,7 @@ export function useUser() {
     .map(event => event.reference_id);
 
   const mascot = profile?.mascot || 'blue';
+  const avatarUrl = profile?.avatar_url || null;
 
   const hasScannedCode = (code) => scannedCodes.includes(code);
   const hasCompletedChallenge = (challengeId) => completedChallenges.includes(challengeId);
@@ -35,6 +36,12 @@ export function useUser() {
   const changeMascot = async (color) => {
     await updateMascot(color);
     setProfile(prev => (prev ? { ...prev, mascot: color } : prev));
+  };
+
+  const changeAvatar = async (file) => {
+    const publicUrl = await uploadAvatar(file);
+    setProfile(prev => (prev ? { ...prev, avatar_url: publicUrl } : prev));
+    return publicUrl;
   };
 
   // Grava o evento no Supabase; a constraint UNIQUE(user_id, event_type, reference_id)
@@ -152,6 +159,8 @@ export function useUser() {
     completedChallenges,
     mascot,
     setMascot: changeMascot,
+    avatarUrl,
+    setAvatar: changeAvatar,
     registerCodeScan,
     completeChallenge,
     hasScannedCode,

@@ -1,18 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useUser } from '../hooks/useUser';
-import { getMyProfile } from '../lib/gameplay';
-import { LogOut } from 'lucide-react';
+import { getMyProfile, uploadAvatar } from '../lib/gameplay';
+import { LogOut, Camera } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 export default function Profile() {
   const { points } = useUser();
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
   const [profile, setProfile] = useState({
     firstName: 'Visitante',
     lastName: '',
     course: '',
-    participantType: ''
+    participantType: '',
+    avatarUrl: null
   });
+  const [avatarError, setAvatarError] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     getMyProfile()
@@ -24,11 +30,42 @@ export default function Profile() {
           lastName: data.last_name,
           course: data.course,
           participantType: data.participant_type,
-          period: data.period
+          period: data.period,
+          avatarUrl: data.avatar_url
         });
       })
       .catch(() => {});
   }, []);
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('Escolha um arquivo de imagem.');
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarError('A imagem precisa ter até 2MB.');
+      return;
+    }
+
+    setAvatarError('');
+    setUploadingAvatar(true);
+    try {
+      const publicUrl = await uploadAvatar(file);
+      setProfile(prev => ({ ...prev, avatarUrl: publicUrl }));
+    } catch {
+      setAvatarError('Não foi possível enviar a foto. Tente novamente.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('facom_logged_in');
@@ -49,14 +86,37 @@ export default function Profile() {
         <div style={{ width: '40px' }}></div>
         <h1 className="font-lastica" style={{ fontSize: '1.2rem', fontWeight: '500' }}>Perfil</h1>
         <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.2rem', overflow: 'hidden', color: 'white' }}>
-          {profile.firstName ? profile.firstName.charAt(0).toUpperCase() : 'V'}
+          {profile.avatarUrl
+            ? <img src={profile.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : (profile.firstName ? profile.firstName.charAt(0).toUpperCase() : 'V')}
         </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
-        <div style={{ width: '120px', height: '120px', borderRadius: '50%', background: 'var(--primary-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3.5rem', fontWeight: 'bold', color: 'white', border: '3px solid var(--primary)', marginBottom: '16px', boxShadow: '0 10px 25px rgba(59, 130, 246, 0.5)' }}>
-          {profile.firstName ? profile.firstName.charAt(0).toUpperCase() : 'V'}
+        <div
+          onClick={handleAvatarClick}
+          style={{ position: 'relative', width: '120px', height: '120px', borderRadius: '50%', background: 'var(--primary-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3.5rem', fontWeight: 'bold', color: 'white', border: '3px solid var(--primary)', marginBottom: '16px', boxShadow: '0 10px 25px rgba(59, 130, 246, 0.5)', overflow: 'hidden', cursor: 'pointer' }}
+        >
+          {profile.avatarUrl
+            ? <img src={profile.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : (profile.firstName ? profile.firstName.charAt(0).toUpperCase() : 'V')}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.55)', padding: '6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Camera size={18} />
+          </div>
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleAvatarChange}
+          style={{ display: 'none' }}
+        />
+        {uploadingAvatar && (
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>Enviando foto...</p>
+        )}
+        {avatarError && (
+          <p style={{ fontSize: '0.8rem', color: '#ef4444', marginBottom: '8px' }}>{avatarError}</p>
+        )}
         <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '4px' }}>
           {profile.firstName} {profile.lastName}
         </h2>

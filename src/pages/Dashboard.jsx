@@ -6,11 +6,14 @@ import { getMyProfile } from '../lib/gameplay';
 
 export default function Dashboard() {
   const [firstName, setFirstName] = useState('Visitante');
+  const [avatarUrl, setAvatarUrl] = useState(null);
 
   useEffect(() => {
     getMyProfile()
       .then(profile => {
-        if (profile) setFirstName(profile.first_name || profile.username || 'Visitante');
+        if (!profile) return;
+        setFirstName(profile.first_name || profile.username || 'Visitante');
+        setAvatarUrl(profile.avatar_url);
       })
       .catch(() => {});
   }, []);
@@ -24,7 +27,9 @@ export default function Dashboard() {
           <div style={{ width: '40px' }}></div>
           <img src={logoTw} alt="Tech Week Logo" style={{ height: '60px' }} />
           <div className="header-avatar" style={{ overflow: 'hidden' }}>
-            {firstName.charAt(0).toUpperCase()}
+            {avatarUrl
+              ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : firstName.charAt(0).toUpperCase()}
           </div>
         </div>
 
