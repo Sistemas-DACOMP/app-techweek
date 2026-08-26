@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
 import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock } from 'lucide-react';
@@ -9,44 +9,92 @@ export default function Challenges() {
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
   const [manualForm, setManualForm] = useState({});
 
+
+  const [userInitial, setUserInitial] = useState('V');
+
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarPosition, setAvatarPosition] = useState({ x: 0, y: 0 });
+  const [avatarScale, setAvatarScale] = useState(1);
+  
+
+  useEffect(() => {
+    const p = localStorage.getItem('facom_user_profile');
+    if (p) {
+      try {
+        const parsed = JSON.parse(p);
+        const name = parsed.firstName || parsed.username || 'Visitante';
+        setUserInitial(name.charAt(0).toUpperCase());
+
+        
+        if (parsed.avatarUrl) {
+          setAvatarUrl(parsed.avatarUrl);
+        }
+        if (parsed.avatarPosition) {
+          setAvatarPosition(parsed.avatarPosition);
+        }
+        if (parsed.avatarScale) {
+          setAvatarScale(parsed.avatarScale);
+        }
+        
+
+      } catch (e) { }
+    }
+  }, []);
+
   const challengesList = [
     { id: 'instagram_story', name: 'Post no Stories', description: 'Tire uma foto com nossa moldura e compartilhe!', points: 50, icon: Camera, isAction: true },
     { id: 'sponsor_visit', name: 'Conheça Kanastra', description: 'Visite o stand e escaneie o QR Code oficial.', points: 15, icon: MapPin, type: 'auto' },
-    { id: 'sponsor_vaga', name: 'De Olho na Vaga', description: 'Converse com alguém sobre oportunidades para estudantes.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-      { id: 'company', type: 'select', label: 'Qual empresa foi?', options: ['Levty', 'Kanastra', 'Sankhya', 'Neospace', 'Sebrae', 'Outra'] }
-    ]},
-    { id: 'sponsor_tecnologia', name: 'Descubra a Tecnologia', description: 'Pergunte qual tecnologia está transformando o trabalho da empresa.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-      { id: 'company', type: 'select', label: 'Qual empresa foi?', options: ['Levty', 'Kanastra', 'Sankhya', 'Neospace', 'Sebrae', 'Outra'] },
-      { id: 'response', type: 'textarea', label: 'Qual tecnologia eles usam?' }
-    ]},
-    { id: 'sponsor_colecao', name: 'Colecione Patrocinadores', description: 'Complete seu passaporte visitando todos os stands.', points: 50, icon: Camera, type: 'manual', fields: [
-      { id: 'photo', type: 'photo', label: 'Tire uma foto do cartão completo' }
-    ]},
-    { id: 'secret_password', name: 'Missão Secreta', description: 'Descubra a palavra-chave escondida no stand da Kanastra.', points: 30, icon: Lock, type: 'manual', isSecret: true, fields: [
-      { id: 'password', type: 'password', label: 'Qual a palavra-chave?' }
-    ]},
+    {
+      id: 'sponsor_vaga', name: 'De Olho na Vaga', description: 'Converse com alguém sobre oportunidades para estudantes.', points: 20, icon: MessageCircle, type: 'manual', fields: [
+        { id: 'company', type: 'select', label: 'Qual empresa foi?', options: ['Levty', 'Kanastra', 'Sankhya', 'Neospace', 'Sebrae', 'Outra'] }
+      ]
+    },
+    {
+      id: 'sponsor_tecnologia', name: 'Descubra a Tecnologia', description: 'Pergunte qual tecnologia está transformando o trabalho da empresa.', points: 20, icon: MessageCircle, type: 'manual', fields: [
+        { id: 'company', type: 'select', label: 'Qual empresa foi?', options: ['Levty', 'Kanastra', 'Sankhya', 'Neospace', 'Sebrae', 'Outra'] },
+        { id: 'response', type: 'textarea', label: 'Qual tecnologia eles usam?' }
+      ]
+    },
+    {
+      id: 'sponsor_colecao', name: 'Colecione Patrocinadores', description: 'Complete seu passaporte visitando todos os stands.', points: 50, icon: Camera, type: 'manual', fields: [
+        { id: 'photo', type: 'photo', label: 'Tire uma foto do cartão completo' }
+      ]
+    },
+    {
+      id: 'secret_password', name: 'Missão Secreta', description: 'Descubra a palavra-chave escondida no stand da Kanastra.', points: 30, icon: Lock, type: 'manual', isSecret: true, fields: [
+        { id: 'password', type: 'password', label: 'Qual a palavra-chave?' }
+      ]
+    },
     { id: 'secret_qr', name: 'Caça ao QR Code', description: 'Encontre o QR Code escondido antes que termine.', points: 40, icon: Search, type: 'auto', isSecret: true },
-    
+
     { id: 'network_course', name: 'Outro Curso', description: 'Conecte-se com alguém de um curso diferente.', points: 15, icon: Users, type: 'auto' },
     { id: 'network_type', name: 'Fora da UFU', description: 'Encontre alguém de outra instituição ou empresa.', points: 15, icon: Users, type: 'auto' },
     { id: 'network_first', name: 'Primeira Conexão', description: 'Faça sua primeira conexão na TechWeek.', points: 10, icon: Users, type: 'auto' },
     { id: 'network_period', name: 'Calouro na Área', description: 'Conecte-se com alguém do primeiro período.', points: 15, icon: Users, type: 'auto' },
-    { id: 'network_career', name: 'Sua Área', description: 'Encontre alguém da área que quer seguir.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-      { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-      { id: 'prompt2', type: 'textarea', label: 'Qual foi o 1º passo dela na carreira?' }
-    ]},
-    { id: 'network_connect_two', name: 'Conector', description: 'Apresente duas pessoas que devem se conhecer.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-      { id: 'prompt1', type: 'text', label: 'Qual o @/user da 1ª pessoa?' },
-      { id: 'prompt2', type: 'text', label: 'Qual o @/user da 2ª pessoa?' }
-    ]},
-    { id: 'network_past_edition', name: 'Veterano', description: 'Encontre alguém de edições passadas.', points: 15, icon: MessageCircle, type: 'manual', fields: [
-      { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-      { id: 'prompt2', type: 'textarea', label: 'Qual foi a melhor experiência dela?' }
-    ]},
-    { id: 'network_first_edition', name: 'Novato', description: 'Encontre alguém novato e mostre o app.', points: 15, icon: MessageCircle, type: 'manual', fields: [
-      { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-      { id: 'prompt2', type: 'textarea', label: 'O que você mostrou para ela?' }
-    ]}
+    {
+      id: 'network_career', name: 'Sua Área', description: 'Encontre alguém da área que quer seguir.', points: 20, icon: MessageCircle, type: 'manual', fields: [
+        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
+        { id: 'prompt2', type: 'textarea', label: 'Qual foi o 1º passo dela na carreira?' }
+      ]
+    },
+    {
+      id: 'network_connect_two', name: 'Conector', description: 'Apresente duas pessoas que devem se conhecer.', points: 20, icon: MessageCircle, type: 'manual', fields: [
+        { id: 'prompt1', type: 'text', label: 'Qual o @/user da 1ª pessoa?' },
+        { id: 'prompt2', type: 'text', label: 'Qual o @/user da 2ª pessoa?' }
+      ]
+    },
+    {
+      id: 'network_past_edition', name: 'Veterano', description: 'Encontre alguém de edições passadas.', points: 15, icon: MessageCircle, type: 'manual', fields: [
+        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
+        { id: 'prompt2', type: 'textarea', label: 'Qual foi a melhor experiência dela?' }
+      ]
+    },
+    {
+      id: 'network_first_edition', name: 'Novato', description: 'Encontre alguém novato e mostre o app.', points: 15, icon: MessageCircle, type: 'manual', fields: [
+        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
+        { id: 'prompt2', type: 'textarea', label: 'O que você mostrou para ela?' }
+      ]
+    }
   ];
 
   const handleSimulateChallenge = (challenge) => {
@@ -54,7 +102,7 @@ export default function Challenges() {
       if (challenge.id === 'instagram_story') navigate('/instagram-mission');
       return;
     }
-    
+
     if (challenge.type === 'auto') {
       navigate('/scanner');
       return;
@@ -100,18 +148,56 @@ export default function Challenges() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
         <div style={{ width: '40px' }}></div>
         <h1 className="font-lastica" style={{ fontSize: '1.2rem', fontWeight: '500' }}>Missões</h1>
-        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.2rem' }}>
-          M
+        <div style={{
+          width: '40px',
+          height: '40px',
+          borderRadius: '50%',
+          background: '#000',
+          overflow: 'hidden',
+          position: 'relative',
+          border: '2px solid var(--primary)',
+          boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)'
+        }}>
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt="Avatar"
+              style={{
+                position: 'absolute',
+                width: `${(40 * 200 / 120) * avatarScale}px`,
+                height: 'auto',
+                maxWidth: 'none',
+                left: '50%',
+                top: '50%',
+                transform: `translate(-50%, -50%) translate(${avatarPosition.x * (40 / 120)}px, ${avatarPosition.y * (40 / 120)}px)`,
+                objectFit: 'cover'
+              }}
+            />
+          ) : (
+            <div style={{
+              width: '100%',
+              height: '100%',
+              background: 'var(--primary-gradient)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 'bold',
+              fontSize: '1.2rem',
+              color: 'white'
+            }}>
+              {userInitial}
+            </div>
+          )}
         </div>
       </div>
-      
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {challengesList.map((challenge, index) => {
           const isCompleted = completedChallenges.includes(challenge.id);
           const isHighlighted = challenge.id === 'instagram_story' && !isCompleted;
           const isSecret = challenge.isSecret && !isCompleted;
           const IconComponent = challenge.icon || MapPin;
-          
+
           return (
             <div key={challenge.id} className={`card ${isHighlighted ? 'card-highlight' : isSecret ? 'card-highlight-secondary' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: isCompleted ? 0.7 : 1, background: isSecret ? 'rgba(168, 85, 247, 0.15)' : '', borderColor: isSecret ? 'rgba(168, 85, 247, 0.3)' : '' }}>
               <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
@@ -129,12 +215,12 @@ export default function Challenges() {
                   </div>
                 </div>
               </div>
-              
+
               {!isCompleted && (
-                <button 
-                  style={{ 
-                    padding: '8px 12px', 
-                    fontSize: '0.75rem', 
+                <button
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: '0.75rem',
                     background: isHighlighted || isSecret ? 'white' : 'var(--primary)',
                     color: isHighlighted ? 'var(--primary)' : isSecret ? '#a855f7' : 'white',
                     border: 'none',
@@ -162,7 +248,7 @@ export default function Challenges() {
                 <X size={24} />
               </button>
             </div>
-            
+
             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '24px' }}>
               {activeManualChallenge.description}
             </p>
@@ -176,7 +262,7 @@ export default function Challenges() {
                   {field.type === 'select' && (
                     <select
                       value={manualForm[field.id] || ''}
-                      onChange={(e) => setManualForm({...manualForm, [field.id]: e.target.value})}
+                      onChange={(e) => setManualForm({ ...manualForm, [field.id]: e.target.value })}
                       className="login-input"
                       required
                     >
@@ -185,45 +271,45 @@ export default function Challenges() {
                     </select>
                   )}
                   {field.type === 'text' && (
-                    <input 
-                      type="text" 
-                      value={manualForm[field.id] || ''} 
-                      onChange={(e) => setManualForm({...manualForm, [field.id]: e.target.value})}
-                      className="login-input" 
-                      required 
+                    <input
+                      type="text"
+                      value={manualForm[field.id] || ''}
+                      onChange={(e) => setManualForm({ ...manualForm, [field.id]: e.target.value })}
+                      className="login-input"
+                      required
                     />
                   )}
                   {field.type === 'password' && (
-                    <input 
-                      type="text" 
-                      value={manualForm[field.id] || ''} 
-                      onChange={(e) => setManualForm({...manualForm, [field.id]: e.target.value})}
-                      className="login-input" 
-                      required 
+                    <input
+                      type="text"
+                      value={manualForm[field.id] || ''}
+                      onChange={(e) => setManualForm({ ...manualForm, [field.id]: e.target.value })}
+                      className="login-input"
+                      required
                       placeholder="Palavra-chave"
                     />
                   )}
                   {field.type === 'textarea' && (
-                    <textarea 
-                      value={manualForm[field.id] || ''} 
-                      onChange={(e) => setManualForm({...manualForm, [field.id]: e.target.value})}
-                      className="login-input" 
+                    <textarea
+                      value={manualForm[field.id] || ''}
+                      onChange={(e) => setManualForm({ ...manualForm, [field.id]: e.target.value })}
+                      className="login-input"
                       rows="3"
                       style={{ resize: 'none', fontFamily: 'Montserrat, sans-serif' }}
-                      required 
+                      required
                     />
                   )}
                   {field.type === 'photo' && (
-                    <input 
-                      type="file" 
-                      accept="image/*" 
+                    <input
+                      type="file"
+                      accept="image/*"
                       capture="environment"
                       onChange={(e) => {
-                        setManualForm({...manualForm, [field.id]: e.target.files[0] ? 'photo_captured' : ''})
+                        setManualForm({ ...manualForm, [field.id]: e.target.files[0] ? 'photo_captured' : '' })
                       }}
-                      className="login-input" 
+                      className="login-input"
                       style={{ padding: '8px' }}
-                      required 
+                      required
                     />
                   )}
                 </div>
