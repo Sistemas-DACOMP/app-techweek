@@ -22,6 +22,9 @@ dist-ssr
 credentials.json
 service-account*.json
 
+# Notas/contexto de sessão com o Claude — local, nunca versionado
+claude-context/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

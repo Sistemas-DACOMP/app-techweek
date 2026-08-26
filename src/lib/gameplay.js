@@ -16,6 +16,31 @@ export async function getMyProfile() {
   return data;
 }
 
+export async function uploadAvatar(file) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const ext = file.name.split('.').pop();
+  const path = `${user.id}/${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('avatars')
+    .upload(path, file, { contentType: file.type });
+
+  if (uploadError) throw uploadError;
+
+  const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ avatar_url: publicUrl })
+    .eq('id', user.id);
+
+  if (updateError) throw updateError;
+
+  return publicUrl;
+}
+
 export async function updateMascot(mascot) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
