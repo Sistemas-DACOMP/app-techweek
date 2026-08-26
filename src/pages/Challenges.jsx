@@ -9,34 +9,19 @@ export default function Challenges() {
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
   const [manualForm, setManualForm] = useState({});
 
-
-  const [userInitial, setUserInitial] = useState('V');
-
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [avatarPosition, setAvatarPosition] = useState({ x: 0, y: 0 });
-  const [avatarScale, setAvatarScale] = useState(1);
-  
+  const [profile, setProfile] = useState({
+    firstName: 'Visitante',
+    avatarUrl: '',
+    avatarPosition: { x: 0, y: 0 },
+    avatarScale: 1
+  });
 
   useEffect(() => {
     const p = localStorage.getItem('facom_user_profile');
+
     if (p) {
       try {
-        const parsed = JSON.parse(p);
-        const name = parsed.firstName || parsed.username || 'Visitante';
-        setUserInitial(name.charAt(0).toUpperCase());
-
-        
-        if (parsed.avatarUrl) {
-          setAvatarUrl(parsed.avatarUrl);
-        }
-        if (parsed.avatarPosition) {
-          setAvatarPosition(parsed.avatarPosition);
-        }
-        if (parsed.avatarScale) {
-          setAvatarScale(parsed.avatarScale);
-        }
-        
-
+        setProfile(JSON.parse(p));
       } catch (e) { }
     }
   }, []);
@@ -148,45 +133,40 @@ export default function Challenges() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
         <div style={{ width: '40px' }}></div>
         <h1 className="font-lastica" style={{ fontSize: '1.2rem', fontWeight: '500' }}>Missões</h1>
-        <div style={{
-          width: '40px',
-          height: '40px',
-          borderRadius: '50%',
-          background: '#000',
-          overflow: 'hidden',
-          position: 'relative',
-          border: '2px solid var(--primary)',
-          boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)'
-        }}>
-          {avatarUrl ? (
+        <div
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 'bold',
+            fontSize: '1.2rem',
+            overflow: 'hidden',
+            position: 'relative'
+          }}
+        >
+          {profile.avatarUrl ? (
             <img
-              src={avatarUrl}
+              src={profile.avatarUrl}
               alt="Avatar"
               style={{
                 position: 'absolute',
-                width: `${(40 * 200 / 120) * avatarScale}px`,
+                width: `${(40 * 200 / 120) * (profile.avatarScale || 1)}px`,
                 height: 'auto',
                 maxWidth: 'none',
                 left: '50%',
                 top: '50%',
-                transform: `translate(-50%, -50%) translate(${avatarPosition.x * (40 / 120)}px, ${avatarPosition.y * (40 / 120)}px)`,
+                transform: `translate(-50%, -50%) translate(${(profile.avatarPosition?.x || 0) * (40 / 120)}px, ${(profile.avatarPosition?.y || 0) * (40 / 120)}px)`,
                 objectFit: 'cover'
               }}
             />
           ) : (
-            <div style={{
-              width: '100%',
-              height: '100%',
-              background: 'var(--primary-gradient)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 'bold',
-              fontSize: '1.2rem',
-              color: 'white'
-            }}>
-              {userInitial}
-            </div>
+            profile.firstName
+              ? profile.firstName.charAt(0).toUpperCase()
+              : 'V'
           )}
         </div>
       </div>

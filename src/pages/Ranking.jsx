@@ -4,28 +4,19 @@ import { useUser } from '../hooks/useUser';
 
 export default function Ranking() {
   const { points } = useUser();
-
-  const [userInitial, setUserInitial] = useState('V');
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [avatarPosition, setAvatarPosition] = useState({ x: 0, y: 0 });
-  const [avatarScale, setAvatarScale] = useState(1);
+  const [profile, setProfile] = useState({
+    firstName: 'Visitante',
+    avatarUrl: '',
+    avatarPosition: { x: 0, y: 0 },
+    avatarScale: 1
+  });
 
   useEffect(() => {
     const p = localStorage.getItem('facom_user_profile');
+
     if (p) {
       try {
-        const parsed = JSON.parse(p);
-        const name = parsed.firstName || parsed.username || 'Visitante';
-        setUserInitial(name.charAt(0).toUpperCase());
-        if (parsed.avatarUrl) {
-          setAvatarUrl(parsed.avatarUrl);
-        }
-        if (parsed.avatarPosition) {
-          setAvatarPosition(parsed.avatarPosition);
-        }
-        if (parsed.avatarScale) {
-          setAvatarScale(parsed.avatarScale);
-        }
+        setProfile(JSON.parse(p));
       } catch (e) { }
     }
   }, []);
@@ -79,47 +70,41 @@ export default function Ranking() {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {user.name === 'Você' ? (
-                  avatarUrl ? (
-                    
-                    <div style={{
+                  <div
+                    style={{
                       width: '28px',
                       height: '28px',
                       borderRadius: '50%',
-                      overflow: 'hidden',
-                      position: 'relative',
-                      background: '#000'
-                    }}>
-                      <img
-                        src={avatarUrl}
-                        alt="Você"
-                        style={{
-                          position: 'absolute',
-                          width: `${(28 * 200 / 120) * avatarScale}px`,
-                          height: 'auto',
-                          maxWidth: 'none',
-                          left: '50%',
-                          top: '50%',
-                          transform: `translate(-50%, -50%) translate(${avatarPosition.x * (28 / 120)}px, ${avatarPosition.y * (28 / 120)}px)`,
-                          objectFit: 'cover'
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <div style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '50%',
-                      background: 'var(--primary-gradient)',
+                      background: 'rgba(255,255,255,0.1)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontWeight: 'bold',
-                      fontSize: '0.9rem',
-                      color: 'white'
-                    }}>
-                      {userInitial}
-                    </div>
-                  )
+                      overflow: 'hidden',
+                      position: 'relative'
+                    }}
+                  >
+                    {profile.avatarUrl ? (
+                      <img
+                        src={profile.avatarUrl}
+                        alt="Você"
+                        style={{
+                          position: 'absolute',
+                          width: `${(28 * 200 / 120) * (profile.avatarScale || 1)}px`,
+                          height: 'auto',
+                          maxWidth: 'none',
+                          left: '50%',
+                          top: '50%',
+                          transform: `translate(-50%, -50%) translate(${(profile.avatarPosition?.x || 0) * (28 / 120)}px, ${(profile.avatarPosition?.y || 0) * (28 / 120)}px)`,
+                          objectFit: 'cover'
+                        }}
+                      />
+                    ) : (
+                      profile.firstName
+                        ? profile.firstName.charAt(0).toUpperCase()
+                        : 'V'
+                    )}
+                  </div>
                 ) : (
                   <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px', borderRadius: '50%' }}>
                     <User size={16} />

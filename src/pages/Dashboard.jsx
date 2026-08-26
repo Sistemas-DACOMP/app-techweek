@@ -5,10 +5,11 @@ import logoTw from '../assets/logo-tw.png';
 
 export default function Dashboard() {
   const [firstName, setFirstName] = useState('Visitante');
-
-const [avatarUrl, setAvatarUrl] = useState('');
-  const [avatarPosition, setAvatarPosition] = useState({ x: 0, y: 0 });
-  const [avatarScale, setAvatarScale] = useState(1);
+  const [avatar, setAvatar] = useState({
+    avatarUrl: '',
+    avatarPosition: { x: 0, y: 0 },
+    avatarScale: 1
+  });
 
   useEffect(() => {
     const p = localStorage.getItem('facom_user_profile');
@@ -16,16 +17,14 @@ const [avatarUrl, setAvatarUrl] = useState('');
       try {
         const parsed = JSON.parse(p);
         setFirstName(parsed.firstName || parsed.username || 'Visitante');
-        if (parsed.avatarUrl) {
-          setAvatarUrl(parsed.avatarUrl);
-        }
-        if (parsed.avatarPosition) {
-          setAvatarPosition(parsed.avatarPosition);
-        }
-        if (parsed.avatarScale) {
-          setAvatarScale(parsed.avatarScale);
-        }
-      } catch(e) {}
+        setAvatar({
+          avatarUrl: parsed.avatarUrl || '',
+          avatarPosition: parsed.avatarPosition || { x: 0, y: 0 },
+          avatarScale: parsed.avatarScale || 1
+        });
+      } catch {
+        console.error('Erro ao carregar perfil');
+      }
     }
   }, []);
 
@@ -37,25 +36,22 @@ const [avatarUrl, setAvatarUrl] = useState('');
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
           <div style={{ width: '40px' }}></div>
           <img src={logoTw} alt="Tech Week Logo" style={{ height: '60px' }} />
-         <div className="header-avatar" style={{ 
-            overflow: 'hidden', 
-            position: 'relative', 
-            background: '#000',
-            border: '2px solid var(--primary)', // <-- Borda igual à página Profile
-            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)' // <-- Sombra suave idêntica
-          }}>
-            {avatarUrl ? (
+          <div
+            className="header-avatar"
+            style={{ overflow: 'hidden', position: 'relative' }}
+          >
+            {avatar.avatarUrl ? (
               <img
-                src={avatarUrl}
+                src={avatar.avatarUrl}
                 alt="Avatar"
                 style={{
                   position: 'absolute',
-                  width: `${(40 * 200 / 120) * avatarScale}px`,
+                  width: `${(40 * 200 / 120) * (avatar.avatarScale || 1)}px`,
                   height: 'auto',
                   maxWidth: 'none',
                   left: '50%',
                   top: '50%',
-                  transform: `translate(-50%, -50%) translate(${avatarPosition.x * (40 / 120)}px, ${avatarPosition.y * (40 / 120)}px)`,
+                  transform: `translate(-50%, -50%) translate(${(avatar.avatarPosition?.x || 0) * (40 / 120)}px, ${(avatar.avatarPosition?.y || 0) * (40 / 120)}px)`,
                   objectFit: 'cover'
                 }}
               />
