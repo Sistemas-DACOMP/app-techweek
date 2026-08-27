@@ -1,38 +1,23 @@
 import { useState, useEffect } from 'react';
-import { Trophy, Medal, User } from 'lucide-react';
-import { useUser } from '../hooks/useUser';
+import { supabase } from '../lib/supabaseClient';
+import { getRanking } from '../lib/gameplay';
 
 export default function Ranking() {
-  const { points } = useUser();
-  const [profile, setProfile] = useState({
-    firstName: 'Visitante',
-    avatarUrl: '',
-    avatarPosition: { x: 0, y: 0 },
-    avatarScale: 1
-  });
+  const [ranking, setRanking] = useState([]);
+  const [myUserId, setMyUserId] = useState(null);
 
   useEffect(() => {
-    const p = localStorage.getItem('facom_user_profile');
+    supabase.auth.getUser().then(({ data }) => setMyUserId(data.user?.id ?? null));
 
-    if (p) {
-      try {
-        setProfile(JSON.parse(p));
-      } catch (e) { }
-    }
+    getRanking()
+      .then(rows => {
+        // A view já vem ordenada por total_points desc, created_at asc
+        // (critério de desempate — ver PLAN.md).
+        const withRank = rows.map((row, index) => ({ ...row, rank: index + 1 }));
+        setRanking(withRank);
+      })
+      .catch(() => setRanking([]));
   }, []);
-
-  const mockUsers = [
-    { name: 'Ana Silva', points: 340, rank: 1 },
-    { name: 'Lucas Santos', points: 295, rank: 2 },
-    { name: 'Você', points: points, rank: 3 }, // Dynamically injected
-    { name: 'Julia Costa', points: 150, rank: 4 },
-    { name: 'Pedro Alves', points: 95, rank: 5 },
-  ].sort((a, b) => b.points - a.points); // Resort based on user points
-
-  // Re-assign ranks after sorting
-  mockUsers.forEach((user, index) => {
-    user.rank = index + 1;
-  });
 
   return (
     <div className="page-container animate-fade-in">
@@ -40,85 +25,53 @@ export default function Ranking() {
       <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.9rem' }}>Competidores da FACOM Tech Week</p>
 
       <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {mockUsers.map((user) => (
-          <div
-            key={user.name}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px',
-              borderRadius: '8px',
-              background: user.name === 'Você' ? 'rgba(14, 165, 233, 0.2)' : 'rgba(255,255,255,0.05)',
-              border: user.name === 'Você' ? '1px solid var(--primary)' : '1px solid transparent'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
+        {ranking.slice(0, 10).map((user) => {
+          const isMe = user.user_id === myUserId;
+          const displayName = user.first_name || user.username || 'Participante';
+          return (
+            <div
+              key={user.user_id}
+              style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 'bold',
-                background: user.rank === 1 ? '#fbbf24' : user.rank === 2 ? '#94a3b8' : user.rank === 3 ? '#b45309' : 'rgba(255,255,255,0.1)',
-                color: user.rank <= 3 ? '#000' : 'white'
-              }}>
-                {user.rank}
+                justifyContent: 'space-between',
+                padding: '12px',
+                borderRadius: '8px',
+                background: isMe ? 'rgba(14, 165, 233, 0.2)' : 'rgba(255,255,255,0.05)',
+                border: isMe ? '1px solid var(--primary)' : '1px solid transparent'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 'bold',
+                  background: user.rank === 1 ? '#fbbf24' : user.rank === 2 ? '#94a3b8' : user.rank === 3 ? '#b45309' : 'rgba(255,255,255,0.1)',
+                  color: user.rank <= 3 ? '#000' : 'white'
+                }}>
+                  {user.rank}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                    {user.avatar_url
+                      ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <span style={{ fontWeight: isMe ? 'bold' : 'normal' }}>{isMe ? 'Você' : displayName}</span>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {user.name === 'Você' ? (
-                  <div
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '50%',
-                      background: 'rgba(255,255,255,0.1)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 'bold',
-                      overflow: 'hidden',
-                      position: 'relative'
-                    }}
-                  >
-                    {profile.avatarUrl ? (
-                      <img
-                        src={profile.avatarUrl}
-                        alt="Você"
-                        style={{
-                          position: 'absolute',
-                          width: `${(28 * 200 / 120) * (profile.avatarScale || 1)}px`,
-                          height: 'auto',
-                          maxWidth: 'none',
-                          left: '50%',
-                          top: '50%',
-                          transform: `translate(-50%, -50%) translate(${(profile.avatarPosition?.x || 0) * (28 / 120)}px, ${(profile.avatarPosition?.y || 0) * (28 / 120)}px)`,
-                          objectFit: 'cover'
-                        }}
-                      />
-                    ) : (
-                      profile.firstName
-                        ? profile.firstName.charAt(0).toUpperCase()
-                        : 'V'
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px', borderRadius: '50%' }}>
-                    <User size={16} />
-                  </div>
-                )}
-                <span style={{ fontWeight: user.name === 'Você' ? 'bold' : 'normal' }}>{user.name}</span>
+              <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
+                {user.total_points} pts
               </div>
             </div>
-
-            <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
-              {user.points} pts
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

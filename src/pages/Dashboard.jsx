@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { MapPin, User } from 'lucide-react';
 import MascotDuo from '../components/MascotDuo';
 import logoTw from '../assets/logo-tw.png';
+import { getMyProfile } from '../lib/gameplay';
 
 export default function Dashboard() {
   const [firstName, setFirstName] = useState('Visitante');

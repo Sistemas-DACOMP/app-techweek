@@ -63,15 +63,9 @@ export default function Register() {
       return;
     }
 
-    // Success! Redirect to onboarding presentation
+    // Success! O perfil (nome, curso, tipo, período) é criado automaticamente
+    // no Supabase por trigger a partir dos metadados do signUp acima.
     localStorage.setItem('facom_logged_in', 'true');
-    localStorage.setItem('facom_user_profile', JSON.stringify({
-      username: formData.username,
-      firstName: formData.firstName,
-      participantType: formData.participantType,
-      course: formData.course,
-      period: formData.period ? parseInt(formData.period) : null
-    }));
     navigate('/onboarding');
   };
 

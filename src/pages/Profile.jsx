@@ -4,6 +4,7 @@ import { LogOut, Camera } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AvatarEditor from '../components/AvatarEditor';
 
+
 export default function Profile() {
   const { points } = useUser();
   const navigate = useNavigate();
@@ -17,33 +18,34 @@ export default function Profile() {
     avatarScale: 1
   });
 
+
   const [isCropping, setIsCropping] = useState(false);
   const [tempImage, setTempImage] = useState(null);
 
+  useEffect(() => {
+    const p = localStorage.getItem('facom_user_profile');
 
-useEffect(() => {
-  const p = localStorage.getItem('facom_user_profile');
-
-  if (p) {
-    try {
-      const parsed = JSON.parse(p);
-      setProfile(parsed);
-    } catch (e) { }
-  }
-}, []);
-
-
-
+    if (p) {
+      try {
+        const parsed = JSON.parse(p);
+        setProfile(parsed);
+      } catch (e) { }
+    }
+  }, []);
   const handleImageChange = (e) => {
     const file = e.target.files[0];
+
     if (file) {
       const reader = new FileReader();
+
       reader.onloadend = () => {
         const img = new Image();
         img.src = reader.result;
+
         img.onload = () => {
           const canvas = document.createElement('canvas');
           const MAX_WIDTH = 800;
+
           let width = img.width;
           let height = img.height;
 
@@ -54,6 +56,7 @@ useEffect(() => {
 
           canvas.width = width;
           canvas.height = height;
+
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
 
@@ -63,6 +66,7 @@ useEffect(() => {
           setIsCropping(true);
         };
       };
+
       reader.readAsDataURL(file);
     }
   };
@@ -85,6 +89,9 @@ useEffect(() => {
 
     setIsCropping(false);
   };
+
+
+
 
   const handleLogout = () => {
     localStorage.removeItem('facom_logged_in');
