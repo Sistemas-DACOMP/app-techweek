@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Mascot from '../components/Mascot';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
-import { supabase } from '../lib/supabaseClient';
+import { signUpWithEmail } from '../lib/auth';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -38,28 +38,26 @@ export default function Register() {
     }
     
     setLoading(true);
-    
+
     // Create user in Supabase Auth
-    const { data, error } = await supabase.auth.signUp({
+    const result = await signUpWithEmail({
       email: formData.email,
       password: formData.password,
-      options: {
-        data: {
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          username: formData.username,
-          phone: formData.phone,
-          participant_type: formData.participantType,
-          course: formData.course,
-          period: formData.period ? parseInt(formData.period) : null
-        }
+      metadata: {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        username: formData.username,
+        phone: formData.phone,
+        participant_type: formData.participantType,
+        course: formData.course,
+        period: formData.period ? parseInt(formData.period) : null
       }
     });
 
     setLoading(false);
 
-    if (error) {
-      setError(error.message);
+    if (result.status !== 'signed_in') {
+      setError(result.message);
       return;
     }
 
