@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
-import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock } from 'lucide-react';
+import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft } from 'lucide-react';
 
 export default function Challenges() {
   const { completedChallenges, completeChallenge } = useUser();
@@ -96,7 +96,9 @@ export default function Challenges() {
   return (
     <div className="page-container animate-fade-in" style={{ paddingBottom: '120px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
-        <div style={{ width: '40px' }}></div>
+        <button onClick={() => navigate(-1)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', color: 'white', cursor: 'pointer' }}>
+          <ArrowLeft size={20} />
+        </button>
         <h1 className="font-lastica" style={{ fontSize: '1.2rem', fontWeight: '500' }}>Missões</h1>
         <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.2rem' }}>
           M
@@ -111,7 +113,18 @@ export default function Challenges() {
           const IconComponent = challenge.icon || MapPin;
           
           return (
-            <div key={challenge.id} className={`card ${isHighlighted ? 'card-highlight' : isSecret ? 'card-highlight-secondary' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: isCompleted ? 0.7 : 1, background: isSecret ? 'rgba(168, 85, 247, 0.15)' : '', borderColor: isSecret ? 'rgba(168, 85, 247, 0.3)' : '' }}>
+            <div 
+              key={challenge.id} 
+              className={`card ${isHighlighted ? 'card-highlight' : isSecret ? 'card-highlight-secondary' : ''}`} 
+              onClick={() => !isCompleted && handleSimulateChallenge(challenge)}
+              style={{ 
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                opacity: isCompleted ? 0.7 : 1, 
+                background: isSecret ? 'rgba(168, 85, 247, 0.15)' : '', 
+                borderColor: isSecret ? 'rgba(168, 85, 247, 0.3)' : '',
+                cursor: isCompleted ? 'default' : 'pointer'
+              }}
+            >
               <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
                 <div style={{ background: isHighlighted || isSecret ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '50%', color: isHighlighted || isSecret ? 'white' : 'var(--primary)' }}>
                   <IconComponent size={24} />
@@ -152,8 +165,13 @@ export default function Challenges() {
       </div>
 
       {activeManualChallenge && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '400px', background: 'var(--card-bg)' }}>
+        <div style={{ 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', 
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', 
+          padding: '24px', overflowY: 'auto', minHeight: '100dvh'
+        }}>
+          <div className="card" style={{ width: '100%', maxWidth: '400px', background: 'var(--card-bg)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '1.2rem', color: 'white' }}>{activeManualChallenge.name}</h3>
               <button onClick={() => setActiveManualChallenge(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
@@ -209,6 +227,7 @@ export default function Challenges() {
                       rows="3"
                       style={{ resize: 'none', fontFamily: 'Montserrat, sans-serif' }}
                       required 
+                      minLength={activeManualChallenge.id === 'sponsor_tecnologia' ? 15 : undefined}
                     />
                   )}
                   {field.type === 'photo' && (
@@ -227,7 +246,7 @@ export default function Challenges() {
                 </div>
               ))}
 
-              <button type="submit" className="login-btn" style={{ marginTop: '8px' }}>
+              <button type="submit" className="login-btn" style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
                 Completar Missão
               </button>
             </form>
