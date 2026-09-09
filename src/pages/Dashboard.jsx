@@ -20,7 +20,7 @@ export default function Dashboard() {
         setFirstName(profile.first_name || profile.username || 'Visitante');
         setAvatarUrl(profile.avatar_url);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   return (
@@ -31,8 +31,8 @@ export default function Dashboard() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
           <div style={{ width: '40px' }}></div>
           <img src={logoTw} alt="Tech Week Logo" style={{ height: '60px' }} />
-          <div 
-            className="header-avatar" 
+          <div
+            className="header-avatar"
             style={{ overflow: 'hidden', cursor: 'pointer' }}
             onClick={() => window.location.hash = '#/profile'}
           >
@@ -52,49 +52,49 @@ export default function Dashboard() {
       <div className="schedule-panel">
         <h3 className="font-lastica schedule-title">Programação</h3>
 
-      <LectureCard
-        title="Palestra de Abertura"
-        time="19:00"
-        location="Anfiteatro principal"
-        onClick={() =>
-          setSelectedLecture({
-            title: 'Palestra de Abertura',
-            time: '19:00',
-            location: 'Anfiteatro principal'
-          })
-        }
+        <LectureCard
+          title="Palestra de Abertura"
+          time="19:00"
+          location="Anfiteatro principal"
+          onClick={() =>
+            setSelectedLecture({
+              title: 'Palestra de Abertura',
+              time: '19:00',
+              location: 'Anfiteatro principal'
+            })
+          }
         />
 
-        <div className="schedule-item">
-          <div className="schedule-time">20:00</div>
-          <div>
-            <h4>Palestra: Dev que nao aparece, nao cresce</h4>
-            <p>
-              <User size={13} />
-              Samuel Amorim
-            </p>
-          </div>
-        </div>
+        <LectureCard
+          title="Palestra: Dev que nao aparece, nao cresce"
+          time="20:00"
+          location="5R"
+          onClick={() =>
+            setSelectedLecture({
+              title: 'Palestra: Dev que nao aparece, nao cresce',
+              time: '20:00',
+              location: 'Samuel Amorim'
+            })
+          }
+        />
+
+        <LectureModal
+          lecture={selectedLecture}
+          onClose={() => setSelectedLecture(null)}
+          onValidate={() => setShowLectureScanner(true)}
+        />
+
+        {showLectureScanner && (
+          <LectureScanner
+            onClose={() => {
+              setShowLectureScanner(false);
+              setSelectedLecture(null);
+            }}
+            onBack={() => setShowLectureScanner(false)}
+          />
+        )}
+
       </div>
-
-      <LectureModal
-        lecture={selectedLecture}
-        onClose={() => setSelectedLecture(null)}
-        onValidate={() => setShowLectureScanner(true)}
-      />
-
-      {showLectureScanner && (
-        <LectureScanner
-        onClose={() => {
-          setShowLectureScanner(false);
-          setSelectedLecture(null);
-        }}
-        onBack={() => setShowLectureScanner(false)}
-      />
-  )}
-
     </div>
-
-    
   );
 }
