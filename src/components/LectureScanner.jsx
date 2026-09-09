@@ -1,0 +1,324 @@
+import { ArrowLeft, QrCode, X } from 'lucide-react';
+
+export default function LectureScanner({
+  onClose,
+  onBack
+}) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+
+        zIndex: 1100,
+        padding: '20px',
+
+        background: 'rgba(5, 15, 35, 0.18)',
+
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)'
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '470px',
+
+          padding: '30px',
+
+          position: 'relative',
+
+          background:
+            'linear-gradient(145deg, rgba(25, 105, 180, 0.38), rgba(8, 35, 75, 0.48))',
+
+          backdropFilter: 'blur(30px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(30px) saturate(140%)',
+
+          border: '1px solid rgba(180, 225, 255, 0.25)',
+
+          borderRadius: '30px',
+
+          boxShadow:
+            '0 30px 80px rgba(0, 10, 30, 0.45), 0 0 45px rgba(30, 140, 255, 0.12)',
+
+          color: 'white'
+        }}
+      >
+
+        {/* Brilho superior */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: '12%',
+            right: '12%',
+            height: '1px',
+
+            background:
+              'linear-gradient(90deg, transparent, rgba(180,230,255,0.6), transparent)',
+
+            opacity: 0.7
+          }}
+        />
+
+        {/* Botão voltar */}
+        <button
+          onClick={onBack}
+          aria-label="Voltar"
+          style={{
+            position: 'absolute',
+            top: '18px',
+            left: '18px',
+
+            width: '38px',
+            height: '38px',
+
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+
+            borderRadius: '50%',
+
+            border: '1px solid rgba(255,255,255,0.15)',
+
+            background: 'rgba(255,255,255,0.08)',
+
+            color: 'rgba(255,255,255,0.8)',
+
+            cursor: 'pointer',
+
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)'
+          }}
+        >
+          <ArrowLeft size={19} />
+        </button>
+
+
+        {/* Botão fechar */}
+        <button
+          onClick={onClose}
+          aria-label="Fechar"
+          style={{
+            position: 'absolute',
+            top: '18px',
+            right: '18px',
+
+            width: '38px',
+            height: '38px',
+
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+
+            borderRadius: '50%',
+
+            border: '1px solid rgba(255,255,255,0.15)',
+
+            background: 'rgba(255,255,255,0.08)',
+
+            color: 'rgba(255,255,255,0.8)',
+
+            cursor: 'pointer',
+
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)'
+          }}
+        >
+          <X size={19} />
+        </button>
+
+
+        {/* Cabeçalho */}
+        <div
+          style={{
+            textAlign: 'center',
+            paddingTop: '18px'
+          }}
+        >
+
+          <div
+            style={{
+              width: '58px',
+              height: '58px',
+
+              margin: '0 auto 16px',
+
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+
+              borderRadius: '18px',
+
+              background:
+                'rgba(100, 190, 255, 0.12)',
+
+              border:
+                '1px solid rgba(170, 220, 255, 0.18)',
+
+              boxShadow:
+                '0 8px 25px rgba(30, 140, 255, 0.12)'
+            }}
+          >
+            <QrCode
+              size={30}
+              strokeWidth={1.7}
+              style={{
+                color: 'rgba(180, 230, 255, 0.95)'
+              }}
+            />
+          </div>
+
+
+          <span
+            style={{
+              display: 'block',
+
+              fontSize: '11px',
+              fontWeight: '700',
+
+              letterSpacing: '1.5px',
+              textTransform: 'uppercase',
+
+              color: 'rgba(170, 220, 255, 0.8)'
+            }}
+          >
+            Presença
+          </span>
+
+
+          <h2
+            style={{
+              margin: '7px 0 0',
+
+              fontSize: '26px',
+              lineHeight: '1.2',
+              fontWeight: '700',
+
+              letterSpacing: '-0.4px'
+            }}
+          >
+            Escaneie o QR Code
+          </h2>
+
+
+          <p
+            style={{
+              marginTop: '10px',
+              marginBottom: 0,
+
+              fontSize: '14px',
+              lineHeight: '1.5',
+
+              color: 'rgba(255,255,255,0.58)'
+            }}
+          >
+            Aponte a câmera para o QR Code
+            exibido durante a palestra.
+          </p>
+
+        </div>
+
+
+        {/* Área do scanner */}
+        <div
+          style={{
+            margin: '28px auto 0',
+
+            width: '100%',
+            maxWidth: '290px',
+            aspectRatio: '1 / 1',
+
+            position: 'relative',
+
+            borderRadius: '24px',
+
+            background:
+              'rgba(3, 18, 45, 0.42)',
+
+            border:
+              '1px solid rgba(170, 220, 255, 0.16)',
+
+            boxShadow:
+              'inset 0 0 35px rgba(30, 140, 255, 0.08), 0 15px 35px rgba(0, 10, 30, 0.18)',
+
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+
+            overflow: 'hidden'
+          }}
+        >
+
+          {/* Cantos do scanner */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: '22px',
+
+              border:
+                '1px solid rgba(150, 220, 255, 0.25)',
+
+              borderRadius: '18px'
+            }}
+          />
+
+          <QrCode
+            size={110}
+            strokeWidth={1}
+            style={{
+              color: 'rgba(180, 225, 255, 0.35)'
+            }}
+          />
+
+        </div>
+
+
+        {/* Instrução */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+
+            gap: '8px',
+
+            marginTop: '18px'
+          }}
+        >
+
+          <span
+            style={{
+              width: '6px',
+              height: '6px',
+
+              borderRadius: '50%',
+
+              background: 'rgba(100, 200, 255, 0.8)',
+
+              boxShadow:
+                '0 0 10px rgba(80, 190, 255, 0.7)'
+            }}
+          />
+
+          <span
+            style={{
+              fontSize: '12px',
+              color: 'rgba(255,255,255,0.5)'
+            }}
+          >
+            Câmera pronta para leitura
+          </span>
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
