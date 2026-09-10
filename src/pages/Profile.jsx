@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useUser } from '../hooks/useUser';
-import { supabase } from '../lib/supabaseClient';
 import { getMyProfile, uploadAvatar } from '../lib/gameplay';
 import { LogOut, Camera } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -22,21 +21,21 @@ export default function Profile() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser()
-      .then(({ data: { user } }) => {
-        if (!user) return;
-
+    getMyProfile()
+      .then(data => {
+        if (!data) return;
         setProfile(prev => ({
           ...prev,
-          username: user.user_metadata?.username || '',
-          firstName: user.user_metadata?.first_name || 'Visitante',
-          lastName: user.user_metadata?.last_name || '',
-          course: user.user_metadata?.course || '',
-          participantType: user.user_metadata?.participant_type || '',
-          period: user.user_metadata?.period || ''
+          username: data.username,
+          firstName: data.first_name,
+          lastName: data.last_name,
+          course: data.course,
+          participantType: data.participant_type,
+          period: data.period,
+          avatarUrl: data.avatar_url
         }));
       })
-      .catch(error => console.error('ERRO:', error));
+      .catch(() => {});
   }, []);
 
   const handleAvatarClick = () => {

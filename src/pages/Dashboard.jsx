@@ -1,26 +1,23 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MapPin, User } from 'lucide-react';
 import MascotDuo from '../components/MascotDuo';
 import logoTw from '../assets/logo-tw.png';
 import { getMyProfile } from '../lib/gameplay';
-import { supabase } from '../lib/supabaseClient';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [firstName, setFirstName] = useState('Visitante');
   const [avatarUrl, setAvatarUrl] = useState(null);
 
   useEffect(() => {
-    supabase.auth.getUser()
-      .then(({ data: { user } }) => {
-        if (!user) return;
-
-        setFirstName(
-          user.user_metadata?.first_name ||
-          user.user_metadata?.username ||
-          'Visitante'
-        );
+    getMyProfile()
+      .then(profile => {
+        if (!profile) return;
+        setFirstName(profile.first_name || profile.username || 'Visitante');
+        setAvatarUrl(profile.avatar_url);
       })
-      .catch(error => console.error('ERRO:', error));
+      .catch(() => {});
   }, []);
 
   return (
@@ -34,7 +31,7 @@ export default function Dashboard() {
           <div
             className="header-avatar"
             style={{ overflow: 'hidden', cursor: 'pointer' }}
-            onClick={() => window.location.hash = '#/profile'}
+            onClick={() => navigate('/profile')}
           >
             {avatarUrl
               ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
