@@ -73,6 +73,8 @@ export default function Profile() {
   };
 
   const handleLogout = () => {
+    const confirmed = window.confirm('Tem certeza que deseja sair da conta?');
+    if (!confirmed) return;
     localStorage.removeItem('facom_logged_in');
     navigate('/login');
   };
