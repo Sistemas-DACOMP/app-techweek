@@ -14,6 +14,7 @@ export default function Scanner() {
     // Only initialize scanner if we haven't scanned successfully
     if (scanResult) return;
 
+    let isMounted = true;
     const scanner = new Html5QrcodeScanner('reader', {
       qrbox: {
         width: 250,
@@ -24,6 +25,7 @@ export default function Scanner() {
 
     scanner.render(
       (result) => {
+        if (!isMounted) return;
         scanner.clear();
         handleScan(result);
       },
@@ -33,7 +35,13 @@ export default function Scanner() {
     );
 
     return () => {
+      isMounted = false;
       scanner.clear().catch(e => console.error("Failed to clear scanner", e));
+      // Fallback aggressively to stop video tracks
+      const videoElement = document.querySelector('#reader video');
+      if (videoElement && videoElement.srcObject) {
+        videoElement.srcObject.getTracks().forEach(track => track.stop());
+      }
     };
   }, [scanResult]);
 
@@ -98,6 +106,7 @@ export default function Scanner() {
   };
 
   const simulateScan = async () => {
+    setIsLoading(true);
     // 30% chance to simulate a special QR code
     const rand = Math.random();
     if (rand < 0.15) {

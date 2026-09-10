@@ -202,16 +202,21 @@ export default function InstagramMission() {
             text: 'Estou participando da FACOM TechWeek!',
           });
         } catch (err) {
-          console.error("Erro ao compartilhar:", err);
+          console.error("Erro ao compartilhar, tentando fallback de download:", err);
+          downloadFallback(canvas);
         }
       } else {
-        const link = document.createElement('a');
-        link.download = 'techweek-story.png';
-        link.href = canvas.toDataURL();
-        link.click();
-        alert('Imagem baixada! Agora você pode postar no seu Instagram Stories.');
+        downloadFallback(canvas);
       }
     }, 'image/png');
+  };
+
+  const downloadFallback = (canvas) => {
+    const link = document.createElement('a');
+    link.download = 'techweek-story.png';
+    link.href = canvas.toDataURL();
+    link.click();
+    alert('Imagem baixada! Agora você pode postar no seu Instagram Stories.');
   };
 
   return (
