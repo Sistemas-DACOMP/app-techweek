@@ -4,6 +4,7 @@ import { getMyProfile, uploadAvatar } from '../lib/gameplay';
 import { LogOut, Camera } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 export default function Profile() {
@@ -15,10 +16,13 @@ export default function Profile() {
     lastName: '',
     course: '',
     participantType: '',
-    avatarUrl: null
+    avatarUrl: '',
   });
   const [avatarError, setAvatarError] = useState('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+
+
 
   useEffect(() => {
     getMyProfile()
@@ -34,8 +38,9 @@ export default function Profile() {
           avatarUrl: data.avatar_url
         });
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
+
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
@@ -102,6 +107,7 @@ export default function Profile() {
         <div style={{ width: '40px' }}></div>
       </div>
 
+
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
         <div
           onClick={handleAvatarClick}
@@ -159,10 +165,10 @@ export default function Profile() {
       <div className="card" style={{ marginBottom: '24px', textAlign: 'center' }}>
         <h3 style={{ fontSize: '1rem', color: 'white', marginBottom: '16px' }}>Meu QR Code</h3>
         <div style={{ background: 'white', padding: '16px', borderRadius: '16px', display: 'inline-block', marginBottom: '16px' }}>
-          <img 
-            src={qrUrl} 
-            alt="Meu QR Code" 
-            style={{ width: '150px', height: '150px', display: 'block' }} 
+          <img
+            src={qrUrl}
+            alt="Meu QR Code"
+            style={{ width: '150px', height: '150px', display: 'block' }}
           />
         </div>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Peça para escanearem e ganhe pontos!</p>
@@ -176,7 +182,7 @@ export default function Profile() {
 
 
 
-      <button 
+      <button
         onClick={handleLogout}
         className="card"
         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', cursor: 'pointer' }}
@@ -184,7 +190,6 @@ export default function Profile() {
         <LogOut size={20} />
         Sair da Conta
       </button>
-
     </div>
   );
 }
