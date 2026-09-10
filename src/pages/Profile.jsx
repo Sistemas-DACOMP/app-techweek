@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useUser } from '../hooks/useUser';
+import { supabase } from '../lib/supabaseClient';
 import { getMyProfile, uploadAvatar } from '../lib/gameplay';
 import { LogOut, Camera } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -21,20 +22,21 @@ export default function Profile() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
-    getMyProfile()
-      .then(data => {
-        if (!data) return;
-        setProfile({
-          username: data.username,
-          firstName: data.first_name,
-          lastName: data.last_name,
-          course: data.course,
-          participantType: data.participant_type,
-          period: data.period,
-          avatarUrl: data.avatar_url
-        });
+    supabase.auth.getUser()
+      .then(({ data: { user } }) => {
+        if (!user) return;
+
+        setProfile(prev => ({
+          ...prev,
+          username: user.user_metadata?.username || '',
+          firstName: user.user_metadata?.first_name || 'Visitante',
+          lastName: user.user_metadata?.last_name || '',
+          course: user.user_metadata?.course || '',
+          participantType: user.user_metadata?.participant_type || '',
+          period: user.user_metadata?.period || ''
+        }));
       })
-      .catch(() => {});
+      .catch(error => console.error('ERRO:', error));
   }, []);
 
   const handleAvatarClick = () => {
@@ -94,7 +96,7 @@ export default function Profile() {
     <div className="page-container animate-fade-in" style={{ paddingBottom: '120px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
         <button onClick={() => navigate(-1)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', color: 'white', cursor: 'pointer' }}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>
         </button>
         <h1 className="font-lastica" style={{ fontSize: '1.2rem', fontWeight: '500' }}>Perfil</h1>
         <div style={{ width: '40px' }}></div>
@@ -157,10 +159,10 @@ export default function Profile() {
       <div className="card" style={{ marginBottom: '24px', textAlign: 'center' }}>
         <h3 style={{ fontSize: '1rem', color: 'white', marginBottom: '16px' }}>Meu QR Code</h3>
         <div style={{ background: 'white', padding: '16px', borderRadius: '16px', display: 'inline-block', marginBottom: '16px' }}>
-          <img 
-            src={qrUrl} 
-            alt="Meu QR Code" 
-            style={{ width: '150px', height: '150px', display: 'block' }} 
+          <img
+            src={qrUrl}
+            alt="Meu QR Code"
+            style={{ width: '150px', height: '150px', display: 'block' }}
           />
         </div>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Peça para escanearem e ganhe pontos!</p>
@@ -174,7 +176,7 @@ export default function Profile() {
 
 
 
-      <button 
+      <button
         onClick={handleLogout}
         className="card"
         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', cursor: 'pointer' }}

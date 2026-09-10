@@ -3,19 +3,24 @@ import { MapPin, User } from 'lucide-react';
 import MascotDuo from '../components/MascotDuo';
 import logoTw from '../assets/logo-tw.png';
 import { getMyProfile } from '../lib/gameplay';
+import { supabase } from '../lib/supabaseClient';
 
 export default function Dashboard() {
   const [firstName, setFirstName] = useState('Visitante');
   const [avatarUrl, setAvatarUrl] = useState(null);
 
   useEffect(() => {
-    getMyProfile()
-      .then(profile => {
-        if (!profile) return;
-        setFirstName(profile.first_name || profile.username || 'Visitante');
-        setAvatarUrl(profile.avatar_url);
+    supabase.auth.getUser()
+      .then(({ data: { user } }) => {
+        if (!user) return;
+
+        setFirstName(
+          user.user_metadata?.first_name ||
+          user.user_metadata?.username ||
+          'Visitante'
+        );
       })
-      .catch(() => {});
+      .catch(error => console.error('ERRO:', error));
   }, []);
 
   return (
@@ -26,8 +31,8 @@ export default function Dashboard() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
           <div style={{ width: '40px' }}></div>
           <img src={logoTw} alt="Tech Week Logo" style={{ height: '60px' }} />
-          <div 
-            className="header-avatar" 
+          <div
+            className="header-avatar"
             style={{ overflow: 'hidden', cursor: 'pointer' }}
             onClick={() => window.location.hash = '#/profile'}
           >
