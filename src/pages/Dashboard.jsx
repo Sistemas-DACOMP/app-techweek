@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, User } from 'lucide-react';
 import MascotDuo from '../components/MascotDuo';
 import logoTw from '../assets/logo-tw.png';
 import { getMyProfile } from '../lib/gameplay';
+import LectureCard from '../components/LectureCard';
+import LectureModal from '../components/LectureModal';
+import LectureScanner from '../components/LectureScanner';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState('Visitante');
   const [avatarUrl, setAvatarUrl] = useState(null);
+  const [selectedLecture, setSelectedLecture] = useState(null);
+  const [showLectureScanner, setShowLectureScanner] = useState(false);
 
   useEffect(() => {
     getMyProfile()
@@ -17,7 +21,7 @@ export default function Dashboard() {
         setFirstName(profile.first_name || profile.username || 'Visitante');
         setAvatarUrl(profile.avatar_url);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   return (
@@ -49,29 +53,54 @@ export default function Dashboard() {
       <div className="schedule-panel">
         <h3 className="font-lastica schedule-title">Programação</h3>
 
-        <div className="schedule-item">
-          <div className="schedule-time">19:00</div>
-          <div>
-            <h4>Palestra de Abertura</h4>
-            <p>
-              <MapPin size={13} />
-              Anfiteatro principal
-            </p>
-          </div>
-        </div>
+        <LectureCard
+          title="Palestra de Abertura"
+          time="19:00"
+          location="Anfiteatro principal"
+          onClick={() =>
+            setSelectedLecture({
+              id: 'palestra_abertura',
+              title: 'Palestra de Abertura',
+              time: '19:00',
+              location: 'Anfiteatro principal',
+              points: 20
+            })
+          }
+        />
 
-        <div className="schedule-item">
-          <div className="schedule-time">20:00</div>
-          <div>
-            <h4>Palestra: Dev que nao aparece, nao cresce</h4>
-            <p>
-              <User size={13} />
-              Samuel Amorim
-            </p>
-          </div>
-        </div>
+        <LectureCard
+          title="Palestra: Dev que nao aparece, nao cresce"
+          time="20:00"
+          location="5R"
+          onClick={() =>
+            setSelectedLecture({
+              id: 'palestra_samuel_amorim',
+              title: 'Palestra: Dev que nao aparece, nao cresce',
+              time: '20:00',
+              location: '5R',
+              points: 20
+            })
+          }
+        />
+
+        <LectureModal
+          lecture={selectedLecture}
+          onClose={() => setSelectedLecture(null)}
+          onValidate={() => setShowLectureScanner(true)}
+        />
+
+        {showLectureScanner && (
+          <LectureScanner
+            lecture={selectedLecture}
+            onClose={() => {
+              setShowLectureScanner(false);
+              setSelectedLecture(null);
+            }}
+            onBack={() => setShowLectureScanner(false)}
+          />
+        )}
+
       </div>
-
     </div>
   );
 }
