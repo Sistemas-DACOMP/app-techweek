@@ -28,7 +28,8 @@ export default function Profile() {
     getMyProfile()
       .then(data => {
         if (!data) return;
-        setProfile({
+        setProfile(prev => ({
+          ...prev,
           username: data.username,
           firstName: data.first_name,
           lastName: data.last_name,
@@ -36,7 +37,7 @@ export default function Profile() {
           participantType: data.participant_type,
           period: data.period,
           avatarUrl: data.avatar_url
-        });
+        }));
       })
       .catch(() => { });
   }, []);
@@ -101,7 +102,7 @@ export default function Profile() {
     <div className="page-container animate-fade-in" style={{ paddingBottom: '120px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
         <button onClick={() => navigate(-1)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', color: 'white', cursor: 'pointer' }}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>
         </button>
         <h1 className="font-lastica" style={{ fontSize: '1.2rem', fontWeight: '500' }}>Perfil</h1>
         <div style={{ width: '40px' }}></div>
