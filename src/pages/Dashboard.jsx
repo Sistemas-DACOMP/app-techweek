@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import MascotDuo from '../components/MascotDuo';
 import logoTw from '../assets/logo-tw.png';
 import { getMyProfile } from '../lib/gameplay';
@@ -7,6 +8,7 @@ import LectureModal from '../components/LectureModal';
 import LectureScanner from '../components/LectureScanner';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [firstName, setFirstName] = useState('Visitante');
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [selectedLecture, setSelectedLecture] = useState(null);
@@ -33,7 +35,7 @@ export default function Dashboard() {
           <div
             className="header-avatar"
             style={{ overflow: 'hidden', cursor: 'pointer' }}
-            onClick={() => window.location.hash = '#/profile'}
+            onClick={() => navigate('/profile')}
           >
             {avatarUrl
               ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
