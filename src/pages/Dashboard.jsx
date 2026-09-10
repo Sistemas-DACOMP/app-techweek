@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { MapPin, User } from 'lucide-react';
 import MascotDuo from '../components/MascotDuo';
 import logoTw from '../assets/logo-tw.png';
 import { getMyProfile } from '../lib/gameplay';
@@ -58,9 +57,11 @@ export default function Dashboard() {
           location="Anfiteatro principal"
           onClick={() =>
             setSelectedLecture({
+              id: 'palestra_abertura',
               title: 'Palestra de Abertura',
               time: '19:00',
-              location: 'Anfiteatro principal'
+              location: 'Anfiteatro principal',
+              points: 20
             })
           }
         />
@@ -71,9 +72,11 @@ export default function Dashboard() {
           location="5R"
           onClick={() =>
             setSelectedLecture({
+              id: 'palestra_samuel_amorim',
               title: 'Palestra: Dev que nao aparece, nao cresce',
               time: '20:00',
-              location: 'Samuel Amorim'
+              location: '5R',
+              points: 20
             })
           }
         />
@@ -86,6 +89,7 @@ export default function Dashboard() {
 
         {showLectureScanner && (
           <LectureScanner
+            lecture={selectedLecture}
             onClose={() => {
               setShowLectureScanner(false);
               setSelectedLecture(null);

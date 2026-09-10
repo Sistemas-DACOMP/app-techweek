@@ -1,12 +1,34 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, QrCode, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { addPointEvent } from '../lib/gameplay';
 export default function LectureScanner({
+  lecture,
   onClose,
   onBack
 }) {
   const [scanResult, setScanResult] = useState(null);
   const [rating, setRating] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const handleConfirmPresence = async () => {
+    setSaveError('');
+    setSaving(true);
+    try {
+      await addPointEvent({
+        eventType: 'lecture_attendance',
+        referenceId: lecture?.id,
+        points: lecture?.points || 0,
+        metadata: { rating },
+      });
+      onClose();
+    } catch {
+      setSaveError('Não foi possível registrar sua presença. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const scannerStyles = `
     #lecture-reader {
@@ -170,7 +192,8 @@ export default function LectureScanner({
             </div>
 
             <button
-              disabled={rating === 0}
+              disabled={rating === 0 || saving}
+              onClick={handleConfirmPresence}
               style={{
                 width: '100%',
                 marginTop: '30px',
@@ -183,11 +206,17 @@ export default function LectureScanner({
                     : 'rgba(50, 160, 255, 0.8)',
                 color: 'white',
                 fontWeight: '700',
-                cursor: rating === 0 ? 'not-allowed' : 'pointer'
+                cursor: rating === 0 || saving ? 'not-allowed' : 'pointer'
               }}
             >
-              CONFIRMAR PRESENÇA
+              {saving ? 'ENVIANDO...' : 'CONFIRMAR PRESENÇA'}
             </button>
+
+            {saveError && (
+              <p style={{ textAlign: 'center', color: '#f87171', fontSize: '13px', marginTop: '12px' }}>
+                {saveError}
+              </p>
+            )}
           </div>
         </div>
       </>

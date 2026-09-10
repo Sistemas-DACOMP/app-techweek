@@ -31,6 +31,19 @@ export default function LectureModal({
         animation: 'lectureOverlayIn 0.25s ease-out'
       }}
     >
+      <style>
+        {`
+          @keyframes lectureOverlayIn {
+            from { opacity: 0; backdrop-filter: blur(0); }
+            to { opacity: 1; backdrop-filter: blur(14px); }
+          }
+
+          @keyframes lectureModalIn {
+            from { opacity: 0; transform: translateY(18px) scale(0.94); filter: blur(4px); }
+            to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+          }
+        `}
+      </style>
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -312,34 +325,4 @@ export default function LectureModal({
     </div>
   );
 }
-
-<style>
-  {`
-    @keyframes lectureOverlayIn {
-      from {
-        opacity: 0;
-        backdrop-filter: blur(0);
-      }
-
-      to {
-        opacity: 1;
-        backdrop-filter: blur(14px);
-      }
-    }
-
-    @keyframes lectureModalIn {
-      from {
-        opacity: 0;
-        transform: translateY(18px) scale(0.94);
-        filter: blur(4px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-        filter: blur(0);
-      }
-    }
-  `}
-</style>
 
