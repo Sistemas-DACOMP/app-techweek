@@ -26,7 +26,11 @@ export default function Dashboard() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
           <div style={{ width: '40px' }}></div>
           <img src={logoTw} alt="Tech Week Logo" style={{ height: '60px' }} />
-          <div className="header-avatar" style={{ overflow: 'hidden' }}>
+          <div 
+            className="header-avatar" 
+            style={{ overflow: 'hidden', cursor: 'pointer' }}
+            onClick={() => window.location.hash = '#/profile'}
+          >
             {avatarUrl
               ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : firstName.charAt(0).toUpperCase()}
