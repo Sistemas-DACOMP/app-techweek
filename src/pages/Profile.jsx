@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useUser } from '../hooks/useUser';
 import { getMyProfile, uploadAvatar } from '../lib/gameplay';
+import { validateAvatarFile } from '../lib/validators';
 import { LogOut, Camera } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-
-const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 export default function Profile() {
   const { points } = useUser();
@@ -52,12 +50,13 @@ export default function Profile() {
     event.target.value = '';
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setAvatarError('Escolha um arquivo de imagem.');
-      return;
-    }
-    if (file.size > MAX_AVATAR_BYTES) {
-      setAvatarError('A imagem precisa ter até 2MB.');
+    const validation = validateAvatarFile(file);
+    if (!validation.valid) {
+      setAvatarError(
+        validation.reason === 'too_large'
+          ? 'A imagem precisa ter até 2MB.'
+          : 'Escolha um arquivo de imagem.'
+      );
       return;
     }
 
