@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
 import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock } from 'lucide-react';
+import { getMyProfile } from '../lib/gameplay';
 
 export default function Challenges() {
   const { completedChallenges, completeChallenge } = useUser();
@@ -9,21 +10,15 @@ export default function Challenges() {
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
   const [manualForm, setManualForm] = useState({});
 
-  const [profile, setProfile] = useState({
-    firstName: 'Visitante',
-    avatarUrl: '',
-    avatarPosition: { x: 0, y: 0 },
-    avatarScale: 1
-  });
+  const [profile, setProfile] = useState({ firstName: 'Visitante', avatarUrl: '' });
 
   useEffect(() => {
-    const p = localStorage.getItem('facom_user_profile');
-
-    if (p) {
-      try {
-        setProfile(JSON.parse(p));
-      } catch (e) { }
-    }
+    getMyProfile()
+      .then(p => {
+        if (!p) return;
+        setProfile({ firstName: p.first_name || p.username || 'Visitante', avatarUrl: p.avatar_url || '' });
+      })
+      .catch(() => {});
   }, []);
 
   const challengesList = [
@@ -150,16 +145,7 @@ export default function Challenges() {
             <img
               src={profile.avatarUrl}
               alt="Avatar"
-              style={{
-                position: 'absolute',
-                width: `${(40 * 200 / 120) * (profile.avatarScale || 1)}px`,
-                height: 'auto',
-                maxWidth: 'none',
-                left: '50%',
-                top: '50%',
-                transform: `translate(-50%, -50%) translate(${(profile.avatarPosition?.x || 0) * (40 / 120)}px, ${(profile.avatarPosition?.y || 0) * (40 / 120)}px)`,
-                objectFit: 'cover'
-              }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (
             profile.firstName
