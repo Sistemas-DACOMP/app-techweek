@@ -7,6 +7,6 @@ export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
   test: {
     environment: 'node',
-    include: ['src/**/*.test.js', 'tests/**/*.test.js'],
+    include: ['src/**/*.test.js', 'tests/**/*.test.js', 'scripts/**/*.test.mjs'],
   },
 })

@@ -8,10 +8,12 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run src",
+    "test": "vitest run src scripts",
     "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "quality-gate": "node scripts/quality-gate.mjs",
+    "check-ai-infra": "node scripts/check-ai-infra.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
