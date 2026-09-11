@@ -90,7 +90,7 @@ export default function Login() {
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '8px', marginLeft: '4px' }}>
-              E-mail ou Usuário
+              E-mail
             </label>
             <input 
               type="text" 

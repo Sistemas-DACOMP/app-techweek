@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { User } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { getRanking } from '../lib/gameplay';
 
@@ -58,8 +57,10 @@ export default function Ranking() {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px', borderRadius: '50%' }}>
-                    <User size={16} />
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                    {user.avatar_url
+                      ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : displayName.charAt(0).toUpperCase()}
                   </div>
                   <span style={{ fontWeight: isMe ? 'bold' : 'normal' }}>{isMe ? 'Você' : displayName}</span>
                 </div>
