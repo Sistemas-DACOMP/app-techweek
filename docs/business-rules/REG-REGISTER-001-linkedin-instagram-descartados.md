@@ -3,6 +3,7 @@ id: REG-REGISTER-001
 nome: linkedin/instagram enviados no cadastro são descartados silenciosamente
 fonte: observado no código
 tipo: OBSERVADA
+criterio: Se o produto precisa dos campos linkedin/instagram, eles deveriam ser persistidos (coluna + trigger) e exibidos de forma consistente — hoje são coletados e descartados sem erro visível, o que é inconsistente independente da decisão de produto.
 prioridade: baixa
 status: gap — sem card no Jira ainda
 testes_relacionados: nenhum ainda

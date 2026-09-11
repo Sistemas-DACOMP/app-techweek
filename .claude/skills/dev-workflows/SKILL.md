@@ -32,7 +32,7 @@ Nunca substitua silenciosamente uma regra persistida por uma interpretação sua
 ## Agentes disponíveis e quando delegar
 
 - **qa-agent** (skill) — regras de negócio, planejamento e execução de testes em todas as camadas.
-- **pr-review** (agent) — análise/correção/revalidação/preparação de PR. Fases não se misturam.
+- **pr-review** (agent) — análise/correção/revalidação/preparação de PR. Fases não se misturam. Os critérios de análise dele (consistência arquitetural, regressão, cobertura de teste, regra de negócio) também são o que se usa na etapa "revisar" do FEATURE/BUGFIX abaixo, antes mesmo de existir um PR — não precisa criar um Code Review Agent separado pra isso, é a mesma responsabilidade aplicada mais cedo.
 - **security-reviewer** (agent) — revisão de segurança independente, só reporta, não corrige.
 - **dedup-refactor** (agent) — só quando pedido explicitamente para achar duplicação/sugerir extração; não faz parte do fluxo automático de feature/bugfix.
 
@@ -48,6 +48,8 @@ entender requisito
 → planejar implementação (SDD quando o projeto adotar spec formal em changes/*/SPEC.md)
 → implementar
 → delegar testes para qa-agent
+→ revisar (critérios de análise do pr-review: consistência arquitetural, regressão, cobertura de
+  teste, aderência à regra de negócio — procurar problema ativamente, não confirmar por padrão)
 → delegar revisão de segurança para security-reviewer se tocar área sensível
 → node scripts/quality-gate.mjs
 → preparar PR (branch feature/*, commit [TIPO] - descrição, PR pro develop)
@@ -63,8 +65,9 @@ reproduzir
 → avaliar impacto
 → corrigir
 → criar/ajustar teste de regressão (qa-agent)
-→ node scripts/quality-gate.mjs
+→ revisar (critérios do pr-review: a correção não introduziu regressão nem inconsistência)
 → security-reviewer se a área for sensível
+→ node scripts/quality-gate.mjs
 → preparar PR
 ```
 
@@ -139,6 +142,17 @@ A correção vai na camada certa — testes fake não substituem uma implementa�
 Acionar `security-reviewer` sempre que a mudança tocar: autenticação, autorização, tokens, credenciais, uploads, manipulação de dados entre usuários, queries/endpoints administrativos, infraestrutura, migrações, ou qualquer alteração que vá para produção (`main`).
 
 Nenhum agente executa operação destrutiva ou irreversível (merge, force-push, drop de tabela, reset de branch protegida) só porque "parece necessária". Isso é decisão humana.
+
+## IMPACTO EM DEPLOY (Vercel / GitHub Pages)
+
+Quando a mudança tocar `vite.config.js`, `vercel.json`, variáveis `VITE_*`, rotas/base path, ou qualquer coisa que afete o build de produção/homolog:
+
+- rodar `npm run build` localmente antes do PR (o quality gate já faz isso);
+- verificar se `vercel.json` e o `VITE_BASE_PATH` continuam corretos pros dois ambientes (GitHub Pages em `main`, Vercel com Production Branch = `homolog`);
+- verificar se alguma env var nova precisa ser adicionada nos secrets do GitHub Actions e/ou no dashboard da Vercel — nunca só localmente;
+- checar integração frontend/backend (URLs do Supabase) continuam batendo com o ambiente certo (nunca apontar homolog pra produção nem vice-versa).
+
+Isso não substitui o quality gate — é um item a mais quando o diff mexe em configuração de build/deploy.
 
 ## RASTREABILIDADE OBRIGATÓRIA
 

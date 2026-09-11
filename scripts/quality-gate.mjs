@@ -7,8 +7,9 @@
 
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
-function run(cmd) {
+export function run(cmd) {
   try {
     const output = execSync(cmd, { stdio: 'pipe' }).toString();
     return { ok: true, output };
@@ -20,58 +21,68 @@ function run(cmd) {
   }
 }
 
-const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-const hasTestScript = Boolean(pkg.scripts?.test);
+// Lógica pura do gate — sem I/O, testável isolada (ver quality-gate.test.mjs).
+export function evaluateGate({ lintOk, buildOk, hasTestScript, testOk }) {
+  const checks = [lintOk, buildOk, ...(hasTestScript ? [testOk] : [])];
+  const quality_score = Number((checks.filter(Boolean).length / checks.length).toFixed(2));
+  const mandatoryPassed = lintOk && buildOk && (!hasTestScript || testOk);
 
-console.log('Quality Gate — App TechWeek\n');
-
-const lint = run('npx oxlint --quiet');
-console.log(`lint  ... ${lint.ok ? 'PASS' : 'FAIL'}`);
-
-const build = run('npm run build');
-console.log(`build ... ${build.ok ? 'PASS' : 'FAIL'}`);
-
-let test = { ok: true, output: '' };
-if (hasTestScript) {
-  test = run('npm run test');
-  console.log(`test  ... ${test.ok ? 'PASS' : 'FAIL'}`);
-} else {
-  console.log('test  ... SKIP (sem script "test" no package.json ainda — ver PR #17/KAN-31)');
+  return {
+    quality_score,
+    confidence_score: null,
+    security_score: null,
+    tests_passed: hasTestScript ? testOk : null,
+    regression_passed: hasTestScript ? testOk : null,
+    mandatory_checks: {
+      lint: lintOk,
+      build: buildOk,
+      test: hasTestScript ? testOk : 'skipped',
+    },
+    approved: mandatoryPassed,
+  };
 }
 
-const checks = [lint.ok, build.ok, ...(hasTestScript ? [test.ok] : [])];
-const objectiveScore = Number((checks.filter(Boolean).length / checks.length).toFixed(2));
-const mandatoryPassed = lint.ok && build.ok && (!hasTestScript || test.ok);
+function main() {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const hasTestScript = Boolean(pkg.scripts?.test);
 
-const result = {
-  quality_score: objectiveScore,
-  confidence_score: null,
-  security_score: null,
-  tests_passed: hasTestScript ? test.ok : null,
-  regression_passed: hasTestScript ? test.ok : null,
-  mandatory_checks: {
-    lint: lint.ok,
-    build: build.ok,
-    test: hasTestScript ? test.ok : 'skipped',
-  },
-  approved: mandatoryPassed,
-};
+  console.log('Quality Gate — App TechWeek\n');
 
-console.log('\n' + JSON.stringify(result, null, 2));
+  const lint = run('npx oxlint --quiet');
+  console.log(`lint  ... ${lint.ok ? 'PASS' : 'FAIL'}`);
 
-if (!mandatoryPassed) {
-  console.log('\nFALHOU: critério obrigatório não atendido. Nenhuma nota substitui isso.');
-  for (const [name, r] of [
-    ['lint', lint],
-    ['build', build],
-    ['test', test],
-  ]) {
-    if (!r.ok && r.output) {
-      console.log(`\n--- ${name} output (últimas linhas) ---`);
-      console.log(r.output.trim().split('\n').slice(-20).join('\n'));
-    }
+  const build = run('npm run build');
+  console.log(`build ... ${build.ok ? 'PASS' : 'FAIL'}`);
+
+  let test = { ok: true, output: '' };
+  if (hasTestScript) {
+    test = run('npm run test');
+    console.log(`test  ... ${test.ok ? 'PASS' : 'FAIL'}`);
+  } else {
+    console.log('test  ... SKIP (sem script "test" no package.json)');
   }
-  process.exit(1);
+
+  const result = evaluateGate({ lintOk: lint.ok, buildOk: build.ok, hasTestScript, testOk: test.ok });
+
+  console.log('\n' + JSON.stringify(result, null, 2));
+
+  if (!result.approved) {
+    console.log('\nFALHOU: critério obrigatório não atendido. Nenhuma nota substitui isso.');
+    for (const [name, r] of [
+      ['lint', lint],
+      ['build', build],
+      ['test', test],
+    ]) {
+      if (!r.ok && r.output) {
+        console.log(`\n--- ${name} output (últimas linhas) ---`);
+        console.log(r.output.trim().split('\n').slice(-20).join('\n'));
+      }
+    }
+    process.exit(1);
+  }
+
+  process.exit(0);
 }
 
-process.exit(0);
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) main();

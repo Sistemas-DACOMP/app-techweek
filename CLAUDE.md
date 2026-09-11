@@ -51,7 +51,7 @@ Catálogo persistente em `docs/business-rules/` (ver `docs/business-rules/README
 
 ## Testes automatizados
 
-Vitest ainda **não está mergeado na `develop`** — a configuração (`npm run test` unitário, `npm run test:integration` batendo direto no Supabase de homolog sem passar pela UI) existe na branch do PR #17 (KAN-31), aguardando aprovação. Até lá, `package.json` não tem script `test` e o CI pula esse passo (`npm run test --if-present`). Toda regra de negócio nova ou corrigida deveria ganhar teste assim que a suíte for mergeada.
+Vitest mergeado na `develop` (PR #17/KAN-31, 2026-09-11). `npm run test` = unitário (`src/**/*.test.js`, mocka o Supabase), `npm run test:integration` = bate direto no `@supabase/supabase-js` do projeto de HOMOLOGAÇÃO, sem passar pela UI — precisa de `.env.local` com credenciais reais de homolog; se não tiver, os testes usam `describe.skipIf` e pulam em vez de falhar. **`test:integration` cria contas reais no Supabase de homolog a cada execução** (e-mail com timestamp) — normal, mas não rodar sem necessidade nem contra produção. Toda regra de negócio nova ou corrigida deveria ganhar teste.
 
 Existe uma skill do Claude Code (`qa-agent`) que encapsula esse processo inteiro — versionada em `.claude/skills/qa-agent/SKILL.md` neste repo (também existe uma cópia em `~/.claude/skills/qa-agent/SKILL.md` a nível de usuário, pra quando a sessão abre fora do repo). Invocar em vez de reexplicar o framework de teste do zero numa sessão nova.
 
@@ -66,7 +66,7 @@ Existe uma skill do Claude Code (`qa-agent`) que encapsula esse processo inteiro
 
 Persistência de gameplay (pontos, missões, ranking) já migrou pro Supabase (`profiles`, `point_events` — ver migrations em `supabase/migrations/`). Pendências atuais (2026-09-11):
 
-- PR #17 (KAN-31, suíte de testes) aberto, aguardando aprovação de review pra mergear na `develop` (PR #15/KAN-5 já foi mergeado).
+- PR #17 (KAN-31, suíte de testes) e #15 (KAN-5) já mergeados na `develop`.
 - KAN-27/28/29/30: gaps de validação encontrados via QA (senha fraca só valida tarde no cadastro; aceite de LGPD e limite de avatar só existem no front, não no backend; scanner de presença aceita QR de qualquer palestra) — todos no Backlog, sem correção agendada ainda. Registrados também em `docs/business-rules/`.
 - Cobertura de teste ainda falta pra: login (mensagem genérica anti-enumeração), critérios de aceite do avatar (KAN-7), dedup de presença em palestra (KAN-5/`addPointEvent`).
 - Fix de segurança já pronto em `develop` (remoção de credencial hardcoded em `seed-admin.js`, commit `a97375a`) nunca foi promovido pra `main` — produção ainda tem o arquivo antigo. Precisa de PR dedicado `develop → homolog → main`.
@@ -84,4 +84,4 @@ FASE 6 — expansão / agentes adicionais (não iniciada — só quando houver r
           claramente distinta que justifique um agente novo; ver `docs/ai-infra/README.md`)
 ```
 
-Ver `docs/superpowers/specs/2026-09-10-persistent-project-memory-design.md` pro design completo da Fase 1 e `docs/ai-infra/README.md` pra arquitetura completa (Fases 2-6), como configurar num checkout novo e como estender (novo agente/skill/regra). Não pular fase sem validar a anterior funcionando.
+Ver `docs/superpowers/specs/2026-09-10-persistent-project-memory-design.md` pro design da Fase 1 e `docs/superpowers/specs/2026-09-11-agent-infra-fase2-6-design.md` pras decisões das Fases 2-6 (por que a estrutura de pastas foi adaptada, por que só 2 agentes novos, etc). `docs/ai-infra/README.md` é a arquitetura completa, como configurar num checkout novo e como estender (novo agente/skill/regra). Não pular fase sem validar a anterior funcionando.

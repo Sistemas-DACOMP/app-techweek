@@ -3,6 +3,7 @@ id: REG-RANK-001
 nome: Critério de tie-break do ranking
 fonte: observado no código / decisão de migração Supabase (2026-09)
 tipo: OBSERVADA
+criterio: Em empate de pontos totais entre dois usuários, o critério de desempate definido na migração de gameplay decide a ordem — não fica ao acaso da ordem de retorno da query.
 prioridade: media
 status: implementado
 testes_relacionados: nenhum ainda

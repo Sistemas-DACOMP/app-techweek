@@ -36,6 +36,17 @@ Não existe "um agente por tool" nem um agente por área hipotética — só for
 com responsabilidade claramente distinta e valor imediato (ver Fase 6 abaixo pra critério de
 quando adicionar mais um).
 
+**Nota sobre a estrutura de pastas**: o desenho original previa uma pasta por camada
+(`.claude/agents/`, `.claude/skills/`, `.claude/workflows/`, `.claude/rules/`, `.claude/context/`,
+`.claude/config/`). Adaptamos pro mecanismo real do Claude Code em vez de criar pastas que ele não
+lê: `agents` e `skills` são literais (é isso que o Claude Code carrega); `workflows` viraram
+seções dentro da skill `dev-workflows` em vez de arquivos soltos, porque cada workflow é curto
+e todos compartilham o mesmo quality gate/loop — separar traria mais arquivo sem mais clareza;
+`rules` é `docs/business-rules/` (já existia, um arquivo por regra, é o que os agentes/skills
+leem); `context` é o próprio `CLAUDE.md` (carregado automaticamente, sem precisar de pasta extra);
+`config` é `.claude/settings.local.json` (já existia). Nenhuma capacidade do prompt original foi
+descartada — só remapeada pro que o Claude Code de fato executa.
+
 ## Estrutura de arquivos
 
 | Caminho | O que é |
@@ -101,10 +112,20 @@ gh auth login                # necessário só para quem for usar `gh` (PR/issue
 ```
 
 O que **cada pessoa configura localmente** (nunca vai pro Git):
-- `.env.local` (credenciais Supabase de homolog)
-- Autenticação pessoal do `gh` CLI
-- Autenticação pessoal dos MCPs (Jira/Atlassian, Supabase) quando usar Claude Code com esses
-  conectores — cada integrante autentica com a própria conta.
+
+- **`.env.local`** — credenciais Supabase de homolog (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`),
+  a partir de `.env.example`. Pedir os valores pro Fabio, nunca reusar os de produção.
+- **`gh` CLI** — `gh auth login --web` (OAuth, evita colar token em texto). Necessário só pra quem
+  for interagir com PR/issue direto pelo terminal.
+- **MCP Atlassian/Jira** — conector do Claude Code (`claude.ai Atlassian` neste projeto). Cada
+  pessoa autentica com a própria conta Atlassian/Jira na primeira vez que uma tool desse MCP for
+  chamada (fluxo OAuth guiado pelo próprio Claude Code); não precisa de token manual.
+- **MCP Supabase** — conector apontando pro projeto de homologação (`supabase-homolog` neste
+  projeto). Configurado a nível de usuário/máquina, não no repo; sem acesso a ele os agentes ainda
+  funcionam, só perdem a leitura direta de logs/advisors/tabelas do Supabase (o `@supabase/supabase-js`
+  via `.env.local` continua funcionando pros testes de integração independente do MCP).
+- Sem essas autenticações, `npm run check-ai-infra` ainda passa (ele confere arquivos do repo, não
+  sessão de MCP) — a ausência só aparece na hora de usar a tool específica.
 
 ## Quality Gate
 
@@ -119,8 +140,8 @@ passando, teste passando quando existir suíte). Rodar com `npm run quality-gate
   GitHub, mesmo com autorização prévia.
 - Regra INFERIDA nunca vira regra oficial/teste permanente sem validação humana (AskUserQuestion
   com opção recomendada).
-- `npm run test` ainda não existe na `develop` — a suíte Vitest está no PR #17 (KAN-31), sem
-  aprovação ainda. Até lá, `quality-gate`/CI pulam esse passo.
+- `npm run test:integration` cria contas reais no Supabase de HOMOLOGAÇÃO a cada execução — não
+  rodar sem necessidade, nunca contra produção.
 - Gaps de segurança conhecidos sem correção agendada: KAN-27 (senha fraca), KAN-28 (LGPD só no
   front), KAN-29 (limite de avatar só no front), KAN-30 (scanner aceita QR de qualquer palestra)
   — ver `docs/business-rules/`.

@@ -3,6 +3,7 @@ id: REG-POINT-001
 nome: Dedup de point_events
 fonte: observado no código (supabase/migrations/0001_gameplay_persistence.sql + addPointEvent)
 tipo: OBSERVADA
+criterio: Mesmo user_id + mesmo reference_id (palestra/evento) não pode gerar mais de um point_event — segunda tentativa não soma pontos de novo.
 prioridade: alta
 status: implementado
 testes_relacionados: nenhum ainda

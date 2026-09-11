@@ -3,6 +3,7 @@ id: REG-PROFILE-001
 nome: RLS de profiles e lookup cross-user do Scanner
 fonte: observado na policy SQL (não testado ao vivo)
 tipo: NÃO DEFINIDA
+criterio: Um usuário só deveria conseguir ler a própria linha de profiles via RLS — se o lookup por username do Scanner retorna dado de outro usuário sem policy explícita pra isso, é bug; se retorna vazio, o fluxo do Scanner está quebrado. Nenhum dos dois foi confirmado ainda.
 prioridade: alta
 status: falta teste em homolog antes de confiar
 testes_relacionados: nenhum ainda

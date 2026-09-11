@@ -3,6 +3,7 @@ id: REG-SCANNER-001
 nome: Scanner de presença deveria aceitar só o QR da palestra selecionada
 fonte: KAN-30 (Backlog)
 tipo: INFERIDA
+criterio: QR code escaneado só deve gerar ponto se o reference_id corresponder à palestra que o usuário selecionou/está inscrito — QR de outra palestra deve ser rejeitado, não pontuado.
 prioridade: alta
 status: gap de segurança conhecido, sem correção agendada
 testes_relacionados: nenhum ainda

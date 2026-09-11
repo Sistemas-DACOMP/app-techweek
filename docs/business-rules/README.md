@@ -10,6 +10,7 @@ id: REG-XXX
 nome:
 fonte: (Jira KAN-N / SPEC.md / observado no código / não definida)
 tipo: CONFIRMADA | INFERIDA | OBSERVADA | NÃO DEFINIDA
+criterio: (frase objetiva e testável — o que precisa ser verdade pra regra estar OK)
 prioridade:
 status:
 testes_relacionados:
@@ -17,7 +18,7 @@ implementacao_relacionada:
 ultima_validacao: AAAA-MM-DD
 ---
 
-Descrição da regra e critério de aceite.
+Descrição da regra (contexto, por que existe, o que já se sabe).
 ```
 
 ## Legenda de tipo
