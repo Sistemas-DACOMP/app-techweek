@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ['**']
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (errors only — warnings are known tech debt, don't block PRs yet)
+        run: npx oxlint --quiet
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_BASE_PATH: /app-techweek/
+
+      - name: Test (skips if no test script exists yet)
+        run: npm run test --if-present
