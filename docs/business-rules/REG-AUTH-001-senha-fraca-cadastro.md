@@ -6,7 +6,7 @@ tipo: INFERIDA
 criterio: Senha abaixo do mínimo (6 caracteres) deve ser rejeitada cedo no formulário de cadastro, com mensagem específica de senha fraca — nunca reportada como rate-limit.
 prioridade: media
 status: gap conhecido, sem correção agendada
-testes_relacionados: src/lib/validators.test.js (isPasswordLongEnough — unitário, função ainda não ligada ao Register.jsx); src/lib/auth.test.js (mapeamento de erro weak_password, não confundir com rate_limited)
+testes_relacionados: src/lib/validators.test.js (isPasswordLongEnough — unitário, função ainda não ligada ao Register.jsx; o comentário no teste usa o id curto REG-C2, mesma regra que REG-AUTH-001 aqui); src/lib/auth.test.js (mapeamento de erro weak_password, não confundir com rate_limited)
 implementacao_relacionada: src/pages/Register.jsx
 ultima_validacao: 2026-09-11
 ---

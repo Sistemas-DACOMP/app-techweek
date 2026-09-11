@@ -6,7 +6,7 @@ tipo: INFERIDA
 criterio: Upload de avatar maior que 2MB ou de tipo que não seja imagem deve ser recusado também no backend/Storage — não só na validação de front.
 prioridade: media
 status: gap de segurança conhecido, sem correção agendada
-testes_relacionados: src/lib/validators.test.js (validateAvatarFile — unitário, valida a função do front; não cobre o bucket do Storage)
+testes_relacionados: src/lib/validators.test.js (validateAvatarFile — unitário, valida a função do front; não cobre o bucket do Storage; comentário no teste usa o id curto REG-A3, mesma regra que REG-AVATAR-001 aqui)
 implementacao_relacionada: src/pages/Profile.jsx, uploadAvatar
 ultima_validacao: 2026-09-11
 ---

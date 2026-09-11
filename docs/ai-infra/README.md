@@ -142,6 +142,10 @@ passando, teste passando quando existir suíte). Rodar com `npm run quality-gate
   com opção recomendada).
 - `npm run test:integration` cria contas reais no Supabase de HOMOLOGAÇÃO a cada execução — não
   rodar sem necessidade, nunca contra produção.
+- **Não existe suíte de E2E ainda** (nenhum Playwright/Cypress instalado) — a skill `qa-agent`
+  lista E2E como camada esperada de cobertura, mas hoje só unit (`npm run test`) e integração
+  (`npm run test:integration`) existem de fato. Fica como lacuna conhecida, não decisão definitiva
+  de não fazer.
 - Gaps de segurança conhecidos sem correção agendada: KAN-27 (senha fraca), KAN-28 (LGPD só no
   front), KAN-29 (limite de avatar só no front), KAN-30 (scanner aceita QR de qualquer palestra)
   — ver `docs/business-rules/`.

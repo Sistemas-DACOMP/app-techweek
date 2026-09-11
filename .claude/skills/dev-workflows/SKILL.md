@@ -27,6 +27,7 @@ Nunca substitua silenciosamente uma regra persistida por uma interpretação sua
 | "corrija/conserta bug X" | BUGFIX |
 | "revise/analise o PR #N" | PR REVIEW (delega para o agente `pr-review`) |
 | "execute os testes"/"valide a regra X" | TESTING (delega para a skill `qa-agent`) |
+| "prepare para merge" | fase final do PR REVIEW (`pr-review`, 4ª fase — nunca pula pra merge sozinho) |
 | "revisão de segurança"/toca em auth, RLS, token, upload, endpoint admin | delega também para o agente `security-reviewer` |
 
 ## Agentes disponíveis e quando delegar
