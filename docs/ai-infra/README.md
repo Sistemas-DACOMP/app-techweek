@@ -124,9 +124,6 @@ passando, teste passando quando existir suíte). Rodar com `npm run quality-gate
 - Gaps de segurança conhecidos sem correção agendada: KAN-27 (senha fraca), KAN-28 (LGPD só no
   front), KAN-29 (limite de avatar só no front), KAN-30 (scanner aceita QR de qualquer palestra)
   — ver `docs/business-rules/`.
-- Token do GitHub exposto no histórico de uma sessão antiga (`claude-context/app-techweek-devops-handoff.md`,
-  local/gitignored) — confirmar com o Fabio se já foi revogado em
-  https://github.com/settings/tokens.
 
 ## Como estender
 

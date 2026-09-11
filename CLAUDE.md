@@ -1,6 +1,6 @@
 # Contexto do projeto App TechWeek
 
-`claude-context/` é local do Fabio e **não é versionado** (`.gitignore` — o handoff antigo chegou a expor um token do GitHub em texto puro, por isso a exclusão é proposital, não remova). Numa sessão que abre a partir de um clone novo esses arquivos não existem — trate como histórico pessoal complementar, nunca como pré-requisito. O conhecimento operacional que precisa sobreviver a um `git clone` está versionado em: este arquivo, `docs/business-rules/`, `docs/superpowers/specs/`, `.claude/skills/`, `.claude/agents/` — ver `docs/ai-infra/README.md` pra arquitetura completa. Se `claude-context/` existir na sua sessão, `como-usar-fluxo-versionamento.md` continua sendo o texto certo pra explicar git flow pro time em linguagem de iniciante.
+`claude-context/` é local do Fabio e **não é versionado** (`.gitignore` — exclusão proposital, tem conteúdo sensível de setup, não remova). Numa sessão que abre a partir de um clone novo esses arquivos não existem — trate como histórico pessoal complementar, nunca como pré-requisito. O conhecimento operacional que precisa sobreviver a um `git clone` está versionado em: este arquivo, `docs/business-rules/`, `docs/superpowers/specs/`, `.claude/skills/`, `.claude/agents/` — ver `docs/ai-infra/README.md` pra arquitetura completa. Se `claude-context/` existir na sua sessão, `como-usar-fluxo-versionamento.md` continua sendo o texto certo pra explicar git flow pro time em linguagem de iniciante.
 
 ## Quem é o time
 
