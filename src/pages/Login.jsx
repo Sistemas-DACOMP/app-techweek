@@ -5,6 +5,7 @@ import Mascot from '../components/Mascot';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
 import { supabase } from '../lib/supabaseClient';
+import { suggestEmailCorrection } from '../lib/validators';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -21,7 +22,8 @@ export default function Login() {
     setLoading(true);
 
     // Allow "admin" as a shortcut for the admin account
-    const loginEmail = email === 'admin' ? 'admin@admin.com' : email;
+    const cleanEmail = email.trim().toLowerCase();
+    const loginEmail = cleanEmail === 'admin' ? 'admin@admin.com' : cleanEmail;
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
@@ -52,7 +54,7 @@ export default function Login() {
   const isPeeking = focusedInput === 'password' && showPassword;
 
   return (
-    <div className="login-container animate-fade-in" style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       
       {/* Weeka peeking suspiciously from the corner when password is shown */}
       <div 
@@ -90,7 +92,7 @@ export default function Login() {
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '8px', marginLeft: '4px' }}>
-              E-mail ou Usuário
+              E-mail
             </label>
             <input 
               type="text" 

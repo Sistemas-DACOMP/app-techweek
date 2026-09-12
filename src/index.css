@@ -19,6 +19,15 @@
   box-sizing: border-box;
 }
 
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+  position: relative;
+}
+
 body {
   font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
   color: var(--text-primary);
@@ -31,7 +40,19 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: hidden;
 }
 
 .font-lastica {
@@ -42,23 +63,32 @@ body {
   width: 100%;
   max-width: 430px; 
   height: 100vh;
+  height: 100dvh;
   position: relative;
   overflow: hidden;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  box-sizing: border-box;
 }
 
 @media (min-width: 431px) {
   .app-wrapper {
     height: 100vh;
+    height: 100dvh;
   }
 }
 
 .page-container {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 24px;
   padding-top: 40px;
   padding-bottom: 120px; 
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-x: none;
   position: relative;
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -193,12 +223,21 @@ body {
 .login-container {
   height: 100%;
   width: 100%;
+  max-width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-x: none;
   background: transparent;
+  box-sizing: border-box;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.login-container::-webkit-scrollbar {
+  display: none;
 }
 
 .login-glass-card {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Mascot from '../components/Mascot';
 import logoTw from '../assets/logo-tw.png';
-import { Rocket, Target, Users, Hand, Heart } from 'lucide-react';
+import { Rocket, Target, Users, Hand, Heart, ArrowLeft } from 'lucide-react';
 
 // Typewriter Speech Bubble Component
 function TypewriterBubble({ text, delay, icon: Icon, color, position = 'left' }) {
@@ -27,7 +27,7 @@ function TypewriterBubble({ text, delay, icon: Icon, color, position = 'left' })
         } else {
           clearInterval(typeInterval);
         }
-      }, 70); // 70ms per letter typing speed
+      }, 50); // 50ms per letter typing speed
     }, delay);
 
     return () => {
@@ -91,7 +91,7 @@ export default function Onboarding() {
               {step === 0 && (
                 <TypewriterBubble 
                   text="Oi! Eu sou o Teko" 
-                  delay={500} 
+                  delay={300} 
                   icon={Hand} 
                   color="#3b82f6" 
                   position="left"
@@ -103,7 +103,7 @@ export default function Onboarding() {
               {step === 0 && (
                 <TypewriterBubble 
                   text="E eu sou a Weeka!" 
-                  delay={5000} // Waits 5 seconds to start typing
+                  delay={1500} // Waits 1.5 seconds to start typing
                   icon={Heart} 
                   color="#a855f7" 
                   position="right"
@@ -195,13 +195,21 @@ export default function Onboarding() {
   ];
 
   return (
-    <div className="login-container animate-fade-in" style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+    <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
       
       <div className="login-glow"></div>
       
       <div className="login-glass-card" style={{ zIndex: 2, position: 'relative', width: '100%', maxWidth: '500px', display: 'flex', flexDirection: 'column', minHeight: '400px' }}>
         
-        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+        {/* Back Button */}
+        <button 
+          onClick={() => step > 0 ? setStep(step - 1) : navigate(-1)} 
+          style={{ position: 'absolute', top: '16px', left: '16px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer', zIndex: 10 }}
+        >
+          <ArrowLeft size={20} />
+        </button>
+
+        <div style={{ textAlign: 'center', marginBottom: '40px', marginTop: '16px' }}>
           <img src={logoTw} alt="FACOM Tech Week" style={{ height: '60px' }} />
         </div>
 
@@ -215,16 +223,16 @@ export default function Onboarding() {
           </button>
           
           {/* Progress dots */}
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {[0, 1, 2, 3, 4].map((index) => (
               <div 
                 key={index} 
                 style={{
-                  width: '8px', 
+                  width: step === index ? '24px' : '8px', 
                   height: '8px', 
-                  borderRadius: '50%', 
+                  borderRadius: '4px', 
                   backgroundColor: step === index ? 'var(--primary-color)' : 'rgba(255, 255, 255, 0.2)',
-                  transition: 'background-color 0.3s ease'
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                 }} 
               />
             ))}
