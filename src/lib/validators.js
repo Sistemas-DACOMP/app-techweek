@@ -52,3 +52,24 @@ export function suggestEmailCorrection(email) {
   }
   return null;
 }
+
+// REG-SCANNER-001 (KAN-30, CONFIRMADA 2026-09-12): o scanner de presenca de
+// palestra so pode dar ponto se o QR escaneado for o da palestra
+// selecionada. Convencao do payload do QR: JSON `{"lectureId": "<id>"}`.
+// Nao existe ainda geracao de QR no app (ver doc da regra) - esta funcao so
+// valida o que foi lido contra a palestra esperada.
+export function isQrForLecture(rawScanData, expectedLectureId) {
+  if (typeof rawScanData !== 'string') return false;
+  if (expectedLectureId === null || expectedLectureId === undefined) return false;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(rawScanData);
+  } catch {
+    return false;
+  }
+
+  if (!parsed || typeof parsed !== 'object') return false;
+
+  return parsed.lectureId === expectedLectureId;
+}
