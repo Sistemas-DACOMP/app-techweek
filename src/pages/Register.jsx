@@ -118,7 +118,7 @@ export default function Register() {
   const isPeeking = isCoveringEyes && showPassword;
 
   return (
-    <div className="login-container animate-fade-in" style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
+    <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
       
       {/* Weeka peeking */}
       <div 

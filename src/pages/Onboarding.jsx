@@ -27,7 +27,7 @@ function TypewriterBubble({ text, delay, icon: Icon, color, position = 'left' })
         } else {
           clearInterval(typeInterval);
         }
-      }, 70); // 70ms per letter typing speed
+      }, 50); // 50ms per letter typing speed
     }, delay);
 
     return () => {
@@ -91,7 +91,7 @@ export default function Onboarding() {
               {step === 0 && (
                 <TypewriterBubble 
                   text="Oi! Eu sou o Teko" 
-                  delay={500} 
+                  delay={300} 
                   icon={Hand} 
                   color="#3b82f6" 
                   position="left"
@@ -103,7 +103,7 @@ export default function Onboarding() {
               {step === 0 && (
                 <TypewriterBubble 
                   text="E eu sou a Weeka!" 
-                  delay={5000} // Waits 5 seconds to start typing
+                  delay={1500} // Waits 1.5 seconds to start typing
                   icon={Heart} 
                   color="#a855f7" 
                   position="right"
@@ -195,7 +195,7 @@ export default function Onboarding() {
   ];
 
   return (
-    <div className="login-container animate-fade-in" style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+    <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
       
       <div className="login-glow"></div>
       
