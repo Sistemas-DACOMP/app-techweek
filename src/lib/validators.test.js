@@ -4,6 +4,9 @@ import {
   isPasswordLongEnough,
   validateAvatarFile,
   MAX_AVATAR_BYTES,
+  normalizeEmail,
+  isValidEmail,
+  suggestEmailCorrection,
 } from './validators';
 
 // REG-C1 (comportamento observado no codigo, sem card Jira dedicado):
@@ -71,3 +74,49 @@ describe('validateAvatarFile', () => {
     expect(validateAvatarFile(imageFile(MAX_AVATAR_BYTES + 1))).toEqual({ valid: false, reason: 'too_large' });
   });
 });
+
+describe('normalizeEmail', () => {
+  it('remove espacos e converte para minusculo', () => {
+    expect(normalizeEmail('  Samuel.Amorim@UFU.BR  ')).toBe('samuel.amorim@ufu.br');
+  });
+
+  it('retorna string vazia para tipos nao string', () => {
+    expect(normalizeEmail(null)).toBe('');
+    expect(normalizeEmail(undefined)).toBe('');
+  });
+});
+
+describe('isValidEmail', () => {
+  it('aceita emails institucionais da UFU (@ufu.br e @ufu.edu.br)', () => {
+    expect(isValidEmail('samuel.amorim@ufu.br')).toBe(true);
+    expect(isValidEmail('samuel.amorim@ufu.edu.br')).toBe(true);
+    expect(isValidEmail('aluno@facom.ufu.br')).toBe(true);
+  });
+
+  it('aceita emails genericos', () => {
+    expect(isValidEmail('usuario@gmail.com')).toBe(true);
+    expect(isValidEmail('usuario@outlook.com')).toBe(true);
+  });
+
+  it('rejeita emails invalidos ou malformados', () => {
+    expect(isValidEmail('sem-arroba.com')).toBe(false);
+    expect(isValidEmail('@sem-usuario.com')).toBe(false);
+    expect(isValidEmail('usuario@')).toBe(false);
+    expect(isValidEmail('')).toBe(false);
+    expect(isValidEmail(null)).toBe(false);
+  });
+});
+
+describe('suggestEmailCorrection', () => {
+  it('sugere correcao para emails @ufu.edu.br -> @ufu.br', () => {
+    expect(suggestEmailCorrection('samuel.amorim@ufu.edu.br')).toBe('samuel.amorim@ufu.br');
+    expect(suggestEmailCorrection('  SAMUEL@UFU.EDU.BR  ')).toBe('samuel@ufu.br');
+  });
+
+  it('retorna null para emails que ja sao validos ou de outros dominios', () => {
+    expect(suggestEmailCorrection('samuel.amorim@ufu.br')).toBeNull();
+    expect(suggestEmailCorrection('usuario@gmail.com')).toBeNull();
+    expect(suggestEmailCorrection(null)).toBeNull();
+  });
+});
+

@@ -5,6 +5,7 @@ import Mascot from '../components/Mascot';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
 import { supabase } from '../lib/supabaseClient';
+import { suggestEmailCorrection } from '../lib/validators';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -21,7 +22,8 @@ export default function Login() {
     setLoading(true);
 
     // Allow "admin" as a shortcut for the admin account
-    const loginEmail = email === 'admin' ? 'admin@admin.com' : email;
+    const cleanEmail = email.trim().toLowerCase();
+    const loginEmail = cleanEmail === 'admin' ? 'admin@admin.com' : cleanEmail;
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: loginEmail,

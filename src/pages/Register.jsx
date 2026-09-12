@@ -4,6 +4,7 @@ import Mascot from '../components/Mascot';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
 import { signUpWithEmail } from '../lib/auth';
+import { suggestEmailCorrection } from '../lib/validators';
 
 export default function Register() {
   const [formData, setFormData] = useState({
