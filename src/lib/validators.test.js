@@ -7,6 +7,7 @@ import {
   normalizeEmail,
   isValidEmail,
   suggestEmailCorrection,
+  isQrForLecture,
 } from './validators';
 
 // REG-C1 (comportamento observado no codigo, sem card Jira dedicado):
@@ -117,6 +118,47 @@ describe('suggestEmailCorrection', () => {
     expect(suggestEmailCorrection('samuel.amorim@ufu.br')).toBeNull();
     expect(suggestEmailCorrection('usuario@gmail.com')).toBeNull();
     expect(suggestEmailCorrection(null)).toBeNull();
+  });
+});
+
+// REG-SCANNER-001 (KAN-30, confirmada com o Fabio em 2026-09-12): o scanner
+// de presenca so pode aceitar o QR da palestra selecionada. Convencao do
+// payload: JSON `{"lectureId": "<id>"}`.
+describe('isQrForLecture (REG-SCANNER-001 / KAN-30)', () => {
+  it('aceita quando o lectureId do QR bate com o esperado', () => {
+    expect(isQrForLecture('{"lectureId":"palestra-1"}', 'palestra-1')).toBe(true);
+  });
+
+  it('rejeita quando o lectureId do QR e de outra palestra', () => {
+    expect(isQrForLecture('{"lectureId":"palestra-2"}', 'palestra-1')).toBe(false);
+  });
+
+  it('rejeita JSON malformado sem lancar excecao', () => {
+    expect(isQrForLecture('isso nao e json', 'palestra-1')).toBe(false);
+    expect(isQrForLecture('{lectureId: palestra-1}', 'palestra-1')).toBe(false);
+    expect(isQrForLecture('', 'palestra-1')).toBe(false);
+  });
+
+  it('rejeita quando o campo lectureId esta ausente', () => {
+    expect(isQrForLecture('{"outraCoisa":"palestra-1"}', 'palestra-1')).toBe(false);
+    expect(isQrForLecture('{}', 'palestra-1')).toBe(false);
+  });
+
+  it('rejeita entradas nao-string ou nulas para o dado escaneado', () => {
+    expect(isQrForLecture(null, 'palestra-1')).toBe(false);
+    expect(isQrForLecture(undefined, 'palestra-1')).toBe(false);
+    expect(isQrForLecture(123, 'palestra-1')).toBe(false);
+    expect(isQrForLecture({ lectureId: 'palestra-1' }, 'palestra-1')).toBe(false);
+  });
+
+  it('rejeita quando o lectureId esperado e nulo/indefinido, mesmo com payload valido', () => {
+    expect(isQrForLecture('{"lectureId":"palestra-1"}', null)).toBe(false);
+    expect(isQrForLecture('{"lectureId":"palestra-1"}', undefined)).toBe(false);
+  });
+
+  it('nao faz comparacao frouxa entre tipos diferentes (numero vs string)', () => {
+    expect(isQrForLecture('{"lectureId":1}', '1')).toBe(false);
+    expect(isQrForLecture('{"lectureId":"1"}', 1)).toBe(false);
   });
 });
 

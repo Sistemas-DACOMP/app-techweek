@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, QrCode, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { addPointEvent } from '../lib/gameplay';
+import { isQrForLecture } from '../lib/validators';
 export default function LectureScanner({
   lecture,
   onClose,
@@ -11,6 +12,7 @@ export default function LectureScanner({
   const [rating, setRating] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [scanMismatchError, setScanMismatchError] = useState('');
 
   const handleConfirmPresence = async () => {
     setSaveError('');
@@ -71,12 +73,19 @@ export default function LectureScanner({
         (result) => {
           if (!isMounted) return;
 
+          if (!isQrForLecture(result, lecture?.id)) {
+            console.log('QR Code não corresponde à palestra selecionada:', result);
+            setScanMismatchError('Esse QR Code não é desta palestra. Aponte a câmera para o QR Code exibido nesta sessão.');
+            return;
+          }
+
           if (scannerStarted) {
             scanner.stop().catch(() => { });
             scannerStarted = false;
           }
 
           console.log('QR Code Lido:', result);
+          setScanMismatchError('');
           setScanResult(result);
         },
         () => { }
@@ -518,6 +527,12 @@ export default function LectureScanner({
             </span>
 
           </div>
+
+          {scanMismatchError && (
+            <p style={{ textAlign: 'center', color: '#f87171', fontSize: '13px', marginTop: '16px' }}>
+              {scanMismatchError}
+            </p>
+          )}
 
         </div>
       </div>
