@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMyProfile, updateMascot, uploadAvatar, getMyPointEvents, addPointEvent } from '../lib/gameplay';
+import { addNotification } from '../lib/notifications';
 
 export function useUser() {
   const [profile, setProfile] = useState(null);
@@ -149,7 +150,17 @@ export function useUser() {
   const completeChallenge = async (challengeId, amount, metadata = null) => {
     if (hasCompletedChallenge(challengeId)) return false;
     const eventType = metadata ? 'manual_challenge' : 'challenge';
-    return recordEvent(eventType, challengeId, amount, metadata);
+    const ok = await recordEvent(eventType, challengeId, amount, metadata);
+    if (ok) {
+      addNotification({
+        title: 'Missão Concluída! 🎉',
+        message: `Você ganhou +${amount} pontos por completar a missão.`,
+        type: 'points',
+        actionUrl: '/ranking',
+        actionLabel: 'Ver Ranking'
+      });
+    }
+    return ok;
   };
 
   return {
