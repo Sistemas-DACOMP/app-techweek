@@ -1,16 +1,38 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
-import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft } from 'lucide-react';
+import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Zap, Sparkles, Target, UploadCloud, Image as ImageIcon } from 'lucide-react';
 import { getMyProfile } from '../lib/gameplay';
+import { getActiveMissions, MISSIONS_EVENT_NAME } from '../lib/missionsManager';
+
+function getChallengeIcon(challenge) {
+  if (challenge.icon) return challenge.icon;
+  if (challenge.isFlash) return Zap;
+  switch (challenge.iconName) {
+    case 'Camera': return Camera;
+    case 'MapPin': return MapPin;
+    case 'MessageCircle': return MessageCircle;
+    case 'Lock': return Lock;
+    case 'Search': return Search;
+    case 'Users': return Users;
+    case 'Zap': return Zap;
+    case 'Sparkles': return Sparkles;
+    case 'Target':
+    default:
+      return Target;
+  }
+}
 
 export default function Challenges() {
   const { completedChallenges, completeChallenge } = useUser();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
   const [manualForm, setManualForm] = useState({});
-
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [challengesList, setChallengesList] = useState(() => getActiveMissions());
   const [profile, setProfile] = useState({ firstName: 'Visitante', avatarUrl: '' });
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     getMyProfile()
@@ -21,61 +43,27 @@ export default function Challenges() {
       .catch(() => {});
   }, []);
 
-  const challengesList = [
-    { id: 'instagram_story', name: 'Post no Stories', description: 'Tire uma foto com nossa moldura e compartilhe!', points: 50, icon: Camera, isAction: true },
-    { id: 'sponsor_visit', name: 'Conheça Kanastra', description: 'Visite o stand e escaneie o QR Code oficial.', points: 15, icon: MapPin, type: 'auto' },
-    {
-      id: 'sponsor_vaga', name: 'De Olho na Vaga', description: 'Converse com alguém sobre oportunidades para estudantes.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'company', type: 'select', label: 'Qual empresa foi?', options: ['Levty', 'Kanastra', 'Sankhya', 'Neospace', 'Sebrae', 'Outra'] }
-      ]
-    },
-    {
-      id: 'sponsor_tecnologia', name: 'Descubra a Tecnologia', description: 'Pergunte qual tecnologia está transformando o trabalho da empresa.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'company', type: 'select', label: 'Qual empresa foi?', options: ['Levty', 'Kanastra', 'Sankhya', 'Neospace', 'Sebrae', 'Outra'] },
-        { id: 'response', type: 'textarea', label: 'Qual tecnologia eles usam?' }
-      ]
-    },
-    {
-      id: 'sponsor_colecao', name: 'Colecione Patrocinadores', description: 'Complete seu passaporte visitando todos os stands.', points: 50, icon: Camera, type: 'manual', fields: [
-        { id: 'photo', type: 'photo', label: 'Tire uma foto do cartão completo' }
-      ]
-    },
-    {
-      id: 'secret_password', name: 'Missão Secreta', description: 'Descubra a palavra-chave escondida no stand da Kanastra.', points: 30, icon: Lock, type: 'manual', isSecret: true, fields: [
-        { id: 'password', type: 'password', label: 'Qual a palavra-chave?' }
-      ]
-    },
-    { id: 'secret_qr', name: 'Caça ao QR Code', description: 'Encontre o QR Code escondido antes que termine.', points: 40, icon: Search, type: 'auto', isSecret: true },
+  useEffect(() => {
+    const handleUpdate = () => {
+      setChallengesList(getActiveMissions());
+    };
+    window.addEventListener(MISSIONS_EVENT_NAME, handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener(MISSIONS_EVENT_NAME, handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, []);
 
-    { id: 'network_course', name: 'Outro Curso', description: 'Conecte-se com alguém de um curso diferente.', points: 15, icon: Users, type: 'auto' },
-    { id: 'network_type', name: 'Fora da UFU', description: 'Encontre alguém de outra instituição ou empresa.', points: 15, icon: Users, type: 'auto' },
-    { id: 'network_first', name: 'Primeira Conexão', description: 'Faça sua primeira conexão na TechWeek.', points: 10, icon: Users, type: 'auto' },
-    { id: 'network_period', name: 'Calouro na Área', description: 'Conecte-se com alguém do primeiro período.', points: 15, icon: Users, type: 'auto' },
-    {
-      id: 'network_career', name: 'Sua Área', description: 'Encontre alguém da área que quer seguir.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-        { id: 'prompt2', type: 'textarea', label: 'Qual foi o 1º passo dela na carreira?' }
-      ]
-    },
-    {
-      id: 'network_connect_two', name: 'Conector', description: 'Apresente duas pessoas que devem se conhecer.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da 1ª pessoa?' },
-        { id: 'prompt2', type: 'text', label: 'Qual o @/user da 2ª pessoa?' }
-      ]
-    },
-    {
-      id: 'network_past_edition', name: 'Veterano', description: 'Encontre alguém de edições passadas.', points: 15, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-        { id: 'prompt2', type: 'textarea', label: 'Qual foi a melhor experiência dela?' }
-      ]
-    },
-    {
-      id: 'network_first_edition', name: 'Novato', description: 'Encontre alguém novato e mostre o app.', points: 15, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-        { id: 'prompt2', type: 'textarea', label: 'O que você mostrou para ela?' }
-      ]
+  // Auto-abre a missão se foi redirecionado a partir do alerta de missão relâmpago
+  useEffect(() => {
+    if (location.state?.autoOpenMissionId) {
+      const target = challengesList.find(c => c.id === location.state.autoOpenMissionId);
+      if (target && !completedChallenges.includes(target.id)) {
+        handleSimulateChallenge(target);
+      }
     }
-  ];
+  }, [location.state, challengesList, completedChallenges]);
 
   const handleSimulateChallenge = async (challenge) => {
     if (challenge.isAction) {
@@ -88,15 +76,31 @@ export default function Challenges() {
       return;
     }
 
-    if (challenge.type === 'manual') {
-      setActiveManualChallenge(challenge);
+    if (challenge.type === 'manual' || challenge.type === 'photo' || challenge.isFlash) {
+      const fields = challenge.fields && challenge.fields.length > 0
+        ? challenge.fields
+        : [{ id: 'photo', type: 'photo', label: 'Tire uma foto ou anexe da galeria para comprovar a missão' }];
+      setActiveManualChallenge({ ...challenge, fields });
       setManualForm({});
+      setPhotoPreview(null);
       return;
     }
 
     const success = await completeChallenge(challenge.id, challenge.points);
     if (success) {
       alert(`Parabéns! Você completou o desafio e ganhou ${challenge.points} pontos.`);
+    }
+  };
+
+  const handlePhotoSelect = (e, fieldId) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setManualForm(prev => ({ ...prev, [fieldId]: file.name || 'photo_attached' }));
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setPhotoPreview(event.target.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -160,9 +164,9 @@ export default function Challenges() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {challengesList.map((challenge, index) => {
           const isCompleted = completedChallenges.includes(challenge.id);
-          const isHighlighted = challenge.id === 'instagram_story' && !isCompleted;
+          const isHighlighted = (challenge.id === 'instagram_story' || challenge.isFlash) && !isCompleted;
           const isSecret = challenge.isSecret && !isCompleted;
-          const IconComponent = challenge.icon || MapPin;
+          const IconComponent = getChallengeIcon(challenge);
 
           return (
             <div 
@@ -283,17 +287,61 @@ export default function Challenges() {
                     />
                   )}
                   {field.type === 'photo' && (
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={(e) => {
-                        setManualForm({ ...manualForm, [field.id]: e.target.files[0] ? 'photo_captured' : '' })
-                      }}
-                      className="login-input"
-                      style={{ padding: '8px' }}
-                      required
-                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(e) => handlePhotoSelect(e, field.id)}
+                        style={{ display: 'none' }}
+                        required={!manualForm[field.id]}
+                      />
+
+                      {photoPreview ? (
+                        <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '2px solid #3b82f6', maxHeight: '200px' }}>
+                          <img
+                            src={photoPreview}
+                            alt="Pré-visualização"
+                            style={{ width: '100%', height: '200px', objectFit: 'cover', display: 'block' }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            style={{ position: 'absolute', bottom: '10px', right: '10px', background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.3)', color: '#ffffff', padding: '6px 12px', borderRadius: '8px', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            <Camera size={14} />
+                            <span>Trocar Foto</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => fileInputRef.current?.click()}
+                          style={{
+                            border: '2px dashed rgba(59, 130, 246, 0.4)',
+                            background: 'rgba(59, 130, 246, 0.06)',
+                            borderRadius: '16px',
+                            padding: '24px 16px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(59, 130, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px', color: '#38bdf8' }}>
+                            <Camera size={24} />
+                          </div>
+                          <p style={{ fontSize: '0.85rem', fontWeight: '700', color: '#ffffff', marginBottom: '2px' }}>
+                            Tirar Foto ou Escolher da Galeria
+                          </p>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                            Toque para anexar a foto comprobatória
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               ))}

@@ -11,6 +11,8 @@ import Register from './pages/Register';
 import Onboarding from './pages/Onboarding';
 
 import InstagramMission from './pages/InstagramMission';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import FlashMissionAlert from './components/FlashMissionAlert';
 import { useState } from 'react';
 import logoTw from './assets/logo-tw.png';
 import { Loader2 } from 'lucide-react';
@@ -18,16 +20,17 @@ import { Loader2 } from 'lucide-react';
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding';
+  const isAdminPage = location.pathname === '/admin';
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding' || isAdminPage;
 
   const [isSplashVisible, setIsSplashVisible] = useState(true);
 
   useEffect(() => {
     const isLoggedIn = localStorage.getItem('facom_logged_in');
-    if (!isLoggedIn && !isAuthPage && !isSplashVisible) {
+    if (!isLoggedIn && !isAuthPage && !isSplashVisible && !isAdminPage) {
       navigate('/login');
     }
-  }, [isAuthPage, navigate, isSplashVisible]);
+  }, [isAuthPage, isAdminPage, navigate, isSplashVisible]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -57,7 +60,7 @@ function AppContent() {
                 borderRadius: '4px',
                 animation: 'loadingBar 4s ease-in-out forwards'
               }} 
-            />
+              />
           </div>
         </div>
         <style>{`
@@ -74,14 +77,15 @@ function AppContent() {
   }
 
   return (
-    <div className="app-wrapper">
+    <div className={`app-wrapper ${isAdminPage ? 'admin-app-wrapper' : ''}`}>
+      <FlashMissionAlert />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/cadastro" element={<Register />} />
         <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/admin" element={<AdminDashboard />} />
         
-        {/* Protected Routes (we can just render them directly for demo purposes, 
-            but in a real app we'd use a ProtectedRoute component) */}
+        {/* Protected Routes */}
         <Route path="/" element={<Dashboard />} />
         <Route path="/scanner" element={<Scanner />} />
         <Route path="/profile" element={<Profile />} />
