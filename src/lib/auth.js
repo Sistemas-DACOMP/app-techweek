@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { normalizeEmail } from './validators';
 
 export const AUTH_MESSAGES = {
   rate_limited:
@@ -19,8 +20,9 @@ export const AUTH_MESSAGES = {
 // resposta pros dois casos de propósito, pra não vazar se um e-mail já existe.
 // Mostramos a mesma mensagem pros dois por esse motivo (ver SPEC D2).
 export async function signUpWithEmail({ email, password, metadata }) {
+  const cleanEmail = normalizeEmail(email);
   const { data, error } = await supabase.auth.signUp({
-    email,
+    email: cleanEmail,
     password,
     options: { data: metadata },
   });

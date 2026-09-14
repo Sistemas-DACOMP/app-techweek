@@ -29,3 +29,26 @@ export function validateAvatarFile(file, { maxBytes = MAX_AVATAR_BYTES } = {}) {
   }
   return { valid: true, reason: null };
 }
+
+// Validação e normalização de e-mail (suporta domínios institucionais com múltiplos níveis como @ufu.br, @ufu.edu.br)
+export function normalizeEmail(email) {
+  if (typeof email !== 'string') return '';
+  return email.trim().toLowerCase();
+}
+
+export function isValidEmail(email) {
+  if (typeof email !== 'string') return false;
+  const normalized = email.trim();
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  return emailRegex.test(normalized);
+}
+
+// Auxilia na correção de domínios comuns como @ufu.edu.br -> @ufu.br
+export function suggestEmailCorrection(email) {
+  if (typeof email !== 'string') return null;
+  const normalized = email.trim().toLowerCase();
+  if (normalized.endsWith('@ufu.edu.br')) {
+    return normalized.replace(/@ufu\.edu\.br$/, '@ufu.br');
+  }
+  return null;
+}
