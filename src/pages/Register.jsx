@@ -5,6 +5,7 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
 import { signUpWithEmail } from '../lib/auth';
 import { suggestEmailCorrection } from '../lib/validators';
+import { initWelcomeNotifications } from '../lib/notifications';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -105,6 +106,7 @@ export default function Register() {
     setLoading(false);
 
     // Success! O perfil é criado automaticamente
+    initWelcomeNotifications();
     localStorage.setItem('facom_logged_in', 'true');
     navigate('/onboarding');
   };
