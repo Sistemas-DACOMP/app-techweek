@@ -19,7 +19,10 @@ import {
   Trophy,
   Clock,
   ExternalLink,
-  Award
+  Award,
+  Calendar,
+  MapPin,
+  Mic
 } from 'lucide-react';
 import {
   getAllMissions,
@@ -29,6 +32,14 @@ import {
   resetToDefaultMissions,
   MISSIONS_EVENT_NAME
 } from '../../lib/missionsManager';
+import {
+  getAllSchedule,
+  saveScheduleItem,
+  deleteScheduleItem,
+  toggleScheduleItemStatus,
+  resetToDefaultSchedule,
+  SCHEDULE_EVENT_NAME
+} from '../../lib/scheduleManager';
 import { addNotification } from '../../lib/notifications';
 import { getRanking } from '../../lib/gameplay';
 import AdminLogin from './AdminLogin';
@@ -39,8 +50,9 @@ export default function AdminDashboard() {
     return localStorage.getItem('facom_admin_logged_in') === 'true';
   });
 
-  const [activeTab, setActiveTab] = useState('missions'); // 'missions' | 'users' | 'broadcast' | 'stats'
+  const [activeTab, setActiveTab] = useState('missions'); // 'missions' | 'schedule' | 'users' | 'broadcast' | 'stats'
   const [missions, setMissions] = useState(() => getAllMissions());
+  const [schedule, setSchedule] = useState(() => getAllSchedule());
   const [participants, setParticipants] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -58,6 +70,20 @@ export default function AdminDashboard() {
     notifyUsers: true
   });
 
+  // Modal de criação / edição de programação (palestras/atividades)
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState(null);
+  const [scheduleForm, setScheduleForm] = useState({
+    title: '',
+    speaker: '',
+    time: '19:00',
+    location: 'Anfiteatro principal',
+    date: '14/09',
+    points: 20,
+    description: '',
+    notifyUsers: true
+  });
+
   // Formulário de transmissão de avisos
   const [broadcastForm, setBroadcastForm] = useState({
     title: '',
@@ -68,15 +94,26 @@ export default function AdminDashboard() {
   });
   const [broadcastSuccess, setBroadcastSuccess] = useState('');
 
-  // Carrega missões
+  // Carrega missões e programação
   const reloadMissions = () => {
     setMissions(getAllMissions());
   };
 
+  const reloadSchedule = () => {
+    setSchedule(getAllSchedule());
+  };
+
   useEffect(() => {
     const handleMissionsUpdate = () => reloadMissions();
+    const handleScheduleUpdate = () => reloadSchedule();
+
     window.addEventListener(MISSIONS_EVENT_NAME, handleMissionsUpdate);
-    return () => window.removeEventListener(MISSIONS_EVENT_NAME, handleMissionsUpdate);
+    window.addEventListener(SCHEDULE_EVENT_NAME, handleScheduleUpdate);
+
+    return () => {
+      window.removeEventListener(MISSIONS_EVENT_NAME, handleMissionsUpdate);
+      window.removeEventListener(SCHEDULE_EVENT_NAME, handleScheduleUpdate);
+    };
   }, []);
 
   // Carrega participantes a partir da view de ranking do Supabase
@@ -188,6 +225,87 @@ export default function AdminDashboard() {
     }
   };
 
+  // Ações de Programação (Palestras / Atividades)
+  const handleOpenNewSchedule = () => {
+    setEditingSchedule(null);
+    setScheduleForm({
+      title: '',
+      speaker: '',
+      time: '19:00',
+      location: 'Anfiteatro principal',
+      date: '14/09',
+      points: 20,
+      description: '',
+      notifyUsers: true
+    });
+    setIsScheduleModalOpen(true);
+  };
+
+  const handleOpenEditSchedule = (item) => {
+    setEditingSchedule(item);
+    setScheduleForm({
+      title: item.title,
+      speaker: item.speaker || '',
+      time: item.time || '',
+      location: item.location || '',
+      date: item.date || '14/09',
+      points: item.points || 20,
+      description: item.description || '',
+      notifyUsers: false
+    });
+    setIsScheduleModalOpen(true);
+  };
+
+  const handleSaveSchedule = (e) => {
+    e.preventDefault();
+    if (!scheduleForm.title.trim() || !scheduleForm.time.trim()) return;
+
+    const payload = {
+      id: editingSchedule ? editingSchedule.id : undefined,
+      title: scheduleForm.title.trim(),
+      speaker: scheduleForm.speaker.trim(),
+      time: scheduleForm.time.trim(),
+      location: scheduleForm.location.trim(),
+      date: scheduleForm.date.trim(),
+      points: Number(scheduleForm.points) || 20,
+      description: scheduleForm.description.trim(),
+      active: true
+    };
+
+    saveScheduleItem(payload);
+    reloadSchedule();
+    setIsScheduleModalOpen(false);
+
+    if (scheduleForm.notifyUsers) {
+      addNotification({
+        title: `📅 Palestra: ${payload.title}`,
+        message: `${payload.speaker ? `Palestrante: ${payload.speaker} • ` : ''}${payload.time} no local ${payload.location}. Ganhe +${payload.points} pts ao fazer check-in!`,
+        type: 'lecture',
+        actionUrl: '/',
+        actionLabel: 'Ver Programação'
+      });
+    }
+  };
+
+  const handleDeleteSchedule = (id, title) => {
+    if (window.confirm(`Deseja realmente excluir a atividade "${title}" da programação?`)) {
+      deleteScheduleItem(id);
+      reloadSchedule();
+    }
+  };
+
+  const handleToggleScheduleStatus = (id) => {
+    toggleScheduleItemStatus(id);
+    reloadSchedule();
+  };
+
+  const handleResetScheduleDefaults = () => {
+    if (window.confirm('Restaurar a programação para o padrão oficial da Tech Week?')) {
+      resetToDefaultSchedule();
+      reloadSchedule();
+    }
+  };
+
   // Transmissão de Notificação Geral
   const handleSendBroadcast = (e) => {
     e.preventDefault();
@@ -268,6 +386,15 @@ export default function AdminDashboard() {
         >
           <Zap size={16} />
           <span>Missões ({missions.length})</span>
+        </button>
+
+        <button
+          type="button"
+          className={`admin-nav-tab ${activeTab === 'schedule' ? 'active' : ''}`}
+          onClick={() => setActiveTab('schedule')}
+        >
+          <Calendar size={16} />
+          <span>Programação ({schedule.length})</span>
         </button>
 
         <button
@@ -409,6 +536,131 @@ export default function AdminDashboard() {
               style={{ background: 'transparent', border: '1px dashed rgba(255,255,255,0.2)', color: 'var(--text-secondary)', padding: '8px 16px', borderRadius: '10px', fontSize: '0.78rem', cursor: 'pointer' }}
             >
               Restaurar Missões Padrão da Tech Week
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: SCHEDULE / PROGRAMAÇÃO */}
+      {activeTab === 'schedule' && (
+        <div className="animate-fade-in">
+          <div className="admin-actions-bar">
+            <div>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff' }}>Gerenciar Programação</h2>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Cadastre palestras, workshops e atividades oficiais da Tech Week</p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="admin-btn-primary"
+                onClick={handleOpenNewSchedule}
+              >
+                <Plus size={16} />
+                <span>Nova Atividade / Palestra</span>
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {schedule.length === 0 ? (
+              <div className="admin-empty-state">
+                <Calendar size={36} color="var(--text-secondary)" />
+                <p>Nenhuma palestra ou atividade cadastrada.</p>
+              </div>
+            ) : (
+              schedule.map((item) => {
+                const isActive = item.active !== false;
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`admin-item-card ${!isActive ? 'inactive' : ''}`}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: 1, minWidth: 0 }}>
+                      <div className="admin-mission-icon" style={{ background: 'rgba(56, 189, 248, 0.15)' }}>
+                        <Calendar size={20} color="#38bdf8" />
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                          <h3 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#ffffff' }}>
+                            {item.title}
+                          </h3>
+                          {item.date && (
+                            <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.08)', color: '#38bdf8', fontWeight: '600' }}>
+                              {item.date}
+                            </span>
+                          )}
+                          <span className="points-badge">+{item.points || 20} pts</span>
+                          {!isActive && <span className="inactive-badge">PAUSADA</span>}
+                        </div>
+
+                        {item.speaker && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#60a5fa', marginBottom: '4px' }}>
+                            <Mic size={13} />
+                            <span>{item.speaker}</span>
+                          </div>
+                        )}
+
+                        {item.description && (
+                          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            {item.description}
+                          </p>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '16px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', flexWrap: 'wrap' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Clock size={13} color="#a855f7" /> {item.time}
+                          </span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <MapPin size={13} color="#34d399" /> {item.location}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="admin-item-controls">
+                      <button
+                        type="button"
+                        className={`admin-status-toggle ${isActive ? 'active' : ''}`}
+                        onClick={() => handleToggleScheduleStatus(item.id)}
+                        title={isActive ? 'Desativar atividade (ocultar no app)' : 'Ativar atividade'}
+                      >
+                        {isActive ? <CheckCircle2 size={16} color="#10b981" /> : <XCircle size={16} color="#94a3b8" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-edit-btn"
+                        onClick={() => handleOpenEditSchedule(item)}
+                        title="Editar atividade"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-delete-btn"
+                        onClick={() => handleDeleteSchedule(item.id, item.title)}
+                        title="Excluir atividade"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div style={{ marginTop: '24px', textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={handleResetScheduleDefaults}
+              style={{ background: 'transparent', border: '1px dashed rgba(255,255,255,0.2)', color: 'var(--text-secondary)', padding: '8px 16px', borderRadius: '10px', fontSize: '0.78rem', cursor: 'pointer' }}
+            >
+              Restaurar Programação Padrão da Tech Week
             </button>
           </div>
         </div>
@@ -613,6 +865,14 @@ export default function AdminDashboard() {
               <div className="stat-value">{missions.filter((m) => m.active !== false).length}</div>
               <div className="stat-label">Missões Ativas no App</div>
             </div>
+
+            <div className="card admin-stat-card">
+              <div className="stat-icon-wrap" style={{ background: 'rgba(56, 189, 248, 0.15)' }}>
+                <Calendar size={24} color="#38bdf8" />
+              </div>
+              <div className="stat-value">{schedule.filter((s) => s.active !== false).length}</div>
+              <div className="stat-label">Palestras & Atividades Ativas</div>
+            </div>
           </div>
         </div>
       )}
@@ -740,6 +1000,158 @@ export default function AdminDashboard() {
                   style={{ flex: 1, margin: 0 }}
                 >
                   Salvar Missão
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CRIAÇÃO / EDIÇÃO DE PROGRAMAÇÃO */}
+      {isScheduleModalOpen && (
+        <div className="notification-backdrop animate-fade-in" onClick={() => setIsScheduleModalOpen(false)}>
+          <div
+            className="card"
+            style={{ maxWidth: '520px', width: '100%', background: 'var(--card-bg)', border: '1px solid rgba(255,255,255,0.1)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: '1.2rem', color: '#ffffff', marginBottom: '4px' }}>
+              {editingSchedule ? 'Editar Atividade / Palestra' : 'Nova Atividade da Programação'}
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+              Cadastre palestras e atividades que aparecerão diretamente na tela inicial do app.
+            </p>
+
+            <form onSubmit={handleSaveSchedule} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  Título da Palestra / Atividade *
+                </label>
+                <input
+                  type="text"
+                  className="login-input"
+                  placeholder="Ex: Inteligência Artificial no Mercado de Trabalho"
+                  value={scheduleForm.title}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, title: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    Palestrante / Convidado
+                  </label>
+                  <input
+                    type="text"
+                    className="login-input"
+                    placeholder="Ex: Dra. Ana Beatriz"
+                    value={scheduleForm.speaker}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, speaker: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    Data / Dia
+                  </label>
+                  <input
+                    type="text"
+                    className="login-input"
+                    placeholder="Ex: 14/09 ou Segunda"
+                    value={scheduleForm.date}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    Horário *
+                  </label>
+                  <input
+                    type="text"
+                    className="login-input"
+                    placeholder="Ex: 19:30"
+                    value={scheduleForm.time}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, time: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    Local / Sala *
+                  </label>
+                  <input
+                    type="text"
+                    className="login-input"
+                    placeholder="Ex: Anfiteatro 5R"
+                    value={scheduleForm.location}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, location: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    Pontos (+pts)
+                  </label>
+                  <input
+                    type="number"
+                    min="5"
+                    max="200"
+                    className="login-input"
+                    value={scheduleForm.points}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, points: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  Descrição / Resumo
+                </label>
+                <textarea
+                  className="login-input"
+                  rows="2"
+                  style={{ resize: 'none' }}
+                  placeholder="Ex: Visão prática sobre tendências e ferramentas modernas..."
+                  value={scheduleForm.description}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, description: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
+                <input
+                  type="checkbox"
+                  id="notifyScheduleCheck"
+                  checked={scheduleForm.notifyUsers}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, notifyUsers: e.target.checked })}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                <label htmlFor="notifyScheduleCheck" style={{ fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer' }}>
+                  Enviar aviso aos participantes via Central de Notificações
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                <button
+                  type="button"
+                  className="card"
+                  style={{ flex: 1, padding: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#ffffff', cursor: 'pointer', textAlign: 'center' }}
+                  onClick={() => setIsScheduleModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="login-btn"
+                  style={{ flex: 1, margin: 0 }}
+                >
+                  Salvar Atividade
                 </button>
               </div>
             </form>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import MascotDuo from '../components/MascotDuo';
 import logoTw from '../assets/logo-tw.png';
 import { getMyProfile } from '../lib/gameplay';
+import { getActiveSchedule, SCHEDULE_EVENT_NAME } from '../lib/scheduleManager';
 import LectureCard from '../components/LectureCard';
 import LectureModal from '../components/LectureModal';
 import LectureScanner from '../components/LectureScanner';
@@ -14,6 +15,7 @@ export default function Dashboard() {
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [showLectureScanner, setShowLectureScanner] = useState(false);
+  const [scheduleList, setScheduleList] = useState(() => getActiveSchedule());
 
   useEffect(() => {
     getMyProfile()
@@ -23,6 +25,14 @@ export default function Dashboard() {
         setAvatarUrl(profile.avatar_url);
       })
       .catch(() => { });
+  }, []);
+
+  useEffect(() => {
+    const handleScheduleUpdate = () => {
+      setScheduleList(getActiveSchedule());
+    };
+    window.addEventListener(SCHEDULE_EVENT_NAME, handleScheduleUpdate);
+    return () => window.removeEventListener(SCHEDULE_EVENT_NAME, handleScheduleUpdate);
   }, []);
 
   return (
@@ -57,35 +67,21 @@ export default function Dashboard() {
       <div className="schedule-panel">
         <h3 className="font-lastica schedule-title">Programação</h3>
 
-        <LectureCard
-          title="Palestra de Abertura"
-          time="19:00"
-          location="Anfiteatro principal"
-          onClick={() =>
-            setSelectedLecture({
-              id: 'palestra_abertura',
-              title: 'Palestra de Abertura',
-              time: '19:00',
-              location: 'Anfiteatro principal',
-              points: 20
-            })
-          }
-        />
-
-        <LectureCard
-          title="Palestra: Dev que nao aparece, nao cresce"
-          time="20:00"
-          location="5R"
-          onClick={() =>
-            setSelectedLecture({
-              id: 'palestra_samuel_amorim',
-              title: 'Palestra: Dev que nao aparece, nao cresce',
-              time: '20:00',
-              location: '5R',
-              points: 20
-            })
-          }
-        />
+        {scheduleList.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px 10px', color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem' }}>
+            Nenhuma atividade cadastrada no momento.
+          </div>
+        ) : (
+          scheduleList.map((lecture) => (
+            <LectureCard
+              key={lecture.id}
+              title={lecture.title}
+              time={lecture.time}
+              location={lecture.location}
+              onClick={() => setSelectedLecture(lecture)}
+            />
+          ))
+        )}
 
         <LectureModal
           lecture={selectedLecture}
