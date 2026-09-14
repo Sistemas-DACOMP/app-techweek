@@ -80,7 +80,8 @@ export default function Register() {
         course: formData.course,
         period: formData.period ? parseInt(formData.period) : null,
         linkedin: formData.linkedin,
-        instagram: formData.instagram
+        instagram: formData.instagram,
+        terms_accepted: formData.termsAccepted
       }
     });
 
