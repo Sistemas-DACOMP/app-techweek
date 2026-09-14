@@ -26,7 +26,7 @@ describe.skipIf(!hasRealCredentials)('KAN-29 - limite de tamanho/tipo do avatar 
   // atual (errado) de proposito. `it.fails` inverte o resultado do
   // assert - se o assert falhar (como falha hoje, porque o upload passa
   // quando nao deveria), o teste e reportado como passou; quando a
-  // migration 0003_avatar_storage_limits.sql for aplicada em homolog e o
+  // migration 0004_avatar_storage_limits.sql for aplicada em homolog e o
   // upload passar a ser recusado, o assert vai passar de verdade e
   // `it.fails` vai reportar "esperava falhar mas passou" - e a hora de
   // trocar para `it` normal, igual o comentario do teste do KAN-28 ja
@@ -85,7 +85,7 @@ describe.skipIf(!hasRealCredentials)('KAN-29 - limite de tamanho/tipo do avatar 
     // passar por validateAvatarFile/Profile.jsx. Hoje o bucket nao tem
     // file_size_limit configurado, entao o upload passa (error vem null)
     // - este assert falha de proposito ate a migration
-    // 0003_avatar_storage_limits.sql ser aplicada em homolog.
+    // 0004_avatar_storage_limits.sql ser aplicada em homolog.
     expect(error).not.toBeNull();
   }, 15000);
 });

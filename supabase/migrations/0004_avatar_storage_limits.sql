@@ -25,8 +25,10 @@
 -- file_size_limit em bytes: 2 * 1024 * 1024 (2MB), o mesmo valor de
 -- MAX_AVATAR_BYTES em src/lib/validators.js — os dois precisam ficar em
 -- sincronia; se um mudar, o outro tambem precisa mudar.
--- allowed_mime_types: so tipos de imagem, mesma checagem que
--- validateAvatarFile ja faz no front (file.type.startsWith('image/')).
+-- allowed_mime_types: mesma lista explicita de tipos que
+-- validateAvatarFile ja checa no front (ALLOWED_AVATAR_MIME_TYPES em
+-- src/lib/validators.js) - os dois precisam ficar em sincronia; se um
+-- tipo for adicionado/removido aqui, replicar no front tambem.
 update storage.buckets
 set
   file_size_limit = 2 * 1024 * 1024,

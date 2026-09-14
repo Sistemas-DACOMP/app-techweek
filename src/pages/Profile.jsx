@@ -55,7 +55,7 @@ export default function Profile() {
       setAvatarError(
         validation.reason === 'too_large'
           ? 'A imagem precisa ter até 2MB.'
-          : 'Escolha um arquivo de imagem.'
+          : 'Escolha uma imagem PNG, JPEG, WEBP ou GIF.'
       );
       return;
     }
