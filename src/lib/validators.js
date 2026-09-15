@@ -17,11 +17,18 @@ export function isPasswordLongEnough(password, minLength = MIN_PASSWORD_LENGTH) 
 // REG-A3 (Profile.jsx::handleAvatarChange, ja implementada no front hoje).
 export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
+// REG-AVATAR-001 (KAN-29): precisa ficar em sincronia com allowed_mime_types
+// em supabase/migrations/0004_avatar_storage_limits.sql — o Storage recusa
+// qualquer tipo fora desta lista, entao o front tem que validar os mesmos
+// tipos (em vez do prefixo generico 'image/') pra dar erro amigavel antes
+// do upload, ao inves de deixar o Storage recusar com erro generico.
+export const ALLOWED_AVATAR_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
 export function validateAvatarFile(file, { maxBytes = MAX_AVATAR_BYTES } = {}) {
   if (!file) {
     return { valid: false, reason: 'missing' };
   }
-  if (!file.type || !file.type.startsWith('image/')) {
+  if (!file.type || !ALLOWED_AVATAR_MIME_TYPES.includes(file.type)) {
     return { valid: false, reason: 'invalid_type' };
   }
   if (file.size > maxBytes) {
