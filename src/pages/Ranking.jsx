@@ -23,8 +23,9 @@ export default function Ranking() {
 
       <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {ranking.slice(0, 10).map((user) => {
-          const isMe = (user.id === myUserId || user.user_id === myUserId);
-          const displayName = user.first_name || user.username || 'Participante';
+          const rawName = user.username || user.first_name || 'Participante';
+          const displayName = rawName.startsWith('@') ? rawName : `@${rawName}`;
+          const initialChar = rawName.replace(/^@/, '').charAt(0).toUpperCase() || 'U';
           return (
             <div
               key={user.id || user.user_id}
@@ -57,9 +58,9 @@ export default function Ranking() {
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', fontSize: '0.75rem', fontWeight: 'bold' }}>
                     {user.avatar_url
                       ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : displayName.charAt(0).toUpperCase()}
+                      : initialChar}
                   </div>
-                  <span style={{ fontWeight: isMe ? 'bold' : 'normal' }}>{isMe ? 'Você' : displayName}</span>
+                  <span style={{ fontWeight: isMe ? 'bold' : 'normal' }}>{isMe ? `${displayName} (Você)` : displayName}</span>
                 </div>
               </div>
 

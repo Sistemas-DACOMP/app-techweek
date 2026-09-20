@@ -41,7 +41,7 @@ export default function Dashboard() {
           >
             {avatarUrl
               ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : (firstName ? firstName.charAt(0).toUpperCase() : 'U')}
+              : (firstName ? firstName.replace(/^@/, '').charAt(0).toUpperCase() : 'U')}
           </div>
         </div>
 

@@ -13,8 +13,22 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { updateProfile } from 'firebase/auth';
+import { db, storage, auth } from './firebase';
 import { validateAvatarFile } from './validators';
+
+function fileToDataUrl(file) {
+  return new Promise((resolve) => {
+    if (typeof FileReader === 'undefined' || !file) {
+      resolve(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
 
 /**
  * Cria ou inicializa o perfil do usuário na coleção /users/{uid} do Firestore.
@@ -41,6 +55,7 @@ export async function createUserProfile(uid, data) {
     role: data.role || 'PARTICIPANT',
     totalPoints: 0,
     ticketId: data.ticketId || null,
+    symplaTicket: data.symplaTicket || null,
     termsAcceptedAt: now,
     createdAt: now,
     updatedAt: now
@@ -66,7 +81,7 @@ export async function getUserProfile(uid) {
 }
 
 /**
- * Atualiza campos parciais do perfil no Firestore.
+ * Atualiza campos parciais do documento de perfil do usuário.
  */
 export async function updateUserProfile(uid, updates) {
   if (!uid) throw new Error('UID é obrigatório.');
@@ -81,7 +96,7 @@ export async function updateUserProfile(uid, updates) {
 }
 
 /**
- * Faz upload da foto de perfil no Firebase Storage e atualiza a URL no Firestore.
+ * Faz upload da foto de perfil no Firebase Storage com fallback resiliente para Data URL.
  */
 export async function uploadUserAvatar(uid, file) {
   if (!uid) throw new Error('Usuário não autenticado.');
@@ -95,17 +110,47 @@ export async function uploadUserAvatar(uid, file) {
     throw new Error('Formato de imagem inválido. Envie um arquivo PNG, JPEG ou WebP.');
   }
 
-  const ext = file.name.split('.').pop() || 'jpg';
+  const ext = (file && typeof file.name === 'string') 
+    ? (file.name.split('.').pop() || 'jpg') 
+    : (file?.type ? file.type.split('/').pop() : 'jpg');
   const path = `avatars/${uid}/${Date.now()}.${ext}`;
   const storageRef = ref(storage, path);
 
-  await uploadBytes(storageRef, file, { contentType: file.type });
-  const downloadUrl = await getDownloadURL(storageRef);
+  let finalUrl = null;
 
-  // Atualiza o avatar no documento do usuário
-  await updateUserProfile(uid, { avatarUrl: downloadUrl });
+  try {
+    const uploadTask = (async () => {
+      await uploadBytes(storageRef, file, { contentType: file.type || 'image/jpeg' });
+      return await getDownloadURL(storageRef);
+    })();
 
-  return downloadUrl;
+    const timeoutTask = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Tempo limite excedido ao salvar foto no Storage.')), 4000);
+    });
+
+    finalUrl = await Promise.race([uploadTask, timeoutTask]);
+  } catch (storageErr) {
+    console.warn('Storage indisponível ou lento. Aplicando fallback base64:', storageErr);
+    finalUrl = await fileToDataUrl(file);
+  }
+
+  if (!finalUrl) {
+    throw new Error('Não foi possível processar a imagem do perfil.');
+  }
+
+  // 1. Atualiza no Firestore
+  await updateUserProfile(uid, { avatarUrl: finalUrl });
+
+  // 2. Sincroniza no Firebase Auth se for o usuário logado
+  if (auth.currentUser && auth.currentUser.uid === uid) {
+    try {
+      await updateProfile(auth.currentUser, { photoURL: finalUrl });
+    } catch (authErr) {
+      console.warn('Aviso: Falha ao atualizar photoURL no Auth:', authErr);
+    }
+  }
+
+  return finalUrl;
 }
 
 /**

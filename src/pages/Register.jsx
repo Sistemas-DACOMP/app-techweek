@@ -255,8 +255,6 @@ export default function Register() {
                   <option value="Aluno da UFU">Aluno da UFU</option>
                   <option value="Aluno de outra instituição">Aluno de outra instituição</option>
                   <option value="Servidor / Professor">Servidor / Professor</option>
-                  <option value="Organizador">Organizador</option>
-                  <option value="Patrocinador / Palestrante">Patrocinador / Palestrante</option>
                   <option value="Comunidade Externa">Comunidade Externa</option>
                 </select>
               </div>

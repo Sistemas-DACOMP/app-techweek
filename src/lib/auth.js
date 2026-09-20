@@ -3,7 +3,8 @@ import {
   sendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  updateProfile
 } from 'firebase/auth';
 import { auth } from './firebase';
 import { normalizeEmail } from './validators';
@@ -13,6 +14,7 @@ export const AUTH_MESSAGES = {
   user_not_found: 'Nenhuma conta encontrada com este e-mail.',
   wrong_password: 'Senha incorreta. Tente novamente ou use a recuperação de senha.',
   invalid_email: 'O e-mail informado não possui um formato válido.',
+  email_already_in_use: 'Este e-mail já está cadastrado. Faça login ou recupere sua senha.',
   user_disabled: 'Esta conta foi desativada pela coordenação do evento.',
   too_many_requests: 'Muitas tentativas sem sucesso. Aguarde alguns instantes antes de tentar novamente.',
   network_error: 'Falha de conexão. Verifique sua internet.',
@@ -29,12 +31,16 @@ export function mapAuthError(error) {
 
   switch (code) {
     case 'auth/invalid-credential':
-    case 'auth/wrong-password':
+    case 'auth/invalid-login-credentials':
       return AUTH_MESSAGES.invalid_credentials;
     case 'auth/user-not-found':
       return AUTH_MESSAGES.user_not_found;
+    case 'auth/wrong-password':
+      return AUTH_MESSAGES.wrong_password;
     case 'auth/invalid-email':
       return AUTH_MESSAGES.invalid_email;
+    case 'auth/email-already-in-use':
+      return AUTH_MESSAGES.email_already_in_use;
     case 'auth/user-disabled':
       return AUTH_MESSAGES.user_disabled;
     case 'auth/too-many-requests':
@@ -139,6 +145,15 @@ export async function signUpWithEmail({ email, password, metadata }) {
 
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+    const rawUsername = metadata?.username || metadata?.first_name || '';
+    const atUsername = rawUsername ? (rawUsername.startsWith('@') ? rawUsername : `@${rawUsername}`) : '';
+    if (atUsername) {
+      try {
+        await updateProfile(userCredential.user, { displayName: atUsername });
+      } catch (profileErr) {
+        console.warn('Aviso: Falha ao definir displayName no Firebase Auth:', profileErr);
+      }
+    }
     return {
       status: 'signed_in',
       message: null,

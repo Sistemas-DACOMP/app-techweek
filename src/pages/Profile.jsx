@@ -95,13 +95,13 @@ export default function Profile() {
     profile.symplaTicket?.qrCodeData ||
     profile.symplaTicket?.ticketNumber ||
     JSON.stringify({
-      username: profile.username || 'user',
-      participantType: profile.participantType,
-      course: profile.course,
-      period: profile.period
+      username: (profile.username || 'user').replace(/^@/, ''),
+      participantType: profile.participantType || 'Participante',
+      course: profile.course || '',
+      period: profile.period || null
     })
   );
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrData}&bgcolor=ffffff&color=000000`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${qrData}&bgcolor=ffffff&color=000000`;
 
   const formatUrl = (url, prefix = '') => {
     if (!url) return null;
@@ -112,6 +112,11 @@ export default function Profile() {
 
   const linkedinUrl = formatUrl(profile.linkedin, 'https://linkedin.com/in/');
   const instagramUrl = formatUrl(profile.instagram, 'https://instagram.com/');
+
+  const cleanFirstName = (profile.firstName || '').replace(/^@/, '');
+  const cleanLastName = profile.lastName || '';
+  const fullName = [cleanFirstName, cleanLastName].filter(Boolean).join(' ').trim();
+  const cleanUsername = (profile.username || '').replace(/^@/, '');
 
   return (
     <div className="page-container animate-fade-in" style={{ paddingBottom: '120px' }}>
@@ -131,7 +136,7 @@ export default function Profile() {
         >
           {profile.avatarUrl
             ? <img src={profile.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : (profile.firstName ? profile.firstName.charAt(0).toUpperCase() : (profile.username ? profile.username.charAt(0).toUpperCase() : 'U'))}
+            : (cleanFirstName ? cleanFirstName.charAt(0).toUpperCase() : (cleanUsername ? cleanUsername.charAt(0).toUpperCase() : 'U'))}
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.55)', padding: '6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Camera size={18} />
           </div>
@@ -149,10 +154,17 @@ export default function Profile() {
         {avatarError && (
           <p style={{ fontSize: '0.8rem', color: '#ef4444', marginBottom: '8px' }}>{avatarError}</p>
         )}
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '4px', textAlign: 'center' }}>
-          {profile.firstName ? `${profile.firstName} ${profile.lastName}` : (profile.username ? `@${profile.username}` : 'Participante')}
+        {/* Nome Grande em Cima */}
+        <h2 style={{ fontSize: '1.6rem', fontWeight: '800', marginBottom: '4px', textAlign: 'center', color: 'white' }}>
+          {fullName || (cleanUsername ? `@${cleanUsername}` : 'Participante')}
         </h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px', textAlign: 'center' }}>
+        {/* Username em Baixo */}
+        {cleanUsername && (
+          <p style={{ color: 'var(--primary-color, #00d2ff)', fontSize: '1rem', fontWeight: '600', marginBottom: '8px', textAlign: 'center' }}>
+            @{cleanUsername}
+          </p>
+        )}
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '16px', textAlign: 'center' }}>
           {profile.course ? `${profile.course} - ${profile.participantType}` : profile.participantType || 'Participante'}
         </p>
 
@@ -178,22 +190,22 @@ export default function Profile() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: '24px', textAlign: 'center' }}>
-        <h3 style={{ fontSize: '1rem', color: 'white', marginBottom: '8px' }}>Meu Crachá & QR Code</h3>
+      <div className="card" style={{ marginBottom: '24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: 'white', marginBottom: '10px' }}>Meu Crachá & QR Code</h3>
         {profile.symplaTicket?.ticketName && (
-          <div style={{ display: 'inline-block', padding: '4px 12px', background: 'rgba(0, 210, 255, 0.12)', border: '1px solid rgba(0, 210, 255, 0.3)', borderRadius: '20px', color: '#00d2ff', fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '16px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', background: 'rgba(0, 210, 255, 0.12)', border: '1px solid rgba(0, 210, 255, 0.35)', borderRadius: '20px', color: '#00d2ff', fontSize: '0.8rem', fontWeight: '600', marginBottom: '16px' }}>
             🎟️ {profile.symplaTicket.ticketName}
           </div>
         )}
-        <div style={{ background: 'white', padding: '16px', borderRadius: '16px', display: 'inline-block', marginBottom: '16px' }}>
+        <div style={{ background: 'white', padding: '16px', borderRadius: '20px', display: 'inline-block', marginBottom: '14px', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)' }}>
           <img
             src={qrUrl}
             alt="Meu QR Code"
-            style={{ width: '150px', height: '150px', display: 'block' }}
+            style={{ width: '160px', height: '160px', display: 'block' }}
           />
         </div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-          {profile.symplaTicket ? 'Ingresso oficial Sympla vinculado!' : 'Peça para escanearem e ganhe pontos!'}
+        <p style={{ fontSize: '0.85rem', color: profile.symplaTicket ? '#10b981' : 'var(--text-secondary)', fontWeight: profile.symplaTicket ? '600' : 'normal' }}>
+          {profile.symplaTicket ? '✓ Ingresso oficial Sympla vinculado!' : 'Peça para outros participantes escanearem para networking!'}
         </p>
       </div>
 

@@ -33,12 +33,19 @@ export async function getMyProfile() {
   if (!user) return null;
 
   const profile = await getUserProfile(user.uid);
+  const authUsername = user.displayName?.startsWith('@') 
+    ? user.displayName.slice(1) 
+    : (user.displayName || user.email?.split('@')[0] || 'user');
+
   if (!profile) {
-    const fallbackName = user.displayName || user.email?.split('@')[0] || 'Participante';
+    const rawUsername = authUsername;
+    const displayAtUsername = `@${rawUsername}`;
     return {
       id: user.uid,
-      username: user.email?.split('@')[0] || 'user',
-      first_name: fallbackName,
+      email: user.email || '',
+      username: rawUsername,
+      display_name: displayAtUsername,
+      first_name: displayAtUsername,
       last_name: '',
       course: '',
       participant_type: 'Participante',
@@ -50,10 +57,15 @@ export async function getMyProfile() {
     };
   }
 
+  const rawUsername = (profile.username || authUsername || 'user').replace(/^@/, '');
+  const displayAtUsername = `@${rawUsername}`;
+
   return {
     id: user.uid,
-    username: profile.username || user.email?.split('@')[0] || 'user',
-    first_name: profile.firstName || user.displayName || 'Participante',
+    email: profile.email || user.email || '',
+    username: rawUsername,
+    display_name: displayAtUsername,
+    first_name: profile.firstName || user.displayName || rawUsername,
     last_name: profile.lastName || '',
     course: profile.course || '',
     participant_type: profile.participantType || 'Participante',
