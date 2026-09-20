@@ -29,24 +29,26 @@
   - [ ] Validação reativa de força de senha no cadastro (*absorve KAN-27*).
   - [ ] Listener `onAuthStateChanged` gerenciando sessão global (*absorve KAN-16*).
 
-#### 📌 [KAN-44] Tela de Onboarding, Perfil Acadêmico e Aceite de Termos LGPD
+#### 📌 [KAN-44] Tela de Onboarding, Perfil Acadêmico, Vínculo com Sympla e Termos LGPD
 - **Tipo:** User Story | **Componente:** `Frontend - PWA (Mobile)` | **Prioridade:** High
 - **Branch Sugerida:** `feature/KAN-44-onboarding-lgpd`
-- **Descrição:** Como participante no primeiro acesso, preencher perfil com curso da UFU, situação profissional e termos LGPD.
+- **Descrição:** Como participante no primeiro acesso, preencher perfil com curso da UFU, situação profissional, termos LGPD e vincular automaticamente a inscrição com base no e-mail cadastrado no Sympla.
 - **Critérios de Aceite (DoD):**
-  - [ ] Dropdown com os cursos da UFU (*absorve KAN-24*).
+  - [ ] Cruzamento automático com os dados de ingressos do Sympla (`/sympla_tickets` ou consulta sob demanda).
+  - [ ] Preenchimento do perfil com dropdown de cursos da UFU (*absorve KAN-24*).
   - [ ] Dropdown de situação profissional: Estudante, Empregado, Buscando Vaga (*absorve KAN-23*).
   - [ ] Checkbox obrigatório de termos LGPD com timestamp salvo (*absorve KAN-28 e KAN-33*).
-  - [ ] Gravação no documento `/users/{uid}` no Firestore via SDK cliente com `perfilCompleto: true`.
+  - [ ] Gravação no documento `/users/{uid}` no Firestore com `perfilCompleto: true` e `ticketId` associado.
 
-#### 📌 [KAN-45] Crachá Virtual do Participante com QR Code Exclusivo
+#### 📌 [KAN-45] Crachá Virtual do Participante com QR Code Oficial do Sympla
 - **Tipo:** User Story | **Componente:** `Frontend - PWA (Mobile)` | **Prioridade:** High
 - **Branch Sugerida:** `feature/KAN-45-cracha-qrcode`
-- **Descrição:** Como participante, visualizar meu crachá digital com nome, curso, mascotes do evento e um QR Code único para ser lido na portaria e nos estandes.
+- **Descrição:** Como participante, visualizar meu crachá digital com nome, curso, mascotes do evento e o mesmo QR Code gerado pelo Sympla / crachá impresso de pescoço, permitindo leitura unificada na portaria e nos estandes.
 - **Critérios de Aceite (DoD):**
   - [ ] QR Code renderizado na tela com a biblioteca `qrcode.react`.
-  - [ ] Conteúdo do QR Code formatado com o UID: `facomtw://user/<uid>`.
-  - [ ] Exibição integrada dos mascotes (`MascotDuo.jsx`) e pontos acumulados.
+  - [ ] Conteúdo do QR Code gerado com o `ticketId` do Sympla (idêntico ao crachá físico impresso).
+  - [ ] Exibição integrada dos mascotes (`MascotDuo.jsx`) e pontuação acumulada.
+  - [ ] Suporte a cache offline no PWA para exibição mesmo sem internet.
 
 #### 📌 [KAN-46] Regras Declarativas de Segurança Perimetral no Firestore (`firestore.rules`)
 - **Tipo:** Technical Task | **Componente:** `QA, Infra & Segurança` | **Prioridade:** High
@@ -74,20 +76,21 @@
 #### 📌 [KAN-48] Modo Staff: Leitor de QR Code para Portaria e Salas no PWA (`/staff`)
 - **Tipo:** User Story | **Componente:** `Frontend - PWA (Mobile)` | **Prioridade:** High
 - **Branch Sugerida:** `feature/KAN-48-scanner-staff`
-- **Descrição:** Como Staff na porta da sala, usar a câmera do celular para bipar o crachá do aluno e validar presença.
+- **Descrição:** Como Staff na porta da sala, usar a câmera do celular para bipar tanto o crachá físico impresso de pescoço quanto o celular do aluno para validar presença.
 - **Critérios de Aceite (DoD):**
   - [ ] Rota `/staff` restrita a usuários com role `STAFF` ou `ADMIN`.
-  - [ ] Leitor contínuo com `html5-qrcode`.
-  - [ ] Chamada para `POST /api/checkin` enviando `{ participantUid, activityId }`.
+  - [ ] Leitor contínuo com `html5-qrcode` com suporte à leitura rápida de crachás físicos e telas de celular.
+  - [ ] Chamada para `POST /api/checkin` enviando `{ identifier: qrPayload, activityId }`.
   - [ ] Feedback visual e sonoro imediato: verde para confirmado, vermelho para duplicidade.
 
 #### 📌 [KAN-49] Endpoint de Validação de Presença e Crédito de Pontos
 - **Tipo:** Technical Task | **Componente:** `Backend - Serverless & Cloud` | **Prioridade:** High
 - **Branch Sugerida:** `feature/KAN-49-checkin-api`
-- **Descrição:** Endpoint `POST /api/checkin` para validar o crachá do aluno, checar duplicidade e creditar +100 pontos de gamificação.
+- **Descrição:** Endpoint `POST /api/checkin` para validar o crachá do aluno (por `ticketId` do Sympla ou `uid`), checar duplicidade e creditar +100 pontos de gamificação.
 - **Critérios de Aceite (DoD):**
   - [ ] Protegido por `requireRole(['STAFF', 'ADMIN'])`.
-  - [ ] Retorno de HTTP 409 Conflict caso o check-in já tenha sido realizado.
+  - [ ] Resolução do participante via `ticketId` (crachá físico do Sympla) ou `uid` (app).
+  - [ ] Retorno de HTTP 409 Conflict caso o check-in já tenha sido realizado na mesma atividade.
   - [ ] Incremento atômico de +100 pontos em `pontuacaoTotal` via `FieldValue.increment(100)`.
 
 #### 📌 [KAN-50] Catálogo de Atividades em Tempo Real e Reserva no PWA
@@ -115,17 +118,19 @@
 #### 📌 [KAN-52] Modo Patrocinador: Leitor de Leads de Estande no PWA (`/sponsor`)
 - **Tipo:** User Story | **Componente:** `Frontend - PWA (Mobile)` | **Prioridade:** High
 - **Branch Sugerida:** `feature/KAN-52-scanner-sponsor`
-- **Descrição:** Como patrocinador no estande, bipar o crachá do estudante, dar nota de 1 a 5 estrelas e registrar notas de recrutamento.
+- **Descrição:** Como patrocinador no estande, bipar o crachá físico de pescoço ou o crachá digital do estudante, dar nota de 1 a 5 estrelas e registrar notas de recrutamento.
 - **Critérios de Aceite (DoD):**
   - [ ] Rota `/sponsor` restrita a role `SPONSOR` ou `ADMIN`.
+  - [ ] Leitor contínuo de QR Code com suporte a crachá físico do Sympla ou app.
   - [ ] Formulário modal pós-leitura com classificação de estrelas e campo de anotações (`notes`).
   - [ ] Envio para `POST /api/leads` e exibição do botão de WhatsApp.
 
 #### 📌 [KAN-53] Endpoint de Captura de Leads e Gamificação de Estande
 - **Tipo:** Technical Task | **Componente:** `Backend - Serverless & Cloud` | **Prioridade:** High
 - **Branch Sugerida:** `feature/KAN-53-leads-api`
-- **Descrição:** Endpoint `POST /api/leads` para gravar o lead no Firestore e creditar +50 pontos ao participante visitando o estande.
+- **Descrição:** Endpoint `POST /api/leads` para gravar o lead no Firestore (resolvendo por `ticketId` ou `uid`) e creditar +50 pontos ao participante visitando o estande.
 - **Critérios de Aceite (DoD):**
+  - [ ] Resolução automática do estudante a partir do código do Sympla ou `uid`.
   - [ ] Salvamento em `/leads/{sponsorUid}/contacts/{participantUid}`.
   - [ ] Cálculo da faixa etária dinâmica preservando privacidade da data de nascimento exata.
   - [ ] Incremento atômico de +50 pontos no aluno.

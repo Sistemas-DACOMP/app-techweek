@@ -1,15 +1,10 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { onRequest } from 'firebase-functions/v2/https';
-import * as admin from 'firebase-admin';
+import { db, auth } from './config/firebaseAdmin';
+import { requireAuth, requireRole } from './middlewares/authMiddleware';
 
-// Inicializa o Firebase Admin SDK se ainda não foi inicializado
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-
-export const db = admin.firestore();
-export const auth = admin.auth();
+export { db, auth };
 
 const app = express();
 
@@ -27,6 +22,29 @@ app.get('/api/health', (_req: Request, res: Response) => {
   });
 });
 
+// Rota protegida: Retorna os dados do usuário autenticado a partir do token JWT
+app.get('/api/me', requireAuth, (req: Request, res: Response) => {
+  res.status(200).json({
+    user: req.user
+  });
+});
+
+// Rota protegida para STAFF e ADMIN (ex: Validação de presença na portaria)
+app.get('/api/staff/test', requireAuth, requireRole(['STAFF', 'ADMIN']), (req: Request, res: Response) => {
+  res.status(200).json({
+    message: 'Acesso autorizado para a equipe de Staff!',
+    operator: req.user
+  });
+});
+
+// Rota restrita exclusiva para ADMIN
+app.get('/api/admin/test', requireAuth, requireRole(['ADMIN']), (req: Request, res: Response) => {
+  res.status(200).json({
+    message: 'Acesso autorizado para Administrador!',
+    admin: req.user
+  });
+});
+
 // Exporta a Cloud Function 2nd Gen na região us-east1 (Free Tier)
 export const api = onRequest(
   {
@@ -37,4 +55,3 @@ export const api = onRequest(
   },
   app
 );
-
