@@ -29,6 +29,9 @@ Nunca substitua silenciosamente uma regra persistida por uma interpretação sua
 | "execute os testes"/"valide a regra X" | TESTING (delega para a skill `qa-agent`) |
 | "prepare para merge" | fase final do PR REVIEW (`pr-review`, 4ª fase — nunca pula pra merge sozinho) |
 | "revisão de segurança"/toca em auth, RLS, token, upload, endpoint admin | delega também para o agente `security-reviewer` |
+| requisito ambíguo, regra de negócio não classificada | delega para `spec`/`product` antes de implementar |
+| mudança toca `firebase.json`/`firestore.rules`/`storage.rules`/deploy | delega para `infra` |
+| decisão técnica real acabou de ser tomada | delega para `adr` registrar |
 
 ## Agentes disponíveis e quando delegar
 
@@ -37,7 +40,21 @@ Nunca substitua silenciosamente uma regra persistida por uma interpretação sua
 - **security-reviewer** (agent) — revisão de segurança independente, só reporta, não corrige.
 - **dedup-refactor** (agent) — só quando pedido explicitamente para achar duplicação/sugerir extração; não faz parte do fluxo automático de feature/bugfix.
 
+Agentes abaixo vieram da expansão do sistema portável (`.agent-system/agents/`, 2026-09-20) — despache-os sozinho, sem esperar o usuário pedir por nome, sempre que a situação bater:
+
+- **spec** — requisito novo/ambíguo, ou precisa classificar uma regra de negócio (CONFIRMADA/INFERIDA/OBSERVADA/NÃO DEFINIDA) antes de implementar.
+- **product** — divergência entre documentação e implementação, comportamento funcional ambíguo, ou proposta de regra inferida (nunca confirma sozinho).
+- **architecture** — mudança que propõe algo que toca fronteira/estrutura do sistema (nova collection Firestore, contrato de API, novo serviço, mudança que afeta mais de uma área).
+- **backend** — mudança em `backend/` (Cloud Functions/Express).
+- **pwa** — mudança na área de participante/staff/sponsor do app (hoje ainda em `src/` na raiz, `apps/pwa/` não existe como pasta separada).
+- **admin** — mudança em painel administrativo, CRUD, gestão de usuários/roles (`apps/admin-web/` também ainda não existe como pasta separada).
+- **infra** — mudança em `firebase.json`, `firestore.rules`, `storage.rules`, config/deploy do Firebase, `.github/workflows/*.yml`. Nunca altera código do app pra "resolver" problema de infra.
+- **adr** — uma decisão técnica real acabou de ser tomada e precisa virar registro permanente em `.agent-system/adr/`. Nunca inventa decisão que não foi tomada.
+- **ponytail** (plugin real instalado) — antes de aceitar qualquer solução como pronta, pergunta se existe complexidade/abstração/dependência desnecessária. Já dispara sozinho via hook do plugin, não precisa chamar manualmente.
+
 Não crie ou chame agente novo para cada tool — tools são capacidades (ler, editar, rodar lint/build/test, consultar git/PR/Jira), agentes são responsabilidades distintas de raciocínio.
+
+**Padrão daqui pra frente**: toda vez que um agente/skill novo for adicionado a este projeto, ele precisa de equivalente (ou gap documentado) em `AGENTS.md` (Codex/Antigravity) e `.github/copilot-instructions.md` (Copilot) além do arquivo aqui em `.claude/` — não é opcional, é requisito do Fabio (2026-09-20).
 
 ## WORKFLOW: FEATURE
 
