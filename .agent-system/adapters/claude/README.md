@@ -19,9 +19,10 @@ There is no `@import`-style mechanism confirmed to work inside an agent or skill
 | `qa.md` | `.claude/skills/qa-agent/SKILL.md` |
 | `security.md` | `.claude/agents/security-reviewer.md` |
 | `code-review.md` | `.claude/agents/pr-review.md` + `.claude/agents/dedup-refactor.md` |
-| `spec.md`, `product.md`, `architecture.md`, `backend.md`, `pwa.md`, `admin.md`, `infra.md`, `adr.md`, `ponytail.md` | **none yet** — no `.claude/agents/*.md` wrapper exists for these. Gap: someone needs to create the corresponding `.claude/agents/*.md` files wrapping each canonical file before Claude Code can dispatch them as subagents. `ponytail.md` additionally documents a concept that has no installed tool anywhere (see canonical file), so its Claude wrapper — once written — must say so too. |
+| `spec.md`, `product.md`, `architecture.md`, `backend.md`, `pwa.md`, `admin.md`, `infra.md`, `adr.md` | `.claude/agents/spec.md`, `product.md`, `architecture.md`, `backend.md`, `pwa.md`, `admin.md`, `infra.md`, `adr.md` — gap closed 2026-09-20, per Fabio's explicit requirement that agents dispatch automatically instead of needing to be called by name. |
+| `ponytail.md` | no wrapper file — Ponytail is a real installed Claude Code plugin (`ponytail@ponytail`, v4.10.0), its own 6 skills load automatically once the plugin is enabled. A `.claude/agents/ponytail.md` would only duplicate/drift from the plugin's own skills. |
 
-The files in the right-hand column are owned and kept in sync by other agents working in parallel on this system; this adapter README only documents the mapping and the sync convention, it does not itself edit those files.
+All 13 canonical agents now have either a real `.claude/` dispatch file or (Ponytail) a real installed plugin — every one auto-dispatches in Claude Code without the user asking for it by name. The files in the right-hand column are kept in sync by whoever edits the canonical file; this adapter README only documents the mapping and the sync convention, it does not itself edit those files.
 
 ## Sync convention
 
