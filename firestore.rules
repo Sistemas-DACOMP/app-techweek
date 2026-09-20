@@ -19,27 +19,20 @@ service cloud.firestore {
 
     // Regras de Usuários: Todos autenticados leem; só o próprio dono atualiza dados pessoais
     //
-    // O `create` exige termsAcceptedAt como timestamp e role fixo em PARTICIPANT —
-    // isso replica exatamente o que POST /api/auth/register grava (ver backend/src/services/registerUser.ts,
-    // KAN-72/REG-LGPD-001). Sem essa trava, um client autenticado podia escrever
-    // /users/{uid} direto pelo SDK, pulando o backend inteiro: sem aceite de LGPD
-    // registrado e, mais grave, podendo se auto-atribuir qualquer role (inclusive
-    // ADMIN) na criação — o `allow update` já bloqueava troca de role depois, mas
-    // nada bloqueava isso no create. O backend usa o Admin SDK, que ignora estas
-    // regras, então essa trava não afeta o fluxo oficial de cadastro.
-    //
-    // uid/email/hasOnly: achado do security-reviewer (KAN-72) — sem isso, o create
-    // (ainda preso ao próprio uid via isOwner) deixava gravar uid/email arbitrários
-    // e campos extra no próprio doc. uid tem que bater com o token; email só pode
-    // ser o do token ou null (cobre contas sem claim de email, ex. telefone).
+    // `create` bloqueado pro client (KAN-72/REG-LGPD-001, revisto no code-review desta PR):
+    // a primeira versão desta trava tentava replicar em regras declarativas o que
+    // POST /api/auth/register grava (uid/email batendo com o token, termsAcceptedAt
+    // como timestamp, role fixo em PARTICIPANT, hasOnly nos campos). Isso barra client
+    // gravando lixo, mas não prova aceite de LGPD nenhum: nada nas Security Rules
+    // sabe se o usuário realmente marcou o checkbox — um client mal-intencionado (ou só
+    // um SDK direto, sem passar pela tela de cadastro) podia gravar um `termsAcceptedAt`
+    // qualquer (ex.: `serverTimestamp()`) e a regra aceitava, reabrindo exatamente o
+    // bypass que o KAN-72 devia fechar, só que camuflado atrás de uma regra que parece
+    // robusta. A garantia real só existe se a criação do doc for exclusiva do backend
+    // (Admin SDK ignora Security Rules) — mesmo padrão já usado abaixo em `bookings`/`leads`.
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId)
-        && request.resource.data.uid == request.auth.uid
-        && (request.resource.data.email == null || request.resource.data.email == request.auth.token.email)
-        && request.resource.data.termsAcceptedAt is timestamp
-        && request.resource.data.role == 'PARTICIPANT'
-        && request.resource.data.keys().hasOnly(['uid', 'email', 'role', 'termsAcceptedAt', 'createdAt']);
+      allow create: if false; // Apenas backend via Firebase Admin SDK (POST /api/auth/register)
       allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
       allow write: if isAdmin();
     }
