@@ -81,3 +81,4 @@ describe('firestore.rules - Segurança Perimetral (KAN-48)', () => {
     });
   });
 });
+
