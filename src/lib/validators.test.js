@@ -119,4 +119,3 @@ describe('suggestEmailCorrection', () => {
     expect(suggestEmailCorrection(null)).toBeNull();
   });
 });
-
