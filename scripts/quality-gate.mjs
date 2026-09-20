@@ -5,7 +5,7 @@
 // Ver `.claude/skills/dev-workflows/SKILL.md` para o registro completo do quality gate.
 
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 export function run(cmd) {
@@ -21,10 +21,12 @@ export function run(cmd) {
 }
 
 // Lógica pura do gate — sem I/O, testável isolada (ver quality-gate.test.mjs).
-export function evaluateGate({ lintOk, buildOk, hasTestScript, testOk }) {
-  const checks = [lintOk, buildOk, ...(hasTestScript ? [testOk] : [])];
+// hasBackend/backendOk são opcionais (default: sem backend) pra não quebrar quem chama
+// evaluateGate sem saber do backend/ — só entram na nota e no aprovado quando presentes.
+export function evaluateGate({ lintOk, buildOk, hasTestScript, testOk, hasBackend = false, backendOk = true }) {
+  const checks = [lintOk, buildOk, ...(hasTestScript ? [testOk] : []), ...(hasBackend ? [backendOk] : [])];
   const quality_score = Number((checks.filter(Boolean).length / checks.length).toFixed(2));
-  const mandatoryPassed = lintOk && buildOk && (!hasTestScript || testOk);
+  const mandatoryPassed = lintOk && buildOk && (!hasTestScript || testOk) && (!hasBackend || backendOk);
 
   return {
     quality_score,
@@ -36,6 +38,7 @@ export function evaluateGate({ lintOk, buildOk, hasTestScript, testOk }) {
       lint: lintOk,
       build: buildOk,
       test: hasTestScript ? testOk : 'skipped',
+      ...(hasBackend ? { backend: backendOk } : {}),
     },
     approved: mandatoryPassed,
   };
@@ -44,6 +47,11 @@ export function evaluateGate({ lintOk, buildOk, hasTestScript, testOk }) {
 function main() {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   const hasTestScript = Boolean(pkg.scripts?.test);
+
+  const backendPkgPath = new URL('../backend/package.json', import.meta.url);
+  const hasBackend = existsSync(backendPkgPath);
+  const backendPkg = hasBackend ? JSON.parse(readFileSync(backendPkgPath, 'utf8')) : null;
+  const backendHasTestScript = Boolean(backendPkg?.scripts?.test);
 
   console.log('Quality Gate — App TechWeek\n');
 
@@ -61,7 +69,30 @@ function main() {
     console.log('test  ... SKIP (sem script "test" no package.json)');
   }
 
-  const result = evaluateGate({ lintOk: lint.ok, buildOk: build.ok, hasTestScript, testOk: test.ok });
+  // backend/ é um workspace separado (Cloud Functions), não entra no npm run build/test
+  // da raiz — sem isso o gate aprovava PRs que só quebram testes/build do backend.
+  let backendBuild = { ok: true, output: '' };
+  let backendTest = { ok: true, output: '' };
+  if (hasBackend) {
+    backendBuild = run('npm --prefix backend run build');
+    console.log(`backend:build ... ${backendBuild.ok ? 'PASS' : 'FAIL'}`);
+    if (backendHasTestScript) {
+      backendTest = run('npm --prefix backend run test');
+      console.log(`backend:test  ... ${backendTest.ok ? 'PASS' : 'FAIL'}`);
+    } else {
+      console.log('backend:test  ... SKIP (sem script "test" no backend/package.json)');
+    }
+  }
+  const backendOk = backendBuild.ok && backendTest.ok;
+
+  const result = evaluateGate({
+    lintOk: lint.ok,
+    buildOk: build.ok,
+    hasTestScript,
+    testOk: test.ok,
+    hasBackend,
+    backendOk,
+  });
 
   console.log('\n' + JSON.stringify(result, null, 2));
 
@@ -71,6 +102,8 @@ function main() {
       ['lint', lint],
       ['build', build],
       ['test', test],
+      ['backend:build', backendBuild],
+      ['backend:test', backendTest],
     ]) {
       if (!r.ok && r.output) {
         console.log(`\n--- ${name} output (últimas linhas) ---`);
