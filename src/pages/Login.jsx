@@ -189,12 +189,15 @@ export default function Login() {
               style={{
                 background: 'none',
                 border: 'none',
-                color: 'var(--primary-color, #00d2ff)',
-                fontSize: '0.8rem',
+                color: 'var(--text-secondary, #9ca3af)',
+                fontSize: '0.75rem',
                 cursor: 'pointer',
-                textDecoration: 'underline',
-                padding: '0'
+                textDecoration: 'none',
+                padding: '2px 4px',
+                transition: 'color 0.2s ease'
               }}
+              onMouseEnter={(e) => e.target.style.color = '#ffffff'}
+              onMouseLeave={(e) => e.target.style.color = 'var(--text-secondary, #9ca3af)'}
             >
               Esqueceu a senha?
             </button>
