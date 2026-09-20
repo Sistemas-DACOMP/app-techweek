@@ -2,6 +2,10 @@
 
 `claude-context/` é local do Fabio e **não é versionado** (`.gitignore` — exclusão proposital, tem conteúdo sensível de setup, não remova). Numa sessão que abre a partir de um clone novo esses arquivos não existem — trate como histórico pessoal complementar, nunca como pré-requisito. O conhecimento operacional que precisa sobreviver a um `git clone` está versionado em: este arquivo, `docs/business-rules/`, `docs/superpowers/specs/`, `.claude/skills/`, `.claude/agents/` — ver `docs/ai-infra/README.md` pra arquitetura completa. Se `claude-context/` existir na sua sessão, `como-usar-fluxo-versionamento.md` continua sendo o texto certo pra explicar git flow pro time em linguagem de iniciante.
 
+## Sistema de engenharia portável (`.agent-system/`)
+
+A partir de 2026-09-20 o comportamento operacional dos agentes (orquestração, regras, gates, workflows) tem fonte canônica em `.agent-system/` — ver `.agent-system/manifests/system.yaml`. Este CLAUDE.md continua sendo o bootstrap que o Claude Code lê automaticamente, mas para trabalho de engenharia não trivial, consulte também `.agent-system/agents/` (comportamento de cada agente) e `.agent-system/docs/audit-report.md` (auditoria completa: o que existe, o que é portável entre Claude Code/Codex/Antigravity, o que falta). Os arquivos em `.claude/agents/` e `.claude/skills/` continuam sendo os adapters reais que o Claude Code executa — mantidos sincronizados com a fonte canônica, não substituídos por ela.
+
 ## Quem é o time
 
 Time de **iniciantes, primeiro projeto de software real** (evento FACOM Tech Week, UFU). O usuário (Fabio) tem conhecimento de DevOps/segurança e está ensinando o resto do time enquanto configura a infra. Quando ele disser que precisa entender algo pra explicar pro time, pare e explique passo a passo em vez de só executar a ação.
@@ -82,6 +86,7 @@ FASE 5 — integrações Jira/GitHub (feita com o que já existe: gh CLI + MCP A
           integração mais profunda além disso por enquanto — expandir só se necessidade real aparecer)
 FASE 6 — expansão / agentes adicionais (não iniciada — só quando houver responsabilidade
           claramente distinta que justifique um agente novo; ver `docs/ai-infra/README.md`)
+FASE 7 — portabilidade multi-runtime (em andamento: 2026-09-20 — .agent-system/ canônico criado, adapters Claude prontos, Codex/Antigravity documentados mas não testados localmente — CLIs não instalados nesta máquina)
 ```
 
 Ver `docs/superpowers/specs/2026-09-10-persistent-project-memory-design.md` pro design da Fase 1 e `docs/superpowers/specs/2026-09-11-agent-infra-fase2-6-design.md` pras decisões das Fases 2-6 (por que a estrutura de pastas foi adaptada, por que só 2 agentes novos, etc). `docs/ai-infra/README.md` é a arquitetura completa, como configurar num checkout novo e como estender (novo agente/skill/regra). Não pular fase sem validar a anterior funcionando.

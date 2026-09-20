@@ -3,6 +3,8 @@ name: qa-agent
 description: Use when building or maintaining an automated test suite (unit, API/payload, integration, E2E) that covers business rules, when deciding whether a behavior is confirmed enough to become a permanent test, or when writing up a bug found during testing.
 ---
 
+<!-- Canonical definition: .agent-system/agents/qa.md — keep in sync, edit meaning there first. -->
+
 # QA Agent
 
 ## Overview
@@ -87,6 +89,10 @@ Don't chase coverage numbers. No irrelevant asserts, no excessive mocks, no test
 
 Every campaign ends with: summary (rules identified/confirmed/pending), PASS/FAIL per layer, the coverage matrix, bugs found (bug-report format), and the list of inferences still pending PO validation — never promote those to official without it. Update `docs/business-rules/` with anything that changed status.
 
-## Project Note (example, adapt per project)
+## Project Note — Nota de migração (2026-09-20)
 
-For a React+Vite+Supabase app with no backend of its own: "API/payload testing" means calling Supabase (Auth/DB/Storage) directly via `@supabase/supabase-js`, bypassing the UI, generally against a homolog project. "Database" is Postgres with RLS. Business rules live in both React components and SQL policies/triggers — check both when classifying a rule's source.
+Este projeto migrou de Supabase para Firebase/GCP (decisão de 2026-09-20). O escopo Supabase que existia aqui foi removido — os PRs #21/#22/#23, ainda abertos neste repo, tratam de comportamento Supabase que não será mais coberto por este framework de teste; cobertura desses PRs específicos, se necessário, é responsabilidade manual do time, não deste framework.
+
+## Project Note — Escopo atual (Firebase)
+
+`apps/pwa`, `apps/admin-web` e `backend/` (Cloud Functions) ainda não existem (2026-09-20). As categorias de cobertura continuam as mesmas em princípio — Unit, API/payload, Integration, E2E, Security-negative (casos de abuso, bypass de validação de frontend), Concurrency (race conditions, dedup) — mas a ferramenta concreta pra Firestore/Cloud Functions (ex: emulador, test runner) ainda está **indefinida**. Não presuma Firebase Emulator Suite nem qualquer test runner específico até que os repos existam e a escolha seja feita de verdade. Quando existirem, redefina o que "API/payload testing" e "banco" significam, e onde as regras vivem, pra Firestore + Cloud Functions antes de escrever qualquer teste Firebase-específico.
