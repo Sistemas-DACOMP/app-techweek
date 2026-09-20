@@ -93,8 +93,20 @@ falha: `.claude/skills/dev-workflows/SKILL.md`.
 1. Claude Code carrega `CLAUDE.md` automaticamente ao abrir o repo.
 2. Skills (`qa-agent`, `dev-workflows`) são carregadas sob demanda quando o pedido do usuário
    casa com a descrição delas — não é preciso invocar manualmente.
-3. Agentes (`pr-review`, `security-reviewer`, `dedup-refactor`) são chamados via delegação
-   (workflow ou pedido direto).
+3. Agentes (`pr-review`, `security-reviewer`, `dedup-refactor`, e os demais em `.claude/agents/`)
+   são chamados via delegação (workflow ou pedido direto) — **mas só ficam disponíveis como
+   `subagent_type` de verdade se a sessão do Claude Code for aberta com o diretório de trabalho
+   DENTRO deste repo (`app-techweek/` ou mais fundo), nunca numa pasta pai** (ex.:
+   `C:\Users\fabio\App_TechWeek\`, um nível acima). Descoberta de subagente customizado sobe do
+   cwd até achar a raiz do repo git — nunca desce pra dentro de subpastas. Se a sessão abrir na
+   pasta pai (que não é repo git), a subida nunca encontra `.claude/agents/` daqui e nenhum dos
+   agentes do projeto aparece como tipo disparável — só os genéricos (`general-purpose`, `Explore`
+   etc). Skills (`.claude/skills/`) não têm esse problema porque são descobertas
+   dinamicamente conforme arquivos são tocados; agentes só são descobertos uma vez, no início da
+   sessão. Verificado em 2026-09-20 (research via `claude-code-guide`, docs oficiais
+   `code.claude.com/docs/en/sub-agents.md`). Sem fix de config — é comportamento fixo do Claude
+   Code. **Sempre abrir o Claude Code com cwd em `app-techweek/`** (não na pasta pai) pra ter os
+   13 agentes/skills funcionando como time de verdade.
 4. Regras de negócio ficam em `docs/business-rules/` — sempre consultadas antes de reclassificar
    uma regra do zero.
 
@@ -149,6 +161,9 @@ passando, teste passando quando existir suíte). Rodar com `npm run quality-gate
 - Gaps de segurança conhecidos sem correção agendada: KAN-27 (senha fraca), KAN-28 (LGPD só no
   front), KAN-29 (limite de avatar só no front), KAN-30 (scanner aceita QR de qualquer palestra)
   — ver `docs/business-rules/`.
+- **Abrir sessão fora do repo quebra descoberta de agente customizado** — ver detalhe na seção
+  "Como uma sessão nova recupera o contexto" acima. Sem symlink, sem flag de settings.json que
+  resolva; único fix real é abrir a sessão com cwd dentro de `app-techweek/`.
 
 ## Como estender
 

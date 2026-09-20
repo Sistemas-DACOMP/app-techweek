@@ -1,8 +1,7 @@
-#!/usr/bin/env node
 // Quality Gate objetivo — App TechWeek.
 // Roda os critérios obrigatórios (lint/build/test) e imprime um resultado estruturado.
 // confidence_score e security_score não são calculados aqui: vêm do agente/skill que revisou
-// a mudança (qa-agent / security-reviewer) e são combinados com este resultado pelo workflow.
+// a mudança (qa / security) e são combinados com este resultado pelo workflow.
 // Ver `.claude/skills/dev-workflows/SKILL.md` para o registro completo do quality gate.
 
 import { execSync } from 'node:child_process';

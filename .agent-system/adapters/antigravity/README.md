@@ -1,6 +1,6 @@
 # Antigravity adapter
 
-**Status: unverified end-to-end.** Antigravity is **not installed** on the audited machine (2026-09-20). Everything below is written to be ready-to-use once Antigravity is installed and configured — it has not been run against a real Antigravity session from this project.
+**Status: wrappers built, not verified end-to-end.** Antigravity is **not installed** on this machine (2026-09-20). The 13 wrapper files exist in `agents/`, one per canonical agent, but none has run against a real Antigravity session from this project.
 
 ## Proven reference this adapter reuses
 
@@ -25,12 +25,10 @@ When a skill or agent process says "create a todo list" or "track tasks", the An
 
 **This matters directly for this system's templates.** `.agent-system/templates/task-context.md` (and the same reasoning applies to `handoffs/`-style handoff docs) is designed as something an agent fills in and tracks progress against. On Claude Code that can live as an in-context todo list managed by whatever native tracking Claude Code offers in a given session; on Antigravity there is no equivalent in-context mechanism, so `task-context.md` must be materialized as a real file via `write_to_file` (as a task artifact) and edited in place — never kept only "in the model's head" or as a chat-only checklist, because Antigravity has nothing that persists or surfaces that the way a task artifact does.
 
-## How this project's agents would map onto Antigravity
+## How this project's agents map onto Antigravity
 
-Same situation as the Codex adapter — only the bootstrap concept exists so far:
-
-- Antigravity would need to be pointed at root **`AGENTS.md`** (or an equivalent bootstrap file Antigravity actually reads — not confirmed which file Antigravity looks for by default, since it isn't installed here to check) which in turn points at `.agent-system/manifests/system.yaml` and `.agent-system/agents/*.md`.
-- **TODO — not built yet**: no per-agent Antigravity-format wrapper files exist. Each canonical `.agent-system/agents/<id>.md` would need a thin Antigravity-specific translation layer — mainly: replace any "create a todo" instruction in the canonical process with "write/update a task artifact via `write_to_file`" per the rule above, and translate any "dispatch a subagent" instruction into `invoke_subagent` with the right `TypeName`. None of that translation exists yet; this is future work, to be done once there's an actual Antigravity install to verify against.
+- Antigravity natively loads project documentation based on the system prompt context or via `AGENTS.md` being linked via the local prompt.
+- **Built**: Per-agent Antigravity-format wrapper files exist in `.agent-system/adapters/antigravity/agents/`. Each canonical `.agent-system/agents/<id>.md` is wrapped with a thin Antigravity-specific translation layer that forces the use of task artifacts via `write_to_file` and subagent delegation via `invoke_subagent`.
 
 ## Known gaps
 

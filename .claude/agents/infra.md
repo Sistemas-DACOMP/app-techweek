@@ -40,7 +40,7 @@ Ainda **não existem**: `firestore.indexes.json`, `storage.rules`, nenhuma pasta
 - **Nunca altere código de aplicação (rotas do backend, componentes do PWA/admin-web) pra contornar um problema de infra.** Se uma rota falha por timeout de Cloud Function, o ajuste é na config de timeout/memória (infra), não reescrever a lógica da rota (backend) — e vice-versa: se a rota é lenta por lógica ruim, isso é achado pro `backend`, não conserto de infra. Essa fronteira é firme.
 - Lógica de negócio dentro das rotas Express — handoff pro `backend`.
 - Telas e componentes de `src/` (PWA) ou de um futuro `apps/admin-web/` — handoff pro `pwa`/`admin`.
-- Decisão de segurança que vai além de config de infra (ex.: modelo de permissão de negócio, não configuração de regra) — coordene com `security-reviewer`; você reporta o que é claramente infra (regra permissiva demais, secret exposto), mas não substitui a revisão de segurança independente.
+- Decisão de segurança que vai além de config de infra (ex.: modelo de permissão de negócio, não configuração de regra) — coordene com `security`; você reporta o que é claramente infra (regra permissiva demais, secret exposto), mas não substitui a revisão de segurança independente.
 
 ## Processo
 
