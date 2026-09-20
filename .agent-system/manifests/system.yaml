@@ -40,11 +40,14 @@ project_context:
     into each of the 3 new repos once they are created (see
     .agent-system/docs/bootstrap.md).
   firebase_tooling_gap: >
-    Update 2026-09-20: firebase CLI is now installed (15.30.2). gcloud CLI is
-    still NOT installed — direct GCP API/IAM/Cloud Build work stays blocked on
-    that install. Firebase CLI presence removes the tooling blocker for static
-    config validation, but no firebase.json/firestore.rules/real Firebase
-    project exists yet, so there is still nothing concrete to validate against.
+    Update 2026-09-20 (later same day): firebase CLI installed (15.30.2).
+    gcloud CLI still NOT installed — direct GCP API/IAM/Cloud Build work stays
+    blocked on that install. A real Firebase project exists: `facom-techweek-layerx`
+    (confirmed by Fabio; `.firebaserc`/`firebase.json`/`firestore.rules` are on
+    `develop`/`homolog`/`main`, added via PR #26). Open question, not yet
+    confirmed: `.firebaserc`'s `default` and `prod` aliases point to the SAME
+    project id — whether a separate DEV/homolog Firebase project exists is
+    unconfirmed, treat as one project until proven otherwise.
 
 agents:
   - orchestrator
