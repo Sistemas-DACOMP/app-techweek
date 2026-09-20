@@ -3,7 +3,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Funções auxiliares de segurança
+    // =========================================================================
+    // Funções Auxiliares de Autenticação e Autorização (Custom Claims & Context)
+    // =========================================================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -17,36 +20,100 @@ service cloud.firestore {
         (request.auth.token.role == 'ADMIN' || request.auth.token.admin == true);
     }
 
-    // Regras de Usuários: Todos autenticados leem; só o próprio dono atualiza dados pessoais
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
-      allow write: if isAdmin();
+    function isStaff() {
+      return isAuthenticated() && 
+        (isAdmin() || request.auth.token.role == 'STAFF' || request.auth.token.staff == true);
     }
 
-    // Regras de Atividades: Leitura pública autenticada; escrita apenas para ADMIN
+    function isSponsor(sponsorId) {
+      return isAuthenticated() && 
+        (isAdmin() || (request.auth.token.role == 'SPONSOR' && (request.auth.token.sponsorId == sponsorId || request.auth.uid == sponsorId)));
+    }
+
+    // =========================================================================
+    // Coleção /users/{userId}
+    // =========================================================================
+    // Leitura: Qualquer usuário autenticado (necessário para Crachá, Ranking e Scanner de Networking)
+    // Criação: Apenas o próprio usuário autenticado criando seu perfil inicial (não pode autoatribuir role de ADMIN/STAFF)
+    // Atualização: O próprio dono pode atualizar dados de perfil, mas não pode alterar o campo 'role'
+    // Exclusão: Apenas administradores
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isOwner(userId) && 
+        (!request.resource.data.keys().hasAny(['role']) || request.resource.data.role == 'PARTICIPANT');
+
+      allow update: if isOwner(userId) && 
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
+        || isAdmin();
+
+      allow delete: if isAdmin();
+
+      // Subcoleção de eventos de pontuação do usuário (/users/{userId}/point_events/{eventId})
+      match /point_events/{eventId} {
+        allow read: if isOwner(userId) || isStaff();
+        allow create: if isOwner(userId);
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // =========================================================================
+    // Coleção /activities/{activityId} (Palestras, Minicursos, Estandes)
+    // =========================================================================
+    // Leitura: Pública para qualquer usuário autenticado
+    // Escrita: Restrita estritamente a administradores
     match /activities/{activityId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
-    // Regras de Comunicados: Leitura pública autenticada; escrita apenas para ADMIN
+    // =========================================================================
+    // Coleção /announcements/{announcementId} (Avisos e Missões Relâmpago)
+    // =========================================================================
+    // Leitura: Pública autenticada
+    // Escrita: Apenas administradores
     match /announcements/{announcementId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
-    // Regras de Reservas e Leads: Escritas diretas do cliente proibidas (feitas pelo backend)
+    // =========================================================================
+    // Coleção /bookings/{bookingId} (Inscrições e Reservas em Atividades)
+    // =========================================================================
+    // Leitura: O próprio participante dono da reserva ou Staff/Admin
+    // Escrita: BLOQUEADA para clientes. Processada exclusivamente via Cloud Function
+    //          com transação atômica (db.runTransaction) para prevenir overbooking.
     match /bookings/{bookingId} {
-      allow read: if isAuthenticated();
-      allow write: if false; // Apenas backend via Firebase Admin SDK
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
+      allow write: if false;
     }
 
+    // =========================================================================
+    // Coleção /leads/{sponsorId}/contacts/{contactId} (Leads coletados em estandes)
+    // =========================================================================
+    // Leitura: O próprio patrocinador dono do estande ou Admin
+    // Escrita: O patrocinador dono do estande
     match /leads/{sponsorId}/contacts/{contactId} {
-      allow read: if isAuthenticated() && (request.auth.uid == sponsorId || isAdmin());
-      allow write: if false; // Apenas backend via Firebase Admin SDK
+      allow read: if isSponsor(sponsorId);
+      allow create, update: if isSponsor(sponsorId);
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // Coleção /checkins/{checkinId} (Registros de Presença da Portaria)
+    // =========================================================================
+    // Leitura: O próprio participante ou Staff/Admin
+    // Escrita: Apenas backend serverless via endpoint seguro de validação de presença
+    match /checkins/{checkinId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // Fallback: Bloquear qualquer outra coleção não especificada expressamente
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
-
