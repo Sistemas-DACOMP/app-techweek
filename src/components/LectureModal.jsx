@@ -1,7 +1,9 @@
-import { Clock, MapPin, QrCode, X } from 'lucide-react';
+import { Clock, MapPin, QrCode, X, Lock, ExternalLink } from 'lucide-react';
+import { SYMPLA_EVENT_URL } from '../lib/sympla';
 
 export default function LectureModal({
   lecture,
+  hasSymplaTicket = true,
   onClose,
   onValidate
 }) {
@@ -288,38 +290,77 @@ export default function LectureModal({
         </div>
 
 
-        {/* Ação principal */}
-        <button
-          className="btn-primary"
-          onClick={onValidate}
-          style={{
-            width: '100%',
-            height: '52px',
-
-            marginTop: '26px',
-
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-
-            gap: '9px',
-
-            borderRadius: '16px',
-
-            fontSize: '14px',
-            fontWeight: '700',
-
-            letterSpacing: '0.1px',
-
-            cursor: 'pointer',
-
-            boxShadow:
-              '0 10px 30px rgba(20, 120, 255, 0.25)'
-          }}
-        >
-          <QrCode size={19} />
-          Validar presença
-        </button>
+        {/* Ação principal ou Trava de Ingresso Sympla */}
+        {!hasSymplaTicket ? (
+          <div style={{ marginTop: '24px', textAlign: 'center' }}>
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+              borderRadius: '14px',
+              padding: '12px 14px',
+              marginBottom: '12px',
+              fontSize: '13px',
+              color: '#fca5a5',
+              lineHeight: '1.4',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              textAlign: 'left'
+            }}>
+              <Lock size={20} style={{ flexShrink: 0, color: '#ef4444' }} />
+              <div>
+                <strong>Presença Bloqueada:</strong> É necessário possuir um ingresso oficial no Sympla para registrar presença nesta palestra.
+              </div>
+            </div>
+            <a
+              href={SYMPLA_EVENT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary"
+              style={{
+                width: '100%',
+                height: '48px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '8px',
+                borderRadius: '14px',
+                fontSize: '14px',
+                fontWeight: '700',
+                textDecoration: 'none',
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                color: '#000',
+                boxShadow: '0 8px 25px rgba(245, 158, 11, 0.3)'
+              }}
+            >
+              <ExternalLink size={16} />
+              Garantir Ingresso no Sympla
+            </a>
+          </div>
+        ) : (
+          <button
+            className="btn-primary"
+            onClick={onValidate}
+            style={{
+              width: '100%',
+              height: '52px',
+              marginTop: '26px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '9px',
+              borderRadius: '16px',
+              fontSize: '14px',
+              fontWeight: '700',
+              letterSpacing: '0.1px',
+              cursor: 'pointer',
+              boxShadow: '0 10px 30px rgba(20, 120, 255, 0.25)'
+            }}
+          >
+            <QrCode size={19} />
+            Validar presença
+          </button>
+        )}
 
       </div>
     </div>

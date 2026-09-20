@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { verifySymplaTicket } from './sympla';
+import { verifySymplaTicket, hasSymplaTicket, SYMPLA_EVENT_URL } from './sympla';
 
 describe('Sympla Integration Client', () => {
   beforeEach(() => {
@@ -33,6 +33,15 @@ describe('Sympla Integration Client', () => {
     const result = await verifySymplaTicket({ email: 'erro@ufu.br' });
     expect(result.verified).toBe(false);
     expect(result.status).toBe('error');
+  });
+
+  it('valida corretamente hasSymplaTicket para perfis com e sem ingresso', () => {
+    expect(hasSymplaTicket(null)).toBe(false);
+    expect(hasSymplaTicket({})).toBe(false);
+    expect(hasSymplaTicket({ symplaTicket: null })).toBe(false);
+    expect(hasSymplaTicket({ symplaTicket: { ticketNumber: '123' } })).toBe(true);
+    expect(hasSymplaTicket({ sympla_ticket: { ticketNumber: '123' } })).toBe(true);
+    expect(SYMPLA_EVENT_URL).toContain('sympla.com.br');
   });
 });
 

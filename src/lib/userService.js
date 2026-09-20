@@ -13,7 +13,8 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { updateEmail } from 'firebase/auth';
+import { db, storage, auth } from './firebase';
 import { validateAvatarFile } from './validators';
 
 /**
@@ -41,6 +42,7 @@ export async function createUserProfile(uid, data) {
     role: data.role || 'PARTICIPANT',
     totalPoints: 0,
     ticketId: data.ticketId || null,
+    symplaTicket: data.symplaTicket || null,
     termsAcceptedAt: now,
     createdAt: now,
     updatedAt: now
@@ -81,6 +83,28 @@ export async function updateUserProfile(uid, updates) {
 }
 
 /**
+ * Atualiza o e-mail do usuário no Firestore e no Firebase Auth.
+ */
+export async function updateUserEmail(uid, newEmail) {
+  if (!uid || !newEmail) throw new Error('UID e novo e-mail são obrigatórios.');
+  const trimmedEmail = newEmail.trim().toLowerCase();
+
+  // 1. Atualiza no Firestore
+  await updateUserProfile(uid, { email: trimmedEmail });
+
+  // 2. Tenta atualizar no Firebase Auth (se a sessão for recente)
+  try {
+    if (auth.currentUser && auth.currentUser.uid === uid) {
+      await updateEmail(auth.currentUser, trimmedEmail);
+    }
+  } catch (authErr) {
+    console.warn('Aviso: E-mail atualizado no Firestore, mas não no Auth:', authErr);
+  }
+
+  return true;
+}
+
+/**
  * Faz upload da foto de perfil no Firebase Storage e atualiza a URL no Firestore.
  */
 export async function uploadUserAvatar(uid, file) {
@@ -95,17 +119,24 @@ export async function uploadUserAvatar(uid, file) {
     throw new Error('Formato de imagem inválido. Envie um arquivo PNG, JPEG ou WebP.');
   }
 
-  const ext = file.name.split('.').pop() || 'jpg';
+  const ext = (file && typeof file.name === 'string') 
+    ? (file.name.split('.').pop() || 'jpg') 
+    : (file?.type ? file.type.split('/').pop() : 'jpg');
   const path = `avatars/${uid}/${Date.now()}.${ext}`;
   const storageRef = ref(storage, path);
 
-  await uploadBytes(storageRef, file, { contentType: file.type });
-  const downloadUrl = await getDownloadURL(storageRef);
+  const uploadTask = (async () => {
+    await uploadBytes(storageRef, file, { contentType: file.type || 'image/jpeg' });
+    const downloadUrl = await getDownloadURL(storageRef);
+    await updateUserProfile(uid, { avatarUrl: downloadUrl });
+    return downloadUrl;
+  })();
 
-  // Atualiza o avatar no documento do usuário
-  await updateUserProfile(uid, { avatarUrl: downloadUrl });
+  const timeoutTask = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Tempo limite excedido ao salvar foto no Storage.')), 5000);
+  });
 
-  return downloadUrl;
+  return Promise.race([uploadTask, timeoutTask]);
 }
 
 /**

@@ -13,6 +13,7 @@ export const AUTH_MESSAGES = {
   user_not_found: 'Nenhuma conta encontrada com este e-mail.',
   wrong_password: 'Senha incorreta. Tente novamente ou use a recuperação de senha.',
   invalid_email: 'O e-mail informado não possui um formato válido.',
+  email_already_in_use: 'Este e-mail já está cadastrado. Faça login ou use a recuperação de senha.',
   user_disabled: 'Esta conta foi desativada pela coordenação do evento.',
   too_many_requests: 'Muitas tentativas sem sucesso. Aguarde alguns instantes antes de tentar novamente.',
   network_error: 'Falha de conexão. Verifique sua internet.',
@@ -28,6 +29,8 @@ export function mapAuthError(error) {
   const code = error.code || '';
 
   switch (code) {
+    case 'auth/email-already-in-use':
+      return AUTH_MESSAGES.email_already_in_use;
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
       return AUTH_MESSAGES.invalid_credentials;

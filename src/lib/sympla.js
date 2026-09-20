@@ -3,8 +3,15 @@
  */
 import { auth } from './firebase';
 
+export const SYMPLA_EVENT_URL = 'https://www.sympla.com.br/evento/teste-facom-tech-weak/3575331';
+
+export function hasSymplaTicket(userProfile) {
+  if (!userProfile) return false;
+  return Boolean(userProfile.symplaTicket || userProfile.sympla_ticket);
+}
+
 const getApiBaseUrl = () => {
-  return import.meta.env.VITE_API_URL || 'http://127.0.0.1:5001/app-techweek-ufu/us-east1/api';
+  return import.meta.env.VITE_API_URL || '/api';
 };
 
 /**

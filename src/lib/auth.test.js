@@ -49,6 +49,11 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
       expect(msg).toBe(AUTH_MESSAGES.too_many_requests);
     });
 
+    it('deve traduzir auth/email-already-in-use para mensagem amigável', () => {
+      const msg = mapAuthError({ code: 'auth/email-already-in-use' });
+      expect(msg).toBe(AUTH_MESSAGES.email_already_in_use);
+    });
+
     it('deve retornar mensagem padrão quando o erro for desconhecido', () => {
       const msg = mapAuthError({});
       expect(msg).toBe(AUTH_MESSAGES.generic_error);

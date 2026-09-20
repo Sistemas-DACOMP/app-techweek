@@ -37,6 +37,7 @@ export async function getMyProfile() {
     const fallbackName = user.displayName || user.email?.split('@')[0] || 'Participante';
     return {
       id: user.uid,
+      email: user.email || '',
       username: user.email?.split('@')[0] || 'user',
       first_name: fallbackName,
       last_name: '',
@@ -52,6 +53,7 @@ export async function getMyProfile() {
 
   return {
     id: user.uid,
+    email: profile.email || user.email || '',
     username: profile.username || user.email?.split('@')[0] || 'user',
     first_name: profile.firstName || user.displayName || 'Participante',
     last_name: profile.lastName || '',
