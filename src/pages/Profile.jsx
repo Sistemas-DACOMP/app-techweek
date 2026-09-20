@@ -6,7 +6,7 @@ import { validateAvatarFile, isValidEmail } from '../lib/validators';
 import AvatarCropperModal from '../components/AvatarCropperModal';
 import { SYMPLA_EVENT_URL, verifySymplaTicket } from '../lib/sympla';
 import { updateUserEmail, updateUserProfile } from '../lib/userService';
-import { LogOut, Camera, Edit2, Loader2, X, RefreshCw } from 'lucide-react';
+import { LogOut, Camera, Edit2, Loader2, X, RefreshCw, Lock } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 export default function Profile() {
@@ -338,15 +338,74 @@ export default function Profile() {
             ⚠️ Ingresso Sympla Pendente
           </div>
         )}
-        <div style={{ background: 'white', padding: '16px', borderRadius: '20px', display: 'inline-block', marginBottom: '14px', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)' }}>
+        <div style={{
+          position: 'relative',
+          background: 'white',
+          padding: '16px',
+          borderRadius: '20px',
+          display: 'inline-block',
+          marginBottom: '14px',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+          overflow: 'hidden'
+        }}>
           <img
             src={qrUrl}
             alt="Meu QR Code"
-            style={{ width: '160px', height: '160px', display: 'block' }}
+            style={{
+              width: '160px',
+              height: '160px',
+              display: 'block',
+              filter: profile.symplaTicket ? 'none' : 'blur(9px) grayscale(50%)',
+              transition: 'filter 0.3s ease',
+              userSelect: 'none',
+              pointerEvents: 'none'
+            }}
           />
+          {!profile.symplaTicket && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(15, 23, 42, 0.65)',
+                backdropFilter: 'blur(3px)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                gap: '8px',
+                padding: '12px'
+              }}
+            >
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.9)',
+                  borderRadius: '50%',
+                  padding: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 14px rgba(239, 68, 68, 0.45)'
+                }}
+              >
+                <Lock size={22} color="white" />
+              </div>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: '800',
+                  color: '#ffffff',
+                  letterSpacing: '1px',
+                  textTransform: 'uppercase'
+                }}
+              >
+                QR Bloqueado
+              </span>
+            </div>
+          )}
         </div>
-        <p style={{ fontSize: '0.85rem', color: profile.symplaTicket ? '#10b981' : 'var(--text-secondary)', fontWeight: profile.symplaTicket ? '600' : 'normal' }}>
-          {profile.symplaTicket ? '✓ Ingresso oficial Sympla vinculado!' : 'Peça para outros participantes escanearem para networking!'}
+        <p style={{ fontSize: '0.85rem', color: profile.symplaTicket ? '#10b981' : '#fbbf24', fontWeight: '600' }}>
+          {profile.symplaTicket ? '✓ Ingresso oficial Sympla vinculado!' : '🔒 Vincule seu ingresso Sympla para desbloquear o QR Code'}
         </p>
         {!profile.symplaTicket && (
           <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
