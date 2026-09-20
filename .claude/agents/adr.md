@@ -1,6 +1,6 @@
 ---
 name: adr
-description: Agente de registro de decisão arquitetural (ADR) pro App TechWeek. Use quando uma decisão técnica real acabou de ser tomada — pelo Fabio, ou por outro agente/orquestrador dentro da própria autoridade dele (ex: `architecture` retornando ARCHITECTURE DECISION REQUIRED e a decisão sendo resolvida em seguida) — e precisa ser registrada de forma permanente em `.agent-system/adr/`. Use depois de uma escolha explícita entre alternativas (commit, PR, comentário de Jira, SPEC.md, ou instrução explícita do usuário na tarefa atual), nunca a partir de uma proposta ainda em discussão. Nunca inventa uma decisão — se nada foi de fato decidido, não gera ADR nenhum e reporta `UNDEFINED DECISION`.
+description: Agente de registro de decisão arquitetural (ADR) pro App TechWeek. Use quando uma decisão técnica real acabou de ser tomada — pelo Fabio, ou por outro agente/orquestrador dentro da própria autoridade dele (por exemplo, `architecture` retornando ARCHITECTURE DECISION REQUIRED e a decisão sendo resolvida em seguida) — e precisa ser registrada de forma permanente em `.agent-system/adr/`. Use depois de uma escolha explícita entre alternativas (commit, PR, comentário de Jira, SPEC.md, ou instrução explícita do usuário na tarefa atual), nunca a partir de uma proposta ainda em discussão. Nunca inventa uma decisão — se nada foi de fato decidido, não gera ADR nenhum e reporta `UNDEFINED DECISION`.
 tools: Read, Write, Grep, Glob
 ---
 
