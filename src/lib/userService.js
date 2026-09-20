@@ -13,7 +13,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile } from 'firebase/auth';
+import { updateProfile, updateEmail } from 'firebase/auth';
 import { db, storage, auth } from './firebase';
 import { validateAvatarFile } from './validators';
 
@@ -92,6 +92,28 @@ export async function updateUserProfile(uid, updates) {
   };
 
   await updateDoc(userRef, dataToUpdate);
+  return true;
+}
+
+/**
+ * Atualiza o e-mail do usuário no Firestore e no Firebase Auth.
+ */
+export async function updateUserEmail(uid, newEmail) {
+  if (!uid || !newEmail) throw new Error('UID e novo e-mail são obrigatórios.');
+  const trimmedEmail = newEmail.trim().toLowerCase();
+
+  // 1. Atualiza no Firestore
+  await updateUserProfile(uid, { email: trimmedEmail });
+
+  // 2. Tenta atualizar no Firebase Auth (se a sessão for recente)
+  try {
+    if (auth.currentUser && auth.currentUser.uid === uid) {
+      await updateEmail(auth.currentUser, trimmedEmail);
+    }
+  } catch (authErr) {
+    console.warn('Aviso: E-mail atualizado no Firestore, mas não no Auth:', authErr);
+  }
+
   return true;
 }
 

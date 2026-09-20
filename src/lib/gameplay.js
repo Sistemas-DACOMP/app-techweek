@@ -45,7 +45,7 @@ export async function getMyProfile() {
       email: user.email || '',
       username: rawUsername,
       display_name: displayAtUsername,
-      first_name: displayAtUsername,
+      first_name: rawUsername,
       last_name: '',
       course: '',
       participant_type: 'Participante',

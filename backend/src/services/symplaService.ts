@@ -38,17 +38,25 @@ export interface SymplaEvent {
 const SYMPLA_BASE_URL = 'https://api.sympla.com.br/public/v3';
 
 export class SymplaService {
-  private apiToken: string;
-  private defaultEventId: string;
+  private apiToken?: string;
+  private defaultEventId?: string;
 
   constructor(token?: string, eventId?: string) {
-    this.apiToken = token || process.env.SYMPLA_API_TOKEN || '';
-    this.defaultEventId = eventId || process.env.SYMPLA_EVENT_ID || '';
+    this.apiToken = token;
+    this.defaultEventId = eventId;
+  }
+
+  private getToken(): string {
+    return this.apiToken || process.env.SYMPLA_API_TOKEN || '';
+  }
+
+  private getEventId(): string {
+    return this.defaultEventId || process.env.SYMPLA_EVENT_ID || '';
   }
 
   private getHeaders() {
     return {
-      's_token': this.apiToken,
+      's_token': this.getToken(),
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     };
@@ -58,7 +66,7 @@ export class SymplaService {
    * Obtém os detalhes de um evento da FACOM Tech Week
    */
   async getEventDetails(eventId?: string): Promise<SymplaEvent> {
-    const targetEventId = eventId || this.defaultEventId;
+    const targetEventId = eventId || this.getEventId();
     if (!targetEventId) {
       throw new Error('Sympla Event ID não configurado.');
     }
@@ -80,7 +88,7 @@ export class SymplaService {
    * Lista participantes com paginação
    */
   async getParticipants(page = 1, pageSize = 100, eventId?: string): Promise<{ data: SymplaParticipant[]; total: number; hasNext: boolean }> {
-    const targetEventId = eventId || this.defaultEventId;
+    const targetEventId = eventId || this.getEventId();
     if (!targetEventId) {
       throw new Error('Sympla Event ID não configurado.');
     }
@@ -132,7 +140,7 @@ export class SymplaService {
    * Busca um participante pelo número do ingresso (ex: T123456789)
    */
   async findParticipantByTicket(ticketNumber: string, eventId?: string): Promise<SymplaParticipant | null> {
-    const targetEventId = eventId || this.defaultEventId;
+    const targetEventId = eventId || this.getEventId();
     if (!targetEventId) {
       throw new Error('Sympla Event ID não configurado.');
     }
@@ -160,7 +168,7 @@ export class SymplaService {
    * Realiza o Check-in oficial do ingresso no Sympla
    */
   async checkInParticipant(ticketNumber: string, eventId?: string): Promise<{ success: boolean; message: string }> {
-    const targetEventId = eventId || this.defaultEventId;
+    const targetEventId = eventId || this.getEventId();
     if (!targetEventId) {
       throw new Error('Sympla Event ID não configurado.');
     }

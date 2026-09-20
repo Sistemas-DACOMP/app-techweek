@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Mascot from '../components/Mascot';
 import AvatarCropperModal from '../components/AvatarCropperModal';
-import { Eye, EyeOff, Loader2, Upload, ShieldCheck, Camera, RefreshCw, Trash2, Plus } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Upload, Camera, RefreshCw, Trash2, Plus, ShieldCheck } from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
 import { signUpWithEmail } from '../lib/auth';
 import { createUserProfile, uploadUserAvatar } from '../lib/userService';
@@ -147,10 +147,11 @@ export default function Register() {
         course: finalCourse,
         period: isStudent ? formData.period : null,
         linkedin: formData.linkedin,
-        instagram: formData.instagram
+        instagram: formData.instagram,
+        symplaTicket: null
       });
 
-      // 3. Faz o upload da foto de perfil no Firebase Storage se fornecida
+      // 4. Faz o upload da foto de perfil no Firebase Storage se fornecida
       if (avatarFile) {
         try {
           await uploadUserAvatar(uid, avatarFile);
@@ -305,11 +306,12 @@ export default function Register() {
               )}
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>E-mail (o mesmo do Sympla)</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>E-mail (preferencialmente o mesmo do Sympla)</label>
                 <input 
                   name="email" type="email" placeholder="seu.email@exemplo.com"
                   value={formData.email} onChange={handleChange}
-                  onFocus={() => setFocusedInput('email')} onBlur={() => setFocusedInput(null)}
+                  onFocus={() => setFocusedInput('email')} 
+                  onBlur={() => setFocusedInput(null)}
                   className="login-input" required
                 />
               </div>

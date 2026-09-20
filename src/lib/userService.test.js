@@ -3,10 +3,12 @@ import {
   createUserProfile, 
   getUserProfile, 
   updateUserProfile, 
-  uploadUserAvatar 
+  uploadUserAvatar,
+  updateUserEmail
 } from './userService';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { updateProfile, updateEmail } from 'firebase/auth';
 
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(() => ({ id: 'mockDocRef' })),
@@ -30,7 +32,8 @@ vi.mock('firebase/storage', () => ({
 }));
 
 vi.mock('firebase/auth', () => ({
-  updateProfile: vi.fn()
+  updateProfile: vi.fn(),
+  updateEmail: vi.fn(() => Promise.resolve())
 }));
 
 vi.mock('./firebase', () => ({
@@ -109,5 +112,27 @@ describe('userService', () => {
       await expect(uploadUserAvatar('user-123', hugeFile)).rejects.toThrow('A imagem precisa ter até 2MB.');
     });
   });
-});
 
+  describe('updateUserEmail', () => {
+    it('lança erro se uid ou email não forem fornecidos', async () => {
+      await expect(updateUserEmail('', 'teste@ufu.br')).rejects.toThrow('UID e novo e-mail são obrigatórios.');
+      await expect(updateUserEmail('123', '')).rejects.toThrow('UID e novo e-mail são obrigatórios.');
+    });
+
+    it('atualiza o documento do usuário no Firestore e tenta no Auth', async () => {
+      const result = await updateUserEmail('user-123', 'Novo.Email@ufu.br ');
+
+      expect(result).toBe(true);
+      expect(updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          email: 'novo.email@ufu.br'
+        })
+      );
+      expect(updateEmail).toHaveBeenCalledWith(
+        expect.anything(),
+        'novo.email@ufu.br'
+      );
+    });
+  });
+});
