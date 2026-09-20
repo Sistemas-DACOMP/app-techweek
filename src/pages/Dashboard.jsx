@@ -9,7 +9,7 @@ import LectureScanner from '../components/LectureScanner';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [firstName, setFirstName] = useState('Visitante');
+  const [firstName, setFirstName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [showLectureScanner, setShowLectureScanner] = useState(false);
@@ -18,10 +18,12 @@ export default function Dashboard() {
     getMyProfile()
       .then(profile => {
         if (!profile) return;
-        setFirstName(profile.first_name || profile.username || 'Visitante');
+        setFirstName(profile.first_name || profile.username || 'Participante');
         setAvatarUrl(profile.avatar_url);
       })
-      .catch(() => { });
+      .catch((err) => {
+        console.warn('Erro ao carregar perfil no Dashboard:', err);
+      });
   }, []);
 
   return (
@@ -39,14 +41,16 @@ export default function Dashboard() {
           >
             {avatarUrl
               ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : firstName.charAt(0).toUpperCase()}
+              : (firstName ? firstName.charAt(0).toUpperCase() : 'U')}
           </div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
           <MascotDuo />
         </div>
-        <h2 style={{ color: 'white', textAlign: 'center', marginTop: '16px', marginBottom: '24px', fontSize: '1.5rem', fontWeight: '700' }}>Olá, {firstName}!</h2>
+        <h2 style={{ color: 'white', textAlign: 'center', marginTop: '16px', marginBottom: '24px', fontSize: '1.5rem', fontWeight: '700' }}>
+          {firstName ? `Olá, ${firstName}!` : 'Olá!'}
+        </h2>
       </div>
 
       {/* Blue section with the event schedule */}

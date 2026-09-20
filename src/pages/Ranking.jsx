@@ -1,18 +1,15 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { getRanking } from '../lib/gameplay';
+import { getRanking, getCurrentAuthUser } from '../lib/gameplay';
 
 export default function Ranking() {
   const [ranking, setRanking] = useState([]);
   const [myUserId, setMyUserId] = useState(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setMyUserId(data.user?.id ?? null));
+    getCurrentAuthUser().then(user => setMyUserId(user?.uid ?? null));
 
     getRanking()
       .then(rows => {
-        // A view já vem ordenada por total_points desc, created_at asc
-        // (critério de desempate — ver PLAN.md).
         const withRank = rows.map((row, index) => ({ ...row, rank: index + 1 }));
         setRanking(withRank);
       })
@@ -26,11 +23,11 @@ export default function Ranking() {
 
       <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {ranking.slice(0, 10).map((user) => {
-          const isMe = user.user_id === myUserId;
+          const isMe = (user.id === myUserId || user.user_id === myUserId);
           const displayName = user.first_name || user.username || 'Participante';
           return (
             <div
-              key={user.user_id}
+              key={user.id || user.user_id}
               style={{
                 display: 'flex',
                 alignItems: 'center',

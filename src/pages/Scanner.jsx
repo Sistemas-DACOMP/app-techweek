@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useUser } from '../hooks/useUser';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
 
 export default function Scanner() {
   const [scanResult, setScanResult] = useState(null);
@@ -73,14 +73,10 @@ export default function Scanner() {
     }
 
     if (isUserQr && usernameToValidate) {
-      // Validate with Supabase profiles table
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('username', usernameToValidate)
-        .single();
+      // Validate with Firestore users collection
+      const userProfile = await findUserByUsername(usernameToValidate);
         
-      if (error || !profile) {
+      if (!userProfile) {
         setIsLoading(false);
         setScanResult({ success: false, message: 'Usuário não encontrado no banco de dados. QR Code inválido.' });
         return;
@@ -119,13 +115,10 @@ export default function Scanner() {
     }
 
     try {
-      // Try to fetch a real user to make simulation work with the new validation
-      const { data: users, error } = await supabase
-        .from('profiles')
-        .select('username, course, participant_type, period')
-        .limit(10);
+      // Try to fetch a real user from Firestore to make simulation work
+      const users = await getLeaderboardUsers(10);
         
-      if (!error && users && users.length > 0) {
+      if (users && users.length > 0) {
         const randomDbUser = users[Math.floor(Math.random() * users.length)];
         const payload = JSON.stringify({
           username: randomDbUser.username,
