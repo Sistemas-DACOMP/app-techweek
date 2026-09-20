@@ -151,7 +151,7 @@ Quando a mudança tocar `vite.config.js`, `vercel.json`, variáveis `VITE_*`, ro
 - rodar `npm run build` localmente antes do PR (o quality gate já faz isso);
 - verificar se `vercel.json` e o `VITE_BASE_PATH` continuam corretos pros dois ambientes (GitHub Pages em `main`, Vercel com Production Branch = `homolog`);
 - verificar se alguma env var nova precisa ser adicionada nos secrets do GitHub Actions e/ou no dashboard da Vercel — nunca só localmente;
-- checar se a integração frontend/backend continua batendo com o ambiente certo (nunca apontar homolog pra produção nem vice-versa) — nota: os checks de URL/ambiente do Supabase de homolog foram retirados (projeto migrou pra Firebase/GCP, decisão de 2026-09-20); a checagem equivalente pro Firebase ainda não está definida.
+- checar integração frontend/backend (URLs do Supabase) continuam batendo com o ambiente certo (nunca apontar homolog pra produção nem vice-versa).
 
 Isso não substitui o quality gate — é um item a mais quando o diff mexe em configuração de build/deploy.
 
