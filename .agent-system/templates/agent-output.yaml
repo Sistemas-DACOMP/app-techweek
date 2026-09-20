@@ -1,0 +1,40 @@
+# Template — every agent produces output in this shape (spec section 31).
+# Not a literal YAML file the agent must emit as a file; this is the structure
+# its final report/handoff message must contain, in prose or YAML, whichever
+# the runtime's output channel makes natural.
+
+agent: <agent-id>
+task: <ticket key or short task description>
+status: OK | BLOCKED | PARTIAL
+
+scope:
+  - <files/areas actually touched or analyzed>
+
+findings:
+  - id: <SEC-001, BUG-002, ...>
+    severity: LOW | MEDIUM | HIGH | CRITICAL
+    description: <what was found>
+    evidence: FACT | INFERENCE | ASSUMPTION | UNKNOWN   # see rules/evidence-model.md
+
+decisions:
+  - <what this agent decided within its own authority>
+
+risks:
+  - <what could go wrong downstream>
+
+blockers:
+  - <what must happen before this can proceed>
+
+evidence:
+  - <file:line, command output, doc reference — never a bare claim>
+
+recommendations:
+  - <what should happen next, even if outside this agent's authority>
+
+handoff:
+  to:
+    - <agent-id(s) that must pick this up next>
+  what_they_need_to_know: <one paragraph, not "see above">
+
+required_agents:
+  - <agent-id(s) whose sign-off is still needed before the gate clears>
