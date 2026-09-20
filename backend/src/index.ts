@@ -3,6 +3,7 @@ import cors from 'cors';
 import { onRequest } from 'firebase-functions/v2/https';
 import { db, auth } from './config/firebaseAdmin';
 import { requireAuth, requireRole } from './middlewares/authMiddleware';
+import symplaRoutes from './routes/symplaRoutes';
 
 export { db, auth };
 
@@ -11,6 +12,9 @@ const app = express();
 // Middlewares padrão
 app.use(cors({ origin: true }));
 app.use(express.json());
+
+// Rotas da API
+app.use('/api/sympla', symplaRoutes);
 
 // Rota de Health Check
 app.get('/api/health', (_req: Request, res: Response) => {

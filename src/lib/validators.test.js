@@ -7,6 +7,7 @@ import {
   normalizeEmail,
   isValidEmail,
   suggestEmailCorrection,
+  getPasswordStrength
 } from './validators';
 
 // REG-C1 (comportamento observado no codigo, sem card Jira dedicado):
@@ -25,6 +26,29 @@ describe('passwordsMatch', () => {
 // exigido pelo Supabase. Esta funcao ainda NAO esta ligada ao
 // Register.jsx (KAN-27 continua no backlog) - o teste documenta a regra
 // que falta ser aplicada no fluxo real.
+// REG-C2 (KAN-27 / KAN-45): Medição reativa de força de senha
+describe('getPasswordStrength (KAN-45)', () => {
+  it('retorna score 0 e inválido para senha vazia', () => {
+    const res = getPasswordStrength('');
+    expect(res.score).toBe(0);
+    expect(res.valid).toBe(false);
+  });
+
+  it('retorna score 1 para senha de 6 caracteres simples', () => {
+    const res = getPasswordStrength('123456');
+    expect(res.score).toBe(1);
+    expect(res.valid).toBe(true);
+    expect(res.label).toBe('Fraca');
+  });
+
+  it('retorna score 4 para senha forte com letras, números e símbolos', () => {
+    const res = getPasswordStrength('TechWeek2026!#');
+    expect(res.score).toBe(4);
+    expect(res.valid).toBe(true);
+    expect(res.label).toBe('Forte');
+  });
+});
+
 describe('isPasswordLongEnough (KAN-27)', () => {
   it('rejeita senha vazia', () => {
     expect(isPasswordLongEnough('')).toBe(false);

@@ -62,22 +62,22 @@ export default function Mascot({ color = 'blue', className = '', isCoveringEyes 
         </g>
 
         {/* Right Arm (Lowers if peeking, raises if waving) */}
-        <g className={isWaving ? "mascot-arm-waving" : (!isCoveringEyes ? "mascot-arm mascot-arm-right" : "")} style={{ transition: 'all 0.3s ease', transformOrigin: '160px 100px' }}>
+        <g className={isWaving ? "mascot-arm-waving" : (!isCoveringEyes ? "mascot-arm mascot-arm-right" : "")} style={{ transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)', transformOrigin: '160px 100px' }}>
           <path
-            d={isCoveringEyes ? (isPeeking ? "M 160 100 L 175 90 L 125 105" : "M 160 100 L 175 70 L 125 85") : (isWaving ? "M 160 100 L 185 70 L 170 30" : "M 160 100 L 185 130 L 170 180")}
+            d={isCoveringEyes ? (isPeeking ? "M 160 100 L 180 120 L 135 130" : "M 160 100 L 175 70 L 125 85") : (isWaving ? "M 160 100 L 185 70 L 170 30" : "M 160 100 L 185 130 L 170 180")}
             fill="none"
             stroke={gradient.end}
             strokeWidth="16"
             strokeLinejoin="bevel"
             strokeLinecap="square"
-            style={{ transition: 'd 0.3s ease' }}
+            style={{ transition: 'd 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
           />
           <rect 
-            x={isCoveringEyes ? (isPeeking ? "115" : "115") : (isWaving ? "160" : "160")} 
-            y={isCoveringEyes ? (isPeeking ? "95" : "75") : (isWaving ? "20" : "170")} 
+            x={isCoveringEyes ? (isPeeking ? "125" : "115") : (isWaving ? "160" : "160")} 
+            y={isCoveringEyes ? (isPeeking ? "120" : "75") : (isWaving ? "20" : "170")} 
             width="20" height="20" rx="6" 
             fill={gradient.start} 
-            style={{ transition: 'all 0.3s ease' }}
+            style={{ transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
           />
         </g>
 
@@ -118,8 +118,8 @@ export default function Mascot({ color = 'blue', className = '', isCoveringEyes 
           ) : (
             <>
               <rect x="103" y="63" width="44" height="44" rx="10" fill="url(#eyeGrad)" />
-              <rect x={113 + cappedOffset} y={73 + cappedOffsetY} width="24" height="24" rx="6" fill="#0f172a" style={{ transition: 'all 0.1s ease-out' }} />
-              <rect x={127 + cappedOffset} y={77 + cappedOffsetY} width="6" height="6" rx="2" fill="#fff" style={{ transition: 'all 0.1s ease-out' }} />
+              <rect x={113 + (isPeeking ? 3 : cappedOffset)} y={73 + (isPeeking ? 6 : cappedOffsetY)} width="24" height="24" rx="6" fill="#0f172a" style={{ transition: 'all 0.1s ease-out' }} />
+              <rect x={127 + (isPeeking ? 3 : cappedOffset)} y={77 + (isPeeking ? 6 : cappedOffsetY)} width="6" height="6" rx="2" fill="#fff" style={{ transition: 'all 0.1s ease-out' }} />
             </>
           )}
         </g>

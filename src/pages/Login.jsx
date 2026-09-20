@@ -81,21 +81,6 @@ export default function Login() {
 
   return (
     <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      
-      {/* Weeka espiando pelo canto */}
-      <div 
-        style={{
-          position: 'absolute',
-          bottom: '10px',
-          right: showPassword ? '-80px' : '-200px',
-          transition: 'right 0.8s cubic-bezier(0.25, 1, 0.5, 1)',
-          zIndex: 10,
-          transform: 'scale(0.85) rotate(-15deg)'
-        }}
-      >
-        <Mascot color="purple" />
-      </div>
-
       <div className="login-glow"></div>
       
       <div className="login-glass-card" style={{ zIndex: 2, position: 'relative', width: '100%', maxWidth: '400px' }}>
