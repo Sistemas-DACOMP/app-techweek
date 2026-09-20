@@ -145,3 +145,4 @@ npm run quality-gate
 
 ---
 *Dúvidas ou sugestões? Converse com o Tech Lead ou mande no canal de desenvolvimento da equipe!*
+

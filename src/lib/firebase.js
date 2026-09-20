@@ -33,3 +33,4 @@ if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
 }
 
 export default app;
+
