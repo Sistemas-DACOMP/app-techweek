@@ -2,6 +2,13 @@
 
 Data da auditoria: 2026-09-20. Escopo: repo atual (`app-techweek`, era Supabase) + inventário global de plugins/skills instalados nesta máquina. Segue a estrutura da spec seção 60.
 
+> **Atualizações desde a auditoria inicial (mesmo dia, 2026-09-20):** este documento é um retrato do momento em que foi escrito — algumas afirmações abaixo já ficaram desatualizadas horas depois, no mesmo dia. Não reescrevi a narrativa original (preserva o histórico da auditoria), só registro aqui o que mudou:
+> - `firebase` CLI foi instalado (15.30.2) — a recomendação #1 abaixo já foi feita.
+> - **Projeto Firebase real confirmado pelo Fabio: `facom-techweek-layerx`** — não é mais placeholder de spec. `.firebaserc`/`firebase.json`/`firestore.rules` existem de verdade no repo (`develop`/`homolog`/`main`), assim como `backend/` (dentro deste mesmo repo, não em pasta separada — PRs #26/#27). `apps/pwa` e `apps/admin-web` continuam não existindo como pastas separadas.
+> - `gcloud` CLI continua não instalado — esse bloqueador segue de pé.
+> - Os 8 agentes que este relatório lista como "documentação, sem despacho automático" (spec/product/architecture/backend/pwa/admin/infra/adr) ganharam arquivo real em `.claude/agents/` no mesmo dia (PR #36) — hoje todos os 13 despacham sozinhos no Claude Code.
+> - Detalhe completo e atual: `.agent-system/manifests/capability-matrix.md` e `.agent-system/agents/infra.md`.
+
 ---
 
 ## CURRENT AGENT SYSTEM
