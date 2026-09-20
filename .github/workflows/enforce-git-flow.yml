@@ -1,0 +1,53 @@
+name: enforce-git-flow
+
+# Garante feature/* -> develop -> homolog -> main, na ordem certa.
+# PR pra main so pode vir de homolog; PR pra homolog so pode vir de develop.
+# Excecao: branches fix/* ou hotfix/* (correcao pontual, ex: resolver
+# conflito de merge) podem ir direto - mesmo padrao ja usado nesta sessao.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches:
+      - main
+      - homolog
+
+jobs:
+  check-source-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Valida branch de origem
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          echo "PR: $HEAD_REF -> $BASE_REF"
+
+          is_exception() {
+            case "$HEAD_REF" in
+              fix/*|hotfix/*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          if [ "$BASE_REF" = "main" ]; then
+            if [ "$HEAD_REF" = "homolog" ] || is_exception; then
+              echo "OK: main so recebe de homolog (ou fix/*, hotfix/*)."
+              exit 0
+            fi
+            echo "BLOQUEADO: PR pra 'main' precisa vir de 'homolog' (ou de um branch fix/*, hotfix/* pra correcao pontual)."
+            echo "Origem encontrada: '$HEAD_REF'. Git Flow do projeto: feature/* -> develop -> homolog -> main."
+            exit 1
+          fi
+
+          if [ "$BASE_REF" = "homolog" ]; then
+            if [ "$HEAD_REF" = "develop" ] || is_exception; then
+              echo "OK: homolog so recebe de develop (ou fix/*, hotfix/*)."
+              exit 0
+            fi
+            echo "BLOQUEADO: PR pra 'homolog' precisa vir de 'develop' (ou de um branch fix/*, hotfix/* pra correcao pontual)."
+            echo "Origem encontrada: '$HEAD_REF'. Git Flow do projeto: feature/* -> develop -> homolog -> main."
+            exit 1
+          fi
+
+          echo "Base '$BASE_REF' fora do escopo deste check, ignorando."
