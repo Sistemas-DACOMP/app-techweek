@@ -55,25 +55,35 @@ Catálogo persistente em `docs/business-rules/` (ver `docs/business-rules/README
 
 ## Testes automatizados
 
-Vitest mergeado na `develop` (PR #17/KAN-31, 2026-09-11). `npm run test` = unitário (`src/**/*.test.js`, mocka o Supabase), `npm run test:integration` = bate direto no `@supabase/supabase-js` do projeto de HOMOLOGAÇÃO, sem passar pela UI — precisa de `.env.local` com credenciais reais de homolog; se não tiver, os testes usam `describe.skipIf` e pulam em vez de falhar. **`test:integration` cria contas reais no Supabase de homolog a cada execução** (e-mail com timestamp) — normal, mas não rodar sem necessidade nem contra produção. Toda regra de negócio nova ou corrigida deveria ganhar teste.
+**Legado Supabase, ainda em uso enquanto o PWA não migra pra Firebase** (ver "Estado da infra" acima): Vitest mergeado na `develop` (PR #17/KAN-31, 2026-09-11). `npm run test` = unitário (`src/**/*.test.js`, mocka o Supabase), `npm run test:integration` = bate direto no `@supabase/supabase-js` do projeto de HOMOLOGAÇÃO, sem passar pela UI — precisa de `.env.local` com credenciais reais de homolog; se não tiver, os testes usam `describe.skipIf` e pulam em vez de falhar. **`test:integration` cria contas reais no Supabase de homolog a cada execução** (e-mail com timestamp) — normal, mas não rodar sem necessidade nem contra produção. Toda regra de negócio nova ou corrigida deveria ganhar teste. Quando o PWA migrar pra Firebase, essa suíte precisa ser reescrita contra Firestore/Auth emulators — não apagar antes de ter o equivalente novo funcionando, senão perde cobertura de regressão do app que ainda tá no ar.
 
 Existe uma skill do Claude Code (`qa-agent`) que encapsula esse processo inteiro — versionada em `.claude/skills/qa-agent/SKILL.md` neste repo (também existe uma cópia em `~/.claude/skills/qa-agent/SKILL.md` a nível de usuário, pra quando a sessão abre fora do repo). Invocar em vez de reexplicar o framework de teste do zero numa sessão nova.
 
 ## Estado da infra (resumo — ver handoff pra detalhes)
 
-- Produção: GitHub Pages, branch `main`, deploy via `.github/workflows/deploy.yml`
-- Homologação: Vercel (time `facomtechweek`, projeto `app-techweek-homolog`), Production Branch = `homolog`, Ignored Build Step configurado e testado
-- Banco: dois projetos Supabase separados (produção e homolog), centralizados numa conta só
-- Kanban: GitHub Project v2 em github.com/users/Oliveira-Jr/projects/1
+**Migração Supabase → Firebase em andamento (verificado em 2026-09-20, dual-stack ativo neste momento):**
+
+- Frontend PWA (`src/`) ainda 100% Supabase — `src/lib/supabaseClient.js`, `Login.jsx`, `Register.jsx`, `Ranking.jsx`, `Scanner.jsx`, `Challenges.jsx`, `useUser.js`, `gameplay.js` continuam usando `@supabase/supabase-js` (ainda dependency ativa no `package.json` raiz). Nenhuma tela do PWA foi migrada pra Firebase ainda.
+- Backend novo (`backend/`) já é Firebase de verdade: Express + TypeScript, Cloud Function 2ª geração (`onRequest`, região `us-east1`, 256MiB, maxInstances 10) — mas só tem rotas de esqueleto (`/api/health`, `/api/me`, `/api/staff/test`, `/api/admin/test`); nenhuma rota de negócio real (booking, checkin, leads, admin/activities) foi implementada ainda, apesar de já estar toda especificada em `Update System/arquitetura-montanha-v2.md`.
+- `firebase.json` + `.firebaserc` existem na raiz — projeto único `facom-techweek-layerx` pra `default` e `prod` (**não há projeto Firebase separado de homolog**, diferente do padrão que existia no Supabase de dois projetos). `firestore.rules` existe e já cobre `users`/`activities`/`announcements`/`bookings`/`leads`. `firestore.indexes.json` e `storage.rules` **não existem ainda**, embora a spec de arquitetura já os preveja.
+- Divergência a confirmar com Fabio: a spec de arquitetura (`Update System/arquitetura-montanha-v2.md`) descreve região `southamerica-east1`, mas o código (`backend/src/index.ts`) está deployado em `us-east1` (free tier).
+- Produção (app antigo): GitHub Pages, branch `main`, deploy via `.github/workflows/deploy.yml` — ainda a versão Supabase, migração não chegou lá.
+- Homologação (app antigo): Vercel (time `facomtechweek`, projeto `app-techweek-homolog`), Production Branch = `homolog`.
+- Kanban: GitHub Project v2 em github.com/users/Oliveira-Jr/projects/1; Jira projeto `KAN` (`app-teckweek.atlassian.net`) é a fonte de verdade pra tracking — 62 issues em 2026-09-20 (22 Backlog, 21 Prod/Concluído, 11 develop, 4 Desenvolvimento, 3 homolog, 1 Bugs).
+
+**Correção de achado anterior:** `.claude/agents/` foi renomeado em 2026-09-20 pra bater 1:1 com `.agent-system/agents/` (`security-reviewer.md`→`security.md`, `pr-review.md`+`dedup-refactor.md`→`code-review.md`, `qa.md` novo — antes só existia como skill). A divergência de nome que existia antes era convenção documentada em `.agent-system/adapters/claude/README.md`, não bug — mas o time decidiu igualar mesmo assim; atualizar esse README se ainda descrever o mapeamento antigo.
+
+**Bug real, encontrado e corrigido, correção confirmada (2026-09-20):** os agentes `architecture` e `adr` não apareciam na lista de agentes disponíveis do Claude Code e falhavam com "Agent type not found" ao serem chamados via Agent tool — reproduzido em 2 sessões separadas. Causa: dos 11 arquivos em `.claude/agents/`, `architecture.md` e `adr.md` eram os **únicos 2** com `: ` (dois-pontos+espaço) dentro do valor não-citado do campo `description:` do frontmatter YAML — o parser provavelmente lê isso como início de um mapeamento aninhado e descarta o arquivo inteiro, silenciosamente. Corrigido removendo o `: ` dos dois arquivos (trocado por travessão). **Confirmado funcionando**: os dois agentes registraram (aparecem na lista de disponíveis) e, testados via Agent tool, carregaram a persona correta (cada um citou uma frase literal da própria description). O registro de agentes do Claude Code parece ser cachê com refresh assíncrono (não por escrita de arquivo) — não confiar em teste imediato após editar `.claude/agents/`, pode levar um tempo pra refletir. **Os 13 agentes canônicos agora disparam de verdade.** Feedback do bug de parsing já registrado no Claude Code.
 
 ## Próximo trabalho em andamento
 
-Persistência de gameplay (pontos, missões, ranking) já migrou pro Supabase (`profiles`, `point_events` — ver migrations em `supabase/migrations/`). Pendências atuais (2026-09-11):
+Persistência de gameplay (pontos, missões, ranking) migrou pro Supabase (`profiles`, `point_events` — ver migrations em `supabase/migrations/`) — isso é histórico, pré-decisão de ir pra Firebase. Pendências atuais (2026-09-20):
 
-- PR #17 (KAN-31, suíte de testes) e #15 (KAN-5) já mergeados na `develop`.
-- KAN-27/28/29/30: gaps de validação encontrados via QA (senha fraca só valida tarde no cadastro; aceite de LGPD e limite de avatar só existem no front, não no backend; scanner de presença aceita QR de qualquer palestra) — todos no Backlog, sem correção agendada ainda. Registrados também em `docs/business-rules/`.
-- Cobertura de teste ainda falta pra: login (mensagem genérica anti-enumeração), critérios de aceite do avatar (KAN-7), dedup de presença em palestra (KAN-5/`addPointEvent`).
-- Fix de segurança já pronto em `develop` (remoção de credencial hardcoded em `seed-admin.js`, commit `a97375a`) nunca foi promovido pra `main` — produção ainda tem o arquivo antigo. Precisa de PR dedicado `develop → homolog → main`.
+- PR #17 (KAN-31, suíte de testes) e #15 (KAN-5) já mergeados na `develop` (histórico Supabase).
+- KAN-27/28/29/30 (gaps de validação em Supabase: senha fraca, LGPD, limite de avatar, scanner de presença) seguem em `develop`/Backlog — decisão a confirmar com Fabio se ainda valem a pena corrigir no código antigo ou só migram direto pra Firebase via KAN-71/72/73 (ver abaixo).
+- KAN-66/67 (setup Firebase, middleware JWT) já em Prod/Concluído e homolog respectivamente — é a base do `backend/` atual.
+- KAN-71/72/73: versões Firebase das regras de negócio de KAN-30/28/29 (scanner de presença, LGPD, limite de avatar) — abertas depois que os PRs antigos #21/#22/#23 (feitos em cima do Supabase) foram fechados por causa da migração. Ainda em Backlog/Desenvolvimento, sem implementação.
+- Fix de segurança do app antigo (remoção de credencial hardcoded em `seed-admin.js`, commit `a97375a`, em `develop`) nunca foi promovido pra `main` — produção ainda tem o arquivo antigo. Baixa prioridade dado que o app antigo está sendo substituído.
 
 ## Roadmap de infra de agentes/skills
 

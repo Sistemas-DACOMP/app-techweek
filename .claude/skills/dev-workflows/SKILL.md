@@ -25,20 +25,19 @@ Nunca substitua silenciosamente uma regra persistida por uma interpretação sua
 |---|---|
 | "implemente/adicione/crie X" | FEATURE |
 | "corrija/conserta bug X" | BUGFIX |
-| "revise/analise o PR #N" | PR REVIEW (delega para o agente `pr-review`) |
-| "execute os testes"/"valide a regra X" | TESTING (delega para a skill `qa-agent`) |
-| "prepare para merge" | fase final do PR REVIEW (`pr-review`, 4ª fase — nunca pula pra merge sozinho) |
-| "revisão de segurança"/toca em auth, RLS, token, upload, endpoint admin | delega também para o agente `security-reviewer` |
+| "revise/analise o PR #N" | PR REVIEW (delega para o agente `code-review`) |
+| "execute os testes"/"valide a regra X" | TESTING (delega para o agente `qa` / skill `qa-agent`) |
+| "prepare para merge" | fase final do PR REVIEW (`code-review`, 4ª fase — nunca pula pra merge sozinho) |
+| "revisão de segurança"/toca em auth, RLS, token, upload, endpoint admin | delega também para o agente `security` |
 | requisito ambíguo, regra de negócio não classificada | delega para `spec`/`product` antes de implementar |
 | mudança toca `firebase.json`/`firestore.rules`/`storage.rules`/deploy | delega para `infra` |
 | decisão técnica real acabou de ser tomada | delega para `adr` registrar |
 
 ## Agentes disponíveis e quando delegar
 
-- **qa-agent** (skill) — regras de negócio, planejamento e execução de testes em todas as camadas.
-- **pr-review** (agent) — análise/correção/revalidação/preparação de PR. Fases não se misturam. Os critérios de análise dele (consistência arquitetural, regressão, cobertura de teste, regra de negócio) também são o que se usa na etapa "revisar" do FEATURE/BUGFIX abaixo, antes mesmo de existir um PR — não precisa criar um Code Review Agent separado pra isso, é a mesma responsabilidade aplicada mais cedo.
-- **security-reviewer** (agent) — revisão de segurança independente, só reporta, não corrige.
-- **dedup-refactor** (agent) — só quando pedido explicitamente para achar duplicação/sugerir extração; não faz parte do fluxo automático de feature/bugfix.
+- **qa** (agent, `.claude/agents/qa.md`) — regras de negócio, planejamento e execução de testes em todas as camadas. Metodologia completa também vive na skill `qa-agent` (`.claude/skills/qa-agent/SKILL.md`).
+- **code-review** (agent) — análise/correção/revalidação/preparação de PR. Fases não se misturam. Os critérios de análise dele (consistência arquitetural, regressão, cobertura de teste, regra de negócio) também são o que se usa na etapa "revisar" do FEATURE/BUGFIX abaixo, antes mesmo de existir um PR. Também roda análise de duplicação (DRY), mas só quando pedido explicitamente — não faz parte do fluxo automático de feature/bugfix.
+- **security** (agent) — revisão de segurança independente, só reporta, não corrige.
 
 Agentes abaixo vieram da expansão do sistema portável (`.agent-system/agents/`, 2026-09-20) — despache-os sozinho, sem esperar o usuário pedir por nome, sempre que a situação bater:
 
@@ -66,9 +65,9 @@ entender requisito
 → planejar implementação (SDD quando o projeto adotar spec formal em changes/*/SPEC.md)
 → implementar
 → delegar testes para qa-agent
-→ revisar (critérios de análise do pr-review: consistência arquitetural, regressão, cobertura de
+→ revisar (critérios de análise do code-review: consistência arquitetural, regressão, cobertura de
   teste, aderência à regra de negócio — procurar problema ativamente, não confirmar por padrão)
-→ delegar revisão de segurança para security-reviewer se tocar área sensível
+→ delegar revisão de segurança para security se tocar área sensível
 → node scripts/quality-gate.mjs
 → preparar PR (branch feature/*, commit [TIPO] - descrição, PR pro develop)
 ```
@@ -83,15 +82,15 @@ reproduzir
 → avaliar impacto
 → corrigir
 → criar/ajustar teste de regressão (qa-agent)
-→ revisar (critérios do pr-review: a correção não introduziu regressão nem inconsistência)
-→ security-reviewer se a área for sensível
+→ revisar (critérios do code-review: a correção não introduziu regressão nem inconsistência)
+→ security se a área for sensível
 → node scripts/quality-gate.mjs
 → preparar PR
 ```
 
 ## WORKFLOW: PR REVIEW
 
-Delegado inteiramente ao agente `pr-review` (`.claude/agents/pr-review.md`), que já implementa as 4 fases obrigatórias (ANÁLISE → CORREÇÃO → REVALIDAÇÃO → PREPARAÇÃO). Nunca pular fase, nunca mergear.
+Delegado inteiramente ao agente `code-review` (`.claude/agents/code-review.md`), que já implementa as 4 fases obrigatórias (ANÁLISE → CORREÇÃO → REVALIDAÇÃO → PREPARAÇÃO). Nunca pular fase, nunca mergear.
 
 ## WORKFLOW: TESTING
 
@@ -114,7 +113,7 @@ Toda entrega relevante recebe um registro estruturado:
 
 - `quality_score` vem de `node scripts/quality-gate.mjs` (lint + build + test, critérios objetivos).
 - `confidence_score` vem de quem implementou/revisou (o quanto a mudança está bem entendida e coberta).
-- `security_score` vem do `security-reviewer` quando acionado; se não foi necessário acionar, registrar `null` e justificar por quê.
+- `security_score` vem do `security` quando acionado; se não foi necessário acionar, registrar `null` e justificar por quê.
 - Threshold desejado: **>= 0.80** — mas a nota NUNCA substitui critério obrigatório.
 
 Critérios obrigatórios (sempre, independente de nota):
@@ -157,7 +156,7 @@ A correção vai na camada certa — testes fake não substituem uma implementa�
 
 ## SEGURANÇA — OPERAÇÕES DE MAIOR RISCO
 
-Acionar `security-reviewer` sempre que a mudança tocar: autenticação, autorização, tokens, credenciais, uploads, manipulação de dados entre usuários, queries/endpoints administrativos, infraestrutura, migrações, ou qualquer alteração que vá para produção (`main`).
+Acionar `security` sempre que a mudança tocar: autenticação, autorização, tokens, credenciais, uploads, manipulação de dados entre usuários, queries/endpoints administrativos, infraestrutura, migrações, ou qualquer alteração que vá para produção (`main`).
 
 Nenhum agente executa operação destrutiva ou irreversível (merge, force-push, drop de tabela, reset de branch protegida) só porque "parece necessária". Isso é decisão humana.
 
