@@ -50,7 +50,7 @@ Regra pra evitar isso se repetir: todo teste novo que documentar uma regra de ne
 | [REG-AUTH-001](REG-AUTH-001-senha-fraca-cadastro.md) | Validação de senha fraca no cadastro | INFERIDA | gap — KAN-27 |
 | [REG-AUTH-002](REG-AUTH-002-senha-confirmacao-identica.md) | Senha e confirmação idênticas no cadastro | OBSERVADA | implementado |
 | [REG-AUTH-003](REG-AUTH-003-status-pos-cadastro.md) | Status pós-cadastro (anti-enumeração / rate limit) | CONFIRMADA | implementado |
-| [REG-LGPD-001](REG-LGPD-001-aceite-lgpd-backend.md) | Aceite de LGPD só no front | INFERIDA | gap — KAN-28 |
+| [REG-LGPD-001](REG-LGPD-001-aceite-lgpd-backend.md) | Aceite de LGPD exigido pelo backend (Firebase) | CONFIRMADA | implementado — KAN-72 |
 | [REG-AVATAR-001](REG-AVATAR-001-limite-avatar-backend.md) | Limite de avatar só no front | INFERIDA | gap — KAN-29 |
 | [REG-SCANNER-001](REG-SCANNER-001-qr-palestra-especifica.md) | Scanner aceita QR de qualquer palestra | INFERIDA | gap — KAN-30 |
 | [REG-PROFILE-001](REG-PROFILE-001-rls-cross-user.md) | RLS `profiles` cross-user lookup | NÃO DEFINIDA | falta teste em homolog |

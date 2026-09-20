@@ -5,6 +5,15 @@ import { createClient } from '@supabase/supabase-js';
 // passar pela UI (bypass do front) - precisam de VITE_SUPABASE_URL e
 // VITE_SUPABASE_ANON_KEY validos em .env.local. Se nao estiverem
 // configurados, os testes sao pulados em vez de falhar.
+//
+// NOTA (KAN-72, 2026-09-20): este arquivo documenta o gap no stack ANTIGO
+// (Supabase), ja descontinuado pelo pivot pra Firebase/GCP. O equivalente
+// desse gap no stack novo foi corrigido em KAN-72 via POST /api/auth/register
+// (backend/src/routes/auth.ts) + a regra `create` de /users/{userId} em
+// firestore.rules - ver docs/business-rules/REG-LGPD-001-aceite-lgpd-backend.md
+// pro relato completo. Este teste nao foi migrado pra Firebase porque isso e
+// uma tarefa maior (reescrever toda a suite de integracao), fora do escopo
+// do KAN-72 - mantido aqui so como registro historico do gap original.
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const hasRealCredentials = Boolean(
