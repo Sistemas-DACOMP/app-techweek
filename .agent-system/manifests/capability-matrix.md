@@ -19,7 +19,7 @@ Auditoria feita em 2026-09-20, nesta máquina (Windows 11, Fabio). Cada linha é
 
 ## Bloqueio real a marcar
 
-`firebase` CLI instalado (15.30.2, 2026-09-20) **desbloqueia validação de config estática** pro agente `infra` — `firebase.json` schema check, revisão de `firestore.rules`, `firebase projects:list` pra confirmar acesso a projeto — assim que esses arquivos/projeto existirem no repo. Isso remove o bloqueador de ferramenta, não o de artefato: hoje ainda não existe `firebase.json`, `firestore.rules` nem os repos `apps/pwa`, `apps/admin-web`, `backend/` (ver `project_context.status: TRANSITIONAL` em `manifests/system.yaml`), então não há nada pra apontar o CLI ainda.
+`firebase` CLI instalado (15.30.2, 2026-09-20) **desbloqueia validação de config estática** pro agente `infra` — `firebase.json` schema check, revisão de `firestore.rules`, `firebase projects:list` pra confirmar acesso a projeto. Atualizado no mesmo dia: `firebase.json`, `firestore.rules`, `.firebaserc` (projeto real `facom-techweek-layerx`, confirmado pelo Fabio) e `backend/` já existem no repo (PRs #26/#27) — o bloqueador de artefato caiu parcialmente. Ainda faltam: `firestore.indexes.json`, `storage.rules`, `apps/pwa`/`apps/admin-web` como pastas separadas, confirmação de projeto DEV/homolog separado de PROD (`.firebaserc` hoje aponta `default` e `prod` pro mesmo id), e `gcloud` CLI (segue não instalado).
 
 `gcloud` ausente **continua sendo bloqueador real e concreto** pra qualquer operação que precise de API do GCP diretamente — mudança de política IAM, configuração de runtime de Cloud Functions além do que `firebase deploy` cobre, Cloud Build. A instalação dessa CLI ainda precisa acontecer antes de qualquer execução real de infra que dependa dela.
 
