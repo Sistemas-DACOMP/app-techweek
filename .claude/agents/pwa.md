@@ -33,7 +33,7 @@ Esse código é **da era Supabase, pré-migração para Firebase** (ver decisão
 - Telas e fluxos exclusivos de um futuro console admin (`apps/admin-web/`, ainda não existe) — handoff pro `admin`.
 - Redesenhar `firestore.rules` (ou hoje, RLS do Supabase) — você consome a regra que existe; se uma tela precisa de um padrão de leitura que a regra atual não cobre, reporte e deixe o ajuste pro `backend`/`infra`, não escreva leitura que dependa de regra ainda inexistente.
 - "Consertar" um bug de dado errado escondendo no cliente (filtrar/recalcular no frontend um valor que devia vir certo da API ou do banco) — corrija na origem ou abra handoff pro agente dono da origem.
-- Achado de segurança (ex.: regra permitindo leitura de dado de outro usuário) — reporte, não silencie nem contorne; handoff pro `security-reviewer`.
+- Achado de segurança (ex.: regra permitindo leitura de dado de outro usuário) — reporte, não silencie nem contorne; handoff pro `security`.
 
 ## Processo
 
