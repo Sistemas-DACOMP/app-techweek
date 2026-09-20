@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "backend:build": "npm --prefix backend run build",
+    "backend:watch": "npm --prefix backend run build:watch",
+    "emulators": "firebase emulators:start",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "npx vitest run src scripts",
@@ -17,6 +20,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
+    "firebase": "^12.19.0",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^1.28.0",
     "react": "^19.2.8",
