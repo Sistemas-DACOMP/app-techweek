@@ -1,0 +1,107 @@
+system:
+  name: facom-techweek-agent-team
+  version: 1.0.0
+  description: >
+    Portable engineering-team agent system for the FACOM Tech Week App.
+    The AI runtime (Claude Code, Codex, Antigravity, ...) is a host only.
+    This system, not the runtime, is the source of truth for how work gets done.
+
+supported_runtimes:
+  - id: claude-code
+    status: native
+    adapter: .agent-system/adapters/claude/
+  - id: codex
+    status: adapter_partial
+    adapter: .agent-system/adapters/codex/
+    note: >
+      Codex CLI not installed on the audited dev machine (2026-09-20).
+      Adapter files are written and ready; unverified end-to-end because there is
+      no local Codex install to run them against. Superpowers plugin already ships
+      a working Codex adapter (.codex-plugin/plugin.json + references/codex-tools.md)
+      that this system's Codex adapter reuses conventions from.
+  - id: antigravity
+    status: adapter_partial
+    adapter: .agent-system/adapters/antigravity/
+    note: >
+      Same as codex — not installed locally, adapter unverified end-to-end.
+      Superpowers ships a working reference (references/antigravity-tools.md),
+      notably: Antigravity has no todo/checklist tool, use write_to_file task artifacts.
+
+project_context:
+  status: TRANSITIONAL
+  note: >
+    Old repo (this repo, app-techweek, React+Vite+Supabase) is DISCARDED per
+    Fabio's decision (2026-09-20) — it no longer represents the product.
+    New target architecture (Firebase/GCP, 3 repos: apps/pwa, apps/admin-web,
+    backend/) is decided (see Update System/arquitetura-montanha-v2.md at the
+    App_TechWeek parent folder) but NOT YET SCAFFOLDED as of this system's
+    creation date. This .agent-system currently lives inside the old repo
+    because it is the only git repo that exists — it is designed to be copied
+    into each of the 3 new repos once they are created (see
+    .agent-system/docs/bootstrap.md).
+  firebase_tooling_gap: >
+    Update 2026-09-20: firebase CLI is now installed (15.30.2). gcloud CLI is
+    still NOT installed — direct GCP API/IAM/Cloud Build work stays blocked on
+    that install. Firebase CLI presence removes the tooling blocker for static
+    config validation, but no firebase.json/firestore.rules/real Firebase
+    project exists yet, so there is still nothing concrete to validate against.
+
+agents:
+  - orchestrator
+  - spec
+  - product
+  - architecture
+  - backend
+  - pwa
+  - admin
+  - qa
+  - security
+  - infra
+  - code-review
+  - adr
+  - ponytail   # see agents/ponytail.md — installed for real 2026-09-20, portable: true
+
+plugins:
+  - id: superpowers
+    version: "6.3.0"
+    portability: PORTABLE
+  - id: caveman
+    version: "15581d14007f"
+    portability: PARTIALLY_PORTABLE
+  - id: gitkraken-hooks
+    version: "3.1.72"
+    portability: UNKNOWN
+    note: Not audited — outside the spec's named plugin list, present but not load-bearing for this system.
+  - id: user-story
+    version: "a03af68414bb"
+    portability: LIKELY_PORTABLE
+    note: Mike Cohn / Gherkin skill, plain markdown, not deep-audited.
+  - id: ponytail
+    version: "4.10.0"
+    portability: PORTABLE
+    note: >
+      Installed for real 2026-09-20 (~/.claude/plugins/cache/ponytail/ponytail/4.10.0/).
+      Real file-backed adapters for Claude Code (full plugin: hooks/skills/commands/
+      statusline) and Codex (.codex-plugin/plugin.json, shares the same
+      hooks/claude-codex-hooks.json as Claude Code) — far higher Codex parity than
+      Caveman's ~20% static-echo hook. Antigravity adapter is instruction-tier only
+      (AGENTS.md at repo root, no hooks/levels), per the plugin's own
+      docs/agent-portability.md. Codex/Antigravity rows unverified end-to-end on this
+      machine (neither installed) — same caveat as superpowers. See
+      agents/ponytail.md and manifests/plugin-parity.md.
+
+required_capabilities:
+  filesystem: true
+  shell: true
+  git: true
+  test_execution: conditional   # depends which of the 3 future repos
+  browser: conditional
+  jira: conditional
+  github: true
+  firebase: true    # AVAILABLE 2026-09-20 (firebase CLI 15.30.2) — see project_context.firebase_tooling_gap for what's still missing (gcloud, real project)
+  docker: false     # NOT AVAILABLE on audited machine
+
+portability:
+  required: true
+  audit_date: "2026-09-20"
+  audit_scope: current repo (app-techweek, Supabase-era) + global plugin/skill inventory
