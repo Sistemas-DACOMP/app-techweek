@@ -6,6 +6,7 @@ import { getMyProfile } from '../lib/gameplay';
 import LectureCard from '../components/LectureCard';
 import LectureModal from '../components/LectureModal';
 import LectureScanner from '../components/LectureScanner';
+import NotificationBell from '../components/NotificationBell';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -30,16 +31,19 @@ export default function Dashboard() {
       {/* White top section with mascots waving */}
       <div className="hero-white">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <div style={{ width: '40px' }}></div>
+          <div style={{ width: '88px' }}></div>
           <img src={logoTw} alt="Tech Week Logo" style={{ height: '60px' }} />
-          <div
-            className="header-avatar"
-            style={{ overflow: 'hidden', cursor: 'pointer' }}
-            onClick={() => navigate('/profile')}
-          >
-            {avatarUrl
-              ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : firstName.charAt(0).toUpperCase()}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <NotificationBell />
+            <div
+              className="header-avatar"
+              style={{ overflow: 'hidden', cursor: 'pointer' }}
+              onClick={() => navigate('/profile')}
+            >
+              {avatarUrl
+                ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : firstName.charAt(0).toUpperCase()}
+            </div>
           </div>
         </div>
 

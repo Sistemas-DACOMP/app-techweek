@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "facom-techweek-layerx",
+    "prod": "facom-techweek-layerx"
+  }
+}
+
