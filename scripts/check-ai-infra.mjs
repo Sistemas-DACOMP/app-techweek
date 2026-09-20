@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Bootstrap check — confirma que o ambiente de desenvolvimento assistido por IA está
 // configurado neste checkout. Não imprime "tudo certo" sem checar de verdade.
 

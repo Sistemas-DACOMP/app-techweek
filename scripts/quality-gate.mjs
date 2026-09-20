@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Quality Gate objetivo — App TechWeek.
 // Roda os critérios obrigatórios (lint/build/test) e imprime um resultado estruturado.
 // confidence_score e security_score não são calculados aqui: vêm do agente/skill que revisou
