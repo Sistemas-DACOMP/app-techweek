@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useUser } from '../hooks/useUser';
 import { getMyProfile, uploadAvatar } from '../lib/gameplay';
-import { logoutUser } from '../lib/auth';
+import { logoutUser, onAuthChange } from '../lib/auth';
 import { auth } from '../lib/firebase';
 import { validateAvatarFile, isValidEmail } from '../lib/validators';
 import AvatarCropperModal from '../components/AvatarCropperModal';
@@ -82,8 +82,8 @@ export default function Profile() {
   const [ticketNotice, setTicketNotice] = useState('');
 
   useEffect(() => {
-    async function fetchUserData() {
-      const uid = auth.currentUser?.uid;
+    async function fetchUserData(currentUser) {
+      const uid = currentUser?.uid || auth.currentUser?.uid;
       let data = null;
       if (uid) {
         try {
@@ -97,26 +97,30 @@ export default function Profile() {
         data = await getMyProfile().catch(() => null);
       }
 
-      if (data) {
+      if (data || currentUser) {
         setProfile({
-          id: data.id || data.uid || uid || '',
-          email: data.email || '',
-          username: data.username || '',
-          firstName: data.firstName || data.first_name || '',
-          lastName: data.lastName || data.last_name || '',
-          phone: data.phone || '',
-          course: data.course || '',
-          participantType: data.participantType || data.participant_type || '',
-          period: data.period || null,
-          avatarUrl: data.avatarUrl || data.avatar_url || '',
-          symplaTicket: data.symplaTicket || data.sympla_ticket || null,
-          linkedin: data.linkedin || '',
-          instagram: data.instagram || ''
+          id: data?.id || data?.uid || uid || currentUser?.uid || '',
+          email: data?.email || currentUser?.email || '',
+          username: data?.username || '',
+          firstName: data?.firstName || data?.first_name || currentUser?.displayName?.split(' ')[0] || '',
+          lastName: data?.lastName || data?.last_name || '',
+          phone: data?.phone || '',
+          course: data?.course || '',
+          participantType: data?.participantType || data?.participant_type || '',
+          period: data?.period || null,
+          avatarUrl: data?.avatarUrl || data?.avatar_url || data?.photoURL || currentUser?.photoURL || '',
+          symplaTicket: data?.symplaTicket || data?.sympla_ticket || null,
+          linkedin: data?.linkedin || '',
+          instagram: data?.instagram || ''
         });
       }
     }
 
-    fetchUserData();
+    const unsubscribe = onAuthChange((user) => {
+      fetchUserData(user);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Abre modal se vier com parâmetro ?edit=true ou ?changeEmail=true

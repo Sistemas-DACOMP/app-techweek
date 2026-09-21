@@ -1,22 +1,63 @@
 import { supabase } from './supabaseClient';
+import { auth } from './firebase';
+import { getUserProfile, uploadUserAvatar } from './userService';
 
 const UNIQUE_VIOLATION = '23505';
 
 export async function getMyProfile() {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  // 1. Prioriza Firebase Auth & Firestore
+  const firebaseUser = auth.currentUser;
+  if (firebaseUser) {
+    try {
+      const fsProfile = await getUserProfile(firebaseUser.uid);
+      if (fsProfile) {
+        return {
+          ...fsProfile,
+          id: firebaseUser.uid,
+          first_name: fsProfile.firstName || fsProfile.displayName?.split(' ')[0] || fsProfile.username || 'Visitante',
+          last_name: fsProfile.lastName || '',
+          username: fsProfile.username || fsProfile.email?.split('@')[0] || '',
+          avatar_url: fsProfile.avatarUrl || fsProfile.photoURL || firebaseUser.photoURL || null,
+          mascot: fsProfile.mascot || 'blue'
+        };
+      }
+      return {
+        id: firebaseUser.uid,
+        first_name: firebaseUser.displayName?.split(' ')[0] || 'Visitante',
+        last_name: '',
+        username: firebaseUser.email?.split('@')[0] || '',
+        avatar_url: firebaseUser.photoURL || null,
+        mascot: 'blue'
+      };
+    } catch (e) {
+      console.warn('[gameplay] Erro ao buscar perfil no Firestore:', e);
+    }
+  }
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
+  // 2. Fallback Supabase
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
 
-  if (error) throw error;
-  return data;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (error) return null;
+    return data;
+  } catch (err) {
+    return null;
+  }
 }
 
 export async function uploadAvatar(file) {
+  const firebaseUser = auth.currentUser;
+  if (firebaseUser) {
+    return await uploadUserAvatar(firebaseUser.uid, file);
+  }
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
 

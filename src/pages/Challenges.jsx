@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
 import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft } from 'lucide-react';
 import { getMyProfile } from '../lib/gameplay';
+import { onAuthChange } from '../lib/auth';
+import { getUserProfile } from '../lib/userService';
 
 export default function Challenges() {
   const { completedChallenges, completeChallenge } = useUser();
@@ -13,12 +15,33 @@ export default function Challenges() {
   const [profile, setProfile] = useState({ firstName: 'Visitante', avatarUrl: '' });
 
   useEffect(() => {
-    getMyProfile()
-      .then(p => {
-        if (!p) return;
-        setProfile({ firstName: p.first_name || p.username || 'Visitante', avatarUrl: p.avatar_url || '' });
-      })
-      .catch(() => {});
+    const unsubscribe = onAuthChange(async (user) => {
+      if (!user) {
+        setProfile({ firstName: 'Visitante', avatarUrl: '' });
+        return;
+      }
+      try {
+        const p = await getUserProfile(user.uid);
+        if (p) {
+          setProfile({
+            firstName: p.firstName || p.displayName?.split(' ')[0] || p.username || 'Visitante',
+            avatarUrl: p.avatarUrl || p.photoURL || user.photoURL || ''
+          });
+        } else {
+          setProfile({
+            firstName: user.displayName?.split(' ')[0] || 'Visitante',
+            avatarUrl: user.photoURL || ''
+          });
+        }
+      } catch (e) {
+        setProfile({
+          firstName: user.displayName?.split(' ')[0] || 'Visitante',
+          avatarUrl: user.photoURL || ''
+        });
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const challengesList = [
