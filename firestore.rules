@@ -33,7 +33,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if false; // Apenas backend via Firebase Admin SDK (POST /api/auth/register)
-      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'email', 'createdAt']));
       allow write: if isAdmin();
     }
 
@@ -60,6 +60,11 @@ service cloud.firestore {
 
     match /leads/{sponsorId}/contacts/{contactId} {
       allow read: if isAuthenticated() && (request.auth.uid == sponsorId || isAdmin());
+      allow write: if false; // Apenas backend via Firebase Admin SDK
+    }
+
+    match /checkins/{checkinId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 

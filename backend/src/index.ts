@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from './middlewares/authMiddleware';
 import authRouter from './routes/auth';
 import checkinRouter from './routes/checkin';
 import bookingRouter from './routes/booking';
+import symplaRouter from './routes/symplaRoutes';
 
 export { db, auth };
 
@@ -54,6 +55,7 @@ app.get('/api/admin/test', requireAuth, requireRole(['ADMIN']), (req: Request, r
 // Check-in de presença em palestra (KAN-71) e reserva de vaga (KAN-49)
 app.use('/api/activities', checkinRouter);
 app.use('/api/activities', bookingRouter);
+app.use('/api/sympla', symplaRouter);
 
 // Exporta a Cloud Function 2nd Gen na região us-east1 (Free Tier)
 export const api = onRequest(

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
 import { requireAuth } from '../middlewares/authMiddleware';
-import { registerUser } from '../services/registerUser';
+import { registerUser, RegisterProfileData } from '../services/registerUser';
 
 const router = Router();
 
@@ -15,7 +15,20 @@ const router = Router();
  * servidor Express de verdade (ver routes/auth.test.ts).
  */
 export async function registerHandler(req: Request, res: Response): Promise<void> {
-  const { termsAccepted } = req.body ?? {};
+  const {
+    termsAccepted,
+    firstName,
+    lastName,
+    displayName,
+    username,
+    phone,
+    participantType,
+    course,
+    period,
+    linkedin,
+    instagram,
+    photoURL
+  } = req.body ?? {};
 
   if (termsAccepted !== true) {
     res.status(400).json({
@@ -28,8 +41,25 @@ export async function registerHandler(req: Request, res: Response): Promise<void
   const uid = req.user!.uid;
   const email = req.user!.email ?? null;
 
+  const profileData: RegisterProfileData = {};
+  if (firstName) profileData.firstName = firstName;
+  if (lastName) profileData.lastName = lastName;
+  if (displayName) profileData.displayName = displayName;
+  if (username) profileData.username = username;
+  if (phone) profileData.phone = phone;
+  if (participantType) profileData.participantType = participantType;
+  if (course) profileData.course = course;
+  if (period) profileData.period = period;
+  if (linkedin) profileData.linkedin = linkedin;
+  if (instagram) profileData.instagram = instagram;
+  if (photoURL) profileData.photoURL = photoURL;
+
+  const hasProfile = Object.keys(profileData).length > 0;
+
   try {
-    const result = await registerUser(db, uid, email);
+    const result = hasProfile
+      ? await registerUser(db, uid, email, profileData)
+      : await registerUser(db, uid, email);
 
     if (result.status === 'already-registered') {
       res.status(409).json({

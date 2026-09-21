@@ -1,8 +1,22 @@
 import * as admin from 'firebase-admin';
 
+export interface RegisterProfileData {
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  username?: string;
+  phone?: string;
+  participantType?: string;
+  course?: string;
+  period?: string;
+  linkedin?: string;
+  instagram?: string;
+  photoURL?: string;
+}
+
 export type RegisterUserResult =
   | { status: 'already-registered' }
-  | { status: 'created'; user: { uid: string; email: string | null; role: 'PARTICIPANT' } };
+  | { status: 'created'; user: { uid: string; email: string | null; role: 'PARTICIPANT'; profile?: RegisterProfileData } };
 
 /**
  * Grava o perfil do usuário em /users/{uid} dentro de uma transação, garantindo que
@@ -15,7 +29,8 @@ export type RegisterUserResult =
 export async function registerUser(
   db: admin.firestore.Firestore,
   uid: string,
-  email: string | null
+  email: string | null,
+  profileData?: RegisterProfileData
 ): Promise<RegisterUserResult> {
   const userRef = db.collection('users').doc(uid);
 
@@ -27,13 +42,34 @@ export async function registerUser(
     }
 
     const now = admin.firestore.FieldValue.serverTimestamp();
-    tx.set(userRef, {
+    const docData: Record<string, any> = {
       uid,
       email,
       role: 'PARTICIPANT',
+      totalPoints: 0,
       termsAcceptedAt: now,
       createdAt: now
-    });
+    };
+
+    if (profileData) {
+      if (profileData.firstName) docData.firstName = profileData.firstName;
+      if (profileData.lastName) docData.lastName = profileData.lastName;
+      if (profileData.displayName) {
+        docData.displayName = profileData.displayName;
+      } else if (profileData.firstName && profileData.lastName) {
+        docData.displayName = `${profileData.firstName} ${profileData.lastName}`.trim();
+      }
+      if (profileData.username) docData.username = profileData.username;
+      if (profileData.phone) docData.phone = profileData.phone;
+      if (profileData.participantType) docData.participantType = profileData.participantType;
+      if (profileData.course) docData.course = profileData.course;
+      if (profileData.period) docData.period = profileData.period;
+      if (profileData.linkedin) docData.linkedin = profileData.linkedin;
+      if (profileData.instagram) docData.instagram = profileData.instagram;
+      if (profileData.photoURL) docData.photoURL = profileData.photoURL;
+    }
+
+    tx.set(userRef, docData);
 
     return false;
   });
@@ -42,5 +78,5 @@ export async function registerUser(
     return { status: 'already-registered' };
   }
 
-  return { status: 'created', user: { uid, email, role: 'PARTICIPANT' } };
+  return { status: 'created', user: { uid, email, role: 'PARTICIPANT', profile: profileData } };
 }
