@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Avatar do participante. Path: /avatars/{userId}/{fileName}
+    // KAN-73 (reimplementação Firebase do que o PR #23 fazia no Supabase):
+    // o limite de 2MB e a lista de tipos aceitos precisam valer aqui, não só
+    // no front (src/lib/validators.js). Lista fechada de content-type pra
+    // bater exatamente com o validador do front e não abrir brecha pra tipo
+    // perigoso (ex: image/svg+xml, que pode carregar script).
+    match /avatars/{userId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType in ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+    }
+  }
+}
