@@ -61,3 +61,61 @@ describe('POST /:activityId/checkin — validação de activityId (KAN-49 securi
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'QR_MISMATCH' }));
   });
 });
+
+function makeCheckinTx(activityData: Record<string, unknown>, pointEventExists = false) {
+  return {
+    get: vi.fn((ref: { path: string }) => {
+      if (ref.path.startsWith('activities/')) return Promise.resolve({ exists: true, data: () => activityData });
+      if (ref.path.startsWith('pointEvents/')) return Promise.resolve({ exists: pointEventExists });
+      throw new Error(`ref inesperada no mock: ${ref.path}`);
+    }),
+    set: vi.fn(),
+    update: vi.fn()
+  };
+}
+
+describe('POST /:activityId/checkin — attendanceMode (KAN-51/D2, convivência com o double-check novo)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (db.collection as any).mockImplementation((name: string) => ({
+      doc: (id: string) => ({ path: `${name}/${id}` })
+    }));
+  });
+
+  it('recusa 400 WRONG_ATTENDANCE_MODE se a atividade usa double-check (KAN-51)', async () => {
+    const tx = makeCheckinTx({ attendanceMode: 'DOUBLE_CHECK', points: 10 });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq('lecture-1', 'lecture-1');
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(tx.set).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'WRONG_ATTENDANCE_MODE' }));
+  });
+
+  it('continua funcionando normal (201) quando attendanceMode está ausente (atividade cadastrada antes do campo existir)', async () => {
+    const tx = makeCheckinTx({ points: 10 });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq('lecture-1', 'lecture-1');
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(tx.set).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('continua funcionando normal (201) quando attendanceMode é explicitamente SELF_SCAN', async () => {
+    const tx = makeCheckinTx({ attendanceMode: 'SELF_SCAN', points: 10 });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq('lecture-1', 'lecture-1');
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(tx.set).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+});
