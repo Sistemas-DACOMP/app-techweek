@@ -55,3 +55,4 @@ Regra pra evitar isso se repetir: todo teste novo que documentar uma regra de ne
 | [REG-SCANNER-001](REG-SCANNER-001-qr-palestra-especifica.md) | Scanner aceita QR de qualquer palestra | INFERIDA | gap — KAN-30 |
 | [REG-PROFILE-001](REG-PROFILE-001-rls-cross-user.md) | RLS `profiles` cross-user lookup | NÃO DEFINIDA | falta teste em homolog |
 | [REG-REGISTER-001](REG-REGISTER-001-linkedin-instagram-descartados.md) | `linkedin`/`instagram` descartados no cadastro | OBSERVADA | gap — sem card ainda |
+| [REG-BOOKING-001](REG-BOOKING-001-leitura-restrita-dono.md) | Leitura de reserva de vaga restrita ao dono ou ADMIN | CONFIRMADA | implementado — KAN-48 |

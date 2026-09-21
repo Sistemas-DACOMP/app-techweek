@@ -49,9 +49,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Regras de Reservas e Leads: Escritas diretas do cliente proibidas (feitas pelo backend)
+    // Regras de Reservas: leitura restrita ao dono da inscrição ou ADMIN (REG-BOOKING-001)
+    // — bookingId é determinístico ({uid}_{activityId}, ver KAN-49), então "leitura pública
+    // autenticada" deixaria qualquer participante ver quem se inscreveu em quê e a posição
+    // na lista de espera de outra pessoa. Escrita sempre pelo backend (Admin SDK, runTransaction).
     match /bookings/{bookingId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
