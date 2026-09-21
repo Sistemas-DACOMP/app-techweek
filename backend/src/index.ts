@@ -4,6 +4,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { db, auth } from './config/firebaseAdmin';
 import { requireAuth, requireRole } from './middlewares/authMiddleware';
 import authRouter from './routes/auth';
+import checkinRouter from './routes/checkin';
 
 export { db, auth };
 
@@ -48,6 +49,9 @@ app.get('/api/admin/test', requireAuth, requireRole(['ADMIN']), (req: Request, r
     admin: req.user
   });
 });
+
+// Check-in de presença em palestra (KAN-71)
+app.use('/api/activities', checkinRouter);
 
 // Exporta a Cloud Function 2nd Gen na região us-east1 (Free Tier)
 export const api = onRequest(

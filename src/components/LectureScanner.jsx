@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, QrCode, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { addPointEvent } from '../lib/gameplay';
+import { isQrForLecture } from '../lib/qrValidation';
 export default function LectureScanner({
   lecture,
   onClose,
@@ -11,9 +12,19 @@ export default function LectureScanner({
   const [rating, setRating] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [scanError, setScanError] = useState('');
 
   const handleConfirmPresence = async () => {
     setSaveError('');
+
+    // Defesa em profundidade: o QR já foi validado antes de setScanResult,
+    // mas confirmamos de novo aqui em vez de confiar cegamente no estado
+    // antes de creditar o ponto (REG-SCANNER-001 / KAN-71).
+    if (!isQrForLecture(scanResult, lecture?.id)) {
+      setSaveError('Esse QR Code não é dessa palestra. Escaneie novamente.');
+      return;
+    }
+
     setSaving(true);
     try {
       await addPointEvent({
@@ -71,12 +82,17 @@ export default function LectureScanner({
         (result) => {
           if (!isMounted) return;
 
+          if (!isQrForLecture(result, lecture?.id)) {
+            setScanError('Esse QR Code não é dessa palestra. Aponte a câmera pro código exibido nesta sala.');
+            return;
+          }
+
           if (scannerStarted) {
             scanner.stop().catch(() => { });
             scannerStarted = false;
           }
 
-          console.log('QR Code Lido:', result);
+          setScanError('');
           setScanResult(result);
         },
         () => { }
@@ -100,8 +116,6 @@ export default function LectureScanner({
       }
     };
   }, [scanResult]);
-
-  console.log('MOSTRANDO FORMULÁRIO', scanResult);
 
   if (scanResult) {
     return (
@@ -518,6 +532,12 @@ export default function LectureScanner({
             </span>
 
           </div>
+
+          {scanError && (
+            <p style={{ textAlign: 'center', color: '#f87171', fontSize: '13px', marginTop: '14px' }}>
+              {scanError}
+            </p>
+          )}
 
         </div>
       </div>
