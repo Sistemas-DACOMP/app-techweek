@@ -7,8 +7,32 @@ import { validateAvatarFile, isValidEmail } from '../lib/validators';
 import AvatarCropperModal from '../components/AvatarCropperModal';
 import { SYMPLA_EVENT_URL, verifySymplaTicket } from '../lib/sympla';
 import { getUserProfile, uploadUserAvatar, updateUserEmail, updateUserProfile } from '../lib/userService';
-import { LogOut, Camera, Edit2, Loader2, X, RefreshCw, Lock } from 'lucide-react';
+import { 
+  LogOut, Camera, Edit2, Edit3, Loader2, X, RefreshCw, Lock, 
+  User, Mail, Phone, BookOpen, GraduationCap, Ticket, Check, AlertCircle, Sparkles, ExternalLink 
+} from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+
+const UFU_COURSES = [
+  'Sistemas de Informação',
+  'Ciência da Computação',
+  'Inteligência Artificial',
+  'Engenharia de Computação',
+  'Engenharia Elétrica',
+  'Engenharia Biomédica',
+  'Engenharia Mecatrônica',
+  'Ciência de Dados',
+  'Cibersegurança',
+  'Design',
+  'Outro (especificar)'
+];
+
+const PARTICIPANT_TYPES = [
+  'Aluno da UFU',
+  'Aluno de outra instituição',
+  'Servidor / Professor',
+  'Comunidade Externa'
+];
 
 export default function Profile() {
   const { points } = useUser();
@@ -21,21 +45,39 @@ export default function Profile() {
     firstName: '',
     lastName: '',
     username: '',
+    phone: '',
     course: '',
     participantType: '',
     period: null,
     avatarUrl: '',
-    symplaTicket: null
+    symplaTicket: null,
+    linkedin: '',
+    instagram: ''
   });
   const [avatarError, setAvatarError] = useState('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [rawImageForCrop, setRawImageForCrop] = useState(null);
 
-  // Estados para troca de e-mail e verificação de ingresso
-  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
-  const [newEmailInput, setNewEmailInput] = useState('');
-  const [savingEmail, setSavingEmail] = useState(false);
-  const [emailChangeMessage, setEmailChangeMessage] = useState(null);
+  // Estados para Modal Completo de Edição de Perfil & Sympla (KAN-69)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    firstName: '',
+    lastName: '',
+    username: '',
+    phone: '',
+    participantType: 'Aluno da UFU',
+    course: 'Sistemas de Informação',
+    customCourse: '',
+    period: '',
+    linkedin: '',
+    instagram: '',
+    email: '',
+    ticketNumber: ''
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [verifyingTicket, setVerifyingTicket] = useState(false);
+  const [editFeedback, setEditFeedback] = useState(null);
+  const [activeTab, setActiveTab] = useState('pessoal'); // 'pessoal' | 'academico' | 'contato' | 'sympla'
   const [recheckingTicket, setRecheckingTicket] = useState(false);
   const [ticketNotice, setTicketNotice] = useState('');
 
@@ -62,6 +104,7 @@ export default function Profile() {
           username: data.username || '',
           firstName: data.firstName || data.first_name || '',
           lastName: data.lastName || data.last_name || '',
+          phone: data.phone || '',
           course: data.course || '',
           participantType: data.participantType || data.participant_type || '',
           period: data.period || null,
@@ -76,69 +119,196 @@ export default function Profile() {
     fetchUserData();
   }, []);
 
-  // Abre o modal de alteração de e-mail automaticamente se vier com ?changeEmail=true
+  // Abre modal se vier com parâmetro ?edit=true ou ?changeEmail=true
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get('changeEmail') === 'true') {
-      setIsEmailModalOpen(true);
-      setNewEmailInput(profile.email || '');
+    if (params.get('edit') === 'true' || params.get('changeEmail') === 'true') {
+      handleOpenEditModal();
+      if (params.get('changeEmail') === 'true') {
+        setActiveTab('sympla');
+      }
     }
-  }, [location.search, profile.email]);
+  }, [location.search, profile.id]);
 
-  const handleSaveEmail = async (e) => {
+  const handleOpenEditModal = () => {
+    const isCustomCourse = profile.course && !UFU_COURSES.slice(0, -1).includes(profile.course);
+    setEditForm({
+      firstName: (profile.firstName || '').replace(/^@/, ''),
+      lastName: profile.lastName || '',
+      username: (profile.username || '').replace(/^@/, ''),
+      phone: profile.phone || '',
+      participantType: profile.participantType || 'Aluno da UFU',
+      course: isCustomCourse ? 'Outro (especificar)' : (profile.course || 'Sistemas de Informação'),
+      customCourse: isCustomCourse ? profile.course : '',
+      period: profile.period ? String(profile.period) : '',
+      linkedin: profile.linkedin || '',
+      instagram: profile.instagram || '',
+      email: profile.email || '',
+      ticketNumber: profile.symplaTicket?.ticketNumber || ''
+    });
+    setEditFeedback(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveProfile = async (e) => {
     e?.preventDefault?.();
-    const cleanEmail = newEmailInput.trim().toLowerCase();
-    if (!cleanEmail || !isValidEmail(cleanEmail)) {
-      setEmailChangeMessage({ type: 'error', text: 'Informe um endereço de e-mail válido.' });
+    const uid = profile.id || auth.currentUser?.uid;
+    if (!uid) {
+      setEditFeedback({ type: 'error', text: 'Sessão expirada. Faça login novamente.' });
       return;
     }
 
-    setSavingEmail(true);
-    setEmailChangeMessage(null);
+    const cleanFirstName = editForm.firstName.trim();
+    const cleanLastName = editForm.lastName.trim();
+    const cleanUsername = editForm.username.trim().replace(/^@/, '');
+    const cleanEmail = editForm.email.trim().toLowerCase();
+    const isStudent = editForm.participantType === 'Aluno da UFU' || editForm.participantType === 'Aluno de outra instituição';
+    const finalCourse = isStudent 
+      ? (editForm.course === 'Outro (especificar)' ? editForm.customCourse.trim() : editForm.course) 
+      : '';
+    const cleanPhone = editForm.phone.trim();
+    const cleanLinkedin = editForm.linkedin.trim();
+    const cleanInstagram = editForm.instagram.trim();
+    const ticketNum = editForm.ticketNumber.trim();
+
+    if (!cleanFirstName) {
+      setEditFeedback({ type: 'error', text: 'Primeiro nome é obrigatório.' });
+      setActiveTab('pessoal');
+      return;
+    }
+    if (!cleanUsername) {
+      setEditFeedback({ type: 'error', text: 'Nome de usuário (@username) é obrigatório.' });
+      setActiveTab('pessoal');
+      return;
+    }
+    if (cleanEmail && !isValidEmail(cleanEmail)) {
+      setEditFeedback({ type: 'error', text: 'Informe um endereço de e-mail válido.' });
+      setActiveTab('sympla');
+      return;
+    }
+    if (isStudent && editForm.course === 'Outro (especificar)' && !editForm.customCourse.trim()) {
+      setEditFeedback({ type: 'error', text: 'Por favor, informe o nome do seu curso.' });
+      setActiveTab('academico');
+      return;
+    }
+
+    setSavingProfile(true);
+    setEditFeedback(null);
 
     try {
-      // 1. Atualiza no Firestore e no Auth
-      await updateUserEmail(profile.id, cleanEmail);
-      setProfile(prev => ({ ...prev, email: cleanEmail }));
+      const updates = {
+        firstName: cleanFirstName,
+        lastName: cleanLastName,
+        displayName: `${cleanFirstName} ${cleanLastName}`.trim(),
+        username: cleanUsername,
+        phone: cleanPhone,
+        participantType: editForm.participantType,
+        course: finalCourse,
+        period: isStudent && editForm.period ? Number(editForm.period) : null,
+        linkedin: cleanLinkedin,
+        instagram: cleanInstagram,
+        email: cleanEmail
+      };
 
-      // 2. Consulta imediatamente o Sympla com o novo e-mail
-      try {
-        const symplaRes = await verifySymplaTicket({ email: cleanEmail });
-        const p = symplaRes?.participant || symplaRes?.ticket;
-        if (symplaRes && symplaRes.verified && p) {
-          const ticketObj = {
-            ticketNumber: p.ticketNumber,
-            ticketName: p.ticketName,
-            qrCodeData: p.qrCodeData || p.ticketNumber,
-            orderId: p.orderId
-          };
-          await updateUserProfile(profile.id, { symplaTicket: ticketObj });
-          setProfile(prev => ({ ...prev, symplaTicket: ticketObj }));
-          setEmailChangeMessage({ 
-            type: 'success', 
-            text: `E-mail alterado e ingresso vinculado com sucesso: ${p.ticketName}! 🎉` 
-          });
-        } else {
-          setEmailChangeMessage({ 
-            type: 'warning', 
-            text: 'E-mail atualizado com sucesso! Porém, ainda não encontramos ingresso no Sympla para este e-mail. Garanta seu ingresso se ainda não o fez.' 
-          });
+      // 1. Atualiza documento no Firestore
+      await updateUserProfile(uid, updates);
+
+      // 2. Se e-mail foi alterado, tenta atualizar no Firebase Auth
+      if (cleanEmail && auth.currentUser && auth.currentUser.email !== cleanEmail) {
+        try {
+          await updateUserEmail(uid, cleanEmail);
+        } catch (authErr) {
+          console.warn('Aviso: E-mail atualizado no Firestore mas precisa de re-login no Auth:', authErr);
         }
-      } catch (symplaErr) {
-        console.warn('Erro ao consultar Sympla após troca de e-mail:', symplaErr);
-        setEmailChangeMessage({ 
-          type: 'warning', 
-          text: 'E-mail atualizado com sucesso! Não foi possível consultar o Sympla no momento.' 
-        });
       }
+
+      // 3. Logística Sympla: se informado e-mail ou ticketNumber, verifica automaticamente
+      let symplaMessage = '';
+      if (cleanEmail || ticketNum) {
+        try {
+          const symplaRes = await verifySymplaTicket({ 
+            email: cleanEmail, 
+            ticketNumber: ticketNum || undefined 
+          });
+          const p = symplaRes?.participant || symplaRes?.ticket;
+          if (symplaRes && symplaRes.verified && p) {
+            const ticketObj = {
+              ticketNumber: p.ticketNumber,
+              ticketName: p.ticketName,
+              qrCodeData: p.qrCodeData || p.ticketNumber,
+              orderId: p.orderId
+            };
+            await updateUserProfile(uid, { symplaTicket: ticketObj });
+            updates.symplaTicket = ticketObj;
+            symplaMessage = ` Ingresso Sympla vinculado: ${p.ticketName}! 🎟️`;
+          } else if (ticketNum || cleanEmail !== profile.email) {
+            symplaMessage = ' (Ingresso ainda não localizado no Sympla com estes dados).';
+          }
+        } catch (symplaErr) {
+          console.warn('Aviso ao consultar Sympla no salvamento do perfil:', symplaErr);
+        }
+      }
+
+      // 4. Atualiza estado local do componente
+      setProfile(prev => ({
+        ...prev,
+        ...updates
+      }));
+
+      setEditFeedback({
+        type: 'success',
+        text: `Perfil atualizado com sucesso!${symplaMessage}`
+      });
+
+      // Fecha o modal após 1.2s se sucesso
+      setTimeout(() => {
+        setIsEditModalOpen(false);
+      }, 1200);
+
     } catch (err) {
-      console.error('Erro ao trocar e-mail:', err);
-      setEmailChangeMessage({ 
-        type: 'error', 
-        text: err.message || 'Erro ao atualizar e-mail. Tente novamente.' 
+      console.error('Erro ao salvar perfil:', err);
+      setEditFeedback({
+        type: 'error',
+        text: err.message || 'Erro ao salvar alterações do perfil.'
       });
     } finally {
-      setSavingEmail(false);
+      setSavingProfile(false);
+    }
+  };
+
+  const handleVerifyTicketInModal = async () => {
+    const cleanEmail = editForm.email.trim().toLowerCase();
+    const ticketNum = editForm.ticketNumber.trim();
+    if (!cleanEmail && !ticketNum) {
+      setEditFeedback({ type: 'error', text: 'Informe um e-mail ou número de ingresso para consultar o Sympla.' });
+      return;
+    }
+
+    setVerifyingTicket(true);
+    setEditFeedback(null);
+    try {
+      const res = await verifySymplaTicket({ email: cleanEmail || undefined, ticketNumber: ticketNum || undefined });
+      const p = res?.participant || res?.ticket;
+      if (res && res.verified && p) {
+        const ticketObj = {
+          ticketNumber: p.ticketNumber,
+          ticketName: p.ticketName,
+          qrCodeData: p.qrCodeData || p.ticketNumber,
+          orderId: p.orderId
+        };
+        const uid = profile.id || auth.currentUser?.uid;
+        if (uid) {
+          await updateUserProfile(uid, { symplaTicket: ticketObj });
+          setProfile(prev => ({ ...prev, symplaTicket: ticketObj }));
+        }
+        setEditFeedback({ type: 'success', text: `Ingresso confirmado com sucesso: ${p.ticketName}! 🎟️` });
+      } else {
+        setEditFeedback({ type: 'warning', text: 'Ingresso não encontrado no Sympla. Verifique se o e-mail ou número do pedido está correto.' });
+      }
+    } catch {
+      setEditFeedback({ type: 'error', text: 'Não foi possível conectar com o Sympla no momento. Tente novamente.' });
+    } finally {
+      setVerifyingTicket(false);
     }
   };
 
@@ -292,13 +462,12 @@ export default function Profile() {
         </p>
 
         {profile.email && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
             <span style={{ fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.7)' }}>{profile.email}</span>
             <button
               onClick={() => {
-                setNewEmailInput(profile.email);
-                setEmailChangeMessage(null);
-                setIsEmailModalOpen(true);
+                handleOpenEditModal();
+                setActiveTab('sympla');
               }}
               style={{
                 background: 'rgba(255, 255, 255, 0.08)',
@@ -312,13 +481,38 @@ export default function Profile() {
                 alignItems: 'center',
                 gap: '4px'
               }}
-              title="Trocar e-mail da conta"
+              title="Trocar e-mail ou vincular ingresso"
             >
               <Edit2 size={11} />
               Trocar
             </button>
           </div>
         )}
+
+        {/* Botão de Destaque: Editar Perfil Completo (KAN-69) */}
+        <button
+          onClick={handleOpenEditModal}
+          style={{
+            marginTop: '8px',
+            marginBottom: '16px',
+            padding: '8px 20px',
+            borderRadius: '12px',
+            background: 'rgba(0, 210, 255, 0.12)',
+            border: '1px solid rgba(0, 210, 255, 0.35)',
+            color: 'var(--primary-color, #00d2ff)',
+            fontSize: '0.85rem',
+            fontWeight: '600',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 4px 12px rgba(0, 210, 255, 0.12)'
+          }}
+        >
+          <Edit3 size={15} />
+          Editar Perfil Completo
+        </button>
 
         <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
           {linkedinUrl && (
@@ -464,9 +658,8 @@ export default function Profile() {
 
             <button
               onClick={() => {
-                setNewEmailInput(profile.email);
-                setEmailChangeMessage(null);
-                setIsEmailModalOpen(true);
+                handleOpenEditModal();
+                setActiveTab('sympla');
               }}
               style={{
                 background: 'none',
@@ -478,7 +671,7 @@ export default function Profile() {
                 marginTop: '4px'
               }}
             >
-              Usou outro e-mail no Sympla? Alterar e-mail
+              Usou outro e-mail ou tem código do ingresso? Vincular ingresso Sympla
             </button>
 
             {ticketNotice && (
@@ -516,14 +709,14 @@ export default function Profile() {
         />
       )}
 
-      {/* Modal de Alteração de E-mail para Vínculo com Sympla */}
-      {isEmailModalOpen && (
+      {/* Modal Completo de Edição de Perfil & Conexão Sympla (KAN-69) */}
+      {isEditModalOpen && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.82)',
-            backdropFilter: 'blur(8px)',
+            background: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(10px)',
             zIndex: 1000,
             display: 'flex',
             alignItems: 'center',
@@ -535,122 +728,460 @@ export default function Profile() {
             className="login-glass-card animate-scale-up"
             style={{
               width: '100%',
-              maxWidth: '420px',
-              padding: '24px',
-              position: 'relative'
+              maxWidth: '520px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: '20px',
+              position: 'relative',
+              overflow: 'hidden',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(0, 210, 255, 0.15)'
             }}
           >
-            <button
-              onClick={() => {
-                setIsEmailModalOpen(false);
-                setEmailChangeMessage(null);
-              }}
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer'
-              }}
-            >
-              <X size={20} />
-            </button>
+            {/* Cabeçalho do Modal */}
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', position: 'relative' }}>
+              <button
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditFeedback(null);
+                }}
+                style={{
+                  position: 'absolute',
+                  top: '18px',
+                  right: '18px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+              >
+                <X size={18} />
+              </button>
 
-            <h3 style={{ fontSize: '1.2rem', color: 'white', marginBottom: '8px', fontWeight: 'bold' }}>
-              Alterar E-mail da Conta
-            </h3>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.45' }}>
-              Cadastrou com um e-mail diferente do que usou no Sympla? Informe o e-mail correto abaixo para atualizarmos seu perfil e sincronizarmos seu ingresso oficial.
-            </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <Edit3 size={18} color="var(--primary-color, #00d2ff)" />
+                <h3 style={{ fontSize: '1.25rem', color: 'white', fontWeight: 'bold', margin: 0 }}>
+                  Editar Perfil
+                </h3>
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+                Atualize seus dados do evento e conecte seu ingresso oficial do Sympla.
+              </p>
 
-            <form onSubmit={handleSaveEmail}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  Novo E-mail (o mesmo do Sympla)
-                </label>
-                <input
-                  type="email"
-                  value={newEmailInput}
-                  onChange={(e) => setNewEmailInput(e.target.value)}
-                  placeholder="exemplo@email.com"
-                  className="login-input"
-                  style={{ width: '100%' }}
-                  required
-                  autoFocus
-                />
+              {/* Seletor de Abas Responsivo */}
+              <div style={{ display: 'flex', gap: '6px', marginTop: '16px', overflowX: 'auto', paddingBottom: '2px' }}>
+                {[
+                  { id: 'pessoal', label: 'Pessoal', icon: User },
+                  { id: 'academico', label: 'Acadêmico', icon: GraduationCap },
+                  { id: 'contato', label: 'Redes', icon: Phone },
+                  { id: 'sympla', label: 'Sympla', icon: Ticket }
+                ].map(tab => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveTab(tab.id)}
+                      style={{
+                        flex: 1,
+                        padding: '8px 10px',
+                        borderRadius: '10px',
+                        fontSize: '0.78rem',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        border: isActive ? '1px solid var(--primary-color, #00d2ff)' : '1px solid rgba(255, 255, 255, 0.08)',
+                        background: isActive ? 'rgba(0, 210, 255, 0.16)' : 'rgba(255, 255, 255, 0.04)',
+                        color: isActive ? 'var(--primary-color, #00d2ff)' : 'var(--text-secondary)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <Icon size={14} />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Conteúdo do Formulário */}
+            <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
+                
+                {/* ABA 1: DADOS PESSOAIS */}
+                {activeTab === 'pessoal' && (
+                  <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                          Primeiro Nome *
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.firstName}
+                          onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+                          placeholder="Ex: Ana"
+                          className="login-input"
+                          required
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                          Sobrenome
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.lastName}
+                          onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
+                          placeholder="Ex: Silva"
+                          className="login-input"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                        Nome de Usuário (@username) *
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>@</span>
+                        <input
+                          type="text"
+                          value={editForm.username}
+                          onChange={(e) => setEditForm({ ...editForm, username: e.target.value.replace(/^@/, '').replace(/\s+/g, '') })}
+                          placeholder="anasilva"
+                          className="login-input"
+                          style={{ paddingLeft: '30px' }}
+                          required
+                        />
+                      </div>
+                      <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: '4px 0 0 2px' }}>
+                        Usado no ranking de pontuação e identificação no evento.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ABA 2: PERFIL ACADÊMICO */}
+                {activeTab === 'academico' && (
+                  <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                        Perfil no Evento
+                      </label>
+                      <select
+                        value={editForm.participantType}
+                        onChange={(e) => setEditForm({ ...editForm, participantType: e.target.value })}
+                        className="login-input"
+                        style={{ width: '100%' }}
+                      >
+                        {PARTICIPANT_TYPES.map(type => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {(editForm.participantType === 'Aluno da UFU' || editForm.participantType === 'Aluno de outra instituição') ? (
+                      <>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                          <div style={{ flex: 2 }}>
+                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                              Curso
+                            </label>
+                            <select
+                              value={editForm.course}
+                              onChange={(e) => setEditForm({ ...editForm, course: e.target.value })}
+                              className="login-input"
+                              style={{ width: '100%' }}
+                            >
+                              <option value="" disabled>Selecione seu curso</option>
+                              {UFU_COURSES.map(courseName => (
+                                <option key={courseName} value={courseName}>{courseName}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                              Período
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="20"
+                              value={editForm.period}
+                              onChange={(e) => setEditForm({ ...editForm, period: e.target.value })}
+                              placeholder="Ex: 4"
+                              className="login-input"
+                            />
+                          </div>
+                        </div>
+
+                        {editForm.course === 'Outro (especificar)' && (
+                          <div className="animate-fade-in">
+                            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--primary-color, #00d2ff)', marginBottom: '4px', fontWeight: '500' }}>
+                              Qual é o seu curso?
+                            </label>
+                            <input
+                              type="text"
+                              value={editForm.customCourse}
+                              onChange={(e) => setEditForm({ ...editForm, customCourse: e.target.value })}
+                              placeholder="Digite o nome completo do seu curso..."
+                              className="login-input"
+                              required
+                            />
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '10px', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        ℹ️ Informações de curso e período acadêmico são exibidas apenas para participantes cadastrados como estudantes.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ABA 3: CONTATO E REDES SOCIAIS */}
+                {activeTab === 'contato' && (
+                  <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                        WhatsApp / Telefone
+                      </label>
+                      <input
+                        type="text"
+                        value={editForm.phone}
+                        onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                        placeholder="(34) 99999-9999"
+                        className="login-input"
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                          LinkedIn (Opcional)
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.linkedin}
+                          onChange={(e) => setEditForm({ ...editForm, linkedin: e.target.value })}
+                          placeholder="linkedin.com/in/seu-perfil"
+                          className="login-input"
+                        />
+                      </div>
+
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                          Instagram (Opcional)
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.instagram}
+                          onChange={(e) => setEditForm({ ...editForm, instagram: e.target.value })}
+                          placeholder="@seu_perfil"
+                          className="login-input"
+                        />
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                      Facilite o networking com outros participantes e patrocinadores da TechWeek!
+                    </p>
+                  </div>
+                )}
+
+                {/* ABA 4: LOGÍSTICA DE INGRESSO SYMPLA */}
+                {activeTab === 'sympla' && (
+                  <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {/* Status Atual do Ingresso */}
+                    {profile.symplaTicket?.ticketName ? (
+                      <div style={{ padding: '12px 14px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <Ticket size={20} color="#10b981" />
+                        <div>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#10b981' }}>
+                            Ingresso Confirmado: {profile.symplaTicket.ticketName}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.7)' }}>
+                            Nº {profile.symplaTicket.ticketNumber || 'Vinculado'} • QR Code ativo
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ padding: '12px 14px', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <AlertCircle size={20} color="#fbbf24" />
+                        <div>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#fbbf24' }}>
+                            Ingresso Sympla Pendente
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.7)' }}>
+                            Informe o e-mail ou o número do ingresso para ativar seu crachá.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                        E-mail da Conta / Compra no Sympla *
+                      </label>
+                      <input
+                        type="email"
+                        value={editForm.email}
+                        onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                        placeholder="exemplo@email.com"
+                        className="login-input"
+                        required
+                      />
+                      <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: '4px 0 0 2px' }}>
+                        Usamos seu e-mail para localizar automaticamente o ingresso emitido pelo Sympla.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                        Número do Ingresso Sympla (Opcional)
+                      </label>
+                      <input
+                        type="text"
+                        value={editForm.ticketNumber}
+                        onChange={(e) => setEditForm({ ...editForm, ticketNumber: e.target.value })}
+                        placeholder="Ex: 10 dígitos (localizado no PDF do ingresso)"
+                        className="login-input"
+                      />
+                      <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: '4px 0 0 2px' }}>
+                        Útil se comprou com outro e-mail ou se o ingresso foi comprado por outra pessoa.
+                      </p>
+                    </div>
+
+                    {/* Botão de Verificação Imediata do Sympla */}
+                    <button
+                      type="button"
+                      onClick={handleVerifyTicketInModal}
+                      disabled={verifyingTicket}
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: '10px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        color: 'white',
+                        fontSize: '0.8rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {verifyingTicket ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                      {verifyingTicket ? 'Consultando Sympla...' : 'Testar / Verificar Ingresso Agora'}
+                    </button>
+
+                    <div style={{ textAlign: 'center', marginTop: '4px' }}>
+                      <a
+                        href={SYMPLA_EVENT_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ fontSize: '0.75rem', color: 'var(--primary-color, #00d2ff)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        Ainda não garantiu sua vaga? Inscreva-se no Sympla <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {/* Box de Feedback / Mensagens */}
+                {editFeedback && (
+                  <div
+                    style={{
+                      marginTop: '16px',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      fontSize: '0.78rem',
+                      lineHeight: '1.45',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background:
+                        editFeedback.type === 'success'
+                          ? 'rgba(16, 185, 129, 0.15)'
+                          : editFeedback.type === 'warning'
+                          ? 'rgba(245, 158, 11, 0.15)'
+                          : 'rgba(239, 68, 68, 0.15)',
+                      border: `1px solid ${
+                        editFeedback.type === 'success'
+                          ? 'rgba(16, 185, 129, 0.3)'
+                          : editFeedback.type === 'warning'
+                          ? 'rgba(245, 158, 11, 0.3)'
+                          : 'rgba(239, 68, 68, 0.3)'
+                      }`,
+                      color:
+                        editFeedback.type === 'success'
+                          ? '#10b981'
+                          : editFeedback.type === 'warning'
+                          ? '#fbbf24'
+                          : '#ef4444'
+                    }}
+                  >
+                    {editFeedback.type === 'success' ? <Check size={16} /> : <AlertCircle size={16} />}
+                    <span>{editFeedback.text}</span>
+                  </div>
+                )}
               </div>
 
-              {emailChangeMessage && (
-                <div
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: '8px',
-                    fontSize: '0.78rem',
-                    marginBottom: '16px',
-                    lineHeight: '1.45',
-                    background:
-                      emailChangeMessage.type === 'success'
-                        ? 'rgba(16, 185, 129, 0.15)'
-                        : emailChangeMessage.type === 'warning'
-                        ? 'rgba(245, 158, 11, 0.15)'
-                        : 'rgba(239, 68, 68, 0.15)',
-                    border: `1px solid ${
-                      emailChangeMessage.type === 'success'
-                        ? 'rgba(16, 185, 129, 0.3)'
-                        : emailChangeMessage.type === 'warning'
-                        ? 'rgba(245, 158, 11, 0.3)'
-                        : 'rgba(239, 68, 68, 0.3)'
-                    }`,
-                    color:
-                      emailChangeMessage.type === 'success'
-                        ? '#10b981'
-                        : emailChangeMessage.type === 'warning'
-                        ? '#fbbf24'
-                        : '#ef4444'
-                  }}
-                >
-                  {emailChangeMessage.text}
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: '10px' }}>
+              {/* Rodapé do Modal com Ações */}
+              <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', gap: '12px', background: 'rgba(0,0,0,0.2)' }}>
                 <button
                   type="button"
                   onClick={() => {
-                    setIsEmailModalOpen(false);
-                    setEmailChangeMessage(null);
+                    setIsEditModalOpen(false);
+                    setEditFeedback(null);
                   }}
                   className="btn btn-secondary"
                   style={{
                     flex: 1,
                     padding: '12px',
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     background: 'rgba(255, 255, 255, 0.08)',
                     border: '1px solid rgba(255, 255, 255, 0.15)',
                     color: 'white',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
                   }}
                 >
-                  Fechar
+                  Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={savingEmail}
+                  disabled={savingProfile}
                   className="login-btn"
                   style={{
                     flex: 2,
                     padding: '12px',
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '8px'
+                    gap: '8px',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold',
+                    cursor: savingProfile ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  {savingEmail ? <Loader2 size={16} className="animate-spin" /> : null}
-                  {savingEmail ? 'Salvando...' : 'Salvar e Verificar'}
+                  {savingProfile ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                  {savingProfile ? 'Salvando Alterações...' : 'Salvar Alterações'}
                 </button>
               </div>
             </form>

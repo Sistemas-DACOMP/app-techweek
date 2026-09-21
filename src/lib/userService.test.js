@@ -135,4 +135,41 @@ describe('userService', () => {
       );
     });
   });
+
+  describe('updateUserProfile (KAN-69)', () => {
+    it('lança erro se uid não for fornecido', async () => {
+      await expect(updateUserProfile('', { firstName: 'Samuel' })).rejects.toThrow('UID é obrigatório.');
+    });
+
+    it('atualiza campos de perfil no Firestore com serverTimestamp', async () => {
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined);
+
+      const updates = {
+        firstName: 'Samuel',
+        lastName: 'Amorim',
+        username: 'sam03amorim',
+        phone: '(34) 99999-9999',
+        participantType: 'Aluno da UFU',
+        course: 'Sistemas de Informação',
+        period: 5,
+        linkedin: 'linkedin.com/in/samuel',
+        instagram: '@samuel'
+      };
+
+      const result = await updateUserProfile('user-123', updates);
+
+      expect(result).toBe(true);
+      expect(updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          firstName: 'Samuel',
+          lastName: 'Amorim',
+          username: 'sam03amorim',
+          course: 'Sistemas de Informação',
+          period: 5,
+          updatedAt: 'MOCK_TIMESTAMP'
+        })
+      );
+    });
+  });
 });
