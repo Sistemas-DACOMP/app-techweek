@@ -33,7 +33,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if false; // Apenas backend via Firebase Admin SDK (POST /api/auth/register)
-      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'email', 'createdAt']));
       allow write: if isAdmin();
     }
 
@@ -55,6 +55,12 @@ service cloud.firestore {
     // na lista de espera de outra pessoa. Escrita sempre pelo backend (Admin SDK, runTransaction).
     match /bookings/{bookingId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if false; // Apenas backend via Firebase Admin SDK
+    }
+
+    // Regras de Check-in de Presença (Double Check Portaria + Telão): Escrita exclusiva pelo backend
+    match /checkins/{checkinId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff() || isAdmin());
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
