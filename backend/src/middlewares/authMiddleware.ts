@@ -28,7 +28,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 
   try {
-    const decodedToken = await auth.verifyIdToken(token);
+    // checkRevoked=true: sem isso, token de conta desabilitada/deslogada à força
+    // continua válido até expirar naturalmente (~1h). Custo é 1 chamada extra
+    // à API do Firebase Auth por request — aceitável no volume do evento.
+    const decodedToken = await auth.verifyIdToken(token, true);
 
     const userRole: UserRole = (decodedToken.role as UserRole) || 'PARTICIPANT';
 
