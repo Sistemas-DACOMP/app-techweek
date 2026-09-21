@@ -18,9 +18,21 @@ service cloud.firestore {
     }
 
     // Regras de Usuários: Todos autenticados leem; só o próprio dono atualiza dados pessoais
+    //
+    // `create` bloqueado pro client (KAN-72/REG-LGPD-001, revisto no code-review desta PR):
+    // a primeira versão desta trava tentava replicar em regras declarativas o que
+    // POST /api/auth/register grava (uid/email batendo com o token, termsAcceptedAt
+    // como timestamp, role fixo em PARTICIPANT, hasOnly nos campos). Isso barra client
+    // gravando lixo, mas não prova aceite de LGPD nenhum: nada nas Security Rules
+    // sabe se o usuário realmente marcou o checkbox — um client mal-intencionado (ou só
+    // um SDK direto, sem passar pela tela de cadastro) podia gravar um `termsAcceptedAt`
+    // qualquer (ex.: `serverTimestamp()`) e a regra aceitava, reabrindo exatamente o
+    // bypass que o KAN-72 devia fechar, só que camuflado atrás de uma regra que parece
+    // robusta. A garantia real só existe se a criação do doc for exclusiva do backend
+    // (Admin SDK ignora Security Rules) — mesmo padrão já usado abaixo em `bookings`/`leads`.
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId);
+      allow create: if false; // Apenas backend via Firebase Admin SDK (POST /api/auth/register)
       allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
       allow write: if isAdmin();
     }
