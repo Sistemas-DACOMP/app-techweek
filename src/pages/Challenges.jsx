@@ -4,6 +4,7 @@ import { useUser } from '../hooks/useUser';
 import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Loader2, Trash2 } from 'lucide-react';
 import { getMyProfile, uploadMissionPhoto } from '../lib/gameplay';
 import { validateMissionPhoto } from '../lib/validators';
+import FeedbackModal from '../components/FeedbackModal';
 
 export default function Challenges() {
   const { completedChallenges, completeChallenge } = useUser();
@@ -13,6 +14,7 @@ export default function Challenges() {
   const [photoFiles, setPhotoFiles] = useState({});
   const [photoPreviews, setPhotoPreviews] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState(null);
 
   const [profile, setProfile] = useState({ firstName: 'Visitante', avatarUrl: '' });
 
@@ -102,7 +104,18 @@ export default function Challenges() {
 
     const success = await completeChallenge(challenge.id, challenge.points);
     if (success) {
-      alert(`Parabéns! Você completou o desafio e ganhou ${challenge.points} pontos.`);
+      setFeedback({
+        type: 'success',
+        title: 'Desafio Concluído! 🎉',
+        message: `Parabéns! Você completou "${challenge.name}" e pontuou com sucesso.`,
+        points: challenge.points
+      });
+    } else {
+      setFeedback({
+        type: 'warning',
+        title: 'Desafio Já Concluído',
+        message: 'Você já completou este desafio anteriormente!'
+      });
     }
   };
 
@@ -113,7 +126,11 @@ export default function Challenges() {
     if (activeManualChallenge.id === 'secret_password') {
       const pass = manualForm['password'];
       if (!pass || pass.trim().toUpperCase() !== 'OPORTUNIDADES') {
-        alert('Palavra-chave incorreta! Continue procurando.');
+        setFeedback({
+          type: 'warning',
+          title: 'Palavra-chave Incorreta',
+          message: 'A palavra-chave inserida não está certa. Continue procurando pelos stands!'
+        });
         return;
       }
     }
@@ -127,7 +144,11 @@ export default function Challenges() {
       if (photoField) {
         const file = photoFiles[photoField.id];
         if (!file) {
-          alert('Por favor, tire ou anexe uma foto para comprovar a missão.');
+          setFeedback({
+            type: 'warning',
+            title: 'Foto Obrigatória',
+            message: 'Por favor, tire ou anexe uma foto comprovando a missão.'
+          });
           setIsSubmitting(false);
           return;
         }
@@ -141,15 +162,31 @@ export default function Challenges() {
       // (REG-MISSION-001) em vez de apenas no estado da página
       const success = await completeChallenge(activeManualChallenge.id, activeManualChallenge.points, finalMetadata);
       if (success) {
-        alert(`Missão concluída! Você ganhou ${activeManualChallenge.points} pontos.`);
+        setFeedback({
+          type: 'success',
+          title: 'Missão Concluída! 🎉',
+          message: `Você cumpriu a missão "${activeManualChallenge.name}" com sucesso!`,
+          points: activeManualChallenge.points
+        });
         setActiveManualChallenge(null);
         setManualForm({});
         setPhotoFiles({});
         setPhotoPreviews({});
+      } else {
+        setFeedback({
+          type: 'warning',
+          title: 'Missão Já Concluída',
+          message: 'Esta missão já foi concluída anteriormente!'
+        });
+        setActiveManualChallenge(null);
       }
     } catch (err) {
       console.error('Erro ao enviar missão:', err);
-      alert('Erro ao concluir missão. Verifique sua conexão e tente novamente.');
+      setFeedback({
+        type: 'error',
+        title: 'Erro ao Concluir Missão',
+        message: 'Não foi possível registrar sua comprovação no momento. Verifique sua conexão e tente novamente.'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -338,11 +375,23 @@ export default function Challenges() {
                             const validation = validateMissionPhoto(file);
                             if (!validation.valid) {
                               if (validation.reason === 'too_large') {
-                                alert('A foto deve ter no máximo 5MB.');
+                                setFeedback({
+                                  type: 'warning',
+                                  title: 'Foto Muito Grande',
+                                  message: 'A foto deve ter no máximo 5MB para otimizar o envio.'
+                                });
                               } else if (validation.reason === 'invalid_type') {
-                                alert('Formato de imagem inválido. Use PNG, JPEG, WebP ou GIF.');
+                                setFeedback({
+                                  type: 'warning',
+                                  title: 'Formato Inválido',
+                                  message: 'Formato de imagem inválido. Use PNG, JPEG, WebP ou GIF.'
+                                });
                               } else {
-                                alert('Arquivo inválido. Selecione uma foto válida.');
+                                setFeedback({
+                                  type: 'error',
+                                  title: 'Arquivo Inválido',
+                                  message: 'Não foi possível ler este arquivo. Selecione uma foto válida.'
+                                });
                               }
                               e.target.value = '';
                               return;
@@ -422,6 +471,16 @@ export default function Challenges() {
           </div>
         </div>
       )}
+
+      {/* Card Modal Estilizado de Feedback (Sucesso / Erro / Atenção) */}
+      <FeedbackModal
+        isOpen={!!feedback}
+        type={feedback?.type}
+        title={feedback?.title}
+        message={feedback?.message}
+        points={feedback?.points}
+        onClose={() => setFeedback(null)}
+      />
     </div>
   );
 }
