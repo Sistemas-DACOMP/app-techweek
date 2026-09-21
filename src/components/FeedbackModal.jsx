@@ -1,5 +1,7 @@
 import React from 'react';
-import { CheckCircle2, AlertCircle, AlertTriangle, Info, Award, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { AlertCircle, AlertTriangle, Info, Award, X } from 'lucide-react';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function FeedbackModal({
   isOpen,
@@ -10,6 +12,7 @@ export default function FeedbackModal({
   onClose,
   actionLabel = 'Continuar'
 }) {
+  useScrollLock(isOpen);
   if (!isOpen) return null;
 
   const config = {
@@ -50,27 +53,22 @@ export default function FeedbackModal({
   const current = config[type] || config.info;
   const ModalIcon = current.Icon;
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
+      className="modal-overlay-fixed"
       onClick={onClose}
       style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(3, 7, 18, 0.78)',
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
+        background: 'rgba(3, 7, 18, 0.82)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
         padding: '20px',
         animation: 'fadeIn 0.2s ease-out'
       }}
     >
       <div
+        className="modal-card-fixed"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
@@ -208,7 +206,8 @@ export default function FeedbackModal({
           {actionLabel}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

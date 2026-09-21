@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
 import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Loader2, Trash2 } from 'lucide-react';
 import { getMyProfile, uploadMissionPhoto } from '../lib/gameplay';
 import { validateMissionPhoto } from '../lib/validators';
 import FeedbackModal from '../components/FeedbackModal';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function Challenges() {
   const { completedChallenges, completeChallenge } = useUser();
   const navigate = useNavigate();
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
+  useScrollLock(!!activeManualChallenge);
   const [manualForm, setManualForm] = useState({});
   const [photoFiles, setPhotoFiles] = useState({});
   const [photoPreviews, setPhotoPreviews] = useState({});
@@ -287,14 +290,27 @@ export default function Challenges() {
         })}
       </div>
 
-      {activeManualChallenge && (
-        <div style={{ 
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-          background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', 
-          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', 
-          padding: '24px', overflowY: 'auto', minHeight: '100dvh'
-        }}>
-          <div className="card" style={{ width: '100%', maxWidth: '400px', background: 'var(--card-bg)', maxHeight: '90vh', overflowY: 'auto' }}>
+      {activeManualChallenge && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="modal-overlay-fixed"
+          onClick={() => {
+            setActiveManualChallenge(null);
+            setManualForm({});
+            setPhotoFiles({});
+            setPhotoPreviews({});
+          }}
+          style={{ 
+            background: 'rgba(0,0,0,0.82)', 
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            padding: '20px'
+          }}
+        >
+          <div 
+            className="card modal-card-fixed" 
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: '420px', background: 'var(--card-bg)' }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '1.2rem', color: 'white' }}>{activeManualChallenge.name}</h3>
               <button
@@ -469,7 +485,8 @@ export default function Challenges() {
               </button>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Card Modal Estilizado de Feedback (Sucesso / Erro / Atenção) */}
