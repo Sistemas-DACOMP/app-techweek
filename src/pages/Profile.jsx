@@ -143,8 +143,7 @@ export default function Profile() {
       period: profile.period ? String(profile.period) : '',
       linkedin: profile.linkedin || '',
       instagram: profile.instagram || '',
-      email: profile.email || '',
-      ticketNumber: profile.symplaTicket?.ticketNumber || ''
+      email: profile.email || ''
     });
     setEditFeedback(null);
     setIsEditModalOpen(true);
@@ -169,7 +168,6 @@ export default function Profile() {
     const cleanPhone = editForm.phone.trim();
     const cleanLinkedin = editForm.linkedin.trim();
     const cleanInstagram = editForm.instagram.trim();
-    const ticketNum = editForm.ticketNumber.trim();
 
     if (!cleanFirstName) {
       setEditFeedback({ type: 'error', text: 'Primeiro nome é obrigatório.' });
@@ -222,14 +220,11 @@ export default function Profile() {
         }
       }
 
-      // 3. Logística Sympla: se informado e-mail ou ticketNumber, verifica automaticamente
+      // 3. Logística Sympla: se informado e-mail, verifica automaticamente
       let symplaMessage = '';
-      if (cleanEmail || ticketNum) {
+      if (cleanEmail) {
         try {
-          const symplaRes = await verifySymplaTicket({ 
-            email: cleanEmail, 
-            ticketNumber: ticketNum || undefined 
-          });
+          const symplaRes = await verifySymplaTicket({ email: cleanEmail });
           const p = symplaRes?.participant || symplaRes?.ticket;
           if (symplaRes && symplaRes.verified && p) {
             const ticketObj = {
@@ -241,8 +236,8 @@ export default function Profile() {
             await updateUserProfile(uid, { symplaTicket: ticketObj });
             updates.symplaTicket = ticketObj;
             symplaMessage = ` Ingresso Sympla vinculado: ${p.ticketName}! 🎟️`;
-          } else if (ticketNum || cleanEmail !== profile.email) {
-            symplaMessage = ' (Ingresso ainda não localizado no Sympla com estes dados).';
+          } else if (cleanEmail !== profile.email) {
+            symplaMessage = ' (Ingresso não localizado com este e-mail).';
           }
         } catch (symplaErr) {
           console.warn('Aviso ao consultar Sympla no salvamento do perfil:', symplaErr);
@@ -278,16 +273,15 @@ export default function Profile() {
 
   const handleVerifyTicketInModal = async () => {
     const cleanEmail = editForm.email.trim().toLowerCase();
-    const ticketNum = editForm.ticketNumber.trim();
-    if (!cleanEmail && !ticketNum) {
-      setEditFeedback({ type: 'error', text: 'Informe um e-mail ou número de ingresso para consultar o Sympla.' });
+    if (!cleanEmail) {
+      setEditFeedback({ type: 'error', text: 'Informe um e-mail para consultar o Sympla.' });
       return;
     }
 
     setVerifyingTicket(true);
     setEditFeedback(null);
     try {
-      const res = await verifySymplaTicket({ email: cleanEmail || undefined, ticketNumber: ticketNum || undefined });
+      const res = await verifySymplaTicket({ email: cleanEmail });
       const p = res?.participant || res?.ticket;
       if (res && res.verified && p) {
         const ticketObj = {
@@ -303,7 +297,7 @@ export default function Profile() {
         }
         setEditFeedback({ type: 'success', text: `Ingresso confirmado com sucesso: ${p.ticketName}! 🎟️` });
       } else {
-        setEditFeedback({ type: 'warning', text: 'Ingresso não encontrado no Sympla. Verifique se o e-mail ou número do pedido está correto.' });
+        setEditFeedback({ type: 'warning', text: 'Ingresso não encontrado no Sympla. Verifique se o e-mail cadastrado é o mesmo da compra do ingresso.' });
       }
     } catch {
       setEditFeedback({ type: 'error', text: 'Não foi possível conectar com o Sympla no momento. Tente novamente.' });
@@ -776,7 +770,18 @@ export default function Profile() {
               </p>
 
               {/* Seletor de Abas Responsivo */}
-              <div style={{ display: 'flex', gap: '6px', marginTop: '16px', overflowX: 'auto', paddingBottom: '2px' }}>
+              <div 
+                className="no-scrollbar" 
+                style={{ 
+                  display: 'flex', 
+                  gap: '6px', 
+                  marginTop: '16px', 
+                  overflowX: 'auto', 
+                  paddingBottom: '2px',
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none' 
+                }}
+              >
                 {[
                   { id: 'pessoal', label: 'Pessoal', icon: User },
                   { id: 'academico', label: 'Acadêmico', icon: GraduationCap },
@@ -1013,7 +1018,7 @@ export default function Profile() {
                             Ingresso Confirmado: {profile.symplaTicket.ticketName}
                           </div>
                           <div style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.7)' }}>
-                            Nº {profile.symplaTicket.ticketNumber || 'Vinculado'} • QR Code ativo
+                            Vinculado ao Sympla • QR Code ativo
                           </div>
                         </div>
                       </div>
@@ -1025,7 +1030,7 @@ export default function Profile() {
                             Ingresso Sympla Pendente
                           </div>
                           <div style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.7)' }}>
-                            Informe o e-mail ou o número do ingresso para ativar seu crachá.
+                            Informe seu e-mail cadastrado no Sympla para vincular seu crachá.
                           </div>
                         </div>
                       </div>
@@ -1044,23 +1049,7 @@ export default function Profile() {
                         required
                       />
                       <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: '4px 0 0 2px' }}>
-                        Usamos seu e-mail para localizar automaticamente o ingresso emitido pelo Sympla.
-                      </p>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                        Número do Ingresso Sympla (Opcional)
-                      </label>
-                      <input
-                        type="text"
-                        value={editForm.ticketNumber}
-                        onChange={(e) => setEditForm({ ...editForm, ticketNumber: e.target.value })}
-                        placeholder="Ex: 10 dígitos (localizado no PDF do ingresso)"
-                        className="login-input"
-                      />
-                      <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: '4px 0 0 2px' }}>
-                        Útil se comprou com outro e-mail ou se o ingresso foi comprado por outra pessoa.
+                        Basta manter o e-mail igual ao da compra no Sympla para localizar seu ingresso automaticamente.
                       </p>
                     </div>
 
@@ -1086,7 +1075,7 @@ export default function Profile() {
                       }}
                     >
                       {verifyingTicket ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-                      {verifyingTicket ? 'Consultando Sympla...' : 'Testar / Verificar Ingresso Agora'}
+                      {verifyingTicket ? 'Consultando Sympla...' : 'Verificar Ingresso no Sympla'}
                     </button>
 
                     <div style={{ textAlign: 'center', marginTop: '4px' }}>
