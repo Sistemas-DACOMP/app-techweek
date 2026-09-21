@@ -3,6 +3,7 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useUser } from '../hooks/useUser';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
 
 export default function Scanner() {
   const [scanResult, setScanResult] = useState(null);
@@ -73,14 +74,22 @@ export default function Scanner() {
     }
 
     if (isUserQr && usernameToValidate) {
-      // Validate with Supabase profiles table
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('username', usernameToValidate)
-        .single();
+      // Valida se o usuário existe no Firestore (ou fallback Supabase)
+      let profile = await findUserByUsername(usernameToValidate).catch(() => null);
+      if (!profile) {
+        try {
+          const { data: spProfile } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('username', usernameToValidate)
+            .single();
+          profile = spProfile;
+        } catch (e) {
+          profile = null;
+        }
+      }
         
-      if (error || !profile) {
+      if (!profile) {
         setIsLoading(false);
         setScanResult({ success: false, message: 'Usuário não encontrado no banco de dados. QR Code inválido.' });
         return;
@@ -119,14 +128,28 @@ export default function Scanner() {
     }
 
     try {
-      // Try to fetch a real user to make simulation work with the new validation
-      const { data: users, error } = await supabase
+      // Tenta buscar usuários do Firestore para a simulação funcionar
+      const users = await getLeaderboardUsers(10).catch(() => []);
+      if (users && users.length > 0) {
+        const randomDbUser = users[Math.floor(Math.random() * users.length)];
+        const payload = JSON.stringify({
+          username: randomDbUser.username,
+          course: randomDbUser.course,
+          participantType: randomDbUser.participant_type || randomDbUser.participantType,
+          period: randomDbUser.period
+        });
+        handleScan(payload);
+        return;
+      }
+
+      // Fallback Supabase
+      const { data: spUsers } = await supabase
         .from('profiles')
         .select('username, course, participant_type, period')
         .limit(10);
         
-      if (!error && users && users.length > 0) {
-        const randomDbUser = users[Math.floor(Math.random() * users.length)];
+      if (spUsers && spUsers.length > 0) {
+        const randomDbUser = spUsers[Math.floor(Math.random() * spUsers.length)];
         const payload = JSON.stringify({
           username: randomDbUser.username,
           course: randomDbUser.course,

@@ -1,6 +1,13 @@
 import { supabase } from './supabaseClient';
 import { auth } from './firebase';
-import { getUserProfile, uploadUserAvatar } from './userService';
+import { 
+  getUserProfile, 
+  uploadUserAvatar, 
+  updateUserProfile, 
+  getUserPointEvents, 
+  addUserPointEvent, 
+  getLeaderboardUsers 
+} from './userService';
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -83,6 +90,11 @@ export async function uploadAvatar(file) {
 }
 
 export async function updateMascot(mascot) {
+  const firebaseUser = auth.currentUser;
+  if (firebaseUser) {
+    return await updateUserProfile(firebaseUser.uid, { mascot });
+  }
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
 
@@ -95,6 +107,18 @@ export async function updateMascot(mascot) {
 }
 
 export async function getMyPointEvents() {
+  const firebaseUser = auth.currentUser;
+  if (firebaseUser) {
+    const events = await getUserPointEvents(firebaseUser.uid);
+    return events.map(e => ({
+      event_type: e.eventType || e.event_type,
+      reference_id: e.referenceId || e.reference_id,
+      points: e.points || 0,
+      metadata: e.metadata || null,
+      created_at: e.createdAt || e.created_at
+    }));
+  }
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -103,13 +127,18 @@ export async function getMyPointEvents() {
     .select('*')
     .eq('user_id', user.id);
 
-  if (error) throw error;
-  return data;
+  if (error) return [];
+  return data || [];
 }
 
 // Registra um evento de pontos. Retorna { success: true } ou
-// { success: false } se a ação já tinha sido feita antes (dedup no banco).
+// { success: false } se a ação já tinha sido feita antes.
 export async function addPointEvent({ eventType, referenceId, points, metadata = null }) {
+  const firebaseUser = auth.currentUser;
+  if (firebaseUser) {
+    return await addUserPointEvent(firebaseUser.uid, { eventType, referenceId, points, metadata });
+  }
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
 
@@ -132,10 +161,23 @@ export async function addPointEvent({ eventType, referenceId, points, metadata =
 }
 
 export async function getRanking() {
-  const { data, error } = await supabase
-    .from('ranking')
-    .select('*');
+  try {
+    const list = await getLeaderboardUsers(50);
+    if (list && list.length > 0) {
+      return list;
+    }
+  } catch (e) {
+    console.warn('[gameplay] Erro ao buscar ranking no Firestore:', e);
+  }
 
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase
+      .from('ranking')
+      .select('*');
+
+    if (error) return [];
+    return data || [];
+  } catch (err) {
+    return [];
+  }
 }

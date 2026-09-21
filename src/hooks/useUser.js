@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMyProfile, updateMascot, uploadAvatar, getMyPointEvents, addPointEvent } from '../lib/gameplay';
+import { onAuthChange } from '../lib/auth';
 import { addNotification } from '../lib/notifications';
 
 export function useUser() {
@@ -10,26 +11,33 @@ export function useUser() {
   const load = useCallback(async () => {
     const [profileData, events] = await Promise.all([getMyProfile(), getMyPointEvents()]);
     setProfile(profileData);
-    setPointEvents(events);
+    setPointEvents(events || []);
     setLoading(false);
   }, []);
 
   useEffect(() => {
     load();
+    const unsubscribe = onAuthChange(() => {
+      load();
+    });
+    return () => unsubscribe();
   }, [load]);
 
-  const points = pointEvents.reduce((sum, event) => sum + event.points, 0);
+  const points = pointEvents.reduce((sum, event) => sum + (event.points || 0), 0);
 
   const scannedCodes = pointEvents
-    .filter(event => event.event_type === 'scan')
-    .map(event => event.reference_id);
+    .filter(event => (event.event_type || event.eventType) === 'scan')
+    .map(event => event.reference_id || event.referenceId);
 
   const completedChallenges = pointEvents
-    .filter(event => event.event_type === 'challenge' || event.event_type === 'manual_challenge')
-    .map(event => event.reference_id);
+    .filter(event => {
+      const type = event.event_type || event.eventType;
+      return type === 'challenge' || type === 'manual_challenge';
+    })
+    .map(event => event.reference_id || event.referenceId);
 
   const mascot = profile?.mascot || 'blue';
-  const avatarUrl = profile?.avatar_url || null;
+  const avatarUrl = profile?.avatar_url || profile?.avatarUrl || profile?.photoURL || null;
 
   const hasScannedCode = (code) => scannedCodes.includes(code);
   const hasCompletedChallenge = (challengeId) => completedChallenges.includes(challengeId);
