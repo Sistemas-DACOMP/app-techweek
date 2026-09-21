@@ -41,6 +41,37 @@ export async function uploadAvatar(file) {
   return publicUrl;
 }
 
+export async function uploadMissionPhoto(file, missionId) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const ext = file.name ? file.name.split('.').pop() : 'png';
+  const path = `${user.id}/${missionId || 'mission'}_${Date.now()}.${ext}`;
+
+  // Envia para o bucket 'missions' ou fallback para 'avatars' caso o bucket 'missions' não esteja criado
+  let publicUrl = '';
+  const { error: uploadError } = await supabase.storage
+    .from('missions')
+    .upload(path, file, { contentType: file.type });
+
+  if (uploadError) {
+    const { error: fallbackError } = await supabase.storage
+      .from('avatars')
+      .upload(`missions/${path}`, file, { contentType: file.type });
+
+    if (fallbackError) {
+      throw uploadError;
+    }
+    const { data } = supabase.storage.from('avatars').getPublicUrl(`missions/${path}`);
+    publicUrl = data.publicUrl;
+  } else {
+    const { data } = supabase.storage.from('missions').getPublicUrl(path);
+    publicUrl = data.publicUrl;
+  }
+
+  return publicUrl;
+}
+
 export async function updateMascot(mascot) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
