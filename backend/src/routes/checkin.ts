@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
 import { requireAuth } from '../middlewares/authMiddleware';
+import { isValidFirestoreId } from '../lib/firestoreId';
 
 const router = Router();
 
@@ -30,6 +31,11 @@ router.post('/:activityId/checkin', requireAuth, async (req: Request, res: Respo
       error: 'QR_MISMATCH',
       message: 'O QR Code escaneado não corresponde a esta palestra.'
     });
+    return;
+  }
+
+  if (!isValidFirestoreId(activityId)) {
+    res.status(400).json({ error: 'INVALID_ACTIVITY_ID', message: 'activityId inválido.' });
     return;
   }
 
