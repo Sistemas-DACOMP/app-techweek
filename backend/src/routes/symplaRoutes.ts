@@ -20,13 +20,18 @@ router.get('/event', async (_req: Request, res: Response) => {
 
 /**
  * POST /api/sympla/verify-ticket
- * Valida o ingresso do participante por e-mail ou número de ingresso
+ * Valida o ingresso do participante por e-mail ou número de ingresso.
+ * Requer autenticação. Usuários normais só podem consultar o próprio ingresso.
  */
-router.post('/verify-ticket', async (req: Request, res: Response) => {
+router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) => {
   try {
+    const userEmail = req.user?.email;
+    const isAdmin = req.user?.role === 'ADMIN';
     const { email, ticketNumber } = req.body;
 
-    if (!email && !ticketNumber) {
+    const targetEmail = isAdmin ? (email || userEmail) : userEmail;
+
+    if (!targetEmail && !ticketNumber) {
       res.status(400).json({ status: 'error', message: 'Informe o e-mail ou número do ingresso para validação.' });
       return;
     }
@@ -35,8 +40,12 @@ router.post('/verify-ticket', async (req: Request, res: Response) => {
 
     if (ticketNumber) {
       participant = await symplaService.findParticipantByTicket(ticketNumber);
-    } else if (email) {
-      participant = await symplaService.findParticipantByEmail(email);
+      if (participant && !isAdmin && userEmail && participant.email?.toLowerCase() !== userEmail.toLowerCase()) {
+        res.status(403).json({ status: 'error', message: 'Acesso não autorizado ao ingresso de outro participante.' });
+        return;
+      }
+    } else if (targetEmail) {
+      participant = await symplaService.findParticipantByEmail(targetEmail);
     }
 
     if (!participant) {

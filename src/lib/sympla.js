@@ -19,11 +19,20 @@ const getApiBaseUrl = () => {
  */
 export async function verifySymplaTicket({ email, ticketNumber }) {
   try {
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+
+    if (auth?.currentUser) {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      } catch (_e) {}
+    }
+
     const response = await fetch(`${getApiBaseUrl()}/sympla/verify-ticket`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify({ email, ticketNumber })
     });
 

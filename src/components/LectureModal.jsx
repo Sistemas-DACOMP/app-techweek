@@ -1,33 +1,27 @@
+import { createPortal } from 'react-dom';
 import { Clock, MapPin, QrCode, X } from 'lucide-react';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function LectureModal({
   lecture,
   onClose,
   onValidate
 }) {
-  if (!lecture) {
+  useScrollLock(!!lecture);
+
+  if (!lecture || typeof document === 'undefined') {
     return null;
   }
 
-  return (
+  return createPortal(
     <div
+      className="modal-overlay-fixed"
       onClick={onClose}
       style={{
-        position: 'fixed',
-        inset: 0,
-
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-
-        zIndex: 1000,
         padding: '20px',
-
-        background: 'rgba(5, 15, 35, 0.18)',
-
+        background: 'rgba(5, 15, 35, 0.45)',
         backdropFilter: 'blur(14px)',
         WebkitBackdropFilter: 'blur(14px)',
-
         animation: 'lectureOverlayIn 0.25s ease-out'
       }}
     >
@@ -45,11 +39,14 @@ export default function LectureModal({
         `}
       </style>
       <div
+        className="modal-card-fixed"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxWidth: '470px',
 
+          maxHeight: '85dvh',
+          overflowY: 'auto',
           padding: '30px',
 
           position: 'relative',
@@ -322,7 +319,8 @@ export default function LectureModal({
         </button>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -111,25 +111,24 @@ export default function Dashboard() {
             })
           }
         />
-
-        <LectureModal
-          lecture={selectedLecture}
-          onClose={() => setSelectedLecture(null)}
-          onValidate={() => setShowLectureScanner(true)}
-        />
-
-        {showLectureScanner && (
-          <LectureScanner
-            lecture={selectedLecture}
-            onClose={() => {
-              setShowLectureScanner(false);
-              setSelectedLecture(null);
-            }}
-            onBack={() => setShowLectureScanner(false)}
-          />
-        )}
-
       </div>
+
+      <LectureModal
+        lecture={selectedLecture}
+        onClose={() => setSelectedLecture(null)}
+        onValidate={() => setShowLectureScanner(true)}
+      />
+
+      {showLectureScanner && (
+        <LectureScanner
+          lecture={selectedLecture}
+          onClose={() => {
+            setShowLectureScanner(false);
+            setSelectedLecture(null);
+          }}
+          onBack={() => setShowLectureScanner(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
 import Mascot from '../components/Mascot';
 import { Eye, EyeOff, Loader2, KeyRound, CheckCircle2, ArrowLeft, X } from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
 import { loginWithEmailAndPassword, sendPasswordReset } from '../lib/auth';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -15,6 +17,7 @@ export default function Login() {
 
   // Estados para o modal de Recuperação de Senha
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  useScrollLock(isResetModalOpen);
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccessMessage, setResetSuccessMessage] = useState('');
@@ -189,15 +192,12 @@ export default function Login() {
               style={{
                 background: 'none',
                 border: 'none',
-                color: 'var(--text-secondary, #9ca3af)',
-                fontSize: '0.75rem',
+                color: 'var(--primary-color, #00d2ff)',
+                fontSize: '0.8rem',
                 cursor: 'pointer',
-                textDecoration: 'none',
-                padding: '2px 4px',
-                transition: 'color 0.2s ease'
+                textDecoration: 'underline',
+                padding: '0'
               }}
-              onMouseEnter={(e) => e.target.style.color = '#ffffff'}
-              onMouseLeave={(e) => e.target.style.color = 'var(--text-secondary, #9ca3af)'}
             >
               Esqueceu a senha?
             </button>
@@ -232,22 +232,20 @@ export default function Login() {
       </div>
 
       {/* Modal de Recuperação de Senha */}
-      {isResetModalOpen && (
+      {isResetModalOpen && typeof document !== 'undefined' && createPortal(
         <div 
+          className="modal-overlay-fixed"
+          onClick={closeResetModal}
           style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(6px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
+            background: 'rgba(0, 0, 0, 0.78)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
             padding: '16px'
           }}
         >
           <div 
-            className="login-glass-card animate-scale-up"
+            className="login-glass-card modal-card-fixed animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
             style={{
               width: '100%',
               maxWidth: '380px',
@@ -361,7 +359,8 @@ export default function Login() {
               </form>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

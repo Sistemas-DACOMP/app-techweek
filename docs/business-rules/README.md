@@ -56,3 +56,5 @@ Regra pra evitar isso se repetir: todo teste novo que documentar uma regra de ne
 | [REG-PROFILE-001](REG-PROFILE-001-rls-cross-user.md) | RLS `profiles` cross-user lookup | NÃO DEFINIDA | falta teste em homolog |
 | [REG-REGISTER-001](REG-REGISTER-001-linkedin-instagram-descartados.md) | `linkedin`/`instagram` descartados no cadastro | OBSERVADA | gap — sem card ainda |
 | [REG-BOOKING-001](REG-BOOKING-001-leitura-restrita-dono.md) | Leitura de reserva de vaga restrita ao dono ou ADMIN | CONFIRMADA | implementado — KAN-48 |
+| [REG-CHECKIN-001](REG-CHECKIN-001-double-check-presenca.md) | Double-check de presença (entrance Staff + checkout aluno) | CONFIRMADA | a implementar — KAN-51 |
+| [REG-CHECKIN-002](REG-CHECKIN-002-attendance-mode-exclusivo.md) | attendanceMode decide fluxo exclusivo de presença por atividade | CONFIRMADA | a implementar — KAN-51 |

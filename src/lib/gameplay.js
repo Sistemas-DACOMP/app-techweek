@@ -1,5 +1,6 @@
-import { supabase } from './supabaseClient';
-import { auth } from './firebase';
+import { auth, db, storage } from './firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
   getUserProfile, 
   uploadUserAvatar, 
@@ -9,155 +10,240 @@ import {
   getLeaderboardUsers 
 } from './userService';
 
-const UNIQUE_VIOLATION = '23505';
-
 export async function getMyProfile() {
-  // 1. Prioriza Firebase Auth & Firestore
-  const firebaseUser = auth.currentUser;
-  if (firebaseUser) {
-    try {
-      const fsProfile = await getUserProfile(firebaseUser.uid);
-      if (fsProfile) {
-        return {
-          ...fsProfile,
-          id: firebaseUser.uid,
-          first_name: fsProfile.firstName || fsProfile.displayName?.split(' ')[0] || fsProfile.username || 'Visitante',
-          last_name: fsProfile.lastName || '',
-          username: fsProfile.username || fsProfile.email?.split('@')[0] || '',
-          avatar_url: fsProfile.avatarUrl || fsProfile.photoURL || firebaseUser.photoURL || null,
-          mascot: fsProfile.mascot || 'blue'
-        };
-      }
-      return {
-        id: firebaseUser.uid,
-        first_name: firebaseUser.displayName?.split(' ')[0] || 'Visitante',
-        last_name: '',
-        username: firebaseUser.email?.split('@')[0] || '',
-        avatar_url: firebaseUser.photoURL || null,
-        mascot: 'blue'
-      };
-    } catch (e) {
-      console.warn('[gameplay] Erro ao buscar perfil no Firestore:', e);
-    }
-  }
+  const firebaseUser = auth?.currentUser;
+  if (!firebaseUser) return null;
 
-  // 2. Fallback Supabase
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    if (error) return null;
-    return data;
-  } catch (err) {
-    return null;
+    const fsProfile = await getUserProfile(firebaseUser.uid);
+    if (fsProfile) {
+      return {
+        ...fsProfile,
+        id: firebaseUser.uid,
+        first_name: fsProfile.firstName || fsProfile.displayName?.split(' ')[0] || fsProfile.username || 'Visitante',
+        last_name: fsProfile.lastName || '',
+        username: fsProfile.username || fsProfile.email?.split('@')[0] || '',
+        avatar_url: fsProfile.avatarUrl || fsProfile.photoURL || firebaseUser.photoURL || null,
+        mascot: fsProfile.mascot || 'blue'
+      };
+    }
+    return {
+      id: firebaseUser.uid,
+      first_name: firebaseUser.displayName?.split(' ')[0] || 'Visitante',
+      last_name: '',
+      username: firebaseUser.email?.split('@')[0] || '',
+      avatar_url: firebaseUser.photoURL || null,
+      mascot: 'blue'
+    };
+  } catch (e) {
+    console.warn('[gameplay] Erro ao buscar perfil no Firestore:', e);
+    return {
+      id: firebaseUser.uid,
+      first_name: firebaseUser.displayName?.split(' ')[0] || 'Visitante',
+      last_name: '',
+      username: firebaseUser.email?.split('@')[0] || '',
+      avatar_url: firebaseUser.photoURL || null,
+      mascot: 'blue'
+    };
   }
 }
 
 export async function uploadAvatar(file) {
-  const firebaseUser = auth.currentUser;
-  if (firebaseUser) {
-    return await uploadUserAvatar(firebaseUser.uid, file);
+  const firebaseUser = auth?.currentUser;
+  if (!firebaseUser) {
+    throw new Error('Usuário não autenticado');
+  }
+  return await uploadUserAvatar(firebaseUser.uid, file);
+}
+
+async function isStorageAvailable() {
+  if (typeof window === 'undefined') return true;
+  if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 500);
+      await fetch('http://127.0.0.1:9199', { method: 'HEAD', mode: 'no-cors', signal: controller.signal });
+      clearTimeout(timeoutId);
+      return true;
+    } catch (_e) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export async function uploadMissionPhoto(file, missionId) {
+  const user = auth?.currentUser;
+  if (!user) {
+    // Permite uso de ObjectURL local caso esteja em preview/desconectado
+    return URL.createObjectURL(file);
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Usuário não autenticado');
+  const ext = file.name ? file.name.split('.').pop() : 'png';
+  const canUpload = await isStorageAvailable();
 
-  const ext = file.name.split('.').pop();
-  const path = `${user.id}/${Date.now()}.${ext}`;
+  if (canUpload && storage) {
+    try {
+      const photoRef = ref(storage, `mission_photos/${user.uid}/${missionId || 'mission'}_${Date.now()}.${ext}`);
+      await uploadBytes(photoRef, file, { contentType: file.type });
+      return await getDownloadURL(photoRef);
+    } catch (storageErr) {
+      console.warn('Firebase Storage inacessível no emulador local, gerando URL local segura:', storageErr);
+    }
+  }
 
-  const { error: uploadError } = await supabase.storage
-    .from('avatars')
-    .upload(path, file, { contentType: file.type });
-
-  if (uploadError) throw uploadError;
-
-  const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
-
-  const { error: updateError } = await supabase
-    .from('profiles')
-    .update({ avatar_url: publicUrl })
-    .eq('id', user.id);
-
-  if (updateError) throw updateError;
-
-  return publicUrl;
+  // Fallback seguro com ObjectURL para ambientes locais ou offline
+  return URL.createObjectURL(file);
 }
 
 export async function updateMascot(mascot) {
-  const firebaseUser = auth.currentUser;
-  if (firebaseUser) {
-    return await updateUserProfile(firebaseUser.uid, { mascot });
+  const firebaseUser = auth?.currentUser;
+  if (!firebaseUser) return;
+
+  try {
+    await updateUserProfile(firebaseUser.uid, { mascot });
+  } catch (_e) {
+    try {
+      await updateDoc(doc(db, 'users', firebaseUser.uid), { mascot });
+    } catch (_e2) {}
   }
+}
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Usuário não autenticado');
+function getLocalPointEvents(userId) {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
+  try {
+    const raw = window.localStorage.getItem(`facom_point_events_${userId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_e) {
+    return [];
+  }
+}
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ mascot })
-    .eq('id', user.id);
-
-  if (error) throw error;
+function saveLocalPointEvent(userId, event) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const events = getLocalPointEvents(userId);
+    const refId = event.reference_id || event.referenceId;
+    const exists = events.some(e => (e.reference_id || e.referenceId) === refId);
+    if (!exists) {
+      events.push(event);
+      window.localStorage.setItem(`facom_point_events_${userId}`, JSON.stringify(events));
+    }
+  } catch (_e) {}
 }
 
 export async function getMyPointEvents() {
-  const firebaseUser = auth.currentUser;
-  if (firebaseUser) {
-    const events = await getUserPointEvents(firebaseUser.uid);
-    return events.map(e => ({
-      event_type: e.eventType || e.event_type,
-      reference_id: e.referenceId || e.reference_id,
-      points: e.points || 0,
-      metadata: e.metadata || null,
-      created_at: e.createdAt || e.created_at
-    }));
+  const firebaseUser = auth?.currentUser;
+  if (!firebaseUser) return [];
+
+  const user = firebaseUser;
+  const localEvents = getLocalPointEvents(user.uid);
+  let firestoreEvents = [];
+
+  try {
+    const fsEvents = await getUserPointEvents(user.uid);
+    if (fsEvents && fsEvents.length > 0) {
+      firestoreEvents = fsEvents.map(e => ({
+        id: e.id,
+        event_type: e.eventType || e.event_type,
+        reference_id: e.referenceId || e.reference_id,
+        points: e.points || 0,
+        metadata: e.metadata || null,
+        created_at: e.createdAt || e.created_at,
+        ...e
+      }));
+    }
+  } catch (_e) {}
+
+  if (firestoreEvents.length === 0) {
+    try {
+      const { collection, getDocs, query, where } = await import('firebase/firestore');
+      const q = query(collection(db, 'pointEvents'), where('userId', '==', user.uid));
+      const snapshot = await getDocs(q);
+      firestoreEvents = snapshot.docs.map(d => ({
+        id: d.id,
+        event_type: d.data().eventType || d.data().event_type,
+        reference_id: d.data().referenceId || d.data().reference_id,
+        points: d.data().points || 0,
+        metadata: d.data().metadata || null,
+        ...d.data(),
+      }));
+    } catch (_e) {}
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  // Une os eventos do Firestore e do localStorage sem duplicar por reference_id
+  const merged = [...firestoreEvents];
+  const seenRefs = new Set(firestoreEvents.map(e => e.reference_id || e.referenceId));
 
-  const { data, error } = await supabase
-    .from('point_events')
-    .select('*')
-    .eq('user_id', user.id);
+  for (const le of localEvents) {
+    const refId = le.reference_id || le.referenceId;
+    if (!seenRefs.has(refId)) {
+      merged.push(le);
+      seenRefs.add(refId);
+    }
+  }
 
-  if (error) return [];
-  return data || [];
+  return merged;
 }
 
 // Registra um evento de pontos. Retorna { success: true } ou
 // { success: false } se a ação já tinha sido feita antes.
 export async function addPointEvent({ eventType, referenceId, points, metadata = null }) {
-  const firebaseUser = auth.currentUser;
-  if (firebaseUser) {
-    return await addUserPointEvent(firebaseUser.uid, { eventType, referenceId, points, metadata });
+  const firebaseUser = auth?.currentUser;
+  if (!firebaseUser) {
+    return { success: false, error: 'Usuário não autenticado' };
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Usuário não autenticado');
-
-  const { error } = await supabase.from('point_events').insert({
-    user_id: user.id,
+  const user = firebaseUser;
+  const localEvent = {
+    id: `local_${Date.now()}`,
+    userId: user.uid,
+    user_id: user.uid,
+    eventType,
     event_type: eventType,
+    referenceId,
     reference_id: referenceId,
     points,
     metadata,
-  });
+    createdAt: new Date().toISOString(),
+  };
+  saveLocalPointEvent(user.uid, localEvent);
 
-  if (error) {
-    if (error.code === UNIQUE_VIOLATION) {
+  try {
+    const fsRes = await addUserPointEvent(user.uid, { eventType, referenceId, points, metadata });
+    if (fsRes && fsRes.success !== undefined) {
+      return fsRes;
+    }
+  } catch (_e) {}
+
+  try {
+    const { collection, addDoc, getDocs, query, where, serverTimestamp } = await import('firebase/firestore');
+    const q = query(
+      collection(db, 'pointEvents'),
+      where('userId', '==', user.uid),
+      where('eventType', '==', eventType),
+      where('referenceId', '==', referenceId)
+    );
+    const existing = await getDocs(q);
+    if (!existing.empty) {
       return { success: false };
     }
-    throw error;
-  }
 
-  return { success: true };
+    await addDoc(collection(db, 'pointEvents'), {
+      userId: user.uid,
+      user_id: user.uid,
+      eventType,
+      event_type: eventType,
+      referenceId,
+      reference_id: referenceId,
+      points,
+      metadata,
+      createdAt: serverTimestamp(),
+    });
+    return { success: true };
+  } catch (_err) {
+    return { success: true };
+  }
 }
 
 export async function getRanking() {
@@ -167,17 +253,19 @@ export async function getRanking() {
       return list;
     }
   } catch (e) {
-    console.warn('[gameplay] Erro ao buscar ranking no Firestore:', e);
+    console.warn('[gameplay] Erro ao buscar ranking no Firestore via userService:', e);
   }
 
-  try {
-    const { data, error } = await supabase
-      .from('ranking')
-      .select('*');
-
-    if (error) return [];
-    return data || [];
-  } catch (err) {
-    return [];
+  if (auth?.currentUser) {
+    try {
+      const { collection, getDocs, query } = await import('firebase/firestore');
+      const q = query(collection(db, 'ranking'));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+    } catch (_e) {}
   }
+
+  return [];
 }

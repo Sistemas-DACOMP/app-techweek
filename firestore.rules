@@ -17,6 +17,10 @@ service cloud.firestore {
         (request.auth.token.role == 'ADMIN' || request.auth.token.admin == true);
     }
 
+    function isStaffOrAdmin() {
+      return isAdmin() || (isAuthenticated() && request.auth.token.role == 'STAFF');
+    }
+
     // Regras de Usuários: Todos autenticados leem; só o próprio dono atualiza dados pessoais
     //
     // `create` bloqueado pro client (KAN-72/REG-LGPD-001, revisto no code-review desta PR):
@@ -33,7 +37,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if false; // Apenas backend via Firebase Admin SDK (POST /api/auth/register)
-      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'createdAt', 'totalPoints']));
+      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'createdAt', 'totalPoints', 'pontuacaoTotal']));
       allow write: if isAdmin();
     }
 
@@ -63,17 +67,22 @@ service cloud.firestore {
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
-    match /checkins/{checkinId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow write: if false; // Apenas backend via Firebase Admin SDK
-    }
-
     // Regras de Pontos (check-in de palestra, missões, etc.): cada usuário lê
     // só os próprios eventos (ou ADMIN lê todos); escrita sempre pelo backend,
     // que revalida a regra de negócio (ex: QR da palestra certa) antes de
     // creditar ponto — ver REG-SCANNER-001 / KAN-71.
     match /pointEvents/{eventId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if false; // Apenas backend via Firebase Admin SDK
+    }
+
+    // Regras de Check-ins (double-check de presença: entrada pelo Staff +
+    // checkout do aluno via QR do telão — KAN-51): leitura restrita ao
+    // próprio participante ou Staff/ADMIN (quem registra a entrada); escrita
+    // sempre pelo backend (Admin SDK, runTransaction), mesmo padrão de
+    // bookings/pointEvents.
+    match /checkins/{checkinId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isStaffOrAdmin());
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
   }

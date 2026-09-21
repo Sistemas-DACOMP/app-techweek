@@ -35,7 +35,7 @@ const PARTICIPANT_TYPES = [
 ];
 
 export default function Profile() {
-  const { points } = useUser();
+  const { points, userLevel } = useUser();
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef(null);
@@ -684,7 +684,29 @@ export default function Profile() {
       <div className="card" style={{ marginBottom: '24px', textAlign: 'center' }}>
         <h3 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>Meus Pontos</h3>
         <div style={{ fontSize: '2.5rem', fontWeight: '700', color: 'white' }}>{points}</div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--primary)', marginTop: '8px' }}>Nível 5 - Expert</p>
+        <p style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--primary)', marginTop: '8px' }}>
+          {userLevel?.label || 'Nível 1 - Novato'}
+        </p>
+
+        {userLevel && !userLevel.isMaxLevel && (
+          <div style={{ marginTop: '14px', textAlign: 'left' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              <span>Progresso para Nível {userLevel.level + 1}</span>
+              <span>{userLevel.points} / {userLevel.nextLevelPoints} pts</span>
+            </div>
+            <div style={{ width: '100%', height: '6px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '999px', overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${userLevel.progress}%`,
+                  height: '100%',
+                  background: 'var(--primary-gradient)',
+                  borderRadius: '999px',
+                  transition: 'width 0.4s ease'
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
 

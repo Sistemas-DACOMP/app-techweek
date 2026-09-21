@@ -7,6 +7,9 @@ import authRouter from './routes/auth';
 import checkinRouter from './routes/checkin';
 import bookingRouter from './routes/booking';
 import symplaRouter from './routes/symplaRoutes';
+import leadsRouter from './routes/leads';
+import screenTokenRouter from './routes/screenToken';
+import checkinDoubleCheckRouter from './routes/checkinDoubleCheck';
 
 export { db, auth };
 
@@ -56,6 +59,13 @@ app.get('/api/admin/test', requireAuth, requireRole(['ADMIN']), (req: Request, r
 app.use('/api/activities', checkinRouter);
 app.use('/api/activities', bookingRouter);
 app.use('/api/sympla', symplaRouter);
+app.use('/api/activities', screenTokenRouter);
+
+// Double-check de presença: entrada (Staff) + checkout (aluno via QR do telão) (KAN-51)
+app.use('/api/checkin', checkinDoubleCheckRouter);
+
+// Captura de Leads e Gamificação de Estande para Patrocinadores (KAN-55)
+app.use('/api/leads', leadsRouter);
 
 // Exporta a Cloud Function 2nd Gen na região us-east1 (Free Tier)
 export const api = onRequest(

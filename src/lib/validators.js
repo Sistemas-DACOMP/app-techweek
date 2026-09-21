@@ -30,6 +30,23 @@ export function validateAvatarFile(file, { maxBytes = MAX_AVATAR_BYTES } = {}) {
   return { valid: true, reason: null };
 }
 
+// REG-MISSION-002: Fotos comprovantes de missões (máximo 5MB e formatos aceitos pelo Storage)
+export const MAX_MISSION_PHOTO_BYTES = 5 * 1024 * 1024;
+export const ALLOWED_MISSION_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
+export function validateMissionPhoto(file, { maxBytes = MAX_MISSION_PHOTO_BYTES, allowedTypes = ALLOWED_MISSION_IMAGE_TYPES } = {}) {
+  if (!file) {
+    return { valid: false, reason: 'missing' };
+  }
+  if (!file.type || !allowedTypes.includes(file.type)) {
+    return { valid: false, reason: 'invalid_type' };
+  }
+  if (file.size > maxBytes) {
+    return { valid: false, reason: 'too_large' };
+  }
+  return { valid: true, reason: null };
+}
+
 // Validação e normalização de e-mail (suporta domínios institucionais com múltiplos níveis como @ufu.br, @ufu.edu.br)
 export function normalizeEmail(email) {
   if (typeof email !== 'string') return '';

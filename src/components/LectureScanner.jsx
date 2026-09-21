@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, QrCode, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { addPointEvent } from '../lib/gameplay';
 import { isQrForLecture } from '../lib/qrValidation';
 import { auth } from '../lib/firebase';
+import { useScrollLock } from '../hooks/useScrollLock';
 export default function LectureScanner({
   lecture,
   onClose,
   onBack
 }) {
+  useScrollLock(true);
   const [scanResult, setScanResult] = useState(null);
   const [rating, setRating] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -144,27 +147,25 @@ export default function LectureScanner({
     };
   }, [scanResult]);
 
+  if (typeof document === 'undefined') return null;
+
   if (scanResult) {
-    return (
+    return createPortal(
       <>
         <style>{scannerStyles}</style>
 
         <div
+          className="modal-overlay-fixed"
           onClick={onClose}
           style={{
-            position: 'fixed',
-            inset: 0,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1100,
             padding: '20px',
-            background: 'rgba(5, 15, 35, 0.18)',
+            background: 'rgba(5, 15, 35, 0.45)',
             backdropFilter: 'blur(14px)',
             WebkitBackdropFilter: 'blur(14px)'
           }}
         >
           <div
+            className="modal-card-fixed"
             onClick={(e) => e.stopPropagation()}
             style={{
               width: '100%',
@@ -260,34 +261,27 @@ export default function LectureScanner({
             )}
           </div>
         </div>
-      </>
+      </>,
+      document.body
     );
   }
 
-  return (
+  return createPortal(
     <>
 
       <style>{scannerStyles}</style>
       <div
+        className="modal-overlay-fixed"
         onClick={onClose}
         style={{
-          position: 'fixed',
-          inset: 0,
-
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-
-          zIndex: 1100,
           padding: '20px',
-
-          background: 'rgba(5, 15, 35, 0.18)',
-
+          background: 'rgba(5, 15, 35, 0.45)',
           backdropFilter: 'blur(14px)',
           WebkitBackdropFilter: 'blur(14px)'
         }}
       >
         <div
+          className="modal-card-fixed"
           onClick={(e) => e.stopPropagation()}
           style={{
             width: '100%',
@@ -568,6 +562,7 @@ export default function LectureScanner({
 
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

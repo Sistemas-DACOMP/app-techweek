@@ -1,18 +1,25 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMyProfile, updateMascot, uploadAvatar, getMyPointEvents, addPointEvent } from '../lib/gameplay';
 import { onAuthChange } from '../lib/auth';
-import { addNotification } from '../lib/notifications';
+import { calculateLevel } from '../lib/level';
+import { useNotifications } from './useNotifications';
 
 export function useUser() {
   const [profile, setProfile] = useState(null);
   const [pointEvents, setPointEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { addNotification } = useNotifications();
 
   const load = useCallback(async () => {
-    const [profileData, events] = await Promise.all([getMyProfile(), getMyPointEvents()]);
-    setProfile(profileData);
-    setPointEvents(events || []);
-    setLoading(false);
+    try {
+      const [profileData, events] = await Promise.all([getMyProfile(), getMyPointEvents()]);
+      setProfile(profileData);
+      setPointEvents(events || []);
+    } catch (_err) {
+      // Offline fallback: mantém estado vazio sem quebrar a UI
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -24,6 +31,7 @@ export function useUser() {
   }, [load]);
 
   const points = pointEvents.reduce((sum, event) => sum + (event.points || 0), 0);
+  const userLevel = calculateLevel(points);
 
   const scannedCodes = pointEvents
     .filter(event => (event.event_type || event.eventType) === 'scan')
@@ -174,6 +182,8 @@ export function useUser() {
   return {
     loading,
     points,
+    level: userLevel.level,
+    userLevel,
     scannedCodes,
     completedChallenges,
     mascot,
