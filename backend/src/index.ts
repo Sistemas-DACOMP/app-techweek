@@ -7,6 +7,8 @@ import authRouter from './routes/auth';
 import checkinRouter from './routes/checkin';
 import bookingRouter from './routes/booking';
 import leadsRouter from './routes/leads';
+import screenTokenRouter from './routes/screenToken';
+import checkinDoubleCheckRouter from './routes/checkinDoubleCheck';
 
 export { db, auth };
 
@@ -55,6 +57,10 @@ app.get('/api/admin/test', requireAuth, requireRole(['ADMIN']), (req: Request, r
 // Check-in de presença em palestra (KAN-71) e reserva de vaga (KAN-49)
 app.use('/api/activities', checkinRouter);
 app.use('/api/activities', bookingRouter);
+app.use('/api/activities', screenTokenRouter);
+
+// Double-check de presença: entrada (Staff) + checkout (aluno via QR do telão) (KAN-51)
+app.use('/api/checkin', checkinDoubleCheckRouter);
 
 // Captura de Leads e Gamificação de Estande para Patrocinadores (KAN-55)
 app.use('/api/leads', leadsRouter);

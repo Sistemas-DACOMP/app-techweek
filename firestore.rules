@@ -17,6 +17,10 @@ service cloud.firestore {
         (request.auth.token.role == 'ADMIN' || request.auth.token.admin == true);
     }
 
+    function isStaffOrAdmin() {
+      return isAdmin() || (isAuthenticated() && request.auth.token.role == 'STAFF');
+    }
+
     // Regras de Usuários: Todos autenticados leem; só o próprio dono atualiza dados pessoais
     //
     // `create` bloqueado pro client (KAN-72/REG-LGPD-001, revisto no code-review desta PR):
@@ -71,6 +75,16 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
+    }
+
+    // Regras de Check-ins (double-check de presença: entrada pelo Staff +
+    // checkout do aluno via QR do telão — KAN-51): leitura restrita ao
+    // próprio participante ou Staff/ADMIN (quem registra a entrada); escrita
+    // sempre pelo backend (Admin SDK, runTransaction), mesmo padrão de
+    // bookings/pointEvents.
+    match /checkins/{checkinId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isStaffOrAdmin());
+      allow write: if false; // Apenas backend via Firebase Admin SDK
     }
   }
 }
