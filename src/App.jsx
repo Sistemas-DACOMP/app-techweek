@@ -9,6 +9,7 @@ import Ranking from './pages/Ranking';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Onboarding from './pages/Onboarding';
+import Staff from './pages/Staff';
 
 import InstagramMission from './pages/InstagramMission';
 import { useState } from 'react';
@@ -88,6 +89,7 @@ function AppContent() {
         <Route path="/challenges" element={<Challenges />} />
         <Route path="/ranking" element={<Ranking />} />
         <Route path="/instagram-mission" element={<InstagramMission />} />
+        <Route path="/staff" element={<Staff />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       
