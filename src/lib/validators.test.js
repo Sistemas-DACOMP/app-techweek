@@ -25,9 +25,8 @@ describe('passwordsMatch', () => {
 });
 
 // REG-C2 (KAN-27): senha deve ter pelo menos 6 caracteres, o minimo real
-// exigido pelo Supabase. Esta funcao ainda NAO esta ligada ao
-// Register.jsx (KAN-27 continua no backlog) - o teste documenta a regra
-// que falta ser aplicada no fluxo real.
+// exigido pelo Firebase Auth. Ligada de verdade ao fluxo em Register.jsx
+// desde a migracao pra Firebase (KAN-69) - REG-AUTH-001 = CONFIRMADA.
 describe('isPasswordLongEnough (KAN-27)', () => {
   it('rejeita senha vazia', () => {
     expect(isPasswordLongEnough('')).toBe(false);
