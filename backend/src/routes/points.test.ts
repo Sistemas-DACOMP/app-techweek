@@ -34,11 +34,12 @@ function getClaimHandler() {
 
 const handler = getClaimHandler();
 
-function makeTx(snaps: { eventSnap: any; userSnap: any }) {
-  const { eventSnap, userSnap } = snaps;
+function makeTx(snaps: { eventSnap: any; userSnap: any; missionSnap?: any }) {
+  const { eventSnap, userSnap, missionSnap = { exists: true, data: () => ({ points: 50 }) } } = snaps;
   return {
     get: vi.fn((ref: { path: string }) => {
       if (ref.path.includes('/point_events/')) return Promise.resolve(eventSnap);
+      if (ref.path.startsWith('missions/')) return Promise.resolve(missionSnap);
       if (ref.path.startsWith('users/')) return Promise.resolve(userSnap);
       throw new Error(`ref inesperada no mock: ${ref.path}`);
     }),
@@ -47,7 +48,7 @@ function makeTx(snaps: { eventSnap: any; userSnap: any }) {
   };
 }
 
-describe('POST /api/points/claim (KAN-79)', () => {
+describe('POST /api/points/claim (KAN-79, KAN-80)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (db.collection as any).mockImplementation((name: string) => ({
@@ -60,14 +61,16 @@ describe('POST /api/points/claim (KAN-79)', () => {
     }));
   });
 
-  it('credita pontos: grava o evento na subcollection e incrementa totalPoints na mesma transação', async () => {
+  it('credita pontos do catálogo (ignora points do body): grava o evento e incrementa totalPoints na mesma transação', async () => {
     const tx = makeTx({
       eventSnap: { exists: false },
-      userSnap: { exists: true }
+      userSnap: { exists: true },
+      missionSnap: { exists: true, data: () => ({ points: 50 }) }
     });
     (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
 
-    const req = makeReq({ eventType: 'mission', referenceId: 'm1', points: 50 });
+    // points: 999999 no body é ignorado — o crédito real vem do catálogo (50).
+    const req = makeReq({ eventType: 'mission', referenceId: 'm1', points: 999999 });
     const res = makeRes();
     await handler(req, res);
 
@@ -83,11 +86,27 @@ describe('POST /api/points/claim (KAN-79)', () => {
     expect(res.json).toHaveBeenCalledWith({ success: true, points: 50 });
   });
 
+  it('eventType "scan" consulta o catálogo pela chave fixa "scan", não pelo referenceId dinâmico', async () => {
+    const tx = makeTx({
+      eventSnap: { exists: false },
+      userSnap: { exists: true },
+      missionSnap: { exists: true, data: () => ({ points: 5 }) }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq({ eventType: 'scan', referenceId: 'user_qualquercoisa' });
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(tx.get).toHaveBeenCalledWith(expect.objectContaining({ path: 'missions/scan' }));
+    expect(res.json).toHaveBeenCalledWith({ success: true, points: 5 });
+  });
+
   it.each([
-    [{ eventType: '', referenceId: 'r1', points: 10 }],
-    [{ referenceId: 'r1', points: 10 }],
-    [{ eventType: 'mission', referenceId: '', points: 10 }],
-    [{ eventType: 'mission', points: 10 }]
+    [{ eventType: '', referenceId: 'r1' }],
+    [{ referenceId: 'r1' }],
+    [{ eventType: 'mission', referenceId: '' }],
+    [{ eventType: 'mission' }]
   ])('eventType/referenceId ausente ou vazio (%o): 400 INVALID_PAYLOAD sem tocar a transação', async (body) => {
     const req = makeReq(body);
     const res = makeRes();
@@ -98,20 +117,36 @@ describe('POST /api/points/claim (KAN-79)', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
   });
 
-  it.each([
-    [-1],
-    [1001],
-    ['dez'],
-    [NaN],
-    [Infinity]
-  ])('points inválido (%p): 400 INVALID_PAYLOAD sem tocar a transação', async (points) => {
-    const req = makeReq({ eventType: 'mission', referenceId: 'm1', points });
+  // BLOCKER do security review: referenceId com "/" formando número ímpar de
+  // segmentos faz o Admin SDK real lançar exceção SÍNCRONA em .doc(...), fora
+  // do try/catch — derrubaria a instância inteira. Este teste não reproduz o
+  // crash em si (o mock de db.collection nunca lança), prova que a validação
+  // barra o id ANTES de chegar em .doc('missions').doc(missionId) — cobertura
+  // de que o guard existe e funciona pro caso que causaria o crash real.
+  it('referenceId com "/" pra eventType não-scan: 400 INVALID_PAYLOAD sem tocar a transação (evita crash síncrono do Admin SDK)', async () => {
+    const req = makeReq({ eventType: 'challenge', referenceId: 'a/b' });
     const res = makeRes();
     await handler(req, res);
 
     expect(db.runTransaction).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
+  });
+
+  it('eventType "scan" com referenceId contendo "/" (QR/perfil arbitrário): não rejeita, pois a missão é sempre a chave fixa "scan"', async () => {
+    const tx = makeTx({
+      eventSnap: { exists: false },
+      userSnap: { exists: true },
+      missionSnap: { exists: true, data: () => ({ points: 5 }) }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq({ eventType: 'scan', referenceId: 'algum/codigo/estranho' });
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ success: true, points: 5 });
   });
 
   it('evento já resgatado: 200 alreadyClaimed, sem gravar/incrementar de novo', async () => {
@@ -121,7 +156,7 @@ describe('POST /api/points/claim (KAN-79)', () => {
     });
     (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
 
-    const req = makeReq({ eventType: 'mission', referenceId: 'm1', points: 50 });
+    const req = makeReq({ eventType: 'mission', referenceId: 'm1' });
     const res = makeRes();
     await handler(req, res);
 
@@ -138,7 +173,7 @@ describe('POST /api/points/claim (KAN-79)', () => {
     });
     (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
 
-    const req = makeReq({ eventType: 'mission', referenceId: 'm1', points: 50 });
+    const req = makeReq({ eventType: 'mission', referenceId: 'm1' });
     const res = makeRes();
     await handler(req, res);
 
@@ -147,10 +182,50 @@ describe('POST /api/points/claim (KAN-79)', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'PARTICIPANT_NOT_FOUND' }));
   });
 
+  it('missão não existe no catálogo: 404 MISSION_NOT_FOUND, sem gravar/incrementar', async () => {
+    const tx = makeTx({
+      eventSnap: { exists: false },
+      userSnap: { exists: true },
+      missionSnap: { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq({ eventType: 'challenge', referenceId: 'missao_inventada' });
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(tx.set).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'MISSION_NOT_FOUND' }));
+  });
+
+  it.each([
+    [{ points: 'cinquenta' }],
+    [{ points: -10 }],
+    [{}]
+  ])('catálogo com points mal formado (%o): 500 INTERNAL_ERROR, sem gravar/incrementar', async (missionData) => {
+    const tx = makeTx({
+      eventSnap: { exists: false },
+      userSnap: { exists: true },
+      missionSnap: { exists: true, data: () => missionData }
+    });
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(tx));
+
+    const req = makeReq({ eventType: 'challenge', referenceId: 'missao_quebrada' });
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(tx.set).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INTERNAL_ERROR' }));
+  });
+
   it('erro inesperado do Firestore: 500 INTERNAL_ERROR sem vazar detalhe', async () => {
     (db.runTransaction as any).mockRejectedValue(new Error('boom - detalhe interno do Firestore'));
 
-    const req = makeReq({ eventType: 'mission', referenceId: 'm1', points: 50 });
+    const req = makeReq({ eventType: 'mission', referenceId: 'm1' });
     const res = makeRes();
     await handler(req, res);
 

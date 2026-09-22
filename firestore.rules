@@ -48,6 +48,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Catálogo de missões/desafios (KAN-80): mesmo padrão de activities —
+    // ADMIN escreve/edita direto pelo Firestore (sem admin-web ainda pra
+    // isso). POST /api/points/claim (backend/src/routes/points.ts) usa o
+    // Admin SDK, que ignora esta regra — ela protege o write client-side.
+    match /missions/{missionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
     // Regras de Comunicados: Leitura pública autenticada; escrita apenas para ADMIN
     match /announcements/{announcementId} {
       allow read: if isAuthenticated();
