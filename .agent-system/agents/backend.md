@@ -27,7 +27,7 @@ portable: true
 portability_note: >
   Conhecimento de processo e convenções Express/TypeScript/Firebase Admin SDK,
   sem chamada a ferramenta específica de um runtime de IA — funciona igual sob
-  Claude Code, Codex ou Antigravity assim que o adapter de cada um apontar pra
+  Claude Code ou Antigravity assim que o adapter de cada um apontar pra
   este arquivo.
 
 ## Purpose
