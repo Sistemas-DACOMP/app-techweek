@@ -47,4 +47,4 @@ All 14 canonical agents now have either a real `.claude/` dispatch file or (Pony
 - **Automation hooks** — `settings.json`-configured hooks (`PreToolUse`, `SessionStart`, `UserPromptSubmit`, etc.); this project already uses one for `rtk`'s transparent bash-command rewriting.
 - **MCP integrations beyond the above** — Supabase homolog project tools (`mcp__supabase-homolog__*`), plus a large set of `claude.ai`-hosted connectors (Notion, Slack, Figma, Asana, Box, Canva, HubSpot, Intercom, Linear, Microsoft 365, monday.com, GitBook, Claude Docs) that are account-level, not project-specific, and not currently wired into this project's workflows.
 
-No other runtime in this system (Codex, Antigravity) is confirmed to have MCP servers configured — MCP server availability is Claude-Code-session-side config per `.agent-system/docs/CONVENTIONS.md`, not a property of the project itself.
+No other runtime in this system (Antigravity) is confirmed to have MCP servers configured — MCP server availability is Claude-Code-session-side config per `.agent-system/docs/CONVENTIONS.md`, not a property of the project itself.

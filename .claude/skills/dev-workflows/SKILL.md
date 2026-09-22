@@ -56,7 +56,7 @@ Agentes abaixo vieram da expansão do sistema portável (`.agent-system/agents/`
 
 Não crie ou chame agente novo para cada tool — tools são capacidades (ler, editar, rodar lint/build/test, consultar git/PR/Jira), agentes são responsabilidades distintas de raciocínio.
 
-**Padrão daqui pra frente**: toda vez que um agente/skill novo for adicionado a este projeto, ele precisa de equivalente (ou gap documentado) em `AGENTS.md` (Codex/Antigravity) e `.github/copilot-instructions.md` (Copilot) além do arquivo aqui em `.claude/` — não é opcional, é requisito do Fabio (2026-09-20).
+**Padrão daqui pra frente**: toda vez que um agente/skill novo for adicionado a este projeto, ele precisa de equivalente (ou gap documentado) em `.agent-system/adapters/antigravity/agents/<id>.md` além do arquivo aqui em `.claude/` — não é opcional, é requisito do Fabio (2026-09-20, escopo de runtimes reduzido pra Claude Code + Antigravity em 2026-09-22 — Codex e Copilot descontinuados).
 
 ## WORKFLOW: FEATURE
 
