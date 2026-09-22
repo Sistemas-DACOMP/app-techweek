@@ -17,23 +17,15 @@ service cloud.firestore {
         (request.auth.token.role == 'ADMIN' || request.auth.token.admin == true);
     }
 
+    function isStaffOrAdmin() {
+      return isAdmin() || (isAuthenticated() && request.auth.token.role == 'STAFF');
+    }
+
     // Regras de Usuários: Todos autenticados leem; só o próprio dono atualiza dados pessoais
-    //
-    // `create` bloqueado pro client (KAN-72/REG-LGPD-001, revisto no code-review desta PR):
-    // a primeira versão desta trava tentava replicar em regras declarativas o que
-    // POST /api/auth/register grava (uid/email batendo com o token, termsAcceptedAt
-    // como timestamp, role fixo em PARTICIPANT, hasOnly nos campos). Isso barra client
-    // gravando lixo, mas não prova aceite de LGPD nenhum: nada nas Security Rules
-    // sabe se o usuário realmente marcou o checkbox — um client mal-intencionado (ou só
-    // um SDK direto, sem passar pela tela de cadastro) podia gravar um `termsAcceptedAt`
-    // qualquer (ex.: `serverTimestamp()`) e a regra aceitava, reabrindo exatamente o
-    // bypass que o KAN-72 devia fechar, só que camuflado atrás de uma regra que parece
-    // robusta. A garantia real só existe se a criação do doc for exclusiva do backend
-    // (Admin SDK ignora Security Rules) — mesmo padrão já usado abaixo em `bookings`/`leads`.
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if false; // Apenas backend via Firebase Admin SDK (POST /api/auth/register)
-      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'email', 'createdAt']));
+      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'createdAt', 'totalPoints', 'pontuacaoTotal']));
       allow write: if isAdmin();
     }
 
@@ -50,17 +42,8 @@ service cloud.firestore {
     }
 
     // Regras de Reservas: leitura restrita ao dono da inscrição ou ADMIN (REG-BOOKING-001)
-    // — bookingId é determinístico ({uid}_{activityId}, ver KAN-49), então "leitura pública
-    // autenticada" deixaria qualquer participante ver quem se inscreveu em quê e a posição
-    // na lista de espera de outra pessoa. Escrita sempre pelo backend (Admin SDK, runTransaction).
     match /bookings/{bookingId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow write: if false; // Apenas backend via Firebase Admin SDK
-    }
-
-    // Regras de Check-in de Presença (Double Check Portaria + Telão): Escrita exclusiva pelo backend
-    match /checkins/{checkinId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff() || isAdmin());
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
@@ -69,14 +52,16 @@ service cloud.firestore {
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
-    // Regras de Pontos (check-in de palestra, missões, etc.): cada usuário lê
-    // só os próprios eventos (ou ADMIN lê todos); escrita sempre pelo backend,
-    // que revalida a regra de negócio (ex: QR da palestra certa) antes de
-    // creditar ponto — ver REG-SCANNER-001 / KAN-71.
+    // Regras de Pontos: cada usuário lê os próprios eventos; escrita sempre pelo backend
     match /pointEvents/{eventId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
+
+    // Regras de Check-ins (double-check de presença): leitura restrita ao participante ou Staff/ADMIN
+    match /checkins/{checkinId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isStaffOrAdmin());
+      allow write: if false; // Apenas backend via Firebase Admin SDK
+    }
   }
 }
-

@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
 import { requireAuth } from '../middlewares/authMiddleware';
+import { isValidFirestoreId } from '../lib/firestoreId';
+import { resolveAttendanceMode } from '../lib/attendanceMode';
 
 const router = Router();
 
@@ -33,6 +35,11 @@ router.post('/:activityId/checkin', requireAuth, async (req: Request, res: Respo
     return;
   }
 
+  if (!isValidFirestoreId(activityId)) {
+    res.status(400).json({ error: 'INVALID_ACTIVITY_ID', message: 'activityId inválido.' });
+    return;
+  }
+
   const activityRef = db.collection('activities').doc(activityId);
   // Id determinístico (usuário + tipo de evento + palestra) em vez de
   // auto-id: permite checar duplicidade dentro da própria transação, sem
@@ -53,6 +60,19 @@ router.post('/:activityId/checkin', requireAuth, async (req: Request, res: Respo
         };
       }
 
+      const activityData = activitySnap.data() ?? {};
+
+      // KAN-51/D2: atividade com double-check usa /api/checkin/entrance +
+      // /checkout (Staff registra entrada, aluno faz checkout via QR do
+      // telão) — este fluxo de autoatendimento não se aplica a ela, senão
+      // dá pra contar presença duas vezes pela mesma atividade.
+      if (resolveAttendanceMode(activityData) === 'DOUBLE_CHECK') {
+        return {
+          status: 400 as const,
+          body: { error: 'WRONG_ATTENDANCE_MODE', message: 'Esta atividade usa double-check de presença (Staff + QR do telão).' }
+        };
+      }
+
       if (pointEventSnap.exists) {
         return {
           status: 409 as const,
@@ -60,7 +80,6 @@ router.post('/:activityId/checkin', requireAuth, async (req: Request, res: Respo
         };
       }
 
-      const activityData = activitySnap.data() ?? {};
       const points = typeof activityData.points === 'number' ? activityData.points : 0;
 
       tx.set(pointEventRef, {
