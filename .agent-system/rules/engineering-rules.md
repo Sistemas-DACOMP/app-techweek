@@ -10,7 +10,7 @@ Origem: `app-techweek/CLAUDE.md` seções "Regras que não mudam" e "Processo de
 - **Nunca altere variáveis de ambiente do Windows** (nem para debug) sem pedir antes.
 - Padrão de commit: `[TIPO] - descrição curta`, tipos `ADD` `FIX` `UPD` `DEL` `DOC` `CFG`.
 - Git Flow: `feature/*` → `develop` → `homolog` → `main`.
-- Branch protection ativa em `main`/`homolog` (PR obrigatório, 0 aprovações) **e também em `develop`** (PR obrigatório, **1 aprovação** — confirmado via API em 2026-09-10; corrige nota antiga que só citava main/homolog).
+- Branch protection ativa em `main`/`homolog`/`develop` (PR obrigatório nas três). Exigência de aprovação: **0 aprovações nas três** — `develop` foi zerada em 2026-09-21 (era 1, desativada a pedido do Fabio via API; motivo: GitHub bloqueia autor de aprovar a própria PR mesmo via API/CLI, e o time é pequeno demais pra sempre ter um segundo revisor disponível). PR continua obrigatório em `develop` — só a contagem de aprovação foi zerada, merge direto sem PR continua bloqueado. (Corrige nota anterior deste arquivo, datada 2026-09-10, que dizia 1 aprovação em `develop` — ficou stale.)
 - Comentário em PR e em card do Jira sempre em linguagem natural, como um dev escrevendo pra outro — nunca com tom de relatório gerado por IA, nem jargão desnecessário. Direto, sem enrolação, mas humano (detalhado em `policies/pr-jira-tone.md`).
 
 ## Processo de revisão de PRs / merge
