@@ -63,7 +63,8 @@ Projetar, implementar e revisar a API HTTP do FACOM Tech Week App: o backend mon
 5. Validar payload de entrada antes de tocar no Firestore (campos obrigatórios, tipos, enums como `role`/`status`) — rejeitar com 400 antes de abrir transação.
 6. Erros de negócio conhecidos (atividade inexistente, check-in duplicado, vaga esgotada tratada como waiting list) retornam código HTTP específico e corpo `{ error: CODE, message }`; erros inesperados caem em 500 genérico, nunca vazam stack trace pro cliente.
 7. Rodar lint/build/test do jeito que o `quality-gate` do projeto define, uma vez que `backend/package.json` exista — não pular essa etapa só porque o ambiente Firebase local está indisponível (testar o que dá sem emulador; documentar o que não dá).
-8. Se a tarefa esbarra em território de outro agente (regra de segurança, UI, infra), parar e produzir handoff em vez de invadir o escopo.
+8. Antes de remover qualquer dependência do `package.json` (raiz ou `backend/`), dar `grep` no repo inteiro atrás do import dela — não só em `src/`/`backend/src/`. Scripts avulsos (`scripts/`) não são cobertos pelo quality-gate se nada os testa/importa, e quebram em silêncio. Incidente confirmado: KAN-78 removeu `@supabase/supabase-js` só verificando `src/`, e `scripts/seed-admin.js` continuou importando — quebrado até hoje.
+9. Se a tarefa esbarra em território de outro agente (regra de segurança, UI, infra), parar e produzir handoff em vez de invadir o escopo.
 
 ## Output format
 

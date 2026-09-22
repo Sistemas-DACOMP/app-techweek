@@ -26,7 +26,12 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if false; // Apenas backend via Firebase Admin SDK (POST /api/auth/register)
       allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'createdAt', 'totalPoints', 'pontuacaoTotal']));
-      allow write: if isAdmin();
+      // Achado do security review (KAN-60): "allow write: if isAdmin()" deixava
+      // qualquer sessão ADMIN escrever QUALQUER campo (inclusive role) direto
+      // pelo client, contornando PUT /api/admin/users/:uid/role (que sincroniza
+      // custom claim + Firestore juntos, com divergência relatada explicitamente
+      // se algo falhar). Fabio confirmou: toda troca de role passa pelo backend
+      // — write:false força isso, mesmo padrão já usado em bookings/leads/checkins.
 
       // Histórico de pontos de missão/desafio (KAN-79, POST /api/points/claim).
       // Regra do documento pai não cobre subcollection — sem isso aqui, a
