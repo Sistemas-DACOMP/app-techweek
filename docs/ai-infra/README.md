@@ -17,9 +17,8 @@ definidas. Ver a missão completa em `Update Prompts/` (fora deste repo, notas p
 Orchestrator (.claude/skills/dev-workflows/SKILL.md)
 ├── Agents
 │   ├── qa-agent            (.claude/skills/qa-agent/SKILL.md)
-│   ├── pr-review           (.claude/agents/pr-review.md)
-│   ├── security-reviewer   (.claude/agents/security-reviewer.md)
-│   └── dedup-refactor      (.claude/agents/dedup-refactor.md)
+│   ├── code-review         (.claude/agents/code-review.md — inclui a análise de duplicação, sob pedido)
+│   └── security            (.claude/agents/security.md)
 ├── Workflows                (dentro de dev-workflows/SKILL.md: FEATURE, BUGFIX, PR REVIEW, TESTING)
 ├── Tools                    (built-in: Read/Edit/Grep/Glob/Bash; externas: gh CLI, MCP Atlassian/Jira,
 │                              MCP Supabase homolog; script: scripts/quality-gate.mjs)
@@ -56,9 +55,9 @@ descartada — só remapeada pro que o Claude Code de fato executa.
 | `docs/superpowers/specs/` | Specs de decisões de infra/arquitetura (design docs). |
 | `.claude/skills/qa-agent/` | Skill de QA — ciclo completo de teste multicamada. |
 | `.claude/skills/dev-workflows/` | Orquestrador — classifica a tarefa, delega, aplica quality gate. |
-| `.claude/agents/pr-review.md` | Agente de revisão de PR (análise → correção → revalidação → preparação). |
-| `.claude/agents/security-reviewer.md` | Agente de revisão de segurança independente. |
-| `.claude/agents/dedup-refactor.md` | Agente de análise de duplicação (sob pedido). |
+| `.claude/agents/code-review.md` | Agente de revisão de PR (análise → correção → revalidação → preparação); também roda análise de duplicação sob pedido. |
+| `.claude/agents/security.md` | Agente de revisão de segurança independente. |
+| `.claude/agents/git-ops.md` | Camada mecânica de cirurgia de branch/PR e higiene de Jira, embaixo do `code-review`. |
 | `scripts/quality-gate.mjs` | Roda lint+build+test e imprime o resultado estruturado do quality gate. |
 | `scripts/check-ai-infra.mjs` | Bootstrap — confirma o que existe/falta configurar num checkout. |
 | `.github/workflows/ci.yml` | CI: `npm ci` → lint → build → test (`--if-present`). |
