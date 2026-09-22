@@ -23,6 +23,7 @@ ANÁLISE → CORREÇÃO → REVALIDAÇÃO → PREPARAÇÃO PARA MERGE
 - Cruzar com `docs/business-rules/` — a mudança implementa, quebra ou introduz uma regra de negócio? Classificar (CONFIRMADA/INFERIDA/OBSERVADA/NÃO DEFINIDA) qualquer regra nova encontrada.
 - Verificar se há testes cobrindo a mudança (coordenar com `qa`).
 - Verificar conflito com outros PRs abertos que tocam os mesmos arquivos — se houver, avaliar ordem de merge por risco/dependência, e planejar atualizar os PRs seguintes com a branch base mais nova antes de assumir ausência de conflito.
+- Se o PR remove uma dependência do `package.json`, dar `grep` no repo inteiro atrás do import dela — não só em `src/`. Um script avulso (`scripts/`, ferramentas internas, seed) pode continuar importando e não é pego pelo quality-gate se nada testa/importa esse script a partir do código do app. Incidente confirmado: KAN-78 removeu `@supabase/supabase-js` verificando só `src/`, e `scripts/seed-admin.js` continuou importando — quebrou em silêncio, o gate ficou verde porque o script não tem cobertura de teste/import nenhuma.
 - Produzir lista de achados, priorizada (bug → regressão → segurança → corretude → arquitetura → manutenibilidade → estilo). Não editar nada ainda.
 
 ### 2. CORREÇÃO
