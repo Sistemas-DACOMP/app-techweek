@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { verifySymplaTicket, hasSymplaTicket, SYMPLA_EVENT_URL } from './sympla';
+import { verifySymplaTicket, hasSymplaTicket, SYMPLA_EVENT_URL, getBadgeQrValue } from './sympla';
 
 describe('Sympla Integration Client', () => {
   beforeEach(() => {
@@ -42,6 +42,19 @@ describe('Sympla Integration Client', () => {
     expect(hasSymplaTicket({ symplaTicket: { ticketNumber: '123' } })).toBe(true);
     expect(hasSymplaTicket({ sympla_ticket: { ticketNumber: '123' } })).toBe(true);
     expect(SYMPLA_EVENT_URL).toContain('sympla.com.br');
+  });
+
+  it('getBadgeQrValue usa o mesmo ticketId do crachá físico quando o ingresso está vinculado (KAN-47)', () => {
+    expect(getBadgeQrValue({ symplaTicket: { qrCodeData: 'SYMPLA:T999999' } })).toBe('SYMPLA:T999999');
+    expect(getBadgeQrValue({ symplaTicket: { ticketNumber: 'T111' } })).toBe('T111');
+  });
+
+  it('getBadgeQrValue cai pra um identificador local sem ingresso vinculado, sem quebrar', () => {
+    const value = getBadgeQrValue({ username: '@fulano', participantType: 'Aluno', course: 'SI', period: 3 });
+    const parsed = JSON.parse(value);
+    expect(parsed).toEqual({ username: 'fulano', participantType: 'Aluno', course: 'SI', period: 3 });
+    expect(() => JSON.parse(getBadgeQrValue(null))).not.toThrow();
+    expect(() => JSON.parse(getBadgeQrValue(undefined))).not.toThrow();
   });
 });
 

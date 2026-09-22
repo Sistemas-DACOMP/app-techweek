@@ -5,7 +5,9 @@ import { logoutUser, onAuthChange } from '../lib/auth';
 import { auth } from '../lib/firebase';
 import { validateAvatarFile, isValidEmail } from '../lib/validators';
 import AvatarCropperModal from '../components/AvatarCropperModal';
-import { SYMPLA_EVENT_URL, verifySymplaTicket } from '../lib/sympla';
+import MascotDuo from '../components/MascotDuo';
+import { QRCodeSVG } from 'qrcode.react';
+import { SYMPLA_EVENT_URL, verifySymplaTicket, getBadgeQrValue } from '../lib/sympla';
 import { getUserProfile, uploadUserAvatar, updateUserEmail, updateUserProfile } from '../lib/userService';
 import { 
   LogOut, Camera, Edit2, Edit3, Loader2, X, RefreshCw, Lock, 
@@ -382,17 +384,9 @@ export default function Profile() {
     navigate('/login');
   };
 
-  const qrData = encodeURIComponent(
-    profile.symplaTicket?.qrCodeData ||
-    profile.symplaTicket?.ticketNumber ||
-    JSON.stringify({
-      username: (profile.username || 'user').replace(/^@/, ''),
-      participantType: profile.participantType || 'Participante',
-      course: profile.course || '',
-      period: profile.period || null
-    })
-  );
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${qrData}&bgcolor=ffffff&color=000000`;
+  // Renderizado client-side (qrcode.react, KAN-47) em vez de imagem de serviço externo: funciona
+  // offline, o crachá continua visível sem rede depois do primeiro carregamento do perfil.
+  const qrValue = getBadgeQrValue(profile);
 
   const formatUrl = (url, prefix = '') => {
     if (!url) return null;
@@ -536,6 +530,12 @@ export default function Profile() {
 
       <div className="card" style={{ marginBottom: '24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: 'white', marginBottom: '10px' }}>Meu Crachá & QR Code</h3>
+        <div style={{ transform: 'scale(0.7)', margin: '-16px 0' }}>
+          <MascotDuo />
+        </div>
+        <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'white', marginBottom: '14px' }}>
+          {points} pts
+        </div>
         {profile.symplaTicket?.ticketName ? (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '20px', color: '#10b981', fontSize: '0.8rem', fontWeight: '600', marginBottom: '16px' }}>
             🎟️ {profile.symplaTicket.ticketName} • Confirmado
@@ -555,19 +555,16 @@ export default function Profile() {
           boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
           overflow: 'hidden'
         }}>
-          <img
-            src={qrUrl}
-            alt="Meu QR Code"
+          <div
             style={{
-              width: '160px',
-              height: '160px',
-              display: 'block',
               filter: profile.symplaTicket ? 'none' : 'blur(9px) grayscale(50%)',
               transition: 'filter 0.3s ease',
               userSelect: 'none',
               pointerEvents: 'none'
             }}
-          />
+          >
+            <QRCodeSVG value={qrValue} size={160} bgColor="#ffffff" fgColor="#000000" />
+          </div>
           {!profile.symplaTicket && (
             <div
               style={{
