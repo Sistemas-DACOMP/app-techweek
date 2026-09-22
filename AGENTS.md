@@ -3,7 +3,7 @@
 This project's engineering-team behavior (orchestration, agent roles, rules, gates, workflows) does not live in this file. It lives in `.agent-system/`.
 
 - `.agent-system/manifests/system.yaml` — the map of what exists: supported runtimes, agents, plugins, required capabilities, current project status.
-- `.agent-system/agents/` — one file per agent (orchestrator, spec, product, architecture, backend, pwa, admin, qa, security, infra, code-review, git-ops, adr, ponytail), each describing that agent's purpose, scope, and process, runtime-agnostic. `git-ops` (2026-09-21) is the mechanical git/Jira-ops layer underneath `code-review` — rebuilds an orphaned/stale branch or PR and corrects Jira board drift, never judges code correctness and never touches branch protection.
+- `.agent-system/agents/` — one file per agent (orchestrator, spec, product, architecture, backend, pwa, admin, qa, security, infra, code-review, git-ops, devops, adr, ponytail), each describing that agent's purpose, scope, and process, runtime-agnostic. `git-ops` (2026-09-21) is the mechanical git/Jira-ops layer underneath `code-review` — rebuilds an orphaned/stale branch or PR and corrects Jira board drift, never judges code correctness and never touches branch protection. `devops` (2026-09-22) owns CI/CD pipelines, build scripts and the develop/homolog/main release flow — never touches Firebase/Firestore config (that's `infra`) or does branch/PR/Jira surgery (that's `git-ops`).
 - `.agent-system/rules/engineering-rules.md` — the full engineering rules this project runs on (git flow, commit format, review process, security invariants). Read that file for the complete rule bodies; this file only states the ones that must never be dropped.
 
 ## Non-negotiable rules (any runtime, no exceptions)
@@ -27,6 +27,7 @@ Você (o runtime lendo este arquivo, Claude Code ou Antigravity) deve classifica
 | "corrija/conserta bug X" | workflow BUGFIX |
 | Revisar/preparar um Pull Request | `code-review` (nunca mergeia — regra não-negociável #4 acima) |
 | Branch/PR desatualizada ou conflitante, PR fechada sem merge, status do Jira que não bate com PR real | `git-ops` — camada mecânica embaixo do `code-review`; nunca julga corretude de código, nunca mexe em branch protection |
+| Falha de CI (`.github/workflows/*.yml`), quality gate quebrando no pipeline, config de deploy/hospedagem | `devops` — nunca mexe em Firebase/Firestore, nunca em branch/PR/Jira |
 | Rodar/validar testes, cobertura de regra de negócio | `qa` |
 | Toca autenticação, Firestore/Storage rules, token, upload, endpoint administrativo, ou vai pra `main` | `security` (aciona sozinho, mesmo sem pedido explícito) |
 | Requisito novo/ambíguo, ou precisa classificar uma regra (CONFIRMADA/INFERIDA/OBSERVADA/NÃO DEFINIDA) | `spec` |
