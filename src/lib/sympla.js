@@ -10,6 +10,23 @@ export function hasSymplaTicket(userProfile) {
   return Boolean(userProfile.symplaTicket || userProfile.sympla_ticket);
 }
 
+/**
+ * Valor codificado no QR do crachá digital (KAN-47). Mesmo `ticketId`/`qrCodeData` do crachá
+ * físico impresso quando o ingresso Sympla está vinculado; cai pra um identificador local só até
+ * o participante vincular o ingresso (nunca bloqueia a tela por falta de ingresso).
+ */
+export function getBadgeQrValue(profile) {
+  const ticket = profile?.symplaTicket;
+  if (ticket?.qrCodeData) return ticket.qrCodeData;
+  if (ticket?.ticketNumber) return ticket.ticketNumber;
+  return JSON.stringify({
+    username: (profile?.username || 'user').replace(/^@/, ''),
+    participantType: profile?.participantType || 'Participante',
+    course: profile?.course || '',
+    period: profile?.period || null
+  });
+}
+
 const getApiBaseUrl = () => {
   return import.meta.env.VITE_API_URL || '/api';
 };
