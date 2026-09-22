@@ -98,3 +98,4 @@ node scripts/quality-gate.mjs
 - **Commits Semânticos:** Usar `[ADD]`, `[FIX]`, `[UPD]`, `[DEL]`, `[DOC]`, `[CFG]`.
 - **Quality Gate:** Todo push precisa passar no script `node scripts/quality-gate.mjs` com score 1.0.
 - **Merge Humano:** O merge final em `develop` e `main` é estritamente humano.
+
