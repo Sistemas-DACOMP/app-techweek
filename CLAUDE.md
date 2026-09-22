@@ -43,7 +43,8 @@ Agentes e skills disponíveis (lista corrigida em 2026-09-21 — os 3 nomes de a
 - `.claude/skills/qa-agent/SKILL.md` — regras de negócio, planejamento e execução de testes.
 - `.claude/agents/code-review.md` — análise/correção/revalidação/preparação de PR (nunca mergeia); também roda análise de duplicação (DRY) sob pedido explícito.
 - `.claude/agents/security.md` — revisão de segurança independente (auth, RLS, uploads, tokens); só reporta, não corrige.
-- `.claude/agents/git-ops.md` (novo, 2026-09-21) — cirurgia de branch/PR (recria branch órfã/desatualizada/conflitante, resolve conflito mecânico, abre PR de substituição) e higiene do board Jira (status que não bate com PR real, duplicata, link de bloqueio, issue Bug fora da coluna certa). Camada mecânica embaixo do `code-review`, nunca no lugar dele — nunca julga corretude de código, nunca mexe em branch protection/config de repositório, nunca mergeia. Despacha sozinho, ver `.claude/skills/dev-workflows/SKILL.md`.
+- `.claude/agents/git-ops.md` (2026-09-21) — cirurgia de branch/PR (recria branch órfã/desatualizada/conflitante, resolve conflito mecânico, abre PR de substituição) e higiene do board Jira (status que não bate com PR real, duplicata, link de bloqueio, issue Bug fora da coluna certa). Camada mecânica embaixo do `code-review`, nunca no lugar dele — nunca julga corretude de código, nunca mexe em branch protection/config de repositório, nunca mergeia. Despacha sozinho, ver `.claude/skills/dev-workflows/SKILL.md`.
+- `.claude/agents/devops.md` (novo, 2026-09-22) — pipelines de CI/CD (`.github/workflows/*.yml`), scripts de build (`quality-gate.mjs`), config de hospedagem (Vercel/GitHub Pages), fluxo de release `develop`→`homolog`→`main`. Nunca mexe em Firebase/Firestore (isso é `infra`), nunca em lógica de negócio/UI (isso é `backend`/`pwa`/`admin`), nunca em branch protection sem permissão explícita, nunca em cirurgia de branch/PR/Jira (isso é `git-ops`).
 
 Quality gate objetivo (lint/build/test) roda com `npm run quality-gate`. Checagem do ambiente de IA (o que existe, o que falta configurar) roda com `npm run check-ai-infra`. Detalhes de threshold, critérios obrigatórios e classificação de falha estão na skill `dev-workflows`.
 
@@ -96,8 +97,8 @@ FASE 3 — QA Agent (feita, já existia) + PR Review Agent (feita: .claude/agent
 FASE 4 — Security Reviewer (feita: .claude/agents/security.md)
 FASE 5 — integrações Jira/GitHub (feita com o que já existe: gh CLI + MCP Atlassian; sem
           integração mais profunda além disso por enquanto — expandir só se necessidade real aparecer)
-FASE 6 — expansão / agentes adicionais (git-ops adicionado 2026-09-21; devops proposto,
-          decisão pendente — ver `docs/ai-infra/README.md`)
+FASE 6 — expansão / agentes adicionais (git-ops adicionado 2026-09-21; devops adicionado
+          2026-09-22, CI/CD e release flow — ver `docs/ai-infra/README.md`)
 FASE 7 — portabilidade multi-runtime (2026-09-22: reduzida pra Claude Code + Antigravity
           apenas, por decisão do Fabio — Codex e Copilot descontinuados. Antigravity segue
           não testado localmente nesta máquina, CLI não instalado)
