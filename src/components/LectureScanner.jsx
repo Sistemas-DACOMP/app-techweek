@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, QrCode, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { addPointEvent } from '../lib/gameplay';
 import { isQrForLecture } from '../lib/qrValidation';
-import { auth } from '../lib/firebase';
+import { apiRequest } from '../lib/api';
 import { useScrollLock } from '../hooks/useScrollLock';
 export default function LectureScanner({
   lecture,
@@ -31,41 +30,20 @@ export default function LectureScanner({
 
     setSaving(true);
     try {
-      if (auth.currentUser) {
-        const token = await auth.currentUser.getIdToken();
-        const res = await fetch(`/api/activities/${lecture?.id}/checkin`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            lectureId: lecture?.id,
-            rating
-          })
-        });
-
-        if (res.status === 409) {
-          setSaveError('Você já registrou presença nesta palestra!');
-          setSaving(false);
-          return;
-        }
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.message || 'Falha ao registrar presença.');
-        }
-      } else {
-        await addPointEvent({
-          eventType: 'lecture_attendance',
-          referenceId: lecture?.id,
-          points: lecture?.points || 0,
-          metadata: { rating },
-        });
-      }
+      // Path relativo direto (fetch('/api/...')) não chega em lugar nenhum
+      // sem proxy/rewrite configurado — apiRequest usa VITE_API_BASE_URL e
+      // já injeta o Bearer token do Firebase Auth (achado KAN-79).
+      await apiRequest(`/activities/${lecture?.id}/checkin`, {
+        method: 'POST',
+        body: JSON.stringify({ lectureId: lecture?.id, rating })
+      });
       onClose();
     } catch (err) {
-      setSaveError(err.message || 'Não foi possível registrar sua presença. Tente novamente.');
+      if (err.status === 409) {
+        setSaveError('Você já registrou presença nesta palestra!');
+      } else {
+        setSaveError(err.message || 'Não foi possível registrar sua presença. Tente novamente.');
+      }
     } finally {
       setSaving(false);
     }
