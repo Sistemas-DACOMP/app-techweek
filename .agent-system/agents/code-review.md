@@ -83,6 +83,12 @@ ANÁLISE → CORREÇÃO → REVALIDAÇÃO → PREPARAÇÃO PARA MERGE
 - Check for conflicts with other open PRs touching the same files — if found, judge merge
   order by risk/dependency, and plan to rebase/update the later ones on the freshest base
   branch before assuming they're conflict-free.
+- If the PR removes a dependency from `package.json`, grep the whole repo for its import —
+  not just `src/`/the main app tree. A one-off script (`scripts/`, tooling, seed helpers)
+  can still import it and isn't covered by the quality gate if nothing tests or imports the
+  script from app code. Confirmed incident: KAN-78 removed `@supabase/supabase-js` after
+  verifying only `src/`, and `scripts/seed-admin.js` kept importing it — broke silently,
+  the quality gate stayed green because the script has zero test/import coverage.
 - Produce the findings list, priority-ordered (bug → regressão → segurança → corretude →
   arquitetura → manutenibilidade → estilo). Don't edit anything yet.
 
