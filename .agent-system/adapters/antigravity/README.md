@@ -35,4 +35,4 @@ When a skill or agent process says "create a todo list" or "track tasks", the An
 ## Known gaps
 
 - Whether Antigravity honors MCP servers configured elsewhere (Jira/Atlassian, browser automation, Supabase) is unconfirmed — MCP server availability is session/runtime-side config, not a property of this project, and Antigravity's own MCP support has not been audited here.
-- No confirmation of how Antigravity discovers its bootstrap file (analogous to Claude Code's `CLAUDE.md` auto-load or Codex's `AGENTS.md` convention) — do not assume it reads `AGENTS.md` the same way until verified.
+- No confirmation of how Antigravity discovers its bootstrap file (analogous to Claude Code's `CLAUDE.md` auto-load) — do not assume it reads `AGENTS.md` the same way until verified.

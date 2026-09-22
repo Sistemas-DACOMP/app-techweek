@@ -8,7 +8,7 @@ This project's engineering-team behavior (orchestration, agent roles, rules, gat
 
 ## Non-negotiable rules (any runtime, no exceptions)
 
-These apply regardless of which AI runtime is reading this file (Claude Code, Codex, Antigravity, or otherwise). Follow whatever attribution convention this session's host normally uses, then apply this project's override on top of it:
+These apply regardless of which AI runtime is reading this file (Claude Code or Antigravity, the only two supported since 2026-09-22). Follow whatever attribution convention this session's host normally uses, then apply this project's override on top of it:
 
 1. **Nunca inclua trailer de co-autoria de IA em commits deste projeto.**
 2. Never alter Windows environment variables — not even for debugging — without asking first.
@@ -19,7 +19,7 @@ For everything else — full rule text, gates, workflows, per-agent behavior —
 
 ## Roteamento automático — leia isto antes de perguntar "qual agente eu uso?"
 
-Você (o runtime lendo este arquivo, seja Codex, Antigravity, Copilot ou outro) deve classificar a tarefa sozinho e despachar o agente certo, sem que o humano precise pedir por nome. Esta tabela é a mesma lógica que `.claude/skills/dev-workflows/SKILL.md` usa no Claude Code — portada aqui pra funcionar em qualquer runtime:
+Você (o runtime lendo este arquivo, Claude Code ou Antigravity) deve classificar a tarefa sozinho e despachar o agente certo, sem que o humano precise pedir por nome. Esta tabela é a mesma lógica que `.claude/skills/dev-workflows/SKILL.md` usa no Claude Code — portada aqui pra funcionar também no Antigravity:
 
 | Situação | Agente (`.agent-system/agents/<id>.md`) |
 |---|---|
@@ -44,9 +44,6 @@ Nunca rode todos os agentes numa tarefa trivial — classifique o impacto (LOW/M
 ## Como despachar um subagente, por runtime
 
 - **Claude Code**: cada agente acima já existe como arquivo real em `.claude/agents/<id>.md` — o Agent tool despacha direto.
-- **Codex**: use `spawn_agent`/`followup_task`/`wait_agent` (requer `multi_agent = true` em `~/.codex/config.toml`) apontando pro conteúdo de `.agent-system/agents/<id>.md` como instrução do subagente. Ver `.agent-system/adapters/codex/README.md` para o detalhe completo — não testado ponta a ponta nesta máquina (Codex CLI não instalado aqui em 2026-09-20).
 - **Antigravity**: use `invoke_subagent` apontando para o wrapper correspondente em `.agent-system/adapters/antigravity/agents/<id>.md`. Antigravity não tem ferramenta de todo-list — os wrappers já instruem a materializar `.agent-system/templates/task-context.md` como um "task artifact" real via `write_to_file`. Ver `.agent-system/adapters/antigravity/README.md` para os detalhes completos de implementação.
-- **GitHub Copilot**: ver `.github/copilot-instructions.md` — Copilot não tem mecanismo de subagente nativo equivalente; a orientação lá é aplicar o raciocínio de cada agente diretamente na resposta, citando qual "chapéu" (`.agent-system/agents/<id>.md`) está sendo seguido.
-- **Qualquer outro runtime que leia `AGENTS.md`**: a tabela acima e os arquivos em `.agent-system/agents/` bastam — não é necessário um mecanismo de subagente formal pra seguir a classificação e o processo descrito em cada agente.
 
-**Isto é padrão do projeto**: toda funcionalidade nova de agente/skill adicionada daqui pra frente precisa ter equivalente (ou gap documentado explicitamente, nunca silencioso) pra Claude Code, Codex, Antigravity e Copilot — não só pra quem está configurando no momento.
+**Isto é padrão do projeto**: toda funcionalidade nova de agente/skill adicionada daqui pra frente precisa ter equivalente (ou gap documentado explicitamente, nunca silencioso) pra Claude Code e Antigravity — os únicos dois runtimes suportados desde 2026-09-22 (Codex e GitHub Copilot foram descontinuados por decisão do Fabio; Codex nunca teve arquivo real, só um README dizendo o que faltava construir — nada foi perdido).

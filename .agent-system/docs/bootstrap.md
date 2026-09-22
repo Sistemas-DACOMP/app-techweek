@@ -8,7 +8,7 @@ Fluxo para um membro novo do time (ou uma sessão de agente nova, em qualquer ru
 
 2. **Escolher um runtime de IA.**
    - **Claude Code** tem suporte nativo completo hoje — todos os agentes, skills, hooks e MCPs (Jira/Atlassian, browser) já funcionam.
-   - **Codex** e **Antigravity** têm adapters documentados mas **não verificados** nesta máquina (CLIs não instaladas na auditoria de 2026-09-20). Ver `.agent-system/adapters/codex/README.md` e `.agent-system/adapters/antigravity/README.md` antes de assumir paridade total — em especial, Jira e Browser via MCP não têm equivalente configurado para esses runtimes neste ambiente.
+   - **Antigravity** tem adapter documentado mas **não verificado** nesta máquina (CLI não instalada na auditoria de 2026-09-20). Ver `.agent-system/adapters/antigravity/README.md` antes de assumir paridade total — em especial, Jira e Browser via MCP não têm equivalente configurado neste ambiente. Codex e GitHub Copilot foram descontinuados como runtimes suportados (2026-09-22).
 
 3. **Deixar o runtime ler o arquivo de bootstrap dele.**
    - Claude Code lê `CLAUDE.md` automaticamente.

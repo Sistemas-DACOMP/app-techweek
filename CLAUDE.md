@@ -4,7 +4,9 @@
 
 ## Sistema de engenharia portável (`.agent-system/`)
 
-A partir de 2026-09-20 o comportamento operacional dos agentes (orquestração, regras, gates, workflows) tem fonte canônica em `.agent-system/` — ver `.agent-system/manifests/system.yaml`. Este CLAUDE.md continua sendo o bootstrap que o Claude Code lê automaticamente, mas para trabalho de engenharia não trivial, consulte também `.agent-system/agents/` (comportamento de cada agente) e `.agent-system/docs/audit-report.md` (auditoria completa: o que existe, o que é portável entre Claude Code/Codex/Antigravity, o que falta). Os arquivos em `.claude/agents/` e `.claude/skills/` continuam sendo os adapters reais que o Claude Code executa — mantidos sincronizados com a fonte canônica, não substituídos por ela.
+A partir de 2026-09-20 o comportamento operacional dos agentes (orquestração, regras, gates, workflows) tem fonte canônica em `.agent-system/` — ver `.agent-system/manifests/system.yaml`. Este CLAUDE.md continua sendo o bootstrap que o Claude Code lê automaticamente, mas para trabalho de engenharia não trivial, consulte também `.agent-system/agents/` (comportamento de cada agente) e `.agent-system/docs/audit-report.md` (auditoria completa: o que existe, o que é portável entre Claude Code/Antigravity, o que falta). Os arquivos em `.claude/agents/` e `.claude/skills/` continuam sendo os adapters reais que o Claude Code executa — mantidos sincronizados com a fonte canônica, não substituídos por ela.
+
+**Runtimes suportados: Claude Code + Antigravity apenas (decisão do Fabio, 2026-09-22)** — Codex e GitHub Copilot foram descontinuados. `.agent-system/adapters/codex/` e `.github/copilot-instructions.md` foram removidos. Codex nunca teve adapter real (só um README documentando o que faltava construir), então nada foi perdido; Antigravity mantém os wrappers reais em `.agent-system/adapters/antigravity/agents/`. Todo agente/skill novo daqui pra frente precisa de paridade (ou gap documentado) só entre esses dois runtimes.
 
 ## Quem é o time
 
@@ -94,9 +96,11 @@ FASE 3 — QA Agent (feita, já existia) + PR Review Agent (feita: .claude/agent
 FASE 4 — Security Reviewer (feita: .claude/agents/security.md)
 FASE 5 — integrações Jira/GitHub (feita com o que já existe: gh CLI + MCP Atlassian; sem
           integração mais profunda além disso por enquanto — expandir só se necessidade real aparecer)
-FASE 6 — expansão / agentes adicionais (não iniciada — só quando houver responsabilidade
-          claramente distinta que justifique um agente novo; ver `docs/ai-infra/README.md`)
-FASE 7 — portabilidade multi-runtime (em andamento: 2026-09-20 — .agent-system/ canônico criado, adapters Claude prontos, Codex/Antigravity documentados mas não testados localmente — CLIs não instalados nesta máquina)
+FASE 6 — expansão / agentes adicionais (git-ops adicionado 2026-09-21; devops proposto,
+          decisão pendente — ver `docs/ai-infra/README.md`)
+FASE 7 — portabilidade multi-runtime (2026-09-22: reduzida pra Claude Code + Antigravity
+          apenas, por decisão do Fabio — Codex e Copilot descontinuados. Antigravity segue
+          não testado localmente nesta máquina, CLI não instalado)
 ```
 
 Ver `docs/superpowers/specs/2026-09-10-persistent-project-memory-design.md` pro design da Fase 1 e `docs/superpowers/specs/2026-09-11-agent-infra-fase2-6-design.md` pras decisões das Fases 2-6 (por que a estrutura de pastas foi adaptada, por que só 2 agentes novos, etc). `docs/ai-infra/README.md` é a arquitetura completa, como configurar num checkout novo e como estender (novo agente/skill/regra). Não pular fase sem validar a anterior funcionando.
