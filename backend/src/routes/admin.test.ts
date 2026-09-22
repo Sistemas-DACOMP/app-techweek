@@ -3,7 +3,8 @@ import type { Request, Response } from 'express';
 
 vi.mock('../config/firebaseAdmin', () => ({
   db: {
-    collection: vi.fn()
+    collection: vi.fn(),
+    runTransaction: vi.fn()
   },
   auth: {
     setCustomUserClaims: vi.fn(),
@@ -82,18 +83,31 @@ function makeBroadcastReq(body: any = {}, user: any = { uid: 'admin-1', role: 'A
   return { body, user } as unknown as Request;
 }
 
-describe('PUT /api/admin/users/:uid/role (KAN-60)', () => {
-  let userDoc: { get: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
+describe('PUT /api/admin/users/:uid/role (KAN-60, KAN-81)', () => {
+  let userSnap: any;
+  let adminsSnap: any;
+  let tx: { get: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
+
+  // Refs/queries são objetos-marcadores simples (não Firestore de verdade) —
+  // tx.get() distingue pelo __kind qual snapshot devolver, do mesmo jeito que
+  // o mock de tx em points.test.ts distingue pelo `.path`.
+  function userRefFor(uid: string) {
+    return { __kind: 'userDoc', uid };
+  }
 
   beforeEach(() => {
     vi.clearAllMocks();
-    userDoc = {
-      get: vi.fn().mockResolvedValue({ exists: true }),
-      update: vi.fn().mockResolvedValue(undefined)
+    userSnap = { exists: true, data: () => ({}) };
+    adminsSnap = { size: 5 };
+    tx = {
+      get: vi.fn((ref: any) => Promise.resolve(ref?.__kind === 'adminsQuery' ? adminsSnap : userSnap)),
+      update: vi.fn()
     };
     (db.collection as any).mockImplementation(() => ({
-      doc: () => userDoc
+      doc: (uid: string) => userRefFor(uid),
+      where: () => ({ __kind: 'adminsQuery' })
     }));
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
     (auth.setCustomUserClaims as any).mockResolvedValue(undefined);
     (auth.getUser as any).mockResolvedValue({ customClaims: {} });
   });
@@ -108,17 +122,18 @@ describe('PUT /api/admin/users/:uid/role (KAN-60)', () => {
     expect(auth.setCustomUserClaims).toHaveBeenCalledWith('part-1', { somethingElse: 'kept', role: 'STAFF' });
   });
 
-  it('sucesso: seta o custom claim, sincroniza o Firestore e responde 200', async () => {
+  it('sucesso: atualiza o Firestore numa transação, seta o custom claim depois e responde 200', async () => {
     const req = makeReq('part-1', { role: 'STAFF' });
     const res = makeRes();
 
     await updateUserRoleHandler(req, res);
 
+    expect(tx.update).toHaveBeenCalledWith(expect.objectContaining({ uid: 'part-1' }), { role: 'STAFF' });
     expect(auth.setCustomUserClaims).toHaveBeenCalledWith('part-1', { role: 'STAFF' });
-    expect(userDoc.update).toHaveBeenCalledWith({ role: 'STAFF' });
-    // update no Firestore só pode acontecer depois do claim ter sido setado.
-    expect(auth.setCustomUserClaims.mock.invocationCallOrder[0]).toBeLessThan(
-      userDoc.update.mock.invocationCallOrder[0]
+    // KAN-81: Firestore primeiro (dentro da transação), claim do Auth depois —
+    // ver doc do handler pra explicação de por que a ordem inverteu.
+    expect(tx.update.mock.invocationCallOrder[0]).toBeLessThan(
+      auth.setCustomUserClaims.mock.invocationCallOrder[0]
     );
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ success: true, uid: 'part-1', role: 'STAFF' });
@@ -130,7 +145,7 @@ describe('PUT /api/admin/users/:uid/role (KAN-60)', () => {
 
     await updateUserRoleHandler(req, res);
 
-    expect(db.collection).not.toHaveBeenCalled();
+    expect(db.runTransaction).not.toHaveBeenCalled();
     expect(auth.setCustomUserClaims).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
@@ -142,7 +157,7 @@ describe('PUT /api/admin/users/:uid/role (KAN-60)', () => {
 
     await updateUserRoleHandler(req, res);
 
-    expect(db.collection).not.toHaveBeenCalled();
+    expect(db.runTransaction).not.toHaveBeenCalled();
     expect(auth.setCustomUserClaims).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
@@ -154,7 +169,7 @@ describe('PUT /api/admin/users/:uid/role (KAN-60)', () => {
 
     await updateUserRoleHandler(req, res);
 
-    expect(db.collection).not.toHaveBeenCalled();
+    expect(db.runTransaction).not.toHaveBeenCalled();
     expect(auth.setCustomUserClaims).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
@@ -166,68 +181,62 @@ describe('PUT /api/admin/users/:uid/role (KAN-60)', () => {
 
     await updateUserRoleHandler(req, res);
 
-    expect(db.collection).not.toHaveBeenCalled();
+    expect(db.runTransaction).not.toHaveBeenCalled();
     expect(auth.setCustomUserClaims).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
   });
 
   it('404 USER_NOT_FOUND se o doc /users/{uid} não existir, setCustomUserClaims nunca é chamado', async () => {
-    userDoc.get.mockResolvedValue({ exists: false });
+    userSnap = { exists: false };
     const req = makeReq('part-404', { role: 'STAFF' });
     const res = makeRes();
 
     await updateUserRoleHandler(req, res);
 
+    expect(tx.update).not.toHaveBeenCalled();
     expect(auth.setCustomUserClaims).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'USER_NOT_FOUND' }));
   });
 
-  it('404 AUTH_USER_NOT_FOUND se auth.getUser (leitura dos claims atuais) rejeitar com auth/user-not-found', async () => {
+  it('500 INTERNAL_ERROR se a leitura do usuário na transação falhar', async () => {
+    tx.get.mockRejectedValueOnce(new Error('firestore down'));
+    const req = makeReq('part-1', { role: 'STAFF' });
+    const res = makeRes();
+
+    await updateUserRoleHandler(req, res);
+
+    expect(auth.setCustomUserClaims).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INTERNAL_ERROR' }));
+  });
+
+  it('500 ROLE_PARTIALLY_UPDATED se o Firestore for atualizado mas auth.getUser (leitura de claims) rejeitar com auth/user-not-found', async () => {
     (auth.getUser as any).mockRejectedValue({ code: 'auth/user-not-found' });
     const req = makeReq('part-1', { role: 'STAFF' });
     const res = makeRes();
 
     await updateUserRoleHandler(req, res);
 
-    expect(auth.setCustomUserClaims).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'AUTH_USER_NOT_FOUND' }));
+    expect(tx.update).toHaveBeenCalledWith(expect.objectContaining({ uid: 'part-1' }), { role: 'STAFF' });
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'ROLE_PARTIALLY_UPDATED',
+        message: expect.stringContaining('não existe mais')
+      })
+    );
   });
 
-  it('404 AUTH_USER_NOT_FOUND se setCustomUserClaims rejeitar com auth/user-not-found', async () => {
-    (auth.setCustomUserClaims as any).mockRejectedValue({ code: 'auth/user-not-found' });
-    const req = makeReq('part-1', { role: 'STAFF' });
-    const res = makeRes();
-
-    await updateUserRoleHandler(req, res);
-
-    expect(userDoc.update).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'AUTH_USER_NOT_FOUND' }));
-  });
-
-  it('500 INTERNAL_ERROR se setCustomUserClaims rejeitar com outro erro, userRef.update nunca é chamado', async () => {
+  it('500 ROLE_PARTIALLY_UPDATED se o Firestore for atualizado mas setCustomUserClaims falhar com outro erro', async () => {
     (auth.setCustomUserClaims as any).mockRejectedValue(new Error('boom'));
     const req = makeReq('part-1', { role: 'STAFF' });
     const res = makeRes();
 
     await updateUserRoleHandler(req, res);
 
-    expect(userDoc.update).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INTERNAL_ERROR' }));
-  });
-
-  it('500 ROLE_PARTIALLY_UPDATED se o claim for setado mas o update no Firestore falhar', async () => {
-    userDoc.update.mockRejectedValue(new Error('firestore down'));
-    const req = makeReq('part-1', { role: 'STAFF' });
-    const res = makeRes();
-
-    await updateUserRoleHandler(req, res);
-
-    expect(auth.setCustomUserClaims).toHaveBeenCalledWith('part-1', { role: 'STAFF' });
+    expect(tx.update).toHaveBeenCalledWith(expect.objectContaining({ uid: 'part-1' }), { role: 'STAFF' });
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -235,6 +244,77 @@ describe('PUT /api/admin/users/:uid/role (KAN-60)', () => {
         message: expect.stringContaining('part-1')
       })
     );
+  });
+
+  it('não consulta contagem de ADMINs quando o alvo já não é ADMIN (troca comum)', async () => {
+    userSnap = { exists: true, data: () => ({ role: 'PARTICIPANT' }) };
+    const req = makeReq('part-1', { role: 'STAFF' });
+    const res = makeRes();
+
+    await updateUserRoleHandler(req, res);
+
+    expect(tx.get).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('permite rebaixar um ADMIN quando existe outro ADMIN além dele (count > 1)', async () => {
+    userSnap = { exists: true, data: () => ({ role: 'ADMIN' }) };
+    adminsSnap = { size: 2 };
+    const req = makeReq('admin-2', { role: 'STAFF' });
+    const res = makeRes();
+
+    await updateUserRoleHandler(req, res);
+
+    expect(auth.setCustomUserClaims).toHaveBeenCalledWith('admin-2', { role: 'STAFF' });
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('409 LAST_ADMIN_PROTECTED se o alvo for o único ADMIN restante, nem toca Auth/Firestore', async () => {
+    userSnap = { exists: true, data: () => ({ role: 'ADMIN' }) };
+    adminsSnap = { size: 1 };
+    const req = makeReq('admin-1', { role: 'STAFF' });
+    const res = makeRes();
+
+    await updateUserRoleHandler(req, res);
+
+    expect(auth.setCustomUserClaims).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'LAST_ADMIN_PROTECTED' }));
+  });
+
+  it('promover um ADMIN pra ADMIN de novo não conta como remoção, count não é consultado', async () => {
+    userSnap = { exists: true, data: () => ({ role: 'ADMIN' }) };
+    const req = makeReq('admin-1', { role: 'ADMIN' });
+    const res = makeRes();
+
+    await updateUserRoleHandler(req, res);
+
+    expect(tx.get).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('409 mantido em retry: duas trocas concorrentes rebaixando ADMINs diferentes — a segunda reconta após a primeira "commitar" e bloqueia', async () => {
+    // Simula o que a transação real do Firestore garante via conflito de
+    // leitura/escrita: a myTransaction callback é invocada de novo (retry) já
+    // vendo o efeito da primeira transação. Aqui simulamos isso mudando o
+    // snapshot de admins que a segunda chamada de runTransaction vai ler.
+    userSnap = { exists: true, data: () => ({ role: 'ADMIN' }) };
+    adminsSnap = { size: 2 }; // antes de qualquer rebaixamento: 2 ADMINs
+
+    const req1 = makeReq('admin-a', { role: 'STAFF' });
+    const res1 = makeRes();
+    await updateUserRoleHandler(req1, res1);
+    expect(res1.status).toHaveBeenCalledWith(200); // primeira passa (tinha 2)
+
+    // Depois do "commit" da primeira, só sobra 1 ADMIN real.
+    adminsSnap = { size: 1 };
+    const req2 = makeReq('admin-b', { role: 'STAFF' });
+    const res2 = makeRes();
+    await updateUserRoleHandler(req2, res2);
+
+    expect(res2.status).toHaveBeenCalledWith(409);
+    expect(res2.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'LAST_ADMIN_PROTECTED' }));
   });
 
   it('cadeia real: STAFF (não-ADMIN) recebe 403 do requireRole e nem chega no handler', async () => {

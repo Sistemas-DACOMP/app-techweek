@@ -9,16 +9,40 @@ const router = Router();
 
 const VALID_ROLES: UserRole[] = ['PARTICIPANT', 'STAFF', 'SPONSOR', 'ADMIN'];
 
+class UserNotFoundError extends Error {}
+class LastAdminProtectedError extends Error {}
+
 /**
- * Handler do endpoint PUT /api/admin/users/:uid/role (KAN-60).
+ * Handler do endpoint PUT /api/admin/users/:uid/role (KAN-60, KAN-81).
  *
  * Atualiza o papel do usuário em dois sistemas que não são atômicos entre si:
- * custom claim do Firebase Auth (fonte usada por requireRole via JWT) e o
- * campo `role` do documento /users/{uid} no Firestore (fonte usada pelo
- * resto da aplicação pra exibir/filtrar por papel). Ordem escolhida: claim
- * primeiro, Firestore depois — se o segundo passo falhar depois do primeiro
- * ter tido sucesso, isso é reportado explicitamente como divergência em vez
- * de escondido atrás de um 500 genérico.
+ * o campo `role` do documento /users/{uid} no Firestore (fonte usada pelo
+ * resto da aplicação pra exibir/filtrar por papel) e o custom claim do
+ * Firebase Auth (fonte usada por requireRole via JWT). Ordem escolhida:
+ * Firestore primeiro, dentro de uma transação, claim depois.
+ *
+ * KAN-81 (revisão de segurança pós-KAN-60): sem trava, o último ADMIN pode
+ * se rebaixar (ou ser rebaixado) e ninguém mais consegue promover ninguém de
+ * volta pela API — recuperação exigiria acesso ao console do Firebase
+ * (firebase/gcloud CLI não estão disponíveis nesta máquina). A checagem
+ * "sobra pelo menos 1 ADMIN" só entra em jogo quando a troca REMOVE o papel
+ * de ADMIN de alguém que hoje é ADMIN.
+ *
+ * Por que a checagem + a escrita no Firestore precisam estar na MESMA
+ * transação (achado do security review, não simplificação gratuita): duas
+ * trocas concorrentes rebaixando dois ADMINs diferentes podiam cada uma ler
+ * "sobram 2 ADMINs" antes da outra terminar, e as duas passavam — sistema
+ * ficava com 0 ADMIN. Como a query de contagem e o `tx.update` do alvo leem
+ * e escrevem o mesmo conjunto de documentos (todo doc com `role == 'ADMIN'`),
+ * o Firestore detecta a sobreposição e força um retry da segunda transação,
+ * que então reconta corretamente e bloqueia. É por isso que a ordem virou
+ * Firestore-primeiro: a invariante só é atômica se a contagem e a escrita
+ * acontecem juntas, e só o Firestore (não o Firebase Auth) tem transação.
+ *
+ * Consequência dessa inversão: se o claim do Auth falhar depois do Firestore
+ * já ter sido gravado, o Firestore fica com a role nova mas a permissão real
+ * (JWT) continua com a antiga até alguém reconciliar — reportado como
+ * `ROLE_PARTIALLY_UPDATED`, nunca escondido atrás de um 500 genérico.
  *
  * Exportado separado do `router.put` pra permitir teste unitário isolado
  * (ver convenção em routes/leads.ts e routes/auth.ts).
@@ -43,14 +67,37 @@ export async function updateUserRoleHandler(req: Request, res: Response): Promis
   const userRef = db.collection('users').doc(uid);
 
   try {
-    const userSnap = await userRef.get();
-    if (!userSnap.exists) {
+    await db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) {
+        throw new UserNotFoundError();
+      }
+
+      const currentRole = userSnap.data()?.role;
+
+      if (currentRole === 'ADMIN' && role !== 'ADMIN') {
+        const adminsSnap = await tx.get(db.collection('users').where('role', '==', 'ADMIN'));
+        if (adminsSnap.size <= 1) {
+          throw new LastAdminProtectedError();
+        }
+      }
+
+      tx.update(userRef, { role });
+    });
+  } catch (error) {
+    if (error instanceof UserNotFoundError) {
       res.status(404).json({ error: 'USER_NOT_FOUND', message: 'Usuário não encontrado.' });
       return;
     }
-  } catch (error) {
-    console.error('Erro ao buscar usuário para atualização de role:', error);
-    res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Não foi possível verificar o usuário.' });
+    if (error instanceof LastAdminProtectedError) {
+      res.status(409).json({
+        error: 'LAST_ADMIN_PROTECTED',
+        message: 'Este é o único usuário com papel ADMIN no sistema. Promova outro usuário a ADMIN antes de rebaixar este.'
+      });
+      return;
+    }
+    console.error('Erro ao atualizar role no Firestore:', error);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Não foi possível atualizar o usuário.' });
     return;
   }
 
@@ -62,27 +109,11 @@ export async function updateUserRoleHandler(req: Request, res: Response): Promis
     const existingUser = await auth.getUser(uid);
     await auth.setCustomUserClaims(uid, { ...existingUser.customClaims, role });
   } catch (error: any) {
-    console.error('Erro ao definir custom claim de role:', error?.message || error);
-    if (error?.code === 'auth/user-not-found') {
-      // Doc existe no Firestore mas a conta do Firebase Auth não existe mais —
-      // inconsistência de dado, não um caso normal de "não encontrado".
-      res.status(404).json({
-        error: 'AUTH_USER_NOT_FOUND',
-        message: 'Existe um perfil no Firestore para este uid, mas nenhuma conta correspondente no Firebase Auth.'
-      });
-      return;
-    }
-    res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Não foi possível atualizar a permissão no Firebase Auth.' });
-    return;
-  }
-
-  try {
-    await userRef.update({ role });
-  } catch (error) {
-    console.error('Erro ao sincronizar role no Firestore após setCustomUserClaims:', error);
+    console.error('Erro ao definir custom claim de role após Firestore já atualizado:', error?.message || error);
+    const contaInexistente = error?.code === 'auth/user-not-found' ? ' (a conta não existe mais no Firebase Auth)' : '';
     res.status(500).json({
       error: 'ROLE_PARTIALLY_UPDATED',
-      message: `A permissão no Firebase Auth já foi alterada para "${role}", mas a atualização do documento /users/${uid} falhou. Os dois sistemas estão divergentes — reconciliar manualmente.`
+      message: `O documento /users/${uid} já foi atualizado para "${role}" no Firestore, mas a permissão real (custom claim do Firebase Auth) não foi alterada${contaInexistente}. Os dois sistemas estão divergentes — reconciliar manualmente.`
     });
     return;
   }
