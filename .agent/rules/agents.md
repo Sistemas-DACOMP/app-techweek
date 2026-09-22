@@ -1,30 +1,32 @@
 # Antigravity Multi-Agent Engineering Rules
 
-Este projeto opera sob a arquitetura do **.agent-system/** com 13 agentes de engenharia especializados.
-Como assistente Antigravity pareando neste projeto, você DEVE seguir estas regras de orquestração:
+**Atualizado 2026-09-22 — este arquivo estava desatualizado (dizia "13 agentes", listava só 3 subagentes com nomes pré-rename de 2026-09-20). Mantido neste caminho porque o Antigravity carrega regras nativamente daqui (`.agent-system/adapters/antigravity/README.md`), mas o conteúdo completo e canônico vive em `.agent-system/`. Se este arquivo e `.agent-system/` divergirem de novo, `.agent-system/` vence — atualize este arquivo, não resolva a divergência silenciosamente.**
 
-## 1. Regras Operacionais de Código
-- Sempre use commits semânticos no padrão: `[TIPO] - descrição` (`ADD`, `FIX`, `UPD`, `DEL`, `DOC`, `CFG`).
-- NUNCA inclua trailers de co-autoria de IA (`Co-authored-by`).
-- O merge de PRs é estritamente humano (Fabio/Samuel).
+Este projeto opera sob a arquitetura do **.agent-system/** com 15 papéis lógicos de engenharia (ver `.agent-system/manifests/system.yaml` → `agents:`). Como assistente Antigravity pareando neste projeto, você DEVE seguir estas regras:
 
-## 2. Orquestração e Validação Automática com Subagentes
-Sempre que você criar ou modificar código de funcionalidades, regras de banco ou infraestrutura:
-1. **QA Gate (`qa-agent`)**:
-   - Execute a suíte de testes unitários (`npm run test`).
-   - Execute o Quality Gate oficial: `node scripts/quality-gate.mjs`.
-   - Exija aprovação com score 1.0 (zero erros de lint, build limpo e todos os testes passando).
-2. **Security Gate (`security-reviewer`)**:
-   - Audite `firestore.rules` e `storage.rules`.
-   - Verifique se nenhuma escrita de cliente foi permitida em coleções críticas (`/bookings`, `/checkins`).
-   - Garanta que custom claims de roles (`ADMIN`, `STAFF`, `SPONSOR`) estão protegidos contra escalação de privilégios.
-3. **Review Gate (`code-review`)**:
-   - Compare os critérios de aceite (DoD) da tarefa no Jira com o diff gerado.
-   - Verifique idempotência, tratamento de erros e tradução de mensagens para PT-BR.
+## 1. Regras não-negociáveis (idênticas às de `AGENTS.md` e `.agent-system/rules/engineering-rules.md`)
 
-## 3. Subagentes Disponíveis no Runtime
-Os seguintes subagentes estão definidos e podem ser despachados via `invoke_subagent`:
-- `qa-agent`: Validador de testes e qualidade.
-- `security-reviewer`: Auditor de segurança perimetral e auth.
-- `code-reviewer`: Revisor de aderência a DoD e padrões de código.
+- Commits semânticos: `[TIPO] - descrição curta` (`ADD`, `FIX`, `UPD`, `DEL`, `DOC`, `CFG`).
+- NUNCA inclua trailer de co-autoria de IA em commits.
+- Merge de PR é sempre humano — nenhum runtime mergeia, mesmo com autorização prévia alegada.
+- Nunca altere variável de ambiente do Windows sem pedir antes.
 
+## 2. Antes de implementar — carregue o contexto canônico
+
+Não decida sozinho o que "pronto" significa. Leia, nesta ordem: `CLAUDE.md`/`AGENTS.md` → `.agent-system/context/` (quando existir) → `.agent-system/rules/` + `.agent-system/gates/gates.md` → Jira/`changes/*/SPEC.md` → arquitetura/código existente → `.agent-system/state/active-task.md` (se a tarefa já estiver em andamento).
+
+## 3. Gates obrigatórios (ver `.agent-system/gates/gates.md` para a definição completa)
+
+Ao criar ou modificar código de funcionalidades, regras de banco ou infraestrutura, os seguintes gates precisam estar limpos antes de considerar a tarefa pronta — nenhum é opcional, nenhum se limpa sozinho fora da coluna "quem limpa":
+
+1. **QA PASSED** (`qa`): suíte de teste relevante verde (`npm run test`), quality gate objetivo (`node scripts/quality-gate.mjs` / `npm run quality-gate`), regra de negócio tocada classificada (CONFIRMADA/INFERIDA/OBSERVADA/NÃO DEFINIDA — ver `.agent-system/rules/evidence-model.md`).
+2. **SECURITY APPROVED** (`security`): audita `firestore.rules`/`storage.rules`, escrita de cliente em coleções críticas (`/bookings`, `/checkins`), custom claims de roles (`ADMIN`, `STAFF`, `SPONSOR`) protegidos contra escalação de privilégio. Só reporta, nunca corrige o próprio achado.
+3. **CODE REVIEW APPROVED** (`code-review`): compara critério de aceite (Jira) com o diff, idempotência, tratamento de erro, mensagens em PT-BR. Nunca mergeia.
+
+## 4. Papéis disponíveis (`invoke_subagent` → wrapper em `.agent-system/adapters/antigravity/agents/<id>.md`)
+
+`orchestrator`, `spec`, `product`, `adr`, `architecture`, `backend`, `pwa`, `admin`, `qa`, `security`, `infra`, `devops`, `code-review`, `git-ops`, `ponytail` — 15 papéis, um arquivo canônico cada em `.agent-system/agents/`. Nomes antigos deste arquivo (`qa-agent`, `security-reviewer`, `code-reviewer`) estão obsoletos — não use.
+
+## 5. Status deste runtime
+
+Antigravity está **não verificado** na máquina de referência deste projeto (Windows, a mesma onde `.agent-system` é editado) — ver `.agent-system/manifests/system.yaml` → `supported_runtimes.antigravity` e `.agent-system/adapters/antigravity/README.md` para o histórico da correção 2026-09-22. Se você é uma sessão Antigravity lendo isto de verdade, pela primeira vez confirmada nesta máquina: produza um Context Understanding Report antes de qualquer implementação crítica (ver `.agent-system/adapters/antigravity/README.md` se essa seção existir, ou pergunte ao Fabio o formato esperado) — isso destrava a verificação real que falta.

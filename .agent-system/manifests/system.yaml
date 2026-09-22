@@ -11,12 +11,48 @@ supported_runtimes:
     status: native
     adapter: .agent-system/adapters/claude/
   - id: antigravity
-    status: adapter_partial
+    status: verified_headless_print_mode
     adapter: .agent-system/adapters/antigravity/
     note: >
-      Not installed locally, adapter unverified end-to-end. Superpowers ships a
-      working reference (references/antigravity-tools.md), notably: Antigravity
-      has no todo/checklist tool, use write_to_file task artifacts.
+      REAL END-TO-END TASK COMPLETED 2026-09-22 on the reference machine (Fabio's own, per
+      ADR-003) — `agy --dangerously-skip-permissions --mode accept-edits --print="..."` was
+      given a read-then-write task (read AGENTS.md + .agent-system/context/* +
+      state/active-task.md, then write a Context Understanding Report to a new file). It
+      correctly read all named files, correctly synthesized project/architecture/current-task/
+      business-rules/risks/decisions, and independently surfaced the same two open questions
+      already tracked in state/blockers.md — real comprehension, not an echo. Output file:
+      .agent-system/state/antigravity-context-report-2026-09-22.md. Caveats: `--mode plan`
+      hangs in headless/print mode (its plan-approval UI has no headless equivalent, print
+      times out waiting for it) — use `--mode accept-edits` for unattended runs.
+      `--dangerously-skip-permissions` was required (default headless mode denies file access
+      with no prompt) — Fabio explicitly authorized this flag for Antigravity testing going
+      forward (2026-09-22, standing authorization, not a one-time exception). Untested:
+      interactive (non-print) session behavior, and whether normal permission prompts work
+      there without the skip flag. Earlier history for context (do not repeat either mistake):
+      CORRECTED TWICE in one day (2026-09-22) — record both corrections so the
+      next reader doesn't repeat either mistake. First correction: a claim
+      that Antigravity was "verified & operational" (2026-09-21) came from a
+      friend's separate macOS machine, not Fabio's; per Fabio's decision, only
+      his own machine is the reference, so that result doesn't count here.
+      Second correction, same day: it turned out the `agy` CLI IS actually
+      installed on Fabio's own machine (v1.2.7, `C:\Users\fabio\AppData\Local\agy\bin\agy`)
+      — confirmed live via `agy --version` and `agy agents`. So "not installed"
+      was also wrong. Real, current status: CLI present and responds
+      (`agy agents` lists only a built-in `flutter_a11y_agent` — no static
+      discovery of this project's `.agent-system/adapters/antigravity/agents/`
+      wrappers, unlike Claude Code's `.claude/agents/`). A live read-only test
+      (`agy --mode plan --print=...`) was attempted and blocked by Antigravity's
+      own headless-mode permission model: "a tool required the read_file
+      permission that headless mode cannot prompt for, so it was auto-denied
+      ... re-run with --dangerously-skip-permissions to auto-approve all tools."
+      That flag was deliberately NOT used (blanket auto-approve on an
+      unfamiliar tool against this repo is not a call to make without asking
+      Fabio first). So: CLI confirmed functional, but no successful end-to-end
+      task run yet — status is "present, not exercised," not "verified" and
+      not "not installed." See state/blockers.md for the exact unblock step.
+      Superpowers ships a working reference (references/antigravity-tools.md),
+      notably: Antigravity has no todo/checklist tool, use write_to_file task
+      artifacts.
 
 # Dropped 2026-09-22 (Fabio's explicit decision): Codex and GitHub Copilot support.
 # Codex only ever had a README documenting what wasn't built (no real per-agent
@@ -27,17 +63,23 @@ supported_runtimes:
 # documented gap) between just these two, not four.
 
 project_context:
-  status: TRANSITIONAL
+  status: MIGRATED_IN_PLACE
   note: >
-    Old repo (this repo, app-techweek, React+Vite+Supabase) is DISCARDED per
-    Fabio's decision (2026-09-20) — it no longer represents the product.
-    New target architecture (Firebase/GCP, 3 repos: apps/pwa, apps/admin-web,
-    backend/) is decided (see Update System/arquitetura-montanha-v2.md at the
-    App_TechWeek parent folder) but NOT YET SCAFFOLDED as of this system's
-    creation date. This .agent-system currently lives inside the old repo
-    because it is the only git repo that exists — it is designed to be copied
-    into each of the 3 new repos once they are created (see
-    .agent-system/docs/bootstrap.md).
+    STALE NOTE CORRECTED 2026-09-22. The Supabase-era description below was
+    accurate on 2026-09-20 (this system's creation date) but the migration
+    that followed did NOT happen the way this note predicted: Firebase/GCP
+    code landed IN THIS SAME REPO (src/ + backend/), not in 3 new split repos.
+    `apps/pwa/` and `apps/admin-web/` do not exist as separate folders or
+    repos anywhere under C:\Users\fabio\App_TechWeek\ (re-confirmed
+    2026-09-22). Current reality: `src/` is the PWA (100% Firebase, zero
+    Supabase imports, confirmed by grep), `backend/` is the Express+TS Cloud
+    Function 2nd-gen (`us-east1`, 256MiB). No admin console exists in any
+    form yet. Whether the 3-repo split (`apps/pwa`, `apps/admin-web`,
+    `backend/`) is still a live future target or was quietly superseded by
+    the in-place layout is UNDEFINED — `Update System/arquitetura-montanha-v2.md`
+    (parent folder, not versioned in this repo) was never confirmed updated
+    or retired. Ask Fabio before assuming either way; don't plan a repo split
+    on this note's authority alone.
   firebase_tooling_gap: >
     Update 2026-09-20 (later same day): firebase CLI installed (15.30.2).
     gcloud CLI still NOT installed — direct GCP API/IAM/Cloud Build work stays
@@ -64,6 +106,17 @@ agents:
   - devops     # added 2026-09-22 — CI/CD pipeline, build script and release-flow specialist
   - adr
   - ponytail   # see agents/ponytail.md — installed for real 2026-09-20, portable: true
+
+connectors:
+  - id: maestri
+    status: not_installed
+    adapter: .agent-system/adapters/maestri/
+    note: >
+      Coordination/canvas layer only (themaestri.app), never a source of
+      canonical knowledge — that stays in .agent-system/. No CLI/API, GUI-only
+      desktop app, so install+configure is a human action. See
+      adapters/maestri/README.md for the exact steps and state/blockers.md
+      for what's blocking it. Added 2026-09-22, per Fabio's request.
 
 plugins:
   - id: superpowers
