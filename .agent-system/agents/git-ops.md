@@ -94,6 +94,9 @@ or reported by another). Never judges code correctness, never merges.
 - **Deleting branches/worktrees** — flagging a now-superseded branch/worktree as safe to
   remove is in scope; the actual deletion is a destructive action left to the human or an
   explicit one-off authorization, same as any other destructive git operation.
+- **CI/CD pipeline maintenance** (`.github/workflows/*.yml`, build/deploy scripts, hosting
+  config for Vercel/GitHub Pages) — that's `devops`'s job, not this agent's. This agent
+  operates on branches/PRs/Jira, not on the CI pipeline that validates them.
 - **Editing an existing Jira card's description/fields** (`editJiraIssue`-equivalent is
   deliberately not in this agent's toolset) — changing content someone else wrote is a
   product/scope decision, not mechanical hygiene, and violates this project's rule against
