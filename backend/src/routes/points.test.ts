@@ -10,6 +10,7 @@ vi.mock('../config/firebaseAdmin', () => ({
 
 import router from './points';
 import { db } from '../config/firebaseAdmin';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -33,6 +34,17 @@ function getClaimHandler() {
 }
 
 const handler = getClaimHandler();
+
+// KAN-75: prova que o rate limiter está montado na rota real (não só que a
+// função do limiter funciona isolada, ver rateLimiter.test.ts).
+it('KAN-75: participantActionLimiter está montado na rota real, antes do handler final', () => {
+  const layer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/claim'
+  );
+  const handles = layer.route.stack.map((l: any) => l.handle);
+  expect(handles).toContain(participantActionLimiter);
+  expect(handles.indexOf(participantActionLimiter)).toBeLessThan(handles.length - 1);
+});
 
 function makeTx(snaps: { eventSnap: any; userSnap: any; missionSnap?: any }) {
   const { eventSnap, userSnap, missionSnap = { exists: true, data: () => ({ points: 50 }) } } = snaps;

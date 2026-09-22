@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import { db } from '../config/firebaseAdmin';
 import { requireAuth } from '../middlewares/authMiddleware';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 import { resolveAttendanceMode } from '../lib/attendanceMode';
 
@@ -15,7 +16,7 @@ const router = Router();
 // faz no client, mas o client sozinho não é confiável nessa arquitetura
 // (REG-SCANNER-001 / KAN-71). Também garante que o mesmo usuário não credita
 // pontos duas vezes pra mesma palestra (dedup via id determinístico do doc).
-router.post('/:activityId/checkin', requireAuth, async (req: Request, res: Response) => {
+router.post('/:activityId/checkin', requireAuth, participantActionLimiter, async (req: Request, res: Response) => {
   const { activityId } = req.params;
   const { lectureId, rating } = req.body ?? {};
   const uid = req.user!.uid;

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
 import { requireAuth } from '../middlewares/authMiddleware';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { registerUser, RegisterProfileData } from '../services/registerUser';
 
 const router = Router();
@@ -79,6 +80,6 @@ export async function registerHandler(req: Request, res: Response): Promise<void
   }
 }
 
-router.post('/register', requireAuth, registerHandler);
+router.post('/register', requireAuth, participantActionLimiter, registerHandler);
 
 export default router;
