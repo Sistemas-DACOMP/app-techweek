@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import { db, auth } from '../config/firebaseAdmin';
 import { requireAuth, requireRole } from '../middlewares/authMiddleware';
+import { adminBroadcastLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 import { UserRole } from '../types/express';
 
@@ -210,6 +211,6 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
 }
 
 // POST /api/admin/notifications/broadcast - apenas ADMIN dispara aviso global (KAN-61).
-router.post('/notifications/broadcast', requireAuth, requireRole(['ADMIN']), broadcastNotificationHandler);
+router.post('/notifications/broadcast', requireAuth, requireRole(['ADMIN']), adminBroadcastLimiter, broadcastNotificationHandler);
 
 export default router;

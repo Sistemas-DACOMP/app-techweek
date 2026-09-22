@@ -10,6 +10,7 @@ vi.mock('../config/firebaseAdmin', () => ({
 
 import router from './checkin';
 import { db } from '../config/firebaseAdmin';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -33,6 +34,18 @@ function getCheckinHandler() {
 }
 
 const handler = getCheckinHandler();
+
+// KAN-75 (achado do security review): prova que o rate limiter está de fato
+// montado na rota real, não só que a função do limiter funciona isolada —
+// um refactor que reordenasse os middlewares não quebraria nenhum outro teste.
+it('KAN-75: participantActionLimiter está montado na rota real, antes do handler final', () => {
+  const layer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/:activityId/checkin'
+  );
+  const handles = layer.route.stack.map((l: any) => l.handle);
+  expect(handles).toContain(participantActionLimiter);
+  expect(handles.indexOf(participantActionLimiter)).toBeLessThan(handles.length - 1);
+});
 
 describe('POST /:activityId/checkin — validação de activityId (KAN-49 security review, achado HIGH aplicado aqui também)', () => {
   beforeEach(() => {

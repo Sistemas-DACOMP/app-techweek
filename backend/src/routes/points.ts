@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import { db } from '../config/firebaseAdmin';
 import { requireAuth } from '../middlewares/authMiddleware';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 
 const router = Router();
@@ -44,7 +45,7 @@ function resolveMissionId(eventType: string, referenceId: string): string {
 // /missions/{missionId}, que só ADMIN escreve (ver firestore.rules) — um
 // client não consegue mais inflar o próprio totalPoints inventando um
 // `points` alto numa chamada direta à API.
-router.post('/claim', requireAuth, async (req: Request, res: Response) => {
+router.post('/claim', requireAuth, participantActionLimiter, async (req: Request, res: Response) => {
   const { eventType, referenceId, metadata } = req.body ?? {};
   const uid = req.user!.uid;
 

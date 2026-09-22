@@ -28,6 +28,7 @@ vi.mock('firebase-admin', async (importOriginal) => {
 import router, { updateUserRoleHandler, broadcastNotificationHandler } from './admin';
 import { db, auth } from '../config/firebaseAdmin';
 import * as admin from 'firebase-admin';
+import { adminBroadcastLimiter } from '../middlewares/rateLimiter';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -82,6 +83,17 @@ const [, broadcastRoleHandler] = getBroadcastChain();
 function makeBroadcastReq(body: any = {}, user: any = { uid: 'admin-1', role: 'ADMIN' }) {
   return { body, user } as unknown as Request;
 }
+
+// KAN-75: prova que o rate limiter está montado na rota real, DEPOIS do
+// requireRole (não gasta cota de rate limit de quem já seria rejeitado por
+// 403) e antes do handler final.
+it('KAN-75: adminBroadcastLimiter está montado na rota real, depois de requireRole e antes do handler final', () => {
+  const handles = getBroadcastChain();
+  const roleIndex = handles.indexOf(broadcastRoleHandler);
+  const limiterIndex = handles.indexOf(adminBroadcastLimiter);
+  expect(limiterIndex).toBeGreaterThan(roleIndex);
+  expect(limiterIndex).toBeLessThan(handles.length - 1);
+});
 
 describe('PUT /api/admin/users/:uid/role (KAN-60, KAN-81)', () => {
   let userSnap: any;
