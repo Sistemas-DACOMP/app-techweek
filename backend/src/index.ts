@@ -10,6 +10,7 @@ import leadsRouter from './routes/leads';
 import screenTokenRouter from './routes/screenToken';
 import checkinDoubleCheckRouter from './routes/checkinDoubleCheck';
 import pointsRouter from './routes/points';
+import adminRouter from './routes/admin';
 
 const app = express();
 
@@ -68,6 +69,9 @@ app.use('/api/leads', leadsRouter);
 // Crédito de pontos de missão/desafio via backend (KAN-79 — client não pode
 // mais escrever totalPoints direto no Firestore desde o fix do SEC-003)
 app.use('/api/points', pointsRouter);
+
+// Gestão de papéis de usuário por ADMIN (KAN-60) — PUT /api/admin/users/:uid/role
+app.use('/api/admin', adminRouter);
 
 // Exporta a Cloud Function 2nd Gen na região us-east1 (Free Tier)
 export const api = onRequest(
