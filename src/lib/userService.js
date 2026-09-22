@@ -7,10 +7,9 @@ import {
   getDocs, 
   query, 
   where, 
-  orderBy, 
-  limit, 
-  increment, 
-  serverTimestamp 
+  orderBy,
+  limit,
+  serverTimestamp
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updateProfile, updateEmail } from 'firebase/auth';
@@ -224,42 +223,6 @@ export async function getUserPointEvents(uid) {
     console.warn('Erro ao buscar point_events:', err);
     return [];
   }
-}
-
-/**
- * Adiciona um evento de pontos para o usuário e incrementa totalPoints.
- * Usa um ID de documento determinístico para evitar pontuação duplicada.
- */
-export async function addUserPointEvent(uid, { eventType, referenceId, points, metadata = null }) {
-  if (!uid) throw new Error('UID é obrigatório para registrar pontos.');
-  
-  const safeRefId = String(referenceId).replace(/[^a-zA-Z0-9_-]/g, '_');
-  const eventDocId = `${eventType}_${safeRefId}`;
-  const eventRef = doc(db, 'users', uid, 'point_events', eventDocId);
-  const userRef = doc(db, 'users', uid);
-
-  // Verifica se o evento já foi resgatado
-  const existingDoc = await getDoc(eventRef);
-  if (existingDoc.exists()) {
-    return { success: false, alreadyClaimed: true };
-  }
-
-  const now = serverTimestamp();
-  await setDoc(eventRef, {
-    eventType,
-    referenceId,
-    points: Number(points) || 0,
-    metadata,
-    createdAt: now
-  });
-
-  // Incrementa os pontos no perfil do usuário
-  await updateDoc(userRef, {
-    totalPoints: increment(Number(points) || 0),
-    updatedAt: now
-  });
-
-  return { success: true };
 }
 
 /**

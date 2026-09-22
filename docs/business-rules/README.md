@@ -47,7 +47,7 @@ Regra pra evitar isso se repetir: todo teste novo que documentar uma regra de ne
 |---|---|---|---|
 | [REG-POINT-001](REG-POINT-001-dedup-point-events.md) | Dedup de `point_events` | OBSERVADA | implementado |
 | [REG-RANK-001](REG-RANK-001-ranking-tiebreak.md) | Critério de tie-break do ranking | OBSERVADA | implementado |
-| [REG-AUTH-001](REG-AUTH-001-senha-fraca-cadastro.md) | Validação de senha fraca no cadastro | INFERIDA | gap — KAN-27 |
+| [REG-AUTH-001](REG-AUTH-001-senha-fraca-cadastro.md) | Validação de senha fraca no cadastro | CONFIRMADA | implementado — KAN-27 |
 | [REG-AUTH-002](REG-AUTH-002-senha-confirmacao-identica.md) | Senha e confirmação idênticas no cadastro | OBSERVADA | implementado |
 | [REG-AUTH-003](REG-AUTH-003-status-pos-cadastro.md) | Status pós-cadastro (anti-enumeração / rate limit) | CONFIRMADA | implementado |
 | [REG-LGPD-001](REG-LGPD-001-aceite-lgpd-backend.md) | Aceite de LGPD exigido pelo backend (Firebase) | CONFIRMADA | implementado — KAN-72 |

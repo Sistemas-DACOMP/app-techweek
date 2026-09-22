@@ -17,12 +17,15 @@ There is no `@import`-style mechanism confirmed to work inside an agent or skill
 |---|---|
 | `orchestrator.md` | `.claude/skills/dev-workflows/SKILL.md` |
 | `qa.md` | `.claude/skills/qa-agent/SKILL.md` |
-| `security.md` | `.claude/agents/security-reviewer.md` |
-| `code-review.md` | `.claude/agents/pr-review.md` + `.claude/agents/dedup-refactor.md` |
+| `security.md` | `.claude/agents/security.md` |
+| `code-review.md` | `.claude/agents/code-review.md` |
+| `git-ops.md` | `.claude/agents/git-ops.md` — added 2026-09-21, mechanical git/Jira-ops layer under `code-review`; see that agent file's "Out of scope" for the exact boundary. |
 | `spec.md`, `product.md`, `architecture.md`, `backend.md`, `pwa.md`, `admin.md`, `infra.md`, `adr.md` | `.claude/agents/spec.md`, `product.md`, `architecture.md`, `backend.md`, `pwa.md`, `admin.md`, `infra.md`, `adr.md` — gap closed 2026-09-20, per Fabio's explicit requirement that agents dispatch automatically instead of needing to be called by name. |
 | `ponytail.md` | no wrapper file — Ponytail is a real installed Claude Code plugin (`ponytail@ponytail`, v4.10.0), its own 6 skills load automatically once the plugin is enabled. A `.claude/agents/ponytail.md` would only duplicate/drift from the plugin's own skills. |
 
-All 13 canonical agents now have either a real `.claude/` dispatch file or (Ponytail) a real installed plugin — every one auto-dispatches in Claude Code without the user asking for it by name. The files in the right-hand column are kept in sync by whoever edits the canonical file; this adapter README only documents the mapping and the sync convention, it does not itself edit those files.
+**Correction (2026-09-21):** the `security.md`/`code-review.md` rows above previously pointed at the pre-rename filenames (`security-reviewer.md`, `pr-review.md` + `dedup-refactor.md`) — those files were renamed 2026-09-20 to match the canonical names 1:1, but this README wasn't updated at the time. Fixed now; if you find another stale filename reference elsewhere in this repo, it's the same drift, not a new bug.
+
+All 14 canonical agents now have either a real `.claude/` dispatch file or (Ponytail) a real installed plugin — every one auto-dispatches in Claude Code without the user asking for it by name. The files in the right-hand column are kept in sync by whoever edits the canonical file; this adapter README only documents the mapping and the sync convention, it does not itself edit those files.
 
 ## Sync convention
 
@@ -44,4 +47,4 @@ All 13 canonical agents now have either a real `.claude/` dispatch file or (Pony
 - **Automation hooks** — `settings.json`-configured hooks (`PreToolUse`, `SessionStart`, `UserPromptSubmit`, etc.); this project already uses one for `rtk`'s transparent bash-command rewriting.
 - **MCP integrations beyond the above** — Supabase homolog project tools (`mcp__supabase-homolog__*`), plus a large set of `claude.ai`-hosted connectors (Notion, Slack, Figma, Asana, Box, Canva, HubSpot, Intercom, Linear, Microsoft 365, monday.com, GitBook, Claude Docs) that are account-level, not project-specific, and not currently wired into this project's workflows.
 
-No other runtime in this system (Codex, Antigravity) is confirmed to have MCP servers configured — MCP server availability is Claude-Code-session-side config per `.agent-system/docs/CONVENTIONS.md`, not a property of the project itself.
+No other runtime in this system (Antigravity) is confirmed to have MCP servers configured — MCP server availability is Claude-Code-session-side config per `.agent-system/docs/CONVENTIONS.md`, not a property of the project itself.

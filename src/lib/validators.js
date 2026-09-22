@@ -1,9 +1,8 @@
 // Regras de negocio do cadastro/perfil, isoladas em funcoes puras pra poder
-// testar sem precisar renderizar componente nem chamar o Supabase.
+// testar sem precisar renderizar componente nem chamar o Firebase Auth.
 
-// REG-C2 (KAN-27, ainda nao aplicada em Register.jsx): Supabase recusa
-// senha com menos de 6 caracteres. Este valor espelha o minimo real do
-// projeto Supabase, nao um numero arbitrario.
+// REG-C2 (KAN-27): Firebase Auth recusa senha com menos de 6 caracteres.
+// Este valor espelha o minimo real do Firebase Auth, nao um numero arbitrario.
 export const MIN_PASSWORD_LENGTH = 6;
 
 export function passwordsMatch(password, confirmPassword) {

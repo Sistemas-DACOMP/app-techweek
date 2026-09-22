@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
 import { requireAuth } from '../middlewares/authMiddleware';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 
 const router = Router();
@@ -12,7 +13,7 @@ const router = Router();
 // checagem de vaga é a única regra de acesso que importa aqui. bookingId
 // determinístico ({uid}_{activityId}, mesmo padrão de checkin.ts) permite
 // checar duplicidade dentro da própria transação, sem query extra.
-router.post('/:activityId/reserve', requireAuth, async (req: Request, res: Response) => {
+router.post('/:activityId/reserve', requireAuth, participantActionLimiter, async (req: Request, res: Response) => {
   const { activityId } = req.params;
   const uid = req.user!.uid;
 
@@ -25,6 +26,13 @@ router.post('/:activityId/reserve', requireAuth, async (req: Request, res: Respo
   const bookingRef = db.collection('bookings').doc(`${uid}_${activityId}`);
 
   try {
+    // maxAttempts: 25 (default do SDK é 5). Achado no teste de carga do
+    // KAN-53: com 50 requisições concorrentes disputando o MESMO doc de
+    // atividade, boa parte estourava o default de tentativas e voltava 500
+    // pro participante — mesmo sem overbooking nenhum (a trava de vagas
+    // sempre segurou), a experiência era ruim pra quem não é dos primeiros a
+    // chegar. Mais tentativas custa só round-trips extras num contexto de
+    // pico curto (evento com 1 clique só por sala), não risco de segurança.
     const result = await db.runTransaction(async (tx) => {
       // Idempotência checada antes de tudo: se o booking já existe, a
       // atividade pode até ter mudado de estado depois — não importa,
@@ -92,7 +100,7 @@ router.post('/:activityId/reserve', requireAuth, async (req: Request, res: Respo
       });
 
       return { status: 200 as const, body: { status: 'WAITING_LIST', position: waitingPosition } };
-    });
+    }, { maxAttempts: 25 });
 
     res.status(result.status).json(result.body);
   } catch (error) {

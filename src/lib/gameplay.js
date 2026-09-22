@@ -1,13 +1,13 @@
 import { auth, db, storage } from './firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { 
-  getUserProfile, 
-  uploadUserAvatar, 
-  updateUserProfile, 
-  getUserPointEvents, 
-  addUserPointEvent, 
-  getLeaderboardUsers 
+import { apiRequest } from './api';
+import {
+  getUserProfile,
+  uploadUserAvatar,
+  updateUserProfile,
+  getUserPointEvents,
+  getLeaderboardUsers
 } from './userService';
 
 export async function getMyProfile() {
@@ -140,10 +140,15 @@ export async function getMyPointEvents() {
   const localEvents = getLocalPointEvents(user.uid);
   let firestoreEvents = [];
 
+  // Duas fontes reais e complementares, não uma fallback da outra: missões/
+  // desafios vivem em users/{uid}/point_events (KAN-79, POST /api/points/claim),
+  // presença de palestra vive em pointEvents/{uid}_lecture_attendance_{id}
+  // (KAN-71, POST /api/activities/:id/checkin) - um usuário com missão completa
+  // não pode perder a presença do histórico, e vice-versa.
   try {
     const fsEvents = await getUserPointEvents(user.uid);
     if (fsEvents && fsEvents.length > 0) {
-      firestoreEvents = fsEvents.map(e => ({
+      firestoreEvents.push(...fsEvents.map(e => ({
         id: e.id,
         event_type: e.eventType || e.event_type,
         reference_id: e.referenceId || e.reference_id,
@@ -151,25 +156,23 @@ export async function getMyPointEvents() {
         metadata: e.metadata || null,
         created_at: e.createdAt || e.created_at,
         ...e
-      }));
+      })));
     }
   } catch (_e) {}
 
-  if (firestoreEvents.length === 0) {
-    try {
-      const { collection, getDocs, query, where } = await import('firebase/firestore');
-      const q = query(collection(db, 'pointEvents'), where('userId', '==', user.uid));
-      const snapshot = await getDocs(q);
-      firestoreEvents = snapshot.docs.map(d => ({
-        id: d.id,
-        event_type: d.data().eventType || d.data().event_type,
-        reference_id: d.data().referenceId || d.data().reference_id,
-        points: d.data().points || 0,
-        metadata: d.data().metadata || null,
-        ...d.data(),
-      }));
-    } catch (_e) {}
-  }
+  try {
+    const { collection, getDocs, query, where } = await import('firebase/firestore');
+    const q = query(collection(db, 'pointEvents'), where('userId', '==', user.uid));
+    const snapshot = await getDocs(q);
+    firestoreEvents.push(...snapshot.docs.map(d => ({
+      id: d.id,
+      event_type: d.data().eventType || d.data().event_type,
+      reference_id: d.data().referenceId || d.data().reference_id,
+      points: d.data().points || 0,
+      metadata: d.data().metadata || null,
+      ...d.data(),
+    })));
+  } catch (_e) {}
 
   // Une os eventos do Firestore e do localStorage sem duplicar por reference_id
   const merged = [...firestoreEvents];
@@ -186,8 +189,11 @@ export async function getMyPointEvents() {
   return merged;
 }
 
-// Registra um evento de pontos. Retorna { success: true } ou
-// { success: false } se a ação já tinha sido feita antes.
+// Registra um evento de pontos via backend (KAN-79). O client não pode mais
+// gravar totalPoints direto no Firestore (bloqueado desde o fix do SEC-003,
+// KAN-69) — a escrita direta falhava em silêncio e mentia sucesso. O backend
+// (POST /api/points/claim) credita totalPoints com FieldValue.increment numa
+// transação, com o mesmo dedup por doc id determinístico que o client já usava.
 export async function addPointEvent({ eventType, referenceId, points, metadata = null }) {
   const firebaseUser = auth?.currentUser;
   if (!firebaseUser) {
@@ -210,39 +216,18 @@ export async function addPointEvent({ eventType, referenceId, points, metadata =
   saveLocalPointEvent(user.uid, localEvent);
 
   try {
-    const fsRes = await addUserPointEvent(user.uid, { eventType, referenceId, points, metadata });
-    if (fsRes && fsRes.success !== undefined) {
-      return fsRes;
-    }
-  } catch (_e) {}
-
-  try {
-    const { collection, addDoc, getDocs, query, where, serverTimestamp } = await import('firebase/firestore');
-    const q = query(
-      collection(db, 'pointEvents'),
-      where('userId', '==', user.uid),
-      where('eventType', '==', eventType),
-      where('referenceId', '==', referenceId)
-    );
-    const existing = await getDocs(q);
-    if (!existing.empty) {
-      return { success: false };
-    }
-
-    await addDoc(collection(db, 'pointEvents'), {
-      userId: user.uid,
-      user_id: user.uid,
-      eventType,
-      event_type: eventType,
-      referenceId,
-      reference_id: referenceId,
-      points,
-      metadata,
-      createdAt: serverTimestamp(),
+    const data = await apiRequest('/points/claim', {
+      method: 'POST',
+      body: JSON.stringify({ eventType, referenceId, points, metadata })
     });
-    return { success: true };
-  } catch (_err) {
-    return { success: true };
+    return data;
+  } catch (err) {
+    if (err.status === 409 || err.data?.alreadyClaimed) {
+      return { success: false, alreadyClaimed: true };
+    }
+    // Falha real (rede indisponível, backend fora do ar) precisa aparecer
+    // como falha real — nunca mais mascarar como sucesso aqui.
+    return { success: false, error: err.message || 'Não foi possível registrar os pontos.' };
   }
 }
 

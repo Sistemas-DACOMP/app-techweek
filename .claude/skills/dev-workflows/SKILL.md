@@ -32,12 +32,17 @@ Nunca substitua silenciosamente uma regra persistida por uma interpretação sua
 | requisito ambíguo, regra de negócio não classificada | delega para `spec`/`product` antes de implementar |
 | mudança toca `firebase.json`/`firestore.rules`/`storage.rules`/deploy | delega para `infra` |
 | decisão técnica real acabou de ser tomada | delega para `adr` registrar |
+| PR/branch desatualizada ou conflitante em relação à base, PR fechada sem merge com branch deletada | delega para `git-ops` — reconstrói antes de `code-review` começar a analisar |
+| status do Jira não bate com PR/branch real, card duplicado, issue tipo Bug fora da coluna certa, card sem link de bloqueio óbvio | delega para `git-ops` |
+| falha de CI (`.github/workflows/*.yml`), quality gate quebrando no pipeline, config de deploy/hospedagem (Vercel/GitHub Pages) | delega para `devops` |
 
 ## Agentes disponíveis e quando delegar
 
 - **qa** (agent, `.claude/agents/qa.md`) — regras de negócio, planejamento e execução de testes em todas as camadas. Metodologia completa também vive na skill `qa-agent` (`.claude/skills/qa-agent/SKILL.md`).
-- **code-review** (agent) — análise/correção/revalidação/preparação de PR. Fases não se misturam. Os critérios de análise dele (consistência arquitetural, regressão, cobertura de teste, regra de negócio) também são o que se usa na etapa "revisar" do FEATURE/BUGFIX abaixo, antes mesmo de existir um PR. Também roda análise de duplicação (DRY), mas só quando pedido explicitamente — não faz parte do fluxo automático de feature/bugfix.
+- **code-review** (agent) — análise/correção/revalidação/preparação de PR. Fases não se misturam. Os critérios de análise dele (consistência arquitetural, regressão, cobertura de teste, regra de negócio) também são o que se usa na etapa "revisar" do FEATURE/BUGFIX abaixo, antes mesmo de existir um PR. Também roda análise de duplicação (DRY), mas só quando pedido explicitamente — não faz parte do fluxo automático de feature/bugfix. Nunca faz cirurgia de git (nunca reconstrói branch, nunca dá push) — se achar conflito ou branch desatualizada durante a análise, repassa pro `git-ops` em vez de tentar resolver.
 - **security** (agent) — revisão de segurança independente, só reporta, não corrige.
+- **git-ops** (agent, `.agent-system/agents/git-ops.md`) — camada mecânica de git/Jira que fica embaixo do `code-review`, nunca no lugar dele. Reconstrói branch órfã/desatualizada/conflitante (identifica os commits reais da PR, ignora ruído de squash-merge, cherry-pick, push, abre PR de substituição dando crédito ao autor original), corrige status do Jira que não bate com estado real verificado via `gh`, liga duplicata, cria link de bloqueio, garante issue tipo Bug na coluna certa. Só resolve conflito **mecânico** (import, config aditiva, registro de rota) — conflito que exige julgar lógica de negócio vira handoff pro `code-review`. Nunca mexe em branch protection/config de repositório (sempre pedido explícito separado), nunca mergeia, nunca julga corretude de código. Nunca mexe em CI/CD (isso é `devops`).
+- **devops** (agent, `.agent-system/agents/devops.md`) — pipelines de CI/CD (`.github/workflows/*.yml`), scripts de build (`quality-gate.mjs`), config de hospedagem (Vercel/GitHub Pages, secrets/variáveis), gestão do fluxo de release entre `develop`/`homolog`/`main`. Nunca mexe em Firebase/Firestore (handoff pro `infra`), nunca resolve lógica de negócio ou UI que quebra o build (handoff pro `backend`/`pwa`/`admin`), nunca altera branch protection sem permissão explícita, nunca faz cirurgia de branch/PR/Jira (isso é `git-ops`).
 
 Agentes abaixo vieram da expansão do sistema portável (`.agent-system/agents/`, 2026-09-20) — despache-os sozinho, sem esperar o usuário pedir por nome, sempre que a situação bater:
 
@@ -53,12 +58,15 @@ Agentes abaixo vieram da expansão do sistema portável (`.agent-system/agents/`
 
 Não crie ou chame agente novo para cada tool — tools são capacidades (ler, editar, rodar lint/build/test, consultar git/PR/Jira), agentes são responsabilidades distintas de raciocínio.
 
-**Padrão daqui pra frente**: toda vez que um agente/skill novo for adicionado a este projeto, ele precisa de equivalente (ou gap documentado) em `AGENTS.md` (Codex/Antigravity) e `.github/copilot-instructions.md` (Copilot) além do arquivo aqui em `.claude/` — não é opcional, é requisito do Fabio (2026-09-20).
+**Padrão daqui pra frente**: toda vez que um agente/skill novo for adicionado a este projeto, ele precisa de equivalente (ou gap documentado) em `.agent-system/adapters/antigravity/agents/<id>.md` além do arquivo aqui em `.claude/` — não é opcional, é requisito do Fabio (2026-09-20, escopo de runtimes reduzido pra Claude Code + Antigravity em 2026-09-22 — Codex e Copilot descontinuados).
 
 ## WORKFLOW: FEATURE
 
 ```
 entender requisito
+→ git-ops verifica se o card tem bloqueio real (não status do Jira — verificar via gh se o
+  card bloqueador de fato tem PR mergeado; status "em andamento" sem PR real não conta como
+  destravado)
 → consultar Jira/backlog (Jira key obrigatória na branch/commit/PR — nunca inventar)
 → carregar docs/business-rules/ relevantes
 → identificar regras e impactos (classificar toda regra nova: CONFIRMADA/INFERIDA/OBSERVADA/NÃO DEFINIDA)
@@ -75,7 +83,8 @@ entender requisito
 ## WORKFLOW: BUGFIX
 
 ```
-reproduzir
+git-ops verifica se o card tem bloqueio real (mesma checagem do FEATURE acima)
+→ reproduzir
 → documentar comportamento observado
 → identificar a regra esperada (docs/business-rules/ ou Jira)
 → localizar causa raiz (não corrigir só o sintoma se a causa puder ser determinada)
@@ -90,7 +99,15 @@ reproduzir
 
 ## WORKFLOW: PR REVIEW
 
-Delegado inteiramente ao agente `code-review` (`.claude/agents/code-review.md`), que já implementa as 4 fases obrigatórias (ANÁLISE → CORREÇÃO → REVALIDAÇÃO → PREPARAÇÃO). Nunca pular fase, nunca mergear.
+```
+git-ops verifica se a branch está atualizada/sem conflito em relação à base
+→ se estiver desatualizada/conflitante/órfã: git-ops reconstrói primeiro (identifica commits
+  reais, cherry-pick, resolve conflito só se mecânico, push, abre PR de substituição) —
+  code-review NUNCA começa a análise numa PR que não seja mergeável ainda
+→ code-review roda as 4 fases obrigatórias (ANÁLISE → CORREÇÃO → REVALIDAÇÃO → PREPARAÇÃO)
+```
+
+Nunca pular fase, nunca mergear. Isso não é passo manual — é verificação automática antes de qualquer revisão de PR começar, porque esse board/repo tem histórico real de PR ficar desatualizada silenciosamente (KAN-71, KAN-73, KAN-45 precisaram de reconstrução completa numa sessão porque isso não era checado antes).
 
 ## WORKFLOW: TESTING
 
@@ -153,6 +170,17 @@ COMPORTAMENTO NÃO DEFINIDO
 ```
 
 A correção vai na camada certa — testes fake não substituem uma implementação errada, e vice-versa.
+
+## HIGIENE DE JIRA AUTOMÁTICA
+
+Qualquer agente (`code-review`, `qa`, `product`, `spec`, ou o orquestrador durante FEATURE/BUGFIX) que encontrar um destes 4 sintomas aciona `git-ops` sozinho, sem esperar o Fabio pedir:
+
+- Status do Jira não bate com estado real verificado (`gh pr list`/`gh api`) — card mostrando "em andamento"/"em revisão" sem PR real por trás.
+- Card duplicado (mesma descrição/objetivo de outro já existente).
+- Issue tipo Bug sentada fora da coluna/status "Bugs" do board (quando ela existir).
+- Card com dependência técnica óbvia (ex: precisa de sessão de auth que outro card ainda não entregou) sem link formal de bloqueio no Jira.
+
+`git-ops` corrige e comenta explicando a evidência usada — nunca promove status/relação sem verificar primeiro (ver regras do próprio agente).
 
 ## SEGURANÇA — OPERAÇÕES DE MAIOR RISCO
 
