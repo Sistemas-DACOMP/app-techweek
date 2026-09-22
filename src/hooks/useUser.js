@@ -61,8 +61,8 @@ export function useUser() {
     return publicUrl;
   };
 
-  // Grava o evento no Supabase; a constraint UNIQUE(user_id, event_type, reference_id)
-  // do banco garante que a mesma ação nunca rende pontos duas vezes.
+  // Grava o evento via backend (KAN-79); o doc id determinístico
+  // (eventType+referenceId) garante que a mesma ação nunca rende pontos duas vezes.
   const recordEvent = async (eventType, referenceId, amount, metadata = null) => {
     const result = await addPointEvent({ eventType, referenceId, points: amount, metadata });
     if (result.success) {

@@ -22,7 +22,7 @@ O projeto foi construio com React e Vite, visando uma experiencia rapida e fluid
 
 * React + Vite: Base da aplicacao, configurada para otima performance.
 * React Router DOM: Gerenciamento de rotas e navegacao no estilo Single Page Application.
-* Supabase: Servicos de banco de dados e autenticacao (BaaS).
+* Firebase: Servicos de banco de dados (Firestore), autenticacao e storage (BaaS). Backend serverless em `backend/` (Express + Cloud Functions).
 * Html5-Qrcode: Modulo acoplado para leitura e parsing de QR Codes nativo pelo navegador do usuario.
 * Lucide React: Pacote de icones padronizados e vetorizados.
 
@@ -40,7 +40,4 @@ O projeto foi construio com React e Vite, visando uma experiencia rapida e fluid
 
 ## Variaveis de Ambiente
 
-Para o pleno funcionamento das funcoes de login e backend, certifique-se de preencher corretamente o arquivo `.env.local` na raiz do projeto com as chaves do seu projeto Supabase:
-
-VITE_SUPABASE_URL="sua-url-do-supabase"
-VITE_SUPABASE_ANON_KEY="sua-chave-anon-do-supabase"
+Copie `.env.example` para `.env.local` e preencha com as chaves do seu projeto Firebase (Console do Firebase > Configuracoes do Projeto > Seus Aplicativos > Web). Ver `docs/GUIA_DEV_EMULADORES.md` pro guia completo de ambiente local (Firebase Emulator Suite) e pro backend em `backend/`.
