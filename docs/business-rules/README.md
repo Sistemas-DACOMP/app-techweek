@@ -45,16 +45,17 @@ Regra pra evitar isso se repetir: todo teste novo que documentar uma regra de ne
 
 | ID | Nome | Tipo | Status |
 |---|---|---|---|
-| [REG-POINT-001](REG-POINT-001-dedup-point-events.md) | Dedup de `point_events` | OBSERVADA | implementado |
+| [REG-POINT-001](REG-POINT-001-dedup-point-events.md) | Dedup de `point_events` | CONFIRMADA | implementado — KAN-79/80 |
 | [REG-RANK-001](REG-RANK-001-ranking-tiebreak.md) | Critério de tie-break do ranking | OBSERVADA | implementado |
 | [REG-AUTH-001](REG-AUTH-001-senha-fraca-cadastro.md) | Validação de senha fraca no cadastro | CONFIRMADA | implementado — KAN-27 |
 | [REG-AUTH-002](REG-AUTH-002-senha-confirmacao-identica.md) | Senha e confirmação idênticas no cadastro | OBSERVADA | implementado |
 | [REG-AUTH-003](REG-AUTH-003-status-pos-cadastro.md) | Status pós-cadastro (anti-enumeração / rate limit) | CONFIRMADA | implementado |
 | [REG-LGPD-001](REG-LGPD-001-aceite-lgpd-backend.md) | Aceite de LGPD exigido pelo backend (Firebase) | CONFIRMADA | implementado — KAN-72 |
-| [REG-AVATAR-001](REG-AVATAR-001-limite-avatar-backend.md) | Limite de avatar só no front | INFERIDA | gap — KAN-29 |
-| [REG-SCANNER-001](REG-SCANNER-001-qr-palestra-especifica.md) | Scanner aceita QR de qualquer palestra | INFERIDA | gap — KAN-30 |
-| [REG-PROFILE-001](REG-PROFILE-001-rls-cross-user.md) | RLS `profiles` cross-user lookup | NÃO DEFINIDA | falta teste em homolog |
+| [REG-AVATAR-001](REG-AVATAR-001-limite-avatar-backend.md) | Limite de tamanho/tipo de avatar (front + Storage) | CONFIRMADA | implementado ponta a ponta |
+| [REG-SCANNER-001](REG-SCANNER-001-qr-palestra-especifica.md) | Scanner aceita QR de qualquer palestra | INFERIDA | gap — KAN-30 (verificar se KAN-71 já fechou, não conferido nesta rodada) |
+| [REG-PROFILE-001](REG-PROFILE-001-rls-cross-user.md) | Leitura cross-user de users/{uid} pro lookup do Scanner | CONFIRMADA | implementado, sem gap |
 | [REG-REGISTER-001](REG-REGISTER-001-linkedin-instagram-descartados.md) | `linkedin`/`instagram` descartados no cadastro | OBSERVADA | gap — sem card ainda |
+| [REG-MISSION-001](REG-MISSION-001-respostas-missao-persistidas.md) | Persistência de respostas de missões manuais | CONFIRMADA | implementado |
 | [REG-BOOKING-001](REG-BOOKING-001-leitura-restrita-dono.md) | Leitura de reserva de vaga restrita ao dono ou ADMIN | CONFIRMADA | implementado — KAN-48 |
 | [REG-CHECKIN-001](REG-CHECKIN-001-double-check-presenca.md) | Double-check de presença (entrance Staff + checkout aluno) | CONFIRMADA | a implementar — KAN-51 |
 | [REG-CHECKIN-002](REG-CHECKIN-002-attendance-mode-exclusivo.md) | attendanceMode decide fluxo exclusivo de presença por atividade | CONFIRMADA | a implementar — KAN-51 |
