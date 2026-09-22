@@ -1,7 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { onRequest } from 'firebase-functions/v2/https';
-import { db, auth } from './config/firebaseAdmin';
 import { requireAuth, requireRole } from './middlewares/authMiddleware';
 import authRouter from './routes/auth';
 import checkinRouter from './routes/checkin';
@@ -11,8 +10,6 @@ import leadsRouter from './routes/leads';
 import screenTokenRouter from './routes/screenToken';
 import checkinDoubleCheckRouter from './routes/checkinDoubleCheck';
 import pointsRouter from './routes/points';
-
-export { db, auth };
 
 const app = express();
 
