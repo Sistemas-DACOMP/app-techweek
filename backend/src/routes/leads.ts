@@ -182,6 +182,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       // Incremento atômico de +50 pontos na primeira visita a este patrocinador
       if (!alreadyAwarded) {
         tx.update(userRef, {
+          totalPoints: admin.firestore.FieldValue.increment(50),
           pontuacaoTotal: admin.firestore.FieldValue.increment(50),
           updatedAt: now
         });

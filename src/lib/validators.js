@@ -60,6 +60,31 @@ export function isValidEmail(email) {
   return emailRegex.test(normalized);
 }
 
+// Avalia a força da senha de forma reativa (score 0 a 4)
+export function getPasswordStrength(password) {
+  if (typeof password !== 'string' || !password) {
+    return { score: 0, label: 'Muito fraca', color: '#6b7280', percent: 0, valid: false };
+  }
+
+  let score = 0;
+  if (password.length >= 6) score += 1;
+  if (password.length >= 8) score += 1;
+  if (/[0-9]/.test(password) && /[a-zA-Z]/.test(password)) score += 1;
+  if (/[^a-zA-Z0-9]/.test(password) || /[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
+
+  const labels = ['Muito fraca', 'Fraca', 'Média', 'Boa', 'Forte'];
+  const colors = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#10b981'];
+  const percents = [10, 25, 50, 75, 100];
+
+  return {
+    score,
+    label: labels[score],
+    color: colors[score],
+    percent: percents[score],
+    valid: password.length >= MIN_PASSWORD_LENGTH
+  };
+}
+
 // Auxilia na correção de domínios comuns como @ufu.edu.br -> @ufu.br
 export function suggestEmailCorrection(email) {
   if (typeof email !== 'string') return null;

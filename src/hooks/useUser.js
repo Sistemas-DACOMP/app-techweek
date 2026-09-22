@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMyProfile, updateMascot, uploadAvatar, getMyPointEvents, addPointEvent } from '../lib/gameplay';
+import { onAuthChange } from '../lib/auth';
 import { calculateLevel } from '../lib/level';
 import { useNotifications } from './useNotifications';
 
@@ -11,12 +12,9 @@ export function useUser() {
 
   const load = useCallback(async () => {
     try {
-      const [prof, events] = await Promise.all([
-        getMyProfile(),
-        getMyPointEvents(),
-      ]);
-      setProfile(prof);
-      setPointEvents(events);
+      const [profileData, events] = await Promise.all([getMyProfile(), getMyPointEvents()]);
+      setProfile(profileData);
+      setPointEvents(events || []);
     } catch (_err) {
       // Offline fallback: mantém estado vazio sem quebrar a UI
     } finally {
@@ -26,21 +24,28 @@ export function useUser() {
 
   useEffect(() => {
     load();
+    const unsubscribe = onAuthChange(() => {
+      load();
+    });
+    return () => unsubscribe();
   }, [load]);
 
-  const points = pointEvents.reduce((sum, event) => sum + event.points, 0);
+  const points = pointEvents.reduce((sum, event) => sum + (event.points || 0), 0);
   const userLevel = calculateLevel(points);
 
   const scannedCodes = pointEvents
-    .filter(event => event.event_type === 'scan')
-    .map(event => event.reference_id);
+    .filter(event => (event.event_type || event.eventType) === 'scan')
+    .map(event => event.reference_id || event.referenceId);
 
   const completedChallenges = pointEvents
-    .filter(event => event.event_type === 'challenge' || event.event_type === 'manual_challenge')
-    .map(event => event.reference_id);
+    .filter(event => {
+      const type = event.event_type || event.eventType;
+      return type === 'challenge' || type === 'manual_challenge';
+    })
+    .map(event => event.reference_id || event.referenceId);
 
   const mascot = profile?.mascot || 'blue';
-  const avatarUrl = profile?.avatar_url || null;
+  const avatarUrl = profile?.avatar_url || profile?.avatarUrl || profile?.photoURL || null;
 
   const hasScannedCode = (code) => scannedCodes.includes(code);
   const hasCompletedChallenge = (challengeId) => completedChallenges.includes(challengeId);

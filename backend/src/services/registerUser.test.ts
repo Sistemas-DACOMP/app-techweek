@@ -69,4 +69,33 @@ describe('registerUser (REG-LGPD-001 / KAN-72)', () => {
     expect(result).toEqual({ status: 'already-registered' });
     expect(setSpy).not.toHaveBeenCalled();
   });
+
+  it('persiste os campos complementares de perfil do aluno (KAN-72 + KAN-68)', async () => {
+    const { db, setSpy } = makeFakeDb(false);
+
+    const profile = {
+      firstName: 'Ana',
+      lastName: 'Silva',
+      username: 'anasilva',
+      course: 'Ciência da Computação',
+      period: '4º Período'
+    };
+
+    const result = await registerUser(db as any, 'uid-3', 'ana@ufu.br', profile);
+
+    expect(result.status).toBe('created');
+    const [, data] = setSpy.mock.calls[0];
+    expect(data).toMatchObject({
+      uid: 'uid-3',
+      email: 'ana@ufu.br',
+      firstName: 'Ana',
+      lastName: 'Silva',
+      displayName: 'Ana Silva',
+      username: 'anasilva',
+      course: 'Ciência da Computação',
+      period: '4º Período',
+      totalPoints: 0
+    });
+  });
 });
+

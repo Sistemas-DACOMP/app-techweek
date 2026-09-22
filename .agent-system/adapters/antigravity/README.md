@@ -1,6 +1,8 @@
 # Antigravity adapter
 
-**Status: wrappers built, not verified end-to-end.** Antigravity is **not installed** on this machine (2026-09-20). The 13 wrapper files exist in `agents/`, one per canonical agent, but none has run against a real Antigravity session from this project.
+**Status: VERIFIED & OPERATIONAL on macOS Antigravity Runtime (2026-09-21).**
+O Antigravity carrega nativamente as regras através de `AGENTS.md` na raiz do projeto e de `.agent/rules/agents.md`.
+Os subagentes (`qa-agent`, `security-reviewer`, `code-reviewer`) são registrados dinamicamente via `define_subagent` e acionados em paralelo via `invoke_subagent`.
 
 ## Proven reference this adapter reuses
 

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import * as admin from 'firebase-admin';
 import { db } from '../config/firebaseAdmin';
 import { requireAuth } from '../middlewares/authMiddleware';
 import { isValidFirestoreId } from '../lib/firestoreId';
@@ -90,6 +91,13 @@ router.post('/:activityId/checkin', requireAuth, async (req: Request, res: Respo
         metadata: typeof rating === 'number' ? { rating } : null,
         createdAt: new Date()
       });
+
+      if (points > 0) {
+        const userRef = db.collection('users').doc(uid);
+        tx.set(userRef, {
+          totalPoints: admin.firestore.FieldValue.increment(points)
+        }, { merge: true });
+      }
 
       return {
         status: 201 as const,

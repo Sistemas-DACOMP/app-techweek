@@ -97,6 +97,15 @@ body {
   display: none;
 }
 
+/* Esconde barras de rolagem nativas sem impedir o scroll */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ==========================================================================
    Global Modal & Scroll Lock System (KAN-77)
    Garante que pop-ups fiquem fixos sem vazar toque ou rolagem para o fundo
