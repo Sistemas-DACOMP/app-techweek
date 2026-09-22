@@ -61,6 +61,7 @@ agents:
   - security
   - infra
   - code-review
+  - git-ops    # added 2026-09-21 — git/Jira ops specialist, mechanical layer under code-review
   - adr
   - ponytail   # see agents/ponytail.md — installed for real 2026-09-20, portable: true
 
