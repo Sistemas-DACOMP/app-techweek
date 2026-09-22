@@ -36,12 +36,12 @@ Toda mudança de comportamento de negócio (nova regra, correção de gap) passa
 
 Este projeto reconhece o tipo de tarefa sozinho — não é preciso dizer "use o fluxo de QA" ou "faça revisão de segurança". A skill `.claude/skills/dev-workflows/SKILL.md` é o orquestrador: classifica o pedido (feature/bugfix/PR review/testing), delega pro agente ou skill certo, e aplica o quality gate e o loop de reprocessamento (limite de 3 tentativas antes de escalar pro Fabio).
 
-Agentes e skills disponíveis:
+Agentes e skills disponíveis (lista corrigida em 2026-09-21 — os 3 nomes de arquivo abaixo estavam desatualizados desde o rename de 2026-09-20, ver `.agent-system/adapters/claude/README.md`):
 
 - `.claude/skills/qa-agent/SKILL.md` — regras de negócio, planejamento e execução de testes.
-- `.claude/agents/pr-review.md` — análise/correção/revalidação/preparação de PR (nunca mergeia).
-- `.claude/agents/security-reviewer.md` — revisão de segurança independente (auth, RLS, uploads, tokens); só reporta, não corrige.
-- `.claude/agents/dedup-refactor.md` — análise de duplicação sob pedido explícito.
+- `.claude/agents/code-review.md` — análise/correção/revalidação/preparação de PR (nunca mergeia); também roda análise de duplicação (DRY) sob pedido explícito.
+- `.claude/agents/security.md` — revisão de segurança independente (auth, RLS, uploads, tokens); só reporta, não corrige.
+- `.claude/agents/git-ops.md` (novo, 2026-09-21) — cirurgia de branch/PR (recria branch órfã/desatualizada/conflitante, resolve conflito mecânico, abre PR de substituição) e higiene do board Jira (status que não bate com PR real, duplicata, link de bloqueio, issue Bug fora da coluna certa). Camada mecânica embaixo do `code-review`, nunca no lugar dele — nunca julga corretude de código, nunca mexe em branch protection/config de repositório, nunca mergeia. Despacha sozinho, ver `.claude/skills/dev-workflows/SKILL.md`.
 
 Quality gate objetivo (lint/build/test) roda com `npm run quality-gate`. Checagem do ambiente de IA (o que existe, o que falta configurar) roda com `npm run check-ai-infra`. Detalhes de threshold, critérios obrigatórios e classificação de falha estão na skill `dev-workflows`.
 

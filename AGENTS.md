@@ -1,9 +1,9 @@
 # AGENTS.md — Bootstrap Multi-Runtime para o App TechWeek
 
-O comportamento de engenharia, orquestração, regras e papéis dos 13 agentes especializados deste projeto está definido em [`.agent-system/`](file:///Users/samuelamorim/Documents/Projetos/app-techweek/.agent-system):
+O comportamento de engenharia, orquestração, regras e papéis dos 14 agentes especializados deste projeto está definido em [`.agent-system/`](file:///Users/samuelamorim/Documents/Projetos/app-techweek/.agent-system):
 
 - [`.agent-system/manifests/system.yaml`](file:///Users/samuelamorim/Documents/Projetos/app-techweek/.agent-system/manifests/system.yaml) — Mapa de capacidades, agentes suportados e status do projeto.
-- [`.agent-system/agents/`](file:///Users/samuelamorim/Documents/Projetos/app-techweek/.agent-system/agents/) — Especificação canônica dos 13 agentes: `orchestrator`, `spec`, `product`, `architecture`, `backend`, `pwa`, `admin`, `qa`, `security`, `infra`, `code-review`, `adr`, `ponytail`.
+- [`.agent-system/agents/`](file:///Users/samuelamorim/Documents/Projetos/app-techweek/.agent-system/agents/) — Especificação canônica dos 14 agentes: `orchestrator`, `spec`, `product`, `architecture`, `backend`, `pwa`, `admin`, `qa`, `security`, `infra`, `code-review`, `git-ops`, `adr`, `ponytail`. `git-ops` (2026-09-21) é a camada mecânica de git/Jira embaixo do `code-review` — reconstrói branch/PR órfã ou desatualizada e corrige drift do board Jira, nunca julga corretude de código nem mexe em branch protection.
 - [`.agent-system/rules/engineering-rules.md`](file:///Users/samuelamorim/Documents/Projetos/app-techweek/.agent-system/rules/engineering-rules.md) — Regras de engenharia (git flow, commits, reviews, invariantes de segurança).
 - [`.agent-system/adapters/antigravity/`](file:///Users/samuelamorim/Documents/Projetos/app-techweek/.agent-system/adapters/antigravity/) — Adaptador operacional para Google Antigravity.
 
