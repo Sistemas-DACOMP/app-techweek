@@ -3,25 +3,23 @@
 Um blocker aqui significa: não dá pra avançar sem uma ação humana específica. Nenhum agente
 resolve isto sozinho escalando pra outro agente.
 
-## BLOCKED — Maestri install/configuração real
+## PARTIALLY RESOLVED — Maestri install/configuração real
 
-**O quê**: Fabio pediu para instalar e configurar `themaestri.app`. É um app desktop nativo
-(canvas de orquestração), sem CLI nem API — confirmado via leitura da página oficial 2026-09-22.
-Instalação e configuração (conectar terminais de agente, desenhar o canvas, atribuir papéis) são
-ações de interface gráfica.
+**O quê**: Fabio instalou `themaestri.app` (confirmado: skills `maestri`/`maestri-manager`/etc.
+apareceram disponíveis nesta conta, e uma pasta `.maestri/roles/` real apareceu neste repo
+2026-09-22 — agora gitignorada). App é GUI-only, sem CLI/API programável de fora dele, como já
+documentado em `adapters/maestri/README.md` e ADR-004.
 
-**O que foi feito**: pesquisa do produto, documentação do que ele é/faz, preparo de
-`.agent-system/adapters/maestri/README.md` com o passo a passo exato.
+**O que falta**: esta sessão específica do Claude Code não está conectada ao canvas — `maestri`
+não existe no PATH deste terminal, `$MAESTRI_CLI` vazio (testado 2 vezes, mesmo resultado). Canvas
+cria o terminal conectado de dentro do próprio app — uma sessão externa como esta não entra
+retroativamente.
 
-**O que falta**: baixar o instalador Windows, instalar, abrir o app, conectar os terminais deste
-projeto ao canvas, atribuir papéis por agente.
+**Ação humana exata**: se Fabio quiser esta conversa dentro do Maestri, precisa recomeçar de um
+terminal criado pelo próprio app; senão, o sistema de agentes funciona igual fora do Maestri (como
+rodou a sessão inteira).
 
-**Ação humana exata**: Fabio baixa e instala `themaestri.app` (build Windows), abre o canvas,
-segue `.agent-system/adapters/maestri/README.md` pra conectar os terminais Claude Code/Antigravity
-deste repo.
-
-**Como validar quando resolvido**: Fabio confirma o app instalado e um workspace criado
-apontando pra este repo; então atualizar `manifests/system.yaml` com o status real.
+**Como validar quando resolvido**: `maestri list` funcionando dentro do terminal em questão.
 
 ## RESOLVED — Verificação real do Antigravity
 
@@ -42,16 +40,9 @@ ativo usava essas branches (`git worktree list` só mostrava `kan45`), sem cópi
 (`git branch -a` só listava local). Deletadas: `worktree-agent-a7921c9391c8cf17b`,
 `worktree-agent-ab6012e30bdb10492` (`git branch -D`).
 
-## BLOCKED — Tarefa piloto (Fase 24)
+## RESOLVED — Tarefa piloto (Fase 24)
 
-**O quê**: a spec pede rodar um ciclo real (Jira → orchestrator → ... → human gate) usando este
-sistema, pelo menos uma etapa em cada runtime disponível.
-
-**O que falta**: escolher um item real de baixa/média criticidade do backlog KAN. Sem isso, Fase
-24-27 (piloto, validação independente, teste de integração final) não têm o que processar.
-
-**Ação humana exata**: Fabio aponta um card KAN específico (ou autoriza escolher um automaticamente
-a partir do Backlog).
-
-**Como validar quando resolvido**: task context real preenchido em `state/active-task.md` para
-esse card, handoff real gerado em `handoffs/`.
+KAN-47 rodou o ciclo completo (ver `state/task-history/2026-09-22-kan47-cracha.md`) — spec achou
+gap real, human gate resolveu ambiguidade, implementação + testes + quality-gate, review
+independente do Antigravity (PASS), PR #96 mergeada pelo Fabio. PR #97 (o próprio agent-system)
+também mergeada, e uma revisão retroativa real achou e corrigiu staleness residual (PR #98).

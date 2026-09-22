@@ -30,6 +30,10 @@ claude-context/
 # como untracked em vez de ignorado)
 .claude/worktrees/
 
+# Config local do Maestri (roles/terminais desta máquina) — mesma categoria de .claude/,
+# nunca versionar (encontrado sem ignore em 2026-09-22)
+.maestri/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
