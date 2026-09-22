@@ -10,6 +10,7 @@
     "backend:watch": "npm --prefix backend run build:watch",
     "emulators": "firebase emulators:start",
     "load-test:booking": "node scripts/load-test-booking.mjs",
+    "seed:missions": "node scripts/seed-missions.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "npx vitest run src scripts tests/unit",
