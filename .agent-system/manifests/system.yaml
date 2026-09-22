@@ -3,29 +3,28 @@ system:
   version: 1.0.0
   description: >
     Portable engineering-team agent system for the FACOM Tech Week App.
-    The AI runtime (Claude Code, Codex, Antigravity, ...) is a host only.
+    The AI runtime (Claude Code, Antigravity) is a host only.
     This system, not the runtime, is the source of truth for how work gets done.
 
 supported_runtimes:
   - id: claude-code
     status: native
     adapter: .agent-system/adapters/claude/
-  - id: codex
-    status: adapter_partial
-    adapter: .agent-system/adapters/codex/
-    note: >
-      Codex CLI not installed on the audited dev machine (2026-09-20).
-      Adapter files are written and ready; unverified end-to-end because there is
-      no local Codex install to run them against. Superpowers plugin already ships
-      a working Codex adapter (.codex-plugin/plugin.json + references/codex-tools.md)
-      that this system's Codex adapter reuses conventions from.
   - id: antigravity
     status: adapter_partial
     adapter: .agent-system/adapters/antigravity/
     note: >
-      Same as codex — not installed locally, adapter unverified end-to-end.
-      Superpowers ships a working reference (references/antigravity-tools.md),
-      notably: Antigravity has no todo/checklist tool, use write_to_file task artifacts.
+      Not installed locally, adapter unverified end-to-end. Superpowers ships a
+      working reference (references/antigravity-tools.md), notably: Antigravity
+      has no todo/checklist tool, use write_to_file task artifacts.
+
+# Dropped 2026-09-22 (Fabio's explicit decision): Codex and GitHub Copilot support.
+# Codex only ever had a README documenting what wasn't built (no real per-agent
+# files existed) — zero work lost. Copilot's .github/copilot-instructions.md is
+# deleted; Copilot has no subagent-dispatch mechanism to target anyway, per that
+# file's own prior content. Only Claude Code and Antigravity remain supported
+# runtimes going forward — the portability standard now requires parity (or a
+# documented gap) between just these two, not four.
 
 project_context:
   status: TRANSITIONAL
@@ -62,6 +61,7 @@ agents:
   - infra
   - code-review
   - git-ops    # added 2026-09-21 — git/Jira ops specialist, mechanical layer under code-review
+  - devops     # added 2026-09-22 — CI/CD pipeline, build script and release-flow specialist
   - adr
   - ponytail   # see agents/ponytail.md — installed for real 2026-09-20, portable: true
 

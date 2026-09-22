@@ -4,7 +4,9 @@
 
 ## Sistema de engenharia portável (`.agent-system/`)
 
-A partir de 2026-09-20 o comportamento operacional dos agentes (orquestração, regras, gates, workflows) tem fonte canônica em `.agent-system/` — ver `.agent-system/manifests/system.yaml`. Este CLAUDE.md continua sendo o bootstrap que o Claude Code lê automaticamente, mas para trabalho de engenharia não trivial, consulte também `.agent-system/agents/` (comportamento de cada agente) e `.agent-system/docs/audit-report.md` (auditoria completa: o que existe, o que é portável entre Claude Code/Codex/Antigravity, o que falta). Os arquivos em `.claude/agents/` e `.claude/skills/` continuam sendo os adapters reais que o Claude Code executa — mantidos sincronizados com a fonte canônica, não substituídos por ela.
+A partir de 2026-09-20 o comportamento operacional dos agentes (orquestração, regras, gates, workflows) tem fonte canônica em `.agent-system/` — ver `.agent-system/manifests/system.yaml`. Este CLAUDE.md continua sendo o bootstrap que o Claude Code lê automaticamente, mas para trabalho de engenharia não trivial, consulte também `.agent-system/agents/` (comportamento de cada agente) e `.agent-system/docs/audit-report.md` (auditoria completa: o que existe, o que é portável entre Claude Code/Antigravity, o que falta). Os arquivos em `.claude/agents/` e `.claude/skills/` continuam sendo os adapters reais que o Claude Code executa — mantidos sincronizados com a fonte canônica, não substituídos por ela.
+
+**Runtimes suportados: Claude Code + Antigravity apenas (decisão do Fabio, 2026-09-22)** — Codex e GitHub Copilot foram descontinuados. `.agent-system/adapters/codex/` e `.github/copilot-instructions.md` foram removidos. Codex nunca teve adapter real (só um README documentando o que faltava construir), então nada foi perdido; Antigravity mantém os wrappers reais em `.agent-system/adapters/antigravity/agents/`. Todo agente/skill novo daqui pra frente precisa de paridade (ou gap documentado) só entre esses dois runtimes.
 
 ## Quem é o time
 
@@ -41,7 +43,8 @@ Agentes e skills disponíveis (lista corrigida em 2026-09-21 — os 3 nomes de a
 - `.claude/skills/qa-agent/SKILL.md` — regras de negócio, planejamento e execução de testes.
 - `.claude/agents/code-review.md` — análise/correção/revalidação/preparação de PR (nunca mergeia); também roda análise de duplicação (DRY) sob pedido explícito.
 - `.claude/agents/security.md` — revisão de segurança independente (auth, RLS, uploads, tokens); só reporta, não corrige.
-- `.claude/agents/git-ops.md` (novo, 2026-09-21) — cirurgia de branch/PR (recria branch órfã/desatualizada/conflitante, resolve conflito mecânico, abre PR de substituição) e higiene do board Jira (status que não bate com PR real, duplicata, link de bloqueio, issue Bug fora da coluna certa). Camada mecânica embaixo do `code-review`, nunca no lugar dele — nunca julga corretude de código, nunca mexe em branch protection/config de repositório, nunca mergeia. Despacha sozinho, ver `.claude/skills/dev-workflows/SKILL.md`.
+- `.claude/agents/git-ops.md` (2026-09-21) — cirurgia de branch/PR (recria branch órfã/desatualizada/conflitante, resolve conflito mecânico, abre PR de substituição) e higiene do board Jira (status que não bate com PR real, duplicata, link de bloqueio, issue Bug fora da coluna certa). Camada mecânica embaixo do `code-review`, nunca no lugar dele — nunca julga corretude de código, nunca mexe em branch protection/config de repositório, nunca mergeia. Despacha sozinho, ver `.claude/skills/dev-workflows/SKILL.md`.
+- `.claude/agents/devops.md` (novo, 2026-09-22) — pipelines de CI/CD (`.github/workflows/*.yml`), scripts de build (`quality-gate.mjs`), config de hospedagem (Vercel/GitHub Pages), fluxo de release `develop`→`homolog`→`main`. Nunca mexe em Firebase/Firestore (isso é `infra`), nunca em lógica de negócio/UI (isso é `backend`/`pwa`/`admin`), nunca em branch protection sem permissão explícita, nunca em cirurgia de branch/PR/Jira (isso é `git-ops`).
 
 Quality gate objetivo (lint/build/test) roda com `npm run quality-gate`. Checagem do ambiente de IA (o que existe, o que falta configurar) roda com `npm run check-ai-infra`. Detalhes de threshold, critérios obrigatórios e classificação de falha estão na skill `dev-workflows`.
 
@@ -94,9 +97,11 @@ FASE 3 — QA Agent (feita, já existia) + PR Review Agent (feita: .claude/agent
 FASE 4 — Security Reviewer (feita: .claude/agents/security.md)
 FASE 5 — integrações Jira/GitHub (feita com o que já existe: gh CLI + MCP Atlassian; sem
           integração mais profunda além disso por enquanto — expandir só se necessidade real aparecer)
-FASE 6 — expansão / agentes adicionais (não iniciada — só quando houver responsabilidade
-          claramente distinta que justifique um agente novo; ver `docs/ai-infra/README.md`)
-FASE 7 — portabilidade multi-runtime (em andamento: 2026-09-20 — .agent-system/ canônico criado, adapters Claude prontos, Codex/Antigravity documentados mas não testados localmente — CLIs não instalados nesta máquina)
+FASE 6 — expansão / agentes adicionais (git-ops adicionado 2026-09-21; devops adicionado
+          2026-09-22, CI/CD e release flow — ver `docs/ai-infra/README.md`)
+FASE 7 — portabilidade multi-runtime (2026-09-22: reduzida pra Claude Code + Antigravity
+          apenas, por decisão do Fabio — Codex e Copilot descontinuados. Antigravity segue
+          não testado localmente nesta máquina, CLI não instalado)
 ```
 
 Ver `docs/superpowers/specs/2026-09-10-persistent-project-memory-design.md` pro design da Fase 1 e `docs/superpowers/specs/2026-09-11-agent-infra-fase2-6-design.md` pras decisões das Fases 2-6 (por que a estrutura de pastas foi adaptada, por que só 2 agentes novos, etc). `docs/ai-infra/README.md` é a arquitetura completa, como configurar num checkout novo e como estender (novo agente/skill/regra). Não pular fase sem validar a anterior funcionando.

@@ -34,13 +34,15 @@ Nunca substitua silenciosamente uma regra persistida por uma interpretação sua
 | decisão técnica real acabou de ser tomada | delega para `adr` registrar |
 | PR/branch desatualizada ou conflitante em relação à base, PR fechada sem merge com branch deletada | delega para `git-ops` — reconstrói antes de `code-review` começar a analisar |
 | status do Jira não bate com PR/branch real, card duplicado, issue tipo Bug fora da coluna certa, card sem link de bloqueio óbvio | delega para `git-ops` |
+| falha de CI (`.github/workflows/*.yml`), quality gate quebrando no pipeline, config de deploy/hospedagem (Vercel/GitHub Pages) | delega para `devops` |
 
 ## Agentes disponíveis e quando delegar
 
 - **qa** (agent, `.claude/agents/qa.md`) — regras de negócio, planejamento e execução de testes em todas as camadas. Metodologia completa também vive na skill `qa-agent` (`.claude/skills/qa-agent/SKILL.md`).
 - **code-review** (agent) — análise/correção/revalidação/preparação de PR. Fases não se misturam. Os critérios de análise dele (consistência arquitetural, regressão, cobertura de teste, regra de negócio) também são o que se usa na etapa "revisar" do FEATURE/BUGFIX abaixo, antes mesmo de existir um PR. Também roda análise de duplicação (DRY), mas só quando pedido explicitamente — não faz parte do fluxo automático de feature/bugfix. Nunca faz cirurgia de git (nunca reconstrói branch, nunca dá push) — se achar conflito ou branch desatualizada durante a análise, repassa pro `git-ops` em vez de tentar resolver.
 - **security** (agent) — revisão de segurança independente, só reporta, não corrige.
-- **git-ops** (agent, `.agent-system/agents/git-ops.md`) — camada mecânica de git/Jira que fica embaixo do `code-review`, nunca no lugar dele. Reconstrói branch órfã/desatualizada/conflitante (identifica os commits reais da PR, ignora ruído de squash-merge, cherry-pick, push, abre PR de substituição dando crédito ao autor original), corrige status do Jira que não bate com estado real verificado via `gh`, liga duplicata, cria link de bloqueio, garante issue tipo Bug na coluna certa. Só resolve conflito **mecânico** (import, config aditiva, registro de rota) — conflito que exige julgar lógica de negócio vira handoff pro `code-review`. Nunca mexe em branch protection/config de repositório (sempre pedido explícito separado), nunca mergeia, nunca julga corretude de código.
+- **git-ops** (agent, `.agent-system/agents/git-ops.md`) — camada mecânica de git/Jira que fica embaixo do `code-review`, nunca no lugar dele. Reconstrói branch órfã/desatualizada/conflitante (identifica os commits reais da PR, ignora ruído de squash-merge, cherry-pick, push, abre PR de substituição dando crédito ao autor original), corrige status do Jira que não bate com estado real verificado via `gh`, liga duplicata, cria link de bloqueio, garante issue tipo Bug na coluna certa. Só resolve conflito **mecânico** (import, config aditiva, registro de rota) — conflito que exige julgar lógica de negócio vira handoff pro `code-review`. Nunca mexe em branch protection/config de repositório (sempre pedido explícito separado), nunca mergeia, nunca julga corretude de código. Nunca mexe em CI/CD (isso é `devops`).
+- **devops** (agent, `.agent-system/agents/devops.md`) — pipelines de CI/CD (`.github/workflows/*.yml`), scripts de build (`quality-gate.mjs`), config de hospedagem (Vercel/GitHub Pages, secrets/variáveis), gestão do fluxo de release entre `develop`/`homolog`/`main`. Nunca mexe em Firebase/Firestore (handoff pro `infra`), nunca resolve lógica de negócio ou UI que quebra o build (handoff pro `backend`/`pwa`/`admin`), nunca altera branch protection sem permissão explícita, nunca faz cirurgia de branch/PR/Jira (isso é `git-ops`).
 
 Agentes abaixo vieram da expansão do sistema portável (`.agent-system/agents/`, 2026-09-20) — despache-os sozinho, sem esperar o usuário pedir por nome, sempre que a situação bater:
 
@@ -56,7 +58,7 @@ Agentes abaixo vieram da expansão do sistema portável (`.agent-system/agents/`
 
 Não crie ou chame agente novo para cada tool — tools são capacidades (ler, editar, rodar lint/build/test, consultar git/PR/Jira), agentes são responsabilidades distintas de raciocínio.
 
-**Padrão daqui pra frente**: toda vez que um agente/skill novo for adicionado a este projeto, ele precisa de equivalente (ou gap documentado) em `AGENTS.md` (Codex/Antigravity) e `.github/copilot-instructions.md` (Copilot) além do arquivo aqui em `.claude/` — não é opcional, é requisito do Fabio (2026-09-20).
+**Padrão daqui pra frente**: toda vez que um agente/skill novo for adicionado a este projeto, ele precisa de equivalente (ou gap documentado) em `.agent-system/adapters/antigravity/agents/<id>.md` além do arquivo aqui em `.claude/` — não é opcional, é requisito do Fabio (2026-09-20, escopo de runtimes reduzido pra Claude Code + Antigravity em 2026-09-22 — Codex e Copilot descontinuados).
 
 ## WORKFLOW: FEATURE
 
