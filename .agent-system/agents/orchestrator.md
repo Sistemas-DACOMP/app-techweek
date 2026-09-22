@@ -24,8 +24,8 @@ portable: true
 portability_note: >
   Pure reasoning/process role — no runtime-specific tool call is load-bearing to
   the logic itself. Delegation mechanics (how one agent hands work to another)
-  differ per runtime (Claude Code Task tool, Codex spawn_agent/followup_task/wait_agent,
-  Antigravity invoke_subagent — see Superpowers' references/<runtime>-tools.md for the
+  differ per runtime (Claude Code Task tool, Antigravity invoke_subagent — see
+  Superpowers' references/<runtime>-tools.md for the
   concrete call shape) but the orchestrator's decisions — what to classify, what to
   select, what to gate — do not depend on which mechanism is used.
 
