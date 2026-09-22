@@ -35,12 +35,12 @@ rodado, arquivo lido, output real).
 | 22 | Automode controlado | DONE | `gates.md` + `rules/engineering-rules.md` + `orchestrator.md` seção 6 (loop de 3 tentativas, escalonamento) |
 | 23 | Human gates | DONE | `gates.md` → `MERGE APPROVED` explicitamente humano; regra "merge sempre humano" repetida em `AGENTS.md`, `CLAUDE.md`, `rules/engineering-rules.md`, `policies/merge-policy.md` |
 | 24 | Piloto executado | PARTIAL | Fabio pediu pra escolher um card de Backlog — próximo passo desta sessão, não escolhido ainda |
-| 25 | Validação Claude ↔ Antigravity | DONE (1 tarefa real) | Antigravity completou uma tarefa real ponta a ponta (leu 9 arquivos, escreveu um Context Understanding Report correto e independente) — ver `state/antigravity-context-report-2026-09-22.md` e ADR-003. Ainda não é uma comparação lado a lado numa MESMA tarefa de produto (isso é o piloto, item 24) |
+| 25 | Validação Claude ↔ Antigravity | DONE | Antigravity completou 2 tarefas reais: (a) Context Understanding Report independente (`state/antigravity-context-report-2026-09-22.md`, ADR-003); (b) code review independente da implementação de KAN-47 feita pelo Claude Code — sem ser avisado que estava "correta" (`state/kan47-antigravity-independent-review.md`). Verdict: PASS, achou os 4 critérios do DoD atendidos, e levantou sozinho um ponto real de null-safety pra verificar (confirmado depois como seguro, mas foi um achado de verdade, não ruído) |
 | 26 | Testes | PARTIAL | Testes de produto (`npm run test`) não tocados nesta sessão (fora de escopo — sessão é meta/infra); `agent-system-doctor.mjs` foi rodado e serve como "teste" deste próprio sistema |
 | 27 | Automode com limite | DONE | Mesmo que item 22 — 3 tentativas, escalonamento pro Fabio |
 | 28 | Human gates presentes | DONE | Mesmo que item 23 |
 | 29 | Piloto | PARTIAL | Mesmo que item 24 |
-| 30 | Validação Claude↔Antigravity | DONE (1 tarefa real) | Mesmo que item 25 |
+| 30 | Validação Claude↔Antigravity | DONE | Mesmo que item 25 |
 | 31 | Testes | PARTIAL | Mesmo que item 26 |
 | 32 | Matriz final | DONE | Este próprio documento |
 
