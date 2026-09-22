@@ -90,8 +90,8 @@ Persistência de gameplay (pontos, missões, ranking) migrou pro Supabase (`prof
 ```
 FASE 1 — memória persistente (feita: CLAUDE.md, docs/business-rules/, CI, qa-agent versionada)
 FASE 2 — orquestrador (feita: .claude/skills/dev-workflows/SKILL.md)
-FASE 3 — QA Agent (feita, já existia) + PR Review Agent (feita: .claude/agents/pr-review.md)
-FASE 4 — Security Reviewer (feita: .claude/agents/security-reviewer.md)
+FASE 3 — QA Agent (feita, já existia) + PR Review Agent (feita: .claude/agents/code-review.md)
+FASE 4 — Security Reviewer (feita: .claude/agents/security.md)
 FASE 5 — integrações Jira/GitHub (feita com o que já existe: gh CLI + MCP Atlassian; sem
           integração mais profunda além disso por enquanto — expandir só se necessidade real aparecer)
 FASE 6 — expansão / agentes adicionais (não iniciada — só quando houver responsabilidade
