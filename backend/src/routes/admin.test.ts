@@ -11,8 +11,22 @@ vi.mock('../config/firebaseAdmin', () => ({
   }
 }));
 
-import router, { updateUserRoleHandler } from './admin';
+// admin.ts importa `firebase-admin` direto (não só via config/firebaseAdmin) pra
+// usar FieldValue.serverTimestamp() e messaging(). FieldValue é estático, não
+// precisa de app inicializado (mesmo padrão de checkinDoubleCheck.test.ts com
+// FieldValue.increment sem mock). messaging() já chama admin.app() por baixo e
+// quebra sem app — como config/firebaseAdmin.ts (que faz initializeApp) está
+// todo mockado acima e nunca roda de verdade, só messaging precisa de mock aqui.
+vi.mock('firebase-admin', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('firebase-admin')>();
+  // firebase-admin expõe firestore/messaging/auth como getters não-enumeráveis
+  // (lazy load) — {...actual} não copia isso, precisa referenciar explícito.
+  return { ...actual, firestore: actual.firestore, messaging: vi.fn() };
+});
+
+import router, { updateUserRoleHandler, broadcastNotificationHandler } from './admin';
 import { db, auth } from '../config/firebaseAdmin';
+import * as admin from 'firebase-admin';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -48,6 +62,25 @@ async function runChain(handlers: Array<(req: Request, res: Response, next: () =
 }
 
 const [, requireRoleHandler] = getRoleChain();
+
+function getBroadcastChain() {
+  const layer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/notifications/broadcast'
+  );
+  return layer.route.stack.map((l: any) => l.handle) as Array<
+    (req: Request, res: Response, next: () => void) => unknown
+  >;
+}
+
+// requireRole(['ADMIN']) é chamado de novo (closure separada) no router.post
+// do broadcast — mesmo middleware compartilhado (authMiddleware.ts), mas
+// instância própria por rota, então extraímos da rota certa em vez de reusar
+// o requireRoleHandler do /users/:uid/role.
+const [, broadcastRoleHandler] = getBroadcastChain();
+
+function makeBroadcastReq(body: any = {}, user: any = { uid: 'admin-1', role: 'ADMIN' }) {
+  return { body, user } as unknown as Request;
+}
 
 describe('PUT /api/admin/users/:uid/role (KAN-60)', () => {
   let userDoc: { get: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
@@ -241,5 +274,138 @@ describe('PUT /api/admin/users/:uid/role (KAN-60)', () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/admin/notifications/broadcast (KAN-61)', () => {
+  let announcementDoc: { id: string; set: ReturnType<typeof vi.fn> };
+  let sendMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    announcementDoc = { id: 'ann-1', set: vi.fn().mockResolvedValue(undefined) };
+    (db.collection as any).mockImplementation(() => ({
+      doc: () => announcementDoc
+    }));
+    sendMock = vi.fn().mockResolvedValue('projects/x/messages/1');
+    (admin.messaging as any).mockReturnValue({ send: sendMock });
+  });
+
+  it('sucesso: grava /announcements (com createdBy do admin) antes do push, dispara FCM no tópico certo e responde 201', async () => {
+    const req = makeBroadcastReq({ title: 'Aviso', body: 'Mensagem geral' });
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(announcementDoc.set).toHaveBeenCalledWith({
+      title: 'Aviso',
+      body: 'Mensagem geral',
+      createdBy: 'admin-1',
+      createdAt: expect.anything()
+    });
+    expect(sendMock).toHaveBeenCalledWith({
+      topic: 'todos_participantes',
+      notification: { title: 'Aviso', body: 'Mensagem geral' }
+    });
+    // Firestore grava antes do push, nessa ordem (não o contrário).
+    expect(announcementDoc.set.mock.invocationCallOrder[0]).toBeLessThan(
+      sendMock.mock.invocationCallOrder[0]
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ success: true, announcementId: 'ann-1' });
+  });
+
+  it('400 INVALID_PAYLOAD se title estiver ausente ou vazio (após trim), nem toca Firestore/messaging', async () => {
+    const req = makeBroadcastReq({ title: '   ', body: 'Mensagem geral' });
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(db.collection).not.toHaveBeenCalled();
+    expect(admin.messaging).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
+  });
+
+  it('400 INVALID_PAYLOAD se body estiver ausente ou vazio (após trim), nem toca Firestore/messaging', async () => {
+    const req = makeBroadcastReq({ title: 'Aviso' });
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(db.collection).not.toHaveBeenCalled();
+    expect(admin.messaging).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
+  });
+
+  it('400 INVALID_PAYLOAD se title passar de 150 caracteres, nem toca Firestore/messaging', async () => {
+    const req = makeBroadcastReq({ title: 'a'.repeat(151), body: 'Mensagem geral' });
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(db.collection).not.toHaveBeenCalled();
+    expect(admin.messaging).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
+  });
+
+  it('400 INVALID_PAYLOAD se body passar de 1000 caracteres, nem toca Firestore/messaging', async () => {
+    const req = makeBroadcastReq({ title: 'Aviso', body: 'a'.repeat(1001) });
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(db.collection).not.toHaveBeenCalled();
+    expect(admin.messaging).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
+  });
+
+  it('500 INTERNAL_ERROR se a escrita em /announcements falhar, messaging().send nunca é chamado', async () => {
+    announcementDoc.set.mockRejectedValue(new Error('firestore down'));
+    const req = makeBroadcastReq({ title: 'Aviso', body: 'Mensagem geral' });
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INTERNAL_ERROR' }));
+  });
+
+  it('502 BROADCAST_PARTIALLY_SENT se o Firestore gravar mas o push FCM falhar, expõe announcementId (não é um 500 genérico)', async () => {
+    sendMock.mockRejectedValue(new Error('fcm down'));
+    const req = makeBroadcastReq({ title: 'Aviso', body: 'Mensagem geral' });
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(announcementDoc.set).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'BROADCAST_PARTIALLY_SENT', announcementId: 'ann-1' })
+    );
+  });
+
+  it('cadeia real: STAFF (não-ADMIN) recebe 403 do requireRole e nem chega no handler', async () => {
+    const req = makeBroadcastReq({ title: 'Aviso', body: 'Mensagem geral' }, { uid: 'staff-1', role: 'STAFF' });
+    const res = makeRes();
+
+    await runChain([broadcastRoleHandler, broadcastNotificationHandler], req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(db.collection).not.toHaveBeenCalled();
+  });
+
+  it('cadeia real: PARTICIPANT recebe 403 do requireRole e nem chega no handler', async () => {
+    const req = makeBroadcastReq({ title: 'Aviso', body: 'Mensagem geral' }, { uid: 'part-1', role: 'PARTICIPANT' });
+    const res = makeRes();
+
+    await runChain([broadcastRoleHandler, broadcastNotificationHandler], req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(db.collection).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import * as admin from 'firebase-admin';
 import { db, auth } from '../config/firebaseAdmin';
 import { requireAuth, requireRole } from '../middlewares/authMiddleware';
 import { isValidFirestoreId } from '../lib/firestoreId';
@@ -91,5 +92,93 @@ export async function updateUserRoleHandler(req: Request, res: Response): Promis
 
 // PUT /api/admin/users/:uid/role — apenas ADMIN pode alterar o papel de outro usuário.
 router.put('/users/:uid/role', requireAuth, requireRole(['ADMIN']), updateUserRoleHandler);
+
+
+/**
+ * Handler do endpoint POST /api/admin/notifications/broadcast (KAN-61).
+ *
+ * Push (FCM) e gravacao em /announcements sao dois sistemas que nao sao
+ * atomicos entre si (mesma natureza do problema do KAN-60, agora entre um
+ * servico externo e o Firestore em vez de dois servicos do Firebase).
+ *
+ * Ordem escolhida: Firestore primeiro, push depois. /announcements e a fonte
+ * de verdade que o PWA escuta em tempo real (KAN-56) - se o push falhar
+ * depois do Firestore ja ter gravado, o aviso continua visivel no feed do
+ * app, entao isso e reportado como sucesso parcial (502) em vez de escondido
+ * atras de um 500 generico. Se a ordem fosse invertida e o Firestore
+ * falhasse depois do push, o usuario teria visto uma notificacao sem
+ * nenhum registro correspondente pra consultar depois - pior cenario.
+ *
+ * Topico fixo 'todos_participantes' (unica audiencia pedida no DoD do
+ * KAN-61) - nao implementa selecao de topico custom, nao foi pedido.
+ */
+// Achado do security review (KAN-61): sem teto de tamanho, um ADMIN
+// comprometido conseguia gravar anuncio degenerado em /announcements mesmo
+// que o push do FCM depois falhasse/truncasse (FCM aceita ~4KB por
+// mensagem). Limites abaixo sao generosos pra notificacao de tela de
+// bloqueio, nao pensados como paragrafo longo.
+const MAX_TITLE_LENGTH = 150;
+const MAX_BODY_LENGTH = 1000;
+
+export async function broadcastNotificationHandler(req: Request, res: Response): Promise<void> {
+  const { title, body } = req.body ?? {};
+
+  if (typeof title !== 'string' || !title.trim()) {
+    res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'title e obrigatorio e deve ser uma string nao vazia.' });
+    return;
+  }
+
+  if (typeof body !== 'string' || !body.trim()) {
+    res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'body e obrigatorio e deve ser uma string nao vazia.' });
+    return;
+  }
+
+  const trimmedTitle = title.trim();
+  const trimmedBody = body.trim();
+
+  if (trimmedTitle.length > MAX_TITLE_LENGTH) {
+    res.status(400).json({ error: 'INVALID_PAYLOAD', message: `title deve ter no maximo ${MAX_TITLE_LENGTH} caracteres.` });
+    return;
+  }
+
+  if (trimmedBody.length > MAX_BODY_LENGTH) {
+    res.status(400).json({ error: 'INVALID_PAYLOAD', message: `body deve ter no maximo ${MAX_BODY_LENGTH} caracteres.` });
+    return;
+  }
+  const announcementRef = db.collection('announcements').doc();
+
+  try {
+    await announcementRef.set({
+      title: trimmedTitle,
+      body: trimmedBody,
+      createdBy: req.user!.uid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Erro ao gravar comunicado em /announcements:', error);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Nao foi possivel gravar o comunicado.' });
+    return;
+  }
+
+  try {
+    await admin.messaging().send({
+      topic: 'todos_participantes',
+      notification: { title: trimmedTitle, body: trimmedBody }
+    });
+  } catch (error: any) {
+    console.error('Erro ao disparar push FCM do broadcast:', error?.message || error);
+    res.status(502).json({
+      error: 'BROADCAST_PARTIALLY_SENT',
+      message: 'O comunicado (id ' + announcementRef.id + ') ja foi salvo em /announcements e esta visivel no feed do app, mas o push via FCM falhou. Participantes nao receberam a notificacao. Reenviar manualmente se necessario.',
+      announcementId: announcementRef.id
+    });
+    return;
+  }
+
+  res.status(201).json({ success: true, announcementId: announcementRef.id });
+}
+
+// POST /api/admin/notifications/broadcast - apenas ADMIN dispara aviso global (KAN-61).
+router.post('/notifications/broadcast', requireAuth, requireRole(['ADMIN']), broadcastNotificationHandler);
 
 export default router;
