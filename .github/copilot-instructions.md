@@ -19,6 +19,7 @@ Copilot não tem um mecanismo nativo de subagente/dispatch como o Claude Code (A
 |---|---|
 | Implementar algo novo / corrigir bug | `.agent-system/workflows/task-workflow.md` + `.agent-system/agents/qa.md` |
 | Revisar/preparar Pull Request | `.agent-system/agents/code-review.md` (nunca sugira merge) |
+| Branch/PR desatualizada ou conflitante, PR fechada sem merge, status do Jira que não bate com PR real, card duplicado ou fora da coluna certa | `.agent-system/agents/git-ops.md` — camada mecânica embaixo do code-review; nunca julga corretude de código, nunca mexe em branch protection |
 | Autenticação, Firestore/Storage rules, token, upload, endpoint administrativo | `.agent-system/agents/security.md` — só aponte o problema, não assuma que está resolvido |
 | Requisito novo/ambíguo ou classificação de regra de negócio | `.agent-system/agents/spec.md` |
 | Divergência entre documentação e código | `.agent-system/agents/product.md` |
