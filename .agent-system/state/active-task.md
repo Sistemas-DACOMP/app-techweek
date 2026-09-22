@@ -52,5 +52,14 @@ Fabio antes de implementar (ver handoff/pergunta desta sessão).
 
 ## Status
 
-BLOCKED_ON_PRODUCT_DECISION — aguardando resposta do Fabio sobre (A) vs (B) acima antes de
-implementar. Gate `SPEC READY` (ver `gates/gates.md`) ainda não limpo por causa dessa ambiguidade.
+READY_FOR_HUMAN_REVIEW. Fabio decidiu (A) — upgrade in-place dentro do Perfil. Implementado,
+testado, PR aberta: https://github.com/Sistemas-DACOMP/app-techweek/pull/96 (branch
+`feature/KAN-47-cracha-digital-qr`). `npm run quality-gate` → `quality_score: 1`, `approved: true`
+(lint/build/test front+backend, 108 testes incluindo os 2 novos pra `getBadgeQrValue`). Jira
+KAN-47 comentado e movido pra status `develop` (Em análise). Merge continua humano — nenhum passo
+aqui tentou mergear.
+
+Trabalho de agent-system (contexto/regras/ADRs/Maestri/Antigravity, ver
+`task-history/2026-09-22-agent-system-buildout.md`) foi pra uma PR separada:
+https://github.com/Sistemas-DACOMP/app-techweek/pull/97 (branch
+`feature/agent-system-buildout-2026-09-22`) — sem Jira, por decisão do Fabio.
