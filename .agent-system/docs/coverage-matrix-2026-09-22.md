@@ -22,7 +22,7 @@ rodado, arquivo lido, output real).
 | 9 | Contracts | DONE (estrutural) | `.agent-system/contracts/README.md` documenta por que está vazio (nenhum contrato formal existe ainda fora do próprio código) e quando escrever um de verdade — não inventado sem necessidade real |
 | 10 | Task state | DONE | `state/active-task.md`, `blockers.md`, `current-workflow.md` — populados de verdade hoje pela primeira vez (antes era scaffolding vazio) |
 | 11 | Handoffs | DONE (1 exemplo real) | `handoffs/2026-09-22-agent-system-buildout.md` — primeiro handoff real já escrito, segue `templates/handoff.md` |
-| 12 | Maestri integrado | BLOCKED | GUI-only, sem CLI/API — `adapters/maestri/README.md` + ADR-004 documentam tudo, exceto o clique real. Ver `state/blockers.md` |
+| 12 | Maestri integrado | PARTIAL | Fabio instalou o app de verdade (skills Maestri disponíveis, `.maestri/roles/` real apareceu no repo). Esta sessão específica não está conectada ao canvas — `maestri` CLI ausente do PATH, testado 2x. Ver `state/blockers.md` |
 | 13 | Git/Jira integrado | DONE | `gh` CLI + Atlassian MCP confirmados funcionais; `rules/engineering-rules.md`/`gates.md` amarram commit/branch/PR a Jira |
 | 14 | Worktree isolation | DONE | Um worktree real em uso (`.claude/worktrees/kan45`), `.gitignore` corrigido hoje; as duas branches órfãs foram deletadas (`git branch -D`, confirmado pelo Fabio, verificado sem worktree ativo/cópia remota antes) |
 | 15 | QA workflow | DONE | `agents/qa.md` + `.claude/skills/qa-agent/SKILL.md`, gate `QA PASSED` em `gates.md` |
