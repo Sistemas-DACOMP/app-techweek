@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
-import * as admin from 'firebase-admin';
-import { db } from '../config/firebaseAdmin';
+import { db, FieldValue } from '../config/firebaseAdmin';
 import { requireAuth } from '../middlewares/authMiddleware';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
@@ -118,11 +117,12 @@ router.post('/claim', requireAuth, participantActionLimiter, async (req: Request
         referenceId,
         points: missionPoints,
         metadata: metadata ?? null,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
       });
 
       tx.update(userRef, {
-        totalPoints: admin.firestore.FieldValue.increment(missionPoints)
+        totalPoints: FieldValue.increment(missionPoints),
+        pontuacaoTotal: FieldValue.increment(missionPoints)
       });
 
       return { status: 200 as const, body: { success: true, points: missionPoints } };

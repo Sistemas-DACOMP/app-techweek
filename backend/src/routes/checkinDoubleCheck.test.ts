@@ -7,6 +7,16 @@ vi.mock('../config/firebaseAdmin', () => ({
     runTransaction: vi.fn()
   }
 }));
+vi.mock('../config/firebaseAdmin', async () => {
+  const admin = await import('firebase-admin');
+  return {
+    db: {
+      collection: vi.fn(),
+      runTransaction: vi.fn()
+    },
+    FieldValue: admin.firestore.FieldValue
+  };
+});
 
 import router from './checkinDoubleCheck';
 import { db } from '../config/firebaseAdmin';
@@ -231,7 +241,10 @@ describe('POST /checkout (KAN-51 — aluno via QR dinâmico do telão)', () => {
     );
     expect(tx.update).toHaveBeenCalledWith(
       { path: 'users/part-1' },
-      { totalPoints: admin.firestore.FieldValue.increment(30) }
+      {
+        totalPoints: admin.firestore.FieldValue.increment(30),
+        pontuacaoTotal: admin.firestore.FieldValue.increment(30)
+      }
     );
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, status: 'COMPLETED', pointsCredited: 30 }));

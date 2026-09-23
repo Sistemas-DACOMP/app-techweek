@@ -11,7 +11,7 @@ import FeedbackModal from '../components/FeedbackModal';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function Challenges() {
-  const { completedChallenges, completeChallenge } = useUser();
+  const { completedChallenges, completeChallenge, hasCompletedChallenge } = useUser();
   const navigate = useNavigate();
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
   useScrollLock(!!activeManualChallenge);
@@ -182,6 +182,16 @@ export default function Challenges() {
         const publicUrl = await uploadMissionPhoto(file, activeManualChallenge.id);
         finalMetadata[photoField.id] = publicUrl;
         finalMetadata.photo_url = publicUrl;
+      }
+
+      if (hasCompletedChallenge && hasCompletedChallenge(activeManualChallenge.id)) {
+        setFeedback({
+          type: 'warning',
+          title: 'Missão Já Concluída',
+          message: 'Esta missão já foi concluída anteriormente!'
+        });
+        setActiveManualChallenge(null);
+        return;
       }
 
       // Respostas da missão manual vão como metadata do evento de pontos

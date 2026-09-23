@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
-import * as admin from 'firebase-admin';
-import { db } from '../config/firebaseAdmin';
+import { db, FieldValue } from '../config/firebaseAdmin';
 import { requireAuth, requireRole } from '../middlewares/authMiddleware';
 import { isValidFirestoreId } from '../lib/firestoreId';
 import { verifyScreenToken } from '../lib/screenToken';
@@ -166,7 +165,8 @@ router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
       });
 
       tx.update(userRef, {
-        totalPoints: admin.firestore.FieldValue.increment(points)
+        totalPoints: FieldValue.increment(points),
+        pontuacaoTotal: FieldValue.increment(points)
       });
 
       return { status: 200 as const, body: { success: true, status: 'COMPLETED', pointsCredited: points } };

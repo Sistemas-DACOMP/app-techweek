@@ -9,7 +9,8 @@ import {
   where, 
   orderBy,
   limit,
-  serverTimestamp
+  serverTimestamp,
+  onSnapshot
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updateProfile, updateEmail } from 'firebase/auth';
@@ -53,6 +54,7 @@ export async function createUserProfile(uid, data) {
     avatarUrl: data.avatarUrl || null,
     role: data.role || 'PARTICIPANT',
     totalPoints: 0,
+    pontuacaoTotal: 0,
     ticketId: data.ticketId || null,
     symplaTicket: data.symplaTicket || null,
     termsAcceptedAt: now,
@@ -225,33 +227,109 @@ export async function getUserPointEvents(uid) {
   }
 }
 
+function mapUserToLeaderboard(d, index) {
+  const data = typeof d.data === 'function' ? d.data() : d;
+  const points = Number(data.pontuacaoTotal ?? data.totalPoints ?? 0);
+  return {
+    id: d.id || data.id || data.uid,
+    rank: index + 1,
+    username: data.username || data.firstName || 'user',
+    first_name: data.firstName || 'Participante',
+    last_name: data.lastName || '',
+    avatar_url: data.avatarUrl || data.photoURL || null,
+    points,
+    mascot: data.mascot || 'blue',
+    course: data.course || '',
+    createdAt: data.createdAt || null
+  };
+}
+
+function sortLeaderboardWithTiebreak(list) {
+  // Critério de tie-break (REG-RANK-001): se houver empate em pontos,
+  // desempata por data de criação mais antiga ou ordem alfabética de username.
+  list.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+    const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+    if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+    return (a.username || '').localeCompare(b.username || '');
+  });
+  return list.map((item, idx) => ({ ...item, rank: idx + 1 }));
+}
+
 /**
- * Obtém os líderes do ranking de pontuação.
+ * Obtém os líderes do ranking de pontuação filtrando apenas participantes
+ * e ordenando por pontuacaoTotal desc com limite configurável (padrão 50).
  */
 export async function getLeaderboardUsers(maxLimit = 50) {
   try {
     const usersRef = collection(db, 'users');
-    const q = query(usersRef, orderBy('totalPoints', 'desc'), limit(maxLimit));
-    const snap = await getDocs(q);
+    let snap;
+    try {
+      const q = query(
+        usersRef,
+        where('role', '==', 'PARTICIPANT'),
+        orderBy('pontuacaoTotal', 'desc'),
+        limit(maxLimit)
+      );
+      snap = await getDocs(q);
+    } catch (primaryErr) {
+      console.warn('Query com pontuacaoTotal falhou, tentando fallback com totalPoints:', primaryErr);
+      const fallbackQuery = query(
+        usersRef,
+        where('role', '==', 'PARTICIPANT'),
+        orderBy('totalPoints', 'desc'),
+        limit(maxLimit)
+      );
+      snap = await getDocs(fallbackQuery);
+    }
 
-    return snap.docs.map((d, index) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        rank: index + 1,
-        username: data.username || 'user',
-        first_name: data.firstName || 'Participante',
-        last_name: data.lastName || '',
-        avatar_url: data.avatarUrl || null,
-        points: data.totalPoints || 0,
-        mascot: data.mascot || 'blue',
-        course: data.course || ''
-      };
-    });
+    const list = snap.docs.map((d, index) => mapUserToLeaderboard(d, index));
+    return sortLeaderboardWithTiebreak(list);
   } catch (err) {
     console.warn('Erro ao carregar ranking:', err);
     return [];
   }
+}
+
+/**
+ * Escuta atualizações do ranking em tempo real via onSnapshot do Firestore (KAN-55).
+ */
+export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
+  const usersRef = collection(db, 'users');
+  const q = query(
+    usersRef,
+    where('role', '==', 'PARTICIPANT'),
+    orderBy('pontuacaoTotal', 'desc'),
+    limit(maxLimit)
+  );
+
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map((d, index) => mapUserToLeaderboard(d, index));
+      callback(sortLeaderboardWithTiebreak(list));
+    },
+    (err) => {
+      console.warn('Erro no listener em tempo real do ranking (pontuacaoTotal), tentando fallback com totalPoints:', err);
+      const fallbackQuery = query(
+        usersRef,
+        where('role', '==', 'PARTICIPANT'),
+        orderBy('totalPoints', 'desc'),
+        limit(maxLimit)
+      );
+      return onSnapshot(
+        fallbackQuery,
+        (fallbackSnap) => {
+          const list = fallbackSnap.docs.map((d, index) => mapUserToLeaderboard(d, index));
+          callback(sortLeaderboardWithTiebreak(list));
+        },
+        (finalErr) => {
+          if (onError) onError(finalErr);
+        }
+      );
+    }
+  );
 }
 
 /**

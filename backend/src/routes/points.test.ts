@@ -7,6 +7,16 @@ vi.mock('../config/firebaseAdmin', () => ({
     runTransaction: vi.fn()
   }
 }));
+vi.mock('../config/firebaseAdmin', async () => {
+  const admin = await import('firebase-admin');
+  return {
+    db: {
+      collection: vi.fn(),
+      runTransaction: vi.fn()
+    },
+    FieldValue: admin.firestore.FieldValue
+  };
+});
 
 import router from './points';
 import { db } from '../config/firebaseAdmin';
