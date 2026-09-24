@@ -5,12 +5,15 @@ import { registerUser } from './registerUser';
  * Fake mínimo de Firestore: só o suficiente pra exercitar a transação
  * (tx.get/tx.set) sem precisar de um projeto Firebase real.
  */
-function makeFakeDb(userAlreadyExists: boolean) {
+function makeFakeDb(userAlreadyExists: boolean, existingData?: any) {
   const setSpy = vi.fn();
   const userRef = { path: 'users/fake-uid' };
 
   const tx = {
-    get: vi.fn().mockResolvedValue({ exists: userAlreadyExists }),
+    get: vi.fn().mockResolvedValue({
+      exists: userAlreadyExists,
+      data: () => (existingData !== undefined ? existingData : (userAlreadyExists ? { termsAcceptedAt: '2026-09-20T00:00:00Z' } : undefined))
+    }),
     set: setSpy
   };
 
@@ -96,6 +99,50 @@ describe('registerUser (REG-LGPD-001 / KAN-72)', () => {
       period: '4º Período',
       totalPoints: 0
     });
+  });
+
+  it('completa o cadastro com sucesso se o documento /users/{uid} já existia mas sem termsAcceptedAt (ex: pré-criado pelo Sympla)', async () => {
+    // Documento pré-existente criado por validação de ingresso Sympla
+    const existingTicketDoc = {
+      hasSymplaTicket: true,
+      symplaTicket: { ticketNumber: 'TICKET-999' },
+      totalPoints: 20,
+      pontuacaoTotal: 20
+    };
+    const { db, setSpy } = makeFakeDb(true, existingTicketDoc);
+
+    const profile = {
+      firstName: 'Carlos',
+      lastName: 'Ferreira',
+      username: 'carlosf'
+    };
+
+    const result = await registerUser(db as any, 'uid-sympla-user', 'carlos@example.com', profile);
+
+    expect(result).toEqual({
+      status: 'created',
+      user: {
+        uid: 'uid-sympla-user',
+        email: 'carlos@example.com',
+        role: 'PARTICIPANT',
+        profile
+      }
+    });
+
+    expect(setSpy).toHaveBeenCalledTimes(1);
+    const [, data, options] = setSpy.mock.calls[0];
+    expect(options).toEqual({ merge: true });
+    expect(data).toMatchObject({
+      uid: 'uid-sympla-user',
+      email: 'carlos@example.com',
+      role: 'PARTICIPANT',
+      username: 'carlosf',
+      firstName: 'Carlos',
+      lastName: 'Ferreira',
+      totalPoints: 20,
+      pontuacaoTotal: 20
+    });
+    expect(data).toHaveProperty('termsAcceptedAt');
   });
 });
 
