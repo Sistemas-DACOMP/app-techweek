@@ -11,7 +11,7 @@ import { SYMPLA_EVENT_URL, verifySymplaTicket, getBadgeQrValue } from '../lib/sy
 import { getUserProfile, uploadUserAvatar, updateUserEmail, updateUserProfile } from '../lib/userService';
 import { 
   LogOut, Camera, Edit2, Edit3, Loader2, X, RefreshCw, Lock, 
-  User, Mail, Phone, BookOpen, GraduationCap, Ticket, Check, AlertCircle, Sparkles, ExternalLink 
+  User, Mail, Phone, BookOpen, GraduationCap, Ticket, Check, AlertCircle, Sparkles, ExternalLink, Building2 
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -528,6 +528,32 @@ export default function Profile() {
         >
           <Edit3 size={15} />
           Editar Perfil Completo
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate('/sponsor')}
+          style={{
+            marginTop: '8px',
+            marginBottom: '16px',
+            marginLeft: '8px',
+            padding: '8px 16px',
+            borderRadius: '12px',
+            background: 'rgba(37, 211, 102, 0.12)',
+            border: '1px solid rgba(37, 211, 102, 0.35)',
+            color: '#25D366',
+            fontSize: '0.85rem',
+            fontWeight: '600',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 4px 12px rgba(37, 211, 102, 0.12)'
+          }}
+        >
+          <Building2 size={15} />
+          Modo Patrocinador
         </button>
 
         <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>

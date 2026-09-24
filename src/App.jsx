@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Onboarding from './pages/Onboarding';
 import InstagramMission from './pages/InstagramMission';
+import Sponsor from './pages/Sponsor';
 import logoTw from './assets/logo-tw.png';
 
 function AppContent() {
@@ -86,6 +87,7 @@ function AppContent() {
         <Route path="/challenges" element={<Challenges />} />
         <Route path="/ranking" element={<Ranking />} />
         <Route path="/instagram-mission" element={<InstagramMission />} />
+        <Route path="/sponsor" element={<Sponsor />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       
