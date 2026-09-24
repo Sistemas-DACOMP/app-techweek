@@ -16,6 +16,7 @@ import MascotDuo from '../components/MascotDuo';
 import logoTw from '../assets/logo-tw.png';
 import { onAuthChange } from '../lib/auth';
 import { getUserProfile } from '../lib/userService';
+import NotificationBell from '../components/NotificationBell';
 import { useUser } from '../hooks/useUser';
 import ActivityCard from '../components/ActivityCard';
 import ActivityModal from '../components/ActivityModal';
