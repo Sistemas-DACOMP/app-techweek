@@ -39,6 +39,7 @@ export default function ActivityCard({
       className="activity-card-container"
       onClick={() => onOpenDetails && onOpenDetails(activity)}
       style={{
+        fontFamily: "'Montserrat', sans-serif",
         position: 'relative',
         background: 'linear-gradient(145deg, rgba(17, 24, 39, 0.75), rgba(15, 23, 42, 0.85))',
         backdropFilter: 'blur(16px)',
@@ -365,6 +366,7 @@ export default function ActivityCard({
                 onClick={handleReserveClick}
                 disabled={isReserving}
                 style={{
+                  fontFamily: "'Montserrat', sans-serif",
                   padding: '8px 16px',
                   borderRadius: '14px',
                   background: isSoldOut 

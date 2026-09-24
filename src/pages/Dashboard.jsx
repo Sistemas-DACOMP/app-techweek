@@ -319,6 +319,7 @@ export default function Dashboard() {
             onClick={() => setActiveTab('all')}
             style={{
               flex: 1,
+              fontFamily: "'Montserrat', sans-serif",
               padding: '12px 8px',
               borderRadius: '14px',
               background: activeTab === 'all' 
@@ -345,6 +346,7 @@ export default function Dashboard() {
             onClick={() => setActiveTab('my_agenda')}
             style={{
               flex: 1,
+              fontFamily: "'Montserrat', sans-serif",
               padding: '12px 8px',
               borderRadius: '14px',
               background: activeTab === 'my_agenda' 
@@ -368,6 +370,7 @@ export default function Dashboard() {
             {myAgendaActivities.length > 0 && (
               <span
                 style={{
+                  fontFamily: "'Montserrat', sans-serif",
                   background: activeTab === 'my_agenda' ? 'rgba(255,255,255,0.25)' : '#3b82f6',
                   color: 'white',
                   borderRadius: '10px',
@@ -385,7 +388,7 @@ export default function Dashboard() {
 
       {/* Tab: TODAS AS ATIVIDADES */}
       {activeTab === 'all' && (
-        <div className="schedule-panel animate-fade-in">
+        <div className="schedule-panel animate-fade-in" style={{ fontFamily: "'Montserrat', sans-serif" }}>
           {/* Search bar */}
           <div
             style={{
@@ -410,6 +413,7 @@ export default function Dashboard() {
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
                 width: '100%',
+                fontFamily: "'Montserrat', sans-serif",
                 padding: '12px 14px 12px 38px',
                 borderRadius: '14px',
                 background: 'rgba(255, 255, 255, 0.05)',
@@ -423,13 +427,15 @@ export default function Dashboard() {
 
           {/* Type Filter Chips */}
           <div
+            className="no-scrollbar"
             style={{
               display: 'flex',
               gap: '8px',
               overflowX: 'auto',
-              paddingBottom: '10px',
-              marginBottom: '8px',
-              scrollbarWidth: 'none'
+              paddingBottom: '8px',
+              marginBottom: '10px',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none'
             }}
           >
             {[
@@ -443,8 +449,9 @@ export default function Dashboard() {
                 key={type.id}
                 onClick={() => setSelectedType(type.id)}
                 style={{
+                  fontFamily: "'Montserrat', sans-serif",
                   whiteSpace: 'nowrap',
-                  padding: '6px 14px',
+                  padding: '7px 14px',
                   borderRadius: '20px',
                   background: selectedType === type.id
                     ? 'rgba(59, 130, 246, 0.25)'
@@ -454,7 +461,7 @@ export default function Dashboard() {
                     : '1px solid rgba(255, 255, 255, 0.08)',
                   color: selectedType === type.id ? '#60a5fa' : 'var(--text-secondary)',
                   fontSize: '12px',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -464,62 +471,73 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Day Filter Chips (if multiple days exist) */}
+          {/* Day Filter Grid (Todos os dias cabem na tela sem rolagem) */}
           {availableDays.length > 0 && (
             <div
+              className="no-scrollbar"
               style={{
                 display: 'flex',
-                gap: '8px',
-                overflowX: 'auto',
-                paddingBottom: '14px',
-                marginBottom: '16px',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.06)'
+                gap: '6px',
+                width: '100%',
+                justifyContent: 'space-between',
+                marginBottom: '18px',
+                paddingBottom: '12px',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
               }}
             >
               <button
                 onClick={() => setSelectedDay('all')}
                 style={{
-                  whiteSpace: 'nowrap',
-                  padding: '5px 12px',
+                  flex: 1,
+                  fontFamily: "'Montserrat', sans-serif",
+                  padding: '8px 2px',
                   borderRadius: '12px',
                   background: selectedDay === 'all'
-                    ? 'rgba(14, 165, 233, 0.2)'
-                    : 'rgba(255, 255, 255, 0.03)',
+                    ? 'rgba(14, 165, 233, 0.25)'
+                    : 'rgba(255, 255, 255, 0.04)',
                   border: selectedDay === 'all'
                     ? '1px solid #0ea5e9'
-                    : '1px solid rgba(255, 255, 255, 0.06)',
-                  color: selectedDay === 'all' ? '#38bdf8' : 'rgba(255, 255, 255, 0.5)',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  cursor: 'pointer'
+                    : '1px solid rgba(255, 255, 255, 0.08)',
+                  color: selectedDay === 'all' ? '#38bdf8' : 'rgba(255, 255, 255, 0.6)',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
                 }}
               >
-                Todos os dias
+                Todos
               </button>
 
-              {availableDays.map((day) => (
-                <button
-                  key={day}
-                  onClick={() => setSelectedDay(day)}
-                  style={{
-                    whiteSpace: 'nowrap',
-                    padding: '5px 12px',
-                    borderRadius: '12px',
-                    background: selectedDay === day
-                      ? 'rgba(14, 165, 233, 0.2)'
-                      : 'rgba(255, 255, 255, 0.03)',
-                    border: selectedDay === day
-                      ? '1px solid #0ea5e9'
-                      : '1px solid rgba(255, 255, 255, 0.06)',
-                    color: selectedDay === day ? '#38bdf8' : 'rgba(255, 255, 255, 0.5)',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {day}
-                </button>
-              ))}
+              {availableDays.map((day) => {
+                const dayOnly = day.includes('/') ? day.split('/')[0] : day;
+                return (
+                  <button
+                    key={day}
+                    onClick={() => setSelectedDay(day)}
+                    style={{
+                      flex: 1,
+                      fontFamily: "'Montserrat', sans-serif",
+                      padding: '8px 2px',
+                      borderRadius: '12px',
+                      background: selectedDay === day
+                        ? 'rgba(14, 165, 233, 0.25)'
+                        : 'rgba(255, 255, 255, 0.04)',
+                      border: selectedDay === day
+                        ? '1px solid #0ea5e9'
+                        : '1px solid rgba(255, 255, 255, 0.08)',
+                      color: selectedDay === day ? '#38bdf8' : 'rgba(255, 255, 255, 0.6)',
+                      fontSize: '12px',
+                      fontWeight: '700',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    Dia {dayOnly}
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -623,7 +641,14 @@ export default function Dashboard() {
               <button
                 onClick={() => setActiveTab('all')}
                 className="btn-primary"
-                style={{ padding: '10px 20px', fontSize: '13px', borderRadius: '14px' }}
+                style={{ 
+                  fontFamily: "'Montserrat', sans-serif",
+                  padding: '12px 24px', 
+                  fontSize: '13px', 
+                  fontWeight: '700',
+                  borderRadius: '14px',
+                  cursor: 'pointer'
+                }}
               >
                 Ver Grade Completa
               </button>

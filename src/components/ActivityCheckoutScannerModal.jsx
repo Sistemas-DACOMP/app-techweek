@@ -107,6 +107,7 @@ export default function ActivityCheckoutScannerModal({
         className="modal-card-fixed"
         onClick={(e) => e.stopPropagation()}
         style={{
+          fontFamily: "'Montserrat', sans-serif",
           width: '100%',
           maxWidth: '460px',
           padding: '28px 24px',
