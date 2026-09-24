@@ -387,18 +387,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-<<<<<<< HEAD
-      <LectureModal
-        lecture={selectedLecture}
-        hasSymplaTicket={hasSymplaTicket}
-        onClose={() => setSelectedLecture(null)}
-        onValidate={() => {
-          if (!hasSymplaTicket) {
-            navigate('/profile');
-            return;
-          }
-          setShowLectureScanner(true);
-=======
       {/* Tab: TODAS AS ATIVIDADES */}
       {activeTab === 'all' && (
         <div className="schedule-panel animate-fade-in" style={{ fontFamily: "'Montserrat', sans-serif" }}>
@@ -687,7 +675,6 @@ export default function Dashboard() {
         onOpenSelfScanner={(act) => {
           setSelectedActivity(null);
           setSelfScanActivity(act);
->>>>>>> feature/KAN-50-grade-atividades
         }}
       />
 
