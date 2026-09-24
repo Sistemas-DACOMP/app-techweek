@@ -232,16 +232,20 @@ export default function Profile() {
         try {
           const symplaRes = await verifySymplaTicket({ email: cleanEmail });
           const p = symplaRes?.participant || symplaRes?.ticket;
-          if (symplaRes && symplaRes.verified && p) {
-            const ticketObj = {
+          if (symplaRes && symplaRes.verified && (symplaRes.symplaTicket || p)) {
+            const ticketObj = symplaRes.symplaTicket || {
               ticketNumber: p.ticketNumber,
               ticketName: p.ticketName,
               qrCodeData: p.qrCodeData || p.ticketNumber,
               orderId: p.orderId
             };
-            await updateUserProfile(uid, { symplaTicket: ticketObj });
             updates.symplaTicket = ticketObj;
-            symplaMessage = ` Ingresso Sympla vinculado: ${p.ticketName}! 🎟️`;
+            try {
+              await updateUserProfile(uid, { symplaTicket: ticketObj });
+            } catch (updateErr) {
+              console.warn('[Profile] Atualização client-side secundária (já salvo pelo backend):', updateErr);
+            }
+            symplaMessage = ` Ingresso Sympla vinculado: ${ticketObj.ticketName || p?.ticketName || 'Oficial'}! 🎟️`;
           } else if (cleanEmail !== profile.email) {
             symplaMessage = ' (Ingresso não localizado com este e-mail).';
           }
@@ -289,23 +293,30 @@ export default function Profile() {
     try {
       const res = await verifySymplaTicket({ email: cleanEmail });
       const p = res?.participant || res?.ticket;
-      if (res && res.verified && p) {
-        const ticketObj = {
+      if (res && res.verified && (res.symplaTicket || p)) {
+        const ticketObj = res.symplaTicket || {
           ticketNumber: p.ticketNumber,
           ticketName: p.ticketName,
           qrCodeData: p.qrCodeData || p.ticketNumber,
           orderId: p.orderId
         };
+        // Atualiza imediatamente o estado do componente com o ingresso oficial
+        setProfile(prev => ({ ...prev, symplaTicket: ticketObj }));
+
         const uid = profile.id || auth.currentUser?.uid;
         if (uid) {
-          await updateUserProfile(uid, { symplaTicket: ticketObj });
-          setProfile(prev => ({ ...prev, symplaTicket: ticketObj }));
+          try {
+            await updateUserProfile(uid, { symplaTicket: ticketObj });
+          } catch (updateErr) {
+            console.warn('[Profile] Atualização client-side secundária (já salvo pelo backend):', updateErr);
+          }
         }
-        setEditFeedback({ type: 'success', text: `Ingresso confirmado com sucesso: ${p.ticketName}! 🎟️` });
+        setEditFeedback({ type: 'success', text: `Ingresso confirmado com sucesso: ${ticketObj.ticketName || p?.ticketName || 'Oficial'}! 🎟️` });
       } else {
-        setEditFeedback({ type: 'warning', text: 'Ingresso não encontrado no Sympla. Verifique se o e-mail cadastrado é o mesmo da compra do ingresso.' });
+        setEditFeedback({ type: 'warning', text: res?.message || 'Ingresso não encontrado no Sympla. Verifique se o e-mail cadastrado é o mesmo da compra do ingresso.' });
       }
-    } catch {
+    } catch (err) {
+      console.error('[Profile] Erro ao verificar ingresso no modal:', err);
       setEditFeedback({ type: 'error', text: 'Não foi possível conectar com o Sympla no momento. Tente novamente.' });
     } finally {
       setVerifyingTicket(false);
@@ -313,26 +324,37 @@ export default function Profile() {
   };
 
   const handleRecheckTicket = async () => {
-    if (!profile.email || !profile.id) return;
+    const emailToVerify = profile.email || auth.currentUser?.email;
+    if (!emailToVerify) return;
     setRecheckingTicket(true);
     setTicketNotice('');
     try {
-      const res = await verifySymplaTicket({ email: profile.email });
+      const res = await verifySymplaTicket({ email: emailToVerify });
       const p = res?.participant || res?.ticket;
-      if (res && res.verified && p) {
-        const ticketObj = {
+      if (res && res.verified && (res.symplaTicket || p)) {
+        const ticketObj = res.symplaTicket || {
           ticketNumber: p.ticketNumber,
           ticketName: p.ticketName,
           qrCodeData: p.qrCodeData || p.ticketNumber,
           orderId: p.orderId
         };
-        await updateUserProfile(profile.id, { symplaTicket: ticketObj });
+        // Atualiza imediatamente o estado do componente com o ingresso oficial
         setProfile(prev => ({ ...prev, symplaTicket: ticketObj }));
+
+        const uid = profile.id || auth.currentUser?.uid;
+        if (uid) {
+          try {
+            await updateUserProfile(uid, { symplaTicket: ticketObj });
+          } catch (updateErr) {
+            console.warn('[Profile] Atualização client-side secundária (já salvo pelo backend):', updateErr);
+          }
+        }
         setTicketNotice('Ingresso localizado e vinculado com sucesso! 🎉');
       } else {
-        setTicketNotice('Ingresso ainda não encontrado no Sympla para este e-mail.');
+        setTicketNotice(res?.message || 'Ingresso ainda não encontrado no Sympla para este e-mail.');
       }
-    } catch {
+    } catch (err) {
+      console.error('[Profile] Erro ao rechecar ingresso:', err);
       setTicketNotice('Erro ao consultar o Sympla no momento.');
     } finally {
       setRecheckingTicket(false);

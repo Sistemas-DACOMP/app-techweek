@@ -128,7 +128,15 @@ export async function updateUserProfile(uid, updates) {
     updatedAt: serverTimestamp()
   };
 
-  await updateDoc(userRef, dataToUpdate);
+  try {
+    await updateDoc(userRef, dataToUpdate);
+  } catch (err) {
+    if (err?.code === 'not-found' || err?.message?.includes('No document to update')) {
+      await setDoc(userRef, dataToUpdate, { merge: true });
+    } else {
+      throw err;
+    }
+  }
   return true;
 }
 
