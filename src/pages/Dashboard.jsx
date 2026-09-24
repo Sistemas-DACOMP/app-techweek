@@ -9,6 +9,8 @@ import LectureCard from '../components/LectureCard';
 import LectureModal from '../components/LectureModal';
 import LectureScanner from '../components/LectureScanner';
 import NotificationBell from '../components/NotificationBell';
+import { useNotifications } from '../hooks/useNotifications';
+import { Bell } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -16,6 +18,14 @@ export default function Dashboard() {
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [showLectureScanner, setShowLectureScanner] = useState(false);
+
+  const { notifications } = useNotifications();
+
+  const urgentAnnouncement = notifications.find(
+    notification =>
+      notification.source === 'announcement' &&
+      notification.priority === 'URGENT'
+  );
 
   useEffect(() => {
     async function loadUserProfile(user) {
@@ -76,6 +86,19 @@ export default function Dashboard() {
           <MascotDuo />
         </div>
         <h2 style={{ color: 'white', textAlign: 'center', marginTop: '16px', marginBottom: '24px', fontSize: '1.5rem', fontWeight: '700' }}>Olá, {firstName}!</h2>
+        {urgentAnnouncement && (
+  <div className="dashboard-urgent-announcement">
+    <div>
+      <strong>{urgentAnnouncement.title}</strong>
+      <p>{urgentAnnouncement.message}</p>
+    </div>
+
+    <Bell
+      size={20}
+      className="dashboard-urgent-announcement-icon"
+    />
+  </div>
+)}
       </div>
 
       {/* Blue section with the event schedule */}
