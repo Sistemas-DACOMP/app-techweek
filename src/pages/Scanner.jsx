@@ -201,38 +201,6 @@ export default function Scanner() {
               </button>
             </div>
           </div>
-
-          {/* Demonstração Interativa do Botão Inteligente do WhatsApp (KAN-54) */}
-          <div className="glass-panel" style={{ padding: '20px', border: '1px solid rgba(37, 211, 102, 0.25)', background: 'linear-gradient(180deg, rgba(37, 211, 102, 0.04) 0%, rgba(15, 23, 42, 0.6) 100%)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <Sparkles size={18} color="#25D366" />
-              <span style={{ fontSize: '13px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#25D366' }}>
-                Conversão Direta WhatsApp (KAN-54)
-              </span>
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.5' }}>
-              Teste a conversão de lead com mensagem personalizada de abertura e deep-link direto:
-            </p>
-
-            <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '14px', borderRadius: '14px', marginBottom: '14px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #00f2fe, #4facfe)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', color: '#000', fontSize: '14px' }}>
-                  LF
-                </div>
-                <div>
-                  <div style={{ fontWeight: '700', fontSize: '14px', color: '#fff' }}>Larissa Ferreira</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Ciência da Computação • (34) 99876-5432</div>
-                </div>
-              </div>
-            </div>
-
-            <WhatsAppButton
-              phone="(34) 99876-5432"
-              participantName="Larissa Ferreira"
-              companyName="TechWeek FACOM"
-              fullWidth
-            />
-          </div>
         </div>
       ) : (
         <div className="glass-panel" style={{ padding: '32px 24px', textAlign: 'center' }}>
