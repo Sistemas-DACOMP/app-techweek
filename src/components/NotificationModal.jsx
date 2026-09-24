@@ -187,7 +187,7 @@ export default function NotificationModal({ isOpen, onClose }) {
             filteredNotifications.map((notification) => (
               <div
                 key={notification.id}
-                className={`notification-item ${notification.read ? 'read' : 'unread'}`}
+                className={`notification-item ${notification.read ? 'read' : 'unread'} ${notification.priority === 'URGENT' ? 'urgent' : ''}`}
                 onClick={() => handleItemClick(notification)}
               >
                 <div className="notification-item-icon">
