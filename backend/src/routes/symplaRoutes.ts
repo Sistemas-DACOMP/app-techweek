@@ -59,6 +59,32 @@ router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) =
 
     const qrCodeData = participant.ticket_num_qr_code || participant.ticket_number;
 
+    const ticketObj = {
+      participantId: participant.id,
+      orderId: participant.order_id,
+      ticketNumber: participant.ticket_number,
+      ticketName: participant.ticket_name,
+      qrCodeData: qrCodeData,
+      syncedAt: new Date().toISOString()
+    };
+
+    // Vincula o ingresso diretamente ao documento do participante no Firestore (Admin SDK)
+    const uid = req.user?.uid;
+    if (uid && (!isAdmin || !email || email.toLowerCase() === userEmail?.toLowerCase())) {
+      try {
+        const userDocRef = db.collection('users')?.doc?.(uid);
+        if (userDocRef?.set) {
+          await userDocRef.set({
+            symplaTicket: ticketObj,
+            hasSymplaTicket: true,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      } catch (dbErr) {
+        console.warn('[symplaRoutes] Aviso ao persistir ingresso no Firestore:', dbErr);
+      }
+    }
+
     res.status(200).json({
       status: 'success',
       verified: true,
@@ -72,7 +98,8 @@ router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) =
         email: participant.email,
         qrCodeData: qrCodeData,
         checkInStatus: participant.check_in?.[0]?.status || false
-      }
+      },
+      symplaTicket: ticketObj
     });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message || 'Erro ao validar ingresso no Sympla.' });
@@ -86,38 +113,50 @@ router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) =
 router.post('/sync-user', requireAuth, async (req: Request, res: Response) => {
   try {
     const uid = req.user?.uid;
-    const email = req.user?.email || req.body.email;
+    const { email: bodyEmail, ticketNumber } = req.body;
+    const email = req.user?.email || bodyEmail;
 
-    if (!uid || !email) {
-      res.status(400).json({ status: 'error', message: 'Usuário não autenticado ou e-mail indisponível.' });
+    if (!uid || (!email && !ticketNumber)) {
+      res.status(400).json({ status: 'error', message: 'Usuário não autenticado ou identificador indisponível.' });
       return;
     }
 
-    const participant = await symplaService.findParticipantByEmail(email);
+    let participant = null;
+    if (ticketNumber) {
+      participant = await symplaService.findParticipantByTicket(ticketNumber);
+    } else if (email) {
+      participant = await symplaService.findParticipantByEmail(email);
+    }
 
     if (!participant) {
       res.status(404).json({
         status: 'not_found',
         synced: false,
-        message: 'Nenhum ingresso encontrado no Sympla para o e-mail ' + email
+        message: 'Nenhum ingresso encontrado no Sympla para os dados informados.'
       });
       return;
     }
 
     const qrCodeData = participant.ticket_num_qr_code || participant.ticket_number;
 
+    const ticketObj = {
+      participantId: participant.id,
+      orderId: participant.order_id,
+      ticketNumber: participant.ticket_number,
+      ticketName: participant.ticket_name,
+      qrCodeData: qrCodeData,
+      syncedAt: new Date().toISOString()
+    };
+
     // Atualiza o perfil no Cloud Firestore
-    await db.collection('users').doc(uid).set({
-      symplaTicket: {
-        participantId: participant.id,
-        orderId: participant.order_id,
-        ticketNumber: participant.ticket_number,
-        ticketName: participant.ticket_name,
-        qrCodeData: qrCodeData,
-        syncedAt: new Date().toISOString()
-      },
-      hasSymplaTicket: true
-    }, { merge: true });
+    const userDocRef = db.collection('users')?.doc?.(uid);
+    if (userDocRef?.set) {
+      await userDocRef.set({
+        symplaTicket: ticketObj,
+        hasSymplaTicket: true,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    }
 
     res.status(200).json({
       status: 'success',
@@ -126,7 +165,8 @@ router.post('/sync-user', requireAuth, async (req: Request, res: Response) => {
         ticketNumber: participant.ticket_number,
         ticketName: participant.ticket_name,
         qrCodeData: qrCodeData
-      }
+      },
+      symplaTicket: ticketObj
     });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message || 'Erro ao sincronizar ingresso.' });
