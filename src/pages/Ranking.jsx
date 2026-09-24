@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Trophy, Crown, Medal, Award, User as UserIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Trophy, Crown, Medal, Award, User as UserIcon, Ticket } from 'lucide-react';
 import { subscribeToLeaderboardUsers, getLeaderboardUsers, getUserProfile } from '../lib/userService';
 import { useAuth } from '../contexts/AuthContext';
+import { useUser } from '../hooks/useUser';
 
 export default function Ranking() {
+  const navigate = useNavigate();
+  const { hasSymplaTicket } = useUser();
   const [ranking, setRanking] = useState([]);
   const [loading, setLoading] = useState(true);
   const [myProfileData, setMyProfileData] = useState(null);
@@ -59,6 +63,13 @@ export default function Ranking() {
   const restOfRanking = ranking.slice(3);
 
   // Informações para a barra fixa no rodapé do usuário logado
+  const isTicketVerified = Boolean(
+    hasSymplaTicket ||
+    myProfileData?.hasSymplaTicket ||
+    myProfileData?.symplaTicket ||
+    myProfileData?.sympla_ticket ||
+    myProfileData?.role === 'ADMIN'
+  );
   const myRankingEntry = ranking.find((u) => u.id === myUserId);
   const myRank = myRankingEntry ? myRankingEntry.rank : null;
   const myPoints = myRankingEntry
@@ -67,6 +78,40 @@ export default function Ranking() {
   const rawMyName = myRankingEntry?.username || myProfileData?.username || myProfileData?.firstName || 'Você';
   const myDisplayName = rawMyName.startsWith('@') ? rawMyName : `@${rawMyName}`;
   const myAvatar = myRankingEntry?.avatar_url || myProfileData?.avatarUrl || authUser?.photoURL || null;
+
+  const footerCardStyle = {
+    position: 'absolute',
+    bottom: '92px',
+    left: '16px',
+    right: '16px',
+    background: 'rgba(15, 23, 42, 0.94)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    border: isTicketVerified ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(234, 179, 8, 0.45)',
+    borderRadius: '16px',
+    padding: '10px 14px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    boxShadow: isTicketVerified
+      ? '0 8px 32px rgba(0, 0, 0, 0.6), 0 0 15px rgba(59, 130, 246, 0.25)'
+      : '0 8px 32px rgba(0, 0, 0, 0.6), 0 0 15px rgba(234, 179, 8, 0.2)',
+    zIndex: 900
+  };
+
+  const badgeBoxStyle = {
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
+    background: isTicketVerified ? 'rgba(59, 130, 246, 0.2)' : 'rgba(234, 179, 8, 0.15)',
+    border: isTicketVerified ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(234, 179, 8, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: '800',
+    fontSize: '0.85rem',
+    color: isTicketVerified ? 'var(--primary)' : '#eab308'
+  };
 
   // Organização visual das colunas do pódio: [2º lugar, 1º lugar, 3º lugar]
   const first = top3[0];
@@ -356,44 +401,16 @@ export default function Ranking() {
         )}
       </div>
 
-      {/* Barra fixa no rodapé mostrando a pontuação do próprio usuário logado (KAN-55) */}
+      {/* Barra fixa no rodapé mostrando a pontuação do próprio usuário logado (KAN-55 / KAN-84) */}
       {authUser && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '92px',
-            left: '16px',
-            right: '16px',
-            background: 'rgba(15, 23, 42, 0.94)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            border: '1px solid rgba(59, 130, 246, 0.4)',
-            borderRadius: '16px',
-            padding: '10px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), 0 0 15px rgba(59, 130, 246, 0.25)',
-            zIndex: 900
-          }}
-        >
+        <div style={footerCardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                background: 'rgba(59, 130, 246, 0.2)',
-                border: '1px solid rgba(59, 130, 246, 0.5)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: '800',
-                fontSize: '0.85rem',
-                color: 'var(--primary)'
-              }}
-            >
-              {myRank ? `#${myRank}` : '-'}
+            <div style={badgeBoxStyle}>
+              {!isTicketVerified ? (
+                <Ticket size={16} />
+              ) : (
+                myRank ? `#${myRank}` : '-'
+              )}
             </div>
 
             <div
@@ -420,22 +437,47 @@ export default function Ranking() {
 
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>
-                {myDisplayName} <span style={{ color: 'var(--primary)', fontSize: '0.75rem' }}>(Você)</span>
+                {myDisplayName} <span style={{ color: !isTicketVerified ? '#eab308' : 'var(--primary)', fontSize: '0.75rem' }}>(Você)</span>
               </span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                {myRank ? `${myRank}º lugar no Ranking` : 'Fora do Top 50'}
+              <span style={{ fontSize: '0.7rem', color: !isTicketVerified ? '#fde047' : 'var(--text-secondary)' }}>
+                {!isTicketVerified
+                  ? 'Conta não verificada (Ingresso pendente)'
+                  : (myRank ? `${myRank}º lugar no Ranking` : 'Fora do Top 50')}
               </span>
             </div>
           </div>
 
-          <div style={{ textAlign: 'right' }}>
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Pontuação
-            </span>
-            <span style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1rem' }}>
-              {myPoints} pts
-            </span>
-          </div>
+          {!isTicketVerified ? (
+            <button
+              onClick={() => navigate('/profile')}
+              style={{
+                background: 'linear-gradient(135deg, #eab308, #ca8a04)',
+                color: '#0f172a',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '6px 12px',
+                fontSize: '0.75rem',
+                fontWeight: '700',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 8px rgba(234, 179, 8, 0.3)'
+              }}
+            >
+              <Ticket size={14} />
+              Vincular
+            </button>
+          ) : (
+            <div style={{ textAlign: 'right' }}>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Pontuação
+              </span>
+              <span style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1rem' }}>
+                {myPoints} pts
+              </span>
+            </div>
+          )}
         </div>
       )}
     </>

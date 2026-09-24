@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db, FieldValue } from '../config/firebaseAdmin';
-import { requireAuth } from '../middlewares/authMiddleware';
+import { requireAuth, requireSymplaTicket } from '../middlewares/authMiddleware';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 
@@ -44,7 +44,9 @@ function resolveMissionId(eventType: string, referenceId: string): string {
 // /missions/{missionId}, que só ADMIN escreve (ver firestore.rules) — um
 // client não consegue mais inflar o próprio totalPoints inventando um
 // `points` alto numa chamada direta à API.
-router.post('/claim', requireAuth, participantActionLimiter, async (req: Request, res: Response) => {
+//
+// KAN-84: Exige ingresso validado do Sympla para participar e creditar pontos.
+router.post('/claim', requireAuth, participantActionLimiter, requireSymplaTicket, async (req: Request, res: Response) => {
   const { eventType, referenceId, metadata } = req.body ?? {};
   const uid = req.user!.uid;
 

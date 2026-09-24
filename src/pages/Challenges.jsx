@@ -11,7 +11,7 @@ import FeedbackModal from '../components/FeedbackModal';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function Challenges() {
-  const { completedChallenges, completeChallenge, hasCompletedChallenge } = useUser();
+  const { completedChallenges, completeChallenge, hasCompletedChallenge, hasSymplaTicket } = useUser();
   const navigate = useNavigate();
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
   useScrollLock(!!activeManualChallenge);
@@ -128,6 +128,15 @@ export default function Challenges() {
       return;
     }
 
+    if (!hasSymplaTicket) {
+      setFeedback({
+        type: 'warning',
+        title: 'Ingresso Sympla Necessário',
+        message: 'Você precisa vincular seu ingresso oficial do Sympla no Perfil para participar e pontuar nos desafios!'
+      });
+      return;
+    }
+
     const success = await completeChallenge(challenge.id, challenge.points);
     if (success) {
       setFeedback({
@@ -148,6 +157,15 @@ export default function Challenges() {
   const handleManualSubmit = async (e) => {
     e.preventDefault();
     if (!activeManualChallenge || isSubmitting) return;
+
+    if (!hasSymplaTicket) {
+      setFeedback({
+        type: 'warning',
+        title: 'Ingresso Sympla Necessário',
+        message: 'Para enviar missões e acumular pontos no ranking oficial, você precisa ter um ingresso do Sympla vinculado à sua conta.'
+      });
+      return;
+    }
 
     if (activeManualChallenge.id === 'secret_password') {
       const pass = manualForm['password'];
@@ -265,6 +283,46 @@ export default function Challenges() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {!hasSymplaTicket && (
+          <div
+            style={{
+              padding: '16px 18px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(161, 98, 7, 0.08))',
+              border: '1px solid rgba(234, 179, 8, 0.35)',
+              color: '#fef08a',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', fontSize: '0.95rem' }}>
+              <span>⚠️</span>
+              <span>Ingresso Sympla Pendente</span>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.4' }}>
+              Vincule seu ingresso oficial do Sympla para desbloquear o envio de missões, fotos e acumular pontos no ranking da TechWeek.
+            </p>
+            <button
+              onClick={() => navigate('/profile')}
+              style={{
+                alignSelf: 'flex-start',
+                marginTop: '4px',
+                padding: '6px 14px',
+                borderRadius: '10px',
+                background: '#eab308',
+                color: '#0f172a',
+                border: 'none',
+                fontWeight: '700',
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              Vincular Ingresso no Perfil →
+            </button>
+          </div>
+        )}
+
         {challengesList.map((challenge, index) => {
           const isCompleted = completedChallenges.includes(challenge.id);
           const isHighlighted = challenge.id === 'instagram_story' && !isCompleted;

@@ -21,6 +21,7 @@ vi.mock('../config/firebaseAdmin', async () => {
 import router from './points';
 import { db } from '../config/firebaseAdmin';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
+import { requireSymplaTicket } from '../middlewares/authMiddleware';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -55,6 +56,17 @@ it('KAN-75: participantActionLimiter está montado na rota real, antes do handle
   expect(handles).toContain(participantActionLimiter);
   expect(handles.indexOf(participantActionLimiter)).toBeLessThan(handles.length - 1);
 });
+
+// KAN-84: prova que requireSymplaTicket está montado na rota real, antes do handler final
+it('KAN-84: requireSymplaTicket está montado na rota real, antes do handler final', () => {
+  const layer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/claim'
+  );
+  const handles = layer.route.stack.map((l: any) => l.handle);
+  expect(handles).toContain(requireSymplaTicket);
+  expect(handles.indexOf(requireSymplaTicket)).toBeLessThan(handles.length - 1);
+});
+
 
 function makeTx(snaps: { eventSnap: any; userSnap: any; missionSnap?: any }) {
   const { eventSnap, userSnap, missionSnap = { exists: true, data: () => ({ points: 50 }) } } = snaps;

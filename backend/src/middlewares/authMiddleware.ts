@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { auth } from '../config/firebaseAdmin';
+import { auth, db } from '../config/firebaseAdmin';
 import { UserRole, AuthUser } from '../types/express';
 
 /**
@@ -83,3 +83,46 @@ export function requireRole(allowedRoles: UserRole[]) {
     });
   };
 }
+
+/**
+ * Middleware para checar se o participante possui ingresso validado do Sympla (KAN-84).
+ * Impede reserva de vagas e resgate de pontos para contas sem ingresso confirmado.
+ * Nota: Usuários com role 'ADMIN' sempre possuem permissão irrestrita.
+ */
+export async function requireSymplaTicket(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Usuário não autenticado.'
+    });
+    return;
+  }
+
+  // ADMIN sempre possui acesso total
+  if (req.user.role === 'ADMIN') {
+    next();
+    return;
+  }
+
+  try {
+    const userSnap = await db.collection('users').doc(req.user.uid).get();
+    const userData = userSnap.data();
+
+    if (!userSnap.exists || !userData?.hasSymplaTicket) {
+      res.status(403).json({
+        error: 'SYMPLA_TICKET_REQUIRED',
+        message: 'É necessário possuir um ingresso oficial do Sympla vinculado à conta para realizar esta ação.'
+      });
+      return;
+    }
+
+    next();
+  } catch (error: any) {
+    console.error('❌ Erro na verificação do ingresso Sympla:', error?.message || error);
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Erro interno ao validar ingresso do participante.'
+    });
+  }
+}
+
