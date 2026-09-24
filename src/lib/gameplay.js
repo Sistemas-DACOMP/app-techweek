@@ -227,9 +227,20 @@ export async function addPointEvent({ eventType, referenceId, points, metadata =
       saveLocalPointEvent(user.uid, localEvent);
       return { success: false, alreadyClaimed: true };
     }
+    if (err.status === 403 && (err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')) {
+      return {
+        success: false,
+        error: err.data?.message || 'Ingresso do Sympla obrigatório para pontuar.',
+        code: 'SYMPLA_TICKET_REQUIRED'
+      };
+    }
     // Falha real (rede indisponível, backend fora do ar) precisa aparecer
     // como falha real — nunca mais mascarar como sucesso aqui nem salvar estado local falso.
-    return { success: false, error: err.message || 'Não foi possível registrar os pontos.' };
+    return {
+      success: false,
+      error: err.message || 'Não foi possível registrar os pontos.',
+      code: err.data?.error || null
+    };
   }
 }
 

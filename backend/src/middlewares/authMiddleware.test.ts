@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 
 vi.mock('../config/firebaseAdmin', () => ({
-  auth: { verifyIdToken: vi.fn() }
+  auth: { verifyIdToken: vi.fn() },
+  db: {
+    collection: vi.fn()
+  }
 }));
 
-import { requireAuth, requireRole } from './authMiddleware';
-import { auth } from '../config/firebaseAdmin';
+import { requireAuth, requireRole, requireSymplaTicket } from './authMiddleware';
+import { auth, db } from '../config/firebaseAdmin';
 import type { AuthUser } from '../types/express';
 
 function makeRes() {
@@ -138,3 +141,113 @@ describe('requireRole (KAN-67 — RBAC reaproveitado por toda rota de negócio n
     expect(res.status).not.toHaveBeenCalled();
   });
 });
+
+describe('requireSymplaTicket (KAN-84 — bloqueio de ações para usuários sem ingresso)', () => {
+  function makeReq(user?: AuthUser): Request {
+    return { user } as unknown as Request;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('retorna 401 quando req.user não está definido', async () => {
+    const res = makeRes();
+    const next = vi.fn() as NextFunction;
+
+    await requireSymplaTicket(makeReq(undefined), res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'UNAUTHORIZED' }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('ADMIN sempre passa direto sem consultar Firestore (bypass de administração)', async () => {
+    const res = makeRes();
+    const next = vi.fn() as NextFunction;
+
+    await requireSymplaTicket(makeReq({ uid: 'admin-1', role: 'ADMIN' }), res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(db.collection).not.toHaveBeenCalled();
+  });
+
+  it('retorna 403 SYMPLA_TICKET_REQUIRED quando documento do usuário não existe', async () => {
+    const res = makeRes();
+    const next = vi.fn() as NextFunction;
+
+    (db.collection as any).mockReturnValue({
+      doc: vi.fn().mockReturnValue({
+        get: vi.fn().mockResolvedValue({ exists: false, data: () => null })
+      })
+    });
+
+    await requireSymplaTicket(makeReq({ uid: 'user-no-doc', role: 'PARTICIPANT' }), res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'SYMPLA_TICKET_REQUIRED' }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('retorna 403 SYMPLA_TICKET_REQUIRED quando usuário não possui hasSymplaTicket: true', async () => {
+    const res = makeRes();
+    const next = vi.fn() as NextFunction;
+
+    (db.collection as any).mockReturnValue({
+      doc: vi.fn().mockReturnValue({
+        get: vi.fn().mockResolvedValue({
+          exists: true,
+          data: () => ({ email: 'test@example.com', hasSymplaTicket: false })
+        })
+      })
+    });
+
+    await requireSymplaTicket(makeReq({ uid: 'user-no-ticket', role: 'PARTICIPANT' }), res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'SYMPLA_TICKET_REQUIRED' }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('chama next() quando o usuário possui hasSymplaTicket: true', async () => {
+    const res = makeRes();
+    const next = vi.fn() as NextFunction;
+
+    (db.collection as any).mockReturnValue({
+      doc: vi.fn().mockReturnValue({
+        get: vi.fn().mockResolvedValue({
+          exists: true,
+          data: () => ({
+            email: 'valid@example.com',
+            hasSymplaTicket: true,
+            symplaTicket: { ticketNumber: '123' }
+          })
+        })
+      })
+    });
+
+    await requireSymplaTicket(makeReq({ uid: 'user-valid', role: 'PARTICIPANT' }), res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('retorna 500 INTERNAL_ERROR caso ocorra erro inesperado no banco', async () => {
+    const res = makeRes();
+    const next = vi.fn() as NextFunction;
+
+    (db.collection as any).mockReturnValue({
+      doc: vi.fn().mockReturnValue({
+        get: vi.fn().mockRejectedValue(new Error('Firestore indisponível'))
+      })
+    });
+
+    await requireSymplaTicket(makeReq({ uid: 'user-err', role: 'PARTICIPANT' }), res, next);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INTERNAL_ERROR' }));
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+

@@ -9,9 +9,11 @@ import LectureCard from '../components/LectureCard';
 import LectureModal from '../components/LectureModal';
 import LectureScanner from '../components/LectureScanner';
 import NotificationBell from '../components/NotificationBell';
+import { useUser } from '../hooks/useUser';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { hasSymplaTicket } = useUser();
   const [firstName, setFirstName] = useState('Visitante');
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [selectedLecture, setSelectedLecture] = useState(null);
@@ -115,8 +117,15 @@ export default function Dashboard() {
 
       <LectureModal
         lecture={selectedLecture}
+        hasSymplaTicket={hasSymplaTicket}
         onClose={() => setSelectedLecture(null)}
-        onValidate={() => setShowLectureScanner(true)}
+        onValidate={() => {
+          if (!hasSymplaTicket) {
+            navigate('/profile');
+            return;
+          }
+          setShowLectureScanner(true);
+        }}
       />
 
       {showLectureScanner && (

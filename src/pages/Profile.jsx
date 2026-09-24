@@ -112,6 +112,7 @@ export default function Profile() {
           period: data?.period || null,
           avatarUrl: data?.avatarUrl || data?.avatar_url || data?.photoURL || currentUser?.photoURL || '',
           symplaTicket: data?.symplaTicket || data?.sympla_ticket || null,
+          hasSymplaTicket: !!(data?.hasSymplaTicket || data?.symplaTicket || data?.sympla_ticket),
           linkedin: data?.linkedin || '',
           instagram: data?.instagram || ''
         });
@@ -240,8 +241,9 @@ export default function Profile() {
               orderId: p.orderId
             };
             updates.symplaTicket = ticketObj;
+            updates.hasSymplaTicket = true;
             try {
-              await updateUserProfile(uid, { symplaTicket: ticketObj });
+              await updateUserProfile(uid, { symplaTicket: ticketObj, hasSymplaTicket: true });
             } catch (updateErr) {
               console.warn('[Profile] Atualização client-side secundária (já salvo pelo backend):', updateErr);
             }
@@ -301,12 +303,12 @@ export default function Profile() {
           orderId: p.orderId
         };
         // Atualiza imediatamente o estado do componente com o ingresso oficial
-        setProfile(prev => ({ ...prev, symplaTicket: ticketObj }));
+        setProfile(prev => ({ ...prev, symplaTicket: ticketObj, hasSymplaTicket: true }));
 
         const uid = profile.id || auth.currentUser?.uid;
         if (uid) {
           try {
-            await updateUserProfile(uid, { symplaTicket: ticketObj });
+            await updateUserProfile(uid, { symplaTicket: ticketObj, hasSymplaTicket: true });
           } catch (updateErr) {
             console.warn('[Profile] Atualização client-side secundária (já salvo pelo backend):', updateErr);
           }
@@ -339,12 +341,12 @@ export default function Profile() {
           orderId: p.orderId
         };
         // Atualiza imediatamente o estado do componente com o ingresso oficial
-        setProfile(prev => ({ ...prev, symplaTicket: ticketObj }));
+        setProfile(prev => ({ ...prev, symplaTicket: ticketObj, hasSymplaTicket: true }));
 
         const uid = profile.id || auth.currentUser?.uid;
         if (uid) {
           try {
-            await updateUserProfile(uid, { symplaTicket: ticketObj });
+            await updateUserProfile(uid, { symplaTicket: ticketObj, hasSymplaTicket: true });
           } catch (updateErr) {
             console.warn('[Profile] Atualização client-side secundária (já salvo pelo backend):', updateErr);
           }
