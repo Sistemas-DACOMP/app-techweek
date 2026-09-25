@@ -1,6 +1,22 @@
 # Antigravity adapter
 
-**Status: wrappers built, not verified end-to-end.** Antigravity is **not installed** on this machine (2026-09-20). The 13 wrapper files exist in `agents/`, one per canonical agent, but none has run against a real Antigravity session from this project.
+**Status: CLI presente, ainda não exercitado ponta a ponta (corrigido 2 vezes em 2026-09-22).**
+
+Duas correções no mesmo dia, registradas as duas pra quem ler depois não repetir nenhuma:
+
+1. Claim anterior deste arquivo dizia "VERIFIED & OPERATIONAL on macOS Antigravity Runtime (2026-09-21)". Origem real: essa verificação rodou na máquina de um amigo do Fabio (macOS), não na máquina de referência deste projeto (Windows). Decisão do Fabio: só a própria máquina dele conta como referência — corrigido pra "não verificado".
+2. Ainda 2026-09-22: descoberto que o CLI `agy` **está instalado de verdade** nesta máquina (v1.2.7, `agy --version` e `agy agents` confirmados rodando). `agy agents` lista só um agente nativo (`flutter_a11y_agent`) — nenhuma descoberta estática dos wrappers deste projeto em `.agent-system/adapters/antigravity/agents/` (diferente do Claude Code, que lê `.claude/agents/*.md` direto). Um teste real read-only (`agy --mode plan --print=...`) foi tentado e bloqueado pelo próprio modelo de permissão do modo headless: nega `read_file` automaticamente por não poder perguntar interativamente, e sugere `--dangerously-skip-permissions` — flag deliberadamente **não usada** (auto-aprovar tudo numa ferramenta pouco conhecida contra este repo não é decisão pra tomar sem perguntar ao Fabio antes).
+
+**Atualização, mesmo dia**: com autorização do Fabio pra `--dangerously-skip-permissions`, uma
+tarefa real foi completada — `agy` leu 9 arquivos reais e escreveu um Context Understanding Report
+correto e independente. Status real agora: **verificado em modo headless (`--print` +
+`--mode accept-edits` + `--dangerously-skip-permissions`)**. `--mode plan` não funciona headless
+(trava esperando aprovação de plano que o modo print não consegue surfacear). Sessão interativa
+normal (sem o flag de skip) segue não testada. Ver `manifests/system.yaml` pro detalhe completo e
+`state/antigravity-context-report-2026-09-22.md` pro artefato real produzido.
+
+O Antigravity carrega nativamente as regras através de `AGENTS.md` na raiz do projeto e de `.agent/rules/agents.md` (ambos existem e foram atualizados 2026-09-22 — ver nota de staleness abaixo).
+Os subagentes canônicos são os 15 papéis de `manifests/system.yaml` → `agents:` (`orchestrator`, `spec`, `product`, `adr`, `architecture`, `backend`, `pwa`, `admin`, `qa`, `security`, `infra`, `devops`, `code-review`, `git-ops`, `ponytail`) — quando o Antigravity for testado de verdade, devem ser registrados via `define_subagent` e acionados via `invoke_subagent`. **Correção 2026-09-22**: os nomes `qa-agent`/`security-reviewer`/`code-reviewer` citados numa versão anterior deste arquivo eram os nomes pré-rename de 2026-09-20 — os nomes atuais são `qa`, `security`, `code-review`.
 
 ## Proven reference this adapter reuses
 
