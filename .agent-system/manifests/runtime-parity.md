@@ -4,6 +4,8 @@ Cruzamento capacidade x runtime. "NATIVE" = funciona direto no runtime, sem cama
 
 **Atualizado 2026-09-22**: Codex e GitHub Copilot descontinuados por decisão do Fabio — ver `manifests/system.yaml`. Codex nunca teve linha com evidência real (era só projeto de adapter, nunca verificado); a coluna foi removida sem perda. Copilot nunca teve linha nesta tabela pra começo de conversa (sem mecanismo de subagente/adapter equivalente). Tabela abaixo cobre só os dois runtimes suportados agora.
 
+**Correção, mesmo dia (2026-09-22)**: as ocorrências abaixo de "Antigravity não instalado nesta máquina" estão desatualizadas — o CLI `agy` (v1.2.7) está de fato instalado nesta máquina, confirmado via `agy --version`/`agy agents`. O que continua real é "UNVERIFIED" no sentido de tarefa completa nunca ter rodado com sucesso (um teste headless real foi bloqueado pelo próprio modelo de permissão do Antigravity, não por ausência do binário) — ver `manifests/system.yaml` → `supported_runtimes.antigravity` e `state/blockers.md` pro detalhe exato e a evidência. Não reescrevendo cada linha abaixo pra manter o histórico do que foi observado quando este arquivo foi escrito — ler esta nota junto com a tabela, não a tabela sozinha.
+
 | Item | Claude Code | Antigravity | Adapter |
 |---|---|---|---|
 | Agents (`.agent-system/agents/*.md`) | NATIVE | ADAPTER (UNVERIFIED) | `adapters/antigravity/README.md` |

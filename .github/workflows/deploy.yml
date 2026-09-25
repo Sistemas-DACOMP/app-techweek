@@ -35,8 +35,20 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Migração Supabase->Firebase (KAN-78/KAN-64): este workflow só builda o
+          # que estiver em `main` no momento do push. Troca de var aqui não afeta
+          # o deploy atual (main ainda não recebeu a migração) — só passa a valer
+          # quando o cutover pra main acontecer, junto com o código que já é
+          # Firebase. Secrets VITE_FIREBASE_* precisam existir no repo antes disso
+          # (Settings > Secrets and variables > Actions) — não configurados ainda
+          # nesta rodada, ver mapeamento de gaps do KAN-64.
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
           VITE_BASE_PATH: /app-techweek/
 
       - name: Setup Pages

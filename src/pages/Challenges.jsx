@@ -1,24 +1,56 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
-import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft } from 'lucide-react';
-import { getMyProfile } from '../lib/gameplay';
+import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Loader2, Trash2 } from 'lucide-react';
+import { getMyProfile, uploadMissionPhoto } from '../lib/gameplay';
+import { onAuthChange } from '../lib/auth';
+import { getUserProfile } from '../lib/userService';
+import { validateMissionPhoto } from '../lib/validators';
+import FeedbackModal from '../components/FeedbackModal';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function Challenges() {
-  const { completedChallenges, completeChallenge } = useUser();
+  const { completedChallenges, completeChallenge, hasCompletedChallenge, hasSymplaTicket } = useUser();
   const navigate = useNavigate();
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
+  useScrollLock(!!activeManualChallenge);
   const [manualForm, setManualForm] = useState({});
+  const [photoFiles, setPhotoFiles] = useState({});
+  const [photoPreviews, setPhotoPreviews] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState(null);
 
   const [profile, setProfile] = useState({ firstName: 'Visitante', avatarUrl: '' });
 
   useEffect(() => {
-    getMyProfile()
-      .then(p => {
-        if (!p) return;
-        setProfile({ firstName: p.first_name || p.username || 'Visitante', avatarUrl: p.avatar_url || '' });
-      })
-      .catch(() => {});
+    const unsubscribe = onAuthChange(async (user) => {
+      if (!user) {
+        setProfile({ firstName: 'Visitante', avatarUrl: '' });
+        return;
+      }
+      try {
+        const p = await getUserProfile(user.uid);
+        if (p) {
+          setProfile({
+            firstName: p.firstName || p.displayName?.split(' ')[0] || p.username || 'Visitante',
+            avatarUrl: p.avatarUrl || p.photoURL || user.photoURL || ''
+          });
+        } else {
+          setProfile({
+            firstName: user.displayName?.split(' ')[0] || 'Visitante',
+            avatarUrl: user.photoURL || ''
+          });
+        }
+      } catch (e) {
+        setProfile({
+          firstName: user.displayName?.split(' ')[0] || 'Visitante',
+          avatarUrl: user.photoURL || ''
+        });
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const challengesList = [
@@ -91,33 +123,126 @@ export default function Challenges() {
     if (challenge.type === 'manual') {
       setActiveManualChallenge(challenge);
       setManualForm({});
+      setPhotoFiles({});
+      setPhotoPreviews({});
+      return;
+    }
+
+    if (!hasSymplaTicket) {
+      setFeedback({
+        type: 'warning',
+        title: 'Ingresso Sympla Necessário',
+        message: 'Você precisa vincular seu ingresso oficial do Sympla no Perfil para participar e pontuar nos desafios!'
+      });
       return;
     }
 
     const success = await completeChallenge(challenge.id, challenge.points);
     if (success) {
-      alert(`Parabéns! Você completou o desafio e ganhou ${challenge.points} pontos.`);
+      setFeedback({
+        type: 'success',
+        title: 'Desafio Concluído! 🎉',
+        message: `Parabéns! Você completou "${challenge.name}" e pontuou com sucesso.`,
+        points: challenge.points
+      });
+    } else {
+      setFeedback({
+        type: 'warning',
+        title: 'Desafio Já Concluído',
+        message: 'Você já completou este desafio anteriormente!'
+      });
     }
   };
 
   const handleManualSubmit = async (e) => {
     e.preventDefault();
-    if (activeManualChallenge) {
-      if (activeManualChallenge.id === 'secret_password') {
-        const pass = manualForm['password'];
-        if (!pass || pass.trim().toUpperCase() !== 'OPORTUNIDADES') {
-          alert('Palavra-chave incorreta! Continue procurando.');
+    if (!activeManualChallenge || isSubmitting) return;
+
+    if (!hasSymplaTicket) {
+      setFeedback({
+        type: 'warning',
+        title: 'Ingresso Sympla Necessário',
+        message: 'Para enviar missões e acumular pontos no ranking oficial, você precisa ter um ingresso do Sympla vinculado à sua conta.'
+      });
+      return;
+    }
+
+    if (activeManualChallenge.id === 'secret_password') {
+      const pass = manualForm['password'];
+      if (!pass || pass.trim().toUpperCase() !== 'OPORTUNIDADES') {
+        setFeedback({
+          type: 'warning',
+          title: 'Palavra-chave Incorreta',
+          message: 'A palavra-chave inserida não está certa. Continue procurando pelos stands!'
+        });
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    try {
+      const finalMetadata = { ...manualForm, submitted_at: new Date().toISOString() };
+
+      // Se a missão possuir campo de foto, faz o upload real antes de concluir
+      const photoField = activeManualChallenge.fields?.find(f => f.type === 'photo');
+      if (photoField) {
+        const file = photoFiles[photoField.id];
+        if (!file) {
+          setFeedback({
+            type: 'warning',
+            title: 'Foto Obrigatória',
+            message: 'Por favor, tire ou anexe uma foto comprovando a missão.'
+          });
+          setIsSubmitting(false);
           return;
         }
+
+        const publicUrl = await uploadMissionPhoto(file, activeManualChallenge.id);
+        finalMetadata[photoField.id] = publicUrl;
+        finalMetadata.photo_url = publicUrl;
+      }
+
+      if (hasCompletedChallenge && hasCompletedChallenge(activeManualChallenge.id)) {
+        setFeedback({
+          type: 'warning',
+          title: 'Missão Já Concluída',
+          message: 'Esta missão já foi concluída anteriormente!'
+        });
+        setActiveManualChallenge(null);
+        return;
       }
 
       // Respostas da missão manual vão como metadata do evento de pontos
-      // (Supabase), em vez de localStorage.facom_manual_missions.
-      const success = await completeChallenge(activeManualChallenge.id, activeManualChallenge.points, manualForm);
+      // (REG-MISSION-001) em vez de apenas no estado da página
+      const success = await completeChallenge(activeManualChallenge.id, activeManualChallenge.points, finalMetadata);
       if (success) {
-        alert(`Missão concluída! Você ganhou ${activeManualChallenge.points} pontos.`);
+        setFeedback({
+          type: 'success',
+          title: 'Missão Concluída! 🎉',
+          message: `Você cumpriu a missão "${activeManualChallenge.name}" com sucesso!`,
+          points: activeManualChallenge.points
+        });
+        setActiveManualChallenge(null);
+        setManualForm({});
+        setPhotoFiles({});
+        setPhotoPreviews({});
+      } else {
+        setFeedback({
+          type: 'warning',
+          title: 'Missão Já Concluída',
+          message: 'Esta missão já foi concluída anteriormente!'
+        });
+        setActiveManualChallenge(null);
       }
-      setActiveManualChallenge(null);
+    } catch (err) {
+      console.error('Erro ao enviar missão:', err);
+      setFeedback({
+        type: 'error',
+        title: 'Erro ao Concluir Missão',
+        message: 'Não foi possível registrar sua comprovação no momento. Verifique sua conexão e tente novamente.'
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -158,6 +283,46 @@ export default function Challenges() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {!hasSymplaTicket && (
+          <div
+            style={{
+              padding: '16px 18px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(161, 98, 7, 0.08))',
+              border: '1px solid rgba(234, 179, 8, 0.35)',
+              color: '#fef08a',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', fontSize: '0.95rem' }}>
+              <span>⚠️</span>
+              <span>Ingresso Sympla Pendente</span>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.4' }}>
+              Vincule seu ingresso oficial do Sympla para desbloquear o envio de missões, fotos e acumular pontos no ranking da TechWeek.
+            </p>
+            <button
+              onClick={() => navigate('/profile')}
+              style={{
+                alignSelf: 'flex-start',
+                marginTop: '4px',
+                padding: '6px 14px',
+                borderRadius: '10px',
+                background: '#eab308',
+                color: '#0f172a',
+                border: 'none',
+                fontWeight: '700',
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              Vincular Ingresso no Perfil →
+            </button>
+          </div>
+        )}
+
         {challengesList.map((challenge, index) => {
           const isCompleted = completedChallenges.includes(challenge.id);
           const isHighlighted = challenge.id === 'instagram_story' && !isCompleted;
@@ -216,17 +381,39 @@ export default function Challenges() {
         })}
       </div>
 
-      {activeManualChallenge && (
-        <div style={{ 
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-          background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', 
-          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', 
-          padding: '24px', overflowY: 'auto', minHeight: '100dvh'
-        }}>
-          <div className="card" style={{ width: '100%', maxWidth: '400px', background: 'var(--card-bg)', maxHeight: '90vh', overflowY: 'auto' }}>
+      {activeManualChallenge && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="modal-overlay-fixed"
+          onClick={() => {
+            setActiveManualChallenge(null);
+            setManualForm({});
+            setPhotoFiles({});
+            setPhotoPreviews({});
+          }}
+          style={{ 
+            background: 'rgba(0,0,0,0.82)', 
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            padding: '20px'
+          }}
+        >
+          <div 
+            className="card modal-card-fixed" 
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: '420px', background: 'var(--card-bg)' }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '1.2rem', color: 'white' }}>{activeManualChallenge.name}</h3>
-              <button onClick={() => setActiveManualChallenge(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveManualChallenge(null);
+                  setManualForm({});
+                  setPhotoFiles({});
+                  setPhotoPreviews({});
+                }}
+                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+              >
                 <X size={24} />
               </button>
             </div>
@@ -283,28 +470,125 @@ export default function Challenges() {
                     />
                   )}
                   {field.type === 'photo' && (
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={(e) => {
-                        setManualForm({ ...manualForm, [field.id]: e.target.files[0] ? 'photo_captured' : '' })
-                      }}
-                      className="login-input"
-                      style={{ padding: '8px' }}
-                      required
-                    />
+                    <div>
+                      {!photoPreviews[field.id] ? (
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          capture="environment"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            const validation = validateMissionPhoto(file);
+                            if (!validation.valid) {
+                              if (validation.reason === 'too_large') {
+                                setFeedback({
+                                  type: 'warning',
+                                  title: 'Foto Muito Grande',
+                                  message: 'A foto deve ter no máximo 5MB para otimizar o envio.'
+                                });
+                              } else if (validation.reason === 'invalid_type') {
+                                setFeedback({
+                                  type: 'warning',
+                                  title: 'Formato Inválido',
+                                  message: 'Formato de imagem inválido. Use PNG, JPEG, WebP ou GIF.'
+                                });
+                              } else {
+                                setFeedback({
+                                  type: 'error',
+                                  title: 'Arquivo Inválido',
+                                  message: 'Não foi possível ler este arquivo. Selecione uma foto válida.'
+                                });
+                              }
+                              e.target.value = '';
+                              return;
+                            }
+                            setPhotoFiles(prev => ({ ...prev, [field.id]: file }));
+                            setPhotoPreviews(prev => ({ ...prev, [field.id]: URL.createObjectURL(file) }));
+                          }}
+                          className="login-input"
+                          style={{ padding: '8px' }}
+                          required
+                        />
+                      ) : (
+                        <div style={{ position: 'relative', marginTop: '8px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)' }}>
+                          <img
+                            src={photoPreviews[field.id]}
+                            alt="Pré-visualização da missão"
+                            style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', display: 'block' }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPhotoFiles(prev => {
+                                const copy = { ...prev };
+                                delete copy[field.id];
+                                return copy;
+                              });
+                              setPhotoPreviews(prev => {
+                                const copy = { ...prev };
+                                delete copy[field.id];
+                                return copy;
+                              });
+                            }}
+                            style={{
+                              position: 'absolute',
+                              top: '8px',
+                              right: '8px',
+                              background: 'rgba(0,0,0,0.7)',
+                              border: 'none',
+                              color: '#ef4444',
+                              borderRadius: '50%',
+                              width: '32px',
+                              height: '32px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer'
+                            }}
+                            title="Remover foto"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               ))}
 
-              <button type="submit" className="login-btn" style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
-                Completar Missão
+              <button
+                type="submit"
+                className="login-btn"
+                disabled={isSubmitting}
+                style={{
+                  marginTop: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  opacity: isSubmitting ? 0.7 : 1,
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isSubmitting && <Loader2 size={18} className="animate-spin" />}
+                {isSubmitting ? 'Enviando comprovação...' : 'Completar Missão'}
               </button>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+
+      {/* Card Modal Estilizado de Feedback (Sucesso / Erro / Atenção) */}
+      <FeedbackModal
+        isOpen={!!feedback}
+        type={feedback?.type}
+        title={feedback?.title}
+        message={feedback?.message}
+        points={feedback?.points}
+        onClose={() => setFeedback(null)}
+      />
     </div>
   );
 }

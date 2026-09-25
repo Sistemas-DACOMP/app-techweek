@@ -64,7 +64,7 @@ Nomes de agente adaptados pros ids reais deste sistema (`manifests/system.yaml` 
 | Arquitetura | `architecture` | `spec` | ARCHITECTURE APPROVED |
 | Regras de negócio | `spec` / `product` | `qa` | SPEC READY |
 | Deploy | `infra` | `qa` | DEPLOY VALIDATED |
-| Complexidade (anti-overengineering) | `ponytail` (não instalado — ver `agents/ponytail.md`; enquanto ausente, `architecture` cobre manualmente) | `code-review` | CODE REVIEW APPROVED |
+| Complexidade (anti-overengineering) | `ponytail` (instalado de verdade desde 2026-09-20 — ver `agents/ponytail.md`; corrige nota antiga deste arquivo que dizia "não instalado") | `code-review` | CODE REVIEW APPROVED |
 | Regressão | `qa` | `code-review` | QA PASSED |
 
 ## Nunca
