@@ -43,6 +43,15 @@ If a runtime, tool, or plugin isn't actually installed/confirmed on the audited 
 - Ponytail: NOT FOUND anywhere on this machine (no plugin, no skill, no folder). Document its intended role per the spec (anti-overengineering gate) in `agents/ponytail.md` but mark `portable: false` reason `NOT_INSTALLED` and do not wire it into any workflow as if active.
 - Runtime/capability facts (2026-09-20, this machine): git 2.49.0, gh CLI 2.98.0 (authenticated), node v22.16.0/npm 11.10.0, rtk 0.45.0 (standalone binary at `/c/Users/fabio/bin/rtk`, but its "transparent" auto-rewrite only works via Claude Code's `PreToolUse` Bash hook). NOT installed: Codex CLI, Antigravity, docker, firebase CLI, gcloud CLI. Jira via Atlassian MCP and browser via claude-in-chrome MCP are available in Claude Code specifically (MCP servers are Claude-Code-side config, not guaranteed present in another runtime's session unless that runtime is also configured with the same MCP servers).
 
+> **Correção 2026-09-22 (não reescrevendo o histórico acima, só anotando o que mudou):** Ponytail
+> está instalado de verdade desde 2026-09-20 (mesmo dia, horas depois desta nota) — v4.10.0, ver
+> `manifests/system.yaml`. firebase CLI também foi instalado no mesmo dia (15.30.2). E o CLI
+> Antigravity (`agy`) foi descoberto instalado nesta máquina em 2026-09-22 (v1.2.7) — "NOT
+> installed" pra Antigravity acima também ficou desatualizado; status real é "CLI presente, não
+> exercitado ponta a ponta" (ver ADR-003). `pr-review.md`/`security-reviewer.md`/`dedup-refactor.md`
+> citados acima foram renomeados 2026-09-20 pra `code-review.md`/`security.md` (dedup-refactor
+> virou uma capacidade dentro de `code-review.md`, não um arquivo próprio).
+
 ## Style
 
 Plain, direct engineering writing. No marketing language, no "seamless"/"robust"/"powerful". Portuguese for anything a human teammate reads in PR/Jira per the parent CLAUDE.md rule; these `.agent-system` files are internal engineering docs consulted by AI agents across runtimes — write them in the same mixed style already used in the project's CLAUDE.md (Portuguese prose, English technical terms), for consistency with the rest of the repo's documentation.

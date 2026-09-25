@@ -17,7 +17,7 @@ Time de **iniciantes, primeiro projeto de software real** (evento FACOM Tech Wee
 - **Nunca inclua o trailer `Co-Authored-By: Claude` em commits.**
 - **Nunca altere variáveis de ambiente do Windows** (nem pra debug) sem pedir antes.
 - Padrão de commit: `[TIPO] - descrição curta`, tipos `ADD` `FIX` `UPD` `DEL` `DOC` `CFG`.
-- Git Flow: `feature/*` → `develop` → `homolog` → `main`. Branch protection ativa em `main`/`homolog` (PR obrigatório, 0 aprovações) **e também em `develop`** (PR obrigatório, **1 aprovação** — confirmado via API em 2026-09-10, corrigindo a nota antiga que só citava main/homolog).
+- Git Flow: `feature/*` → `develop` → `homolog` → `main`. Branch protection ativa em `main`/`homolog`/`develop` (PR obrigatório nas três). Exigência de aprovação: `main`/`homolog` **0 aprovações**; `develop` também **0 aprovações** desde 2026-09-21 (era 1, desativado a pedido do Fabio via API — motivo: GitHub bloqueia autor de aprovar a própria PR mesmo via API/CLI, e o time é pequeno demais pra sempre ter um segundo revisor disponível). PR continua obrigatório em `develop` — só a contagem de aprovação foi zerada, merge direto sem PR continua bloqueado.
 - Comentário em PR e em card do Jira sempre em linguagem natural, como um dev escrevendo pra outro — nunca com tom de relatório gerado por IA, nem jargão desnecessário. Direto, sem enrolação, mas humano.
 
 ## Processo de revisão de PRs / merge
@@ -58,21 +58,21 @@ Catálogo persistente em `docs/business-rules/` (ver `docs/business-rules/README
 
 ## Testes automatizados
 
-**Legado Supabase, ainda em uso enquanto o PWA não migra pra Firebase** (ver "Estado da infra" acima): Vitest mergeado na `develop` (PR #17/KAN-31, 2026-09-11). `npm run test` = unitário (`src/**/*.test.js`, mocka o Supabase), `npm run test:integration` = bate direto no `@supabase/supabase-js` do projeto de HOMOLOGAÇÃO, sem passar pela UI — precisa de `.env.local` com credenciais reais de homolog; se não tiver, os testes usam `describe.skipIf` e pulam em vez de falhar. **`test:integration` cria contas reais no Supabase de homolog a cada execução** (e-mail com timestamp) — normal, mas não rodar sem necessidade nem contra produção. Toda regra de negócio nova ou corrigida deveria ganhar teste. Quando o PWA migrar pra Firebase, essa suíte precisa ser reescrita contra Firestore/Auth emulators — não apagar antes de ter o equivalente novo funcionando, senão perde cobertura de regressão do app que ainda tá no ar.
+**Supabase 100% removido do projeto (2026-09-21)** — `@supabase/supabase-js` saiu do `package.json`, `src/lib/supabaseClient.js` e `tests/integration/kan28-lgpd.test.js` (só existiam pra ele) foram apagados. `npm run test` = `npx vitest run src scripts tests/unit` (mocka Firebase Auth/Firestore, nunca bate em rede real). Não existe mais `test:integration`/suíte contra ambiente real — se um teste de integração fizer sentido de novo no futuro (ex: contra Firebase Emulator Suite), é infra nova, não a reativação da antiga.
 
 Existe uma skill do Claude Code (`qa-agent`) que encapsula esse processo inteiro — versionada em `.claude/skills/qa-agent/SKILL.md` neste repo (também existe uma cópia em `~/.claude/skills/qa-agent/SKILL.md` a nível de usuário, pra quando a sessão abre fora do repo). Invocar em vez de reexplicar o framework de teste do zero numa sessão nova.
 
-## Estado da infra (resumo — ver handoff pra detalhes)
+## Estado da infra (resumo — verificado em 2026-09-21, ler código antes de confiar em qualquer status do Jira — esse board historicamente mostra card em "develop" sem PR real por trás, já aconteceu com KAN-45, KAN-73 e outros)
 
-**Migração Supabase → Firebase em andamento (verificado em 2026-09-20, dual-stack ativo neste momento):**
+**Migração Supabase → Firebase concluída no `src/` e no `backend/`:**
 
-- Frontend PWA (`src/`) ainda 100% Supabase — `src/lib/supabaseClient.js`, `Login.jsx`, `Register.jsx`, `Ranking.jsx`, `Scanner.jsx`, `Challenges.jsx`, `useUser.js`, `gameplay.js` continuam usando `@supabase/supabase-js` (ainda dependency ativa no `package.json` raiz). Nenhuma tela do PWA foi migrada pra Firebase ainda.
-- Backend novo (`backend/`) já é Firebase de verdade: Express + TypeScript, Cloud Function 2ª geração (`onRequest`, região `us-east1`, 256MiB, maxInstances 10) — mas só tem rotas de esqueleto (`/api/health`, `/api/me`, `/api/staff/test`, `/api/admin/test`); nenhuma rota de negócio real (booking, checkin, leads, admin/activities) foi implementada ainda, apesar de já estar toda especificada em `Update System/arquitetura-montanha-v2.md`.
-- `firebase.json` + `.firebaserc` existem na raiz — projeto único `facom-techweek-layerx` pra `default` e `prod` (**não há projeto Firebase separado de homolog**, diferente do padrão que existia no Supabase de dois projetos). `firestore.rules` existe e já cobre `users`/`activities`/`announcements`/`bookings`/`leads`. `firestore.indexes.json` e `storage.rules` **não existem ainda**, embora a spec de arquitetura já os preveja.
-- Divergência a confirmar com Fabio: a spec de arquitetura (`Update System/arquitetura-montanha-v2.md`) descreve região `southamerica-east1`, mas o código (`backend/src/index.ts`) está deployado em `us-east1` (free tier).
-- Produção (app antigo): GitHub Pages, branch `main`, deploy via `.github/workflows/deploy.yml` — ainda a versão Supabase, migração não chegou lá.
-- Homologação (app antigo): Vercel (time `facomtechweek`, projeto `app-techweek-homolog`), Production Branch = `homolog`.
-- Kanban: GitHub Project v2 em github.com/users/Oliveira-Jr/projects/1; Jira projeto `KAN` (`app-teckweek.atlassian.net`) é a fonte de verdade pra tracking — 62 issues em 2026-09-20 (22 Backlog, 21 Prod/Concluído, 11 develop, 4 Desenvolvimento, 3 homolog, 1 Bugs).
+- Frontend PWA (`src/`) 100% Firebase — `Login.jsx`/`Register.jsx` usam Firebase Auth de verdade via `src/lib/auth.js`, sessão global vem de `src/contexts/AuthContext.jsx` (`onAuthChange`/`onAuthStateChanged`, não mais `localStorage.facom_logged_in`). `gameplay.js`/`userService.js`/`Scanner.jsx`/`Ranking.jsx`/`Challenges.jsx` leem/gravam Firestore/Storage. `@supabase/supabase-js` removido do `package.json` (2026-09-21) — nenhum código de app depende mais dele.
+- Backend (`backend/`) Express + TypeScript, Cloud Function 2ª geração (`onRequest`, região `us-east1`, 256MiB, maxInstances 10) — rotas de negócio reais implementadas: `/api/auth/register` (LGPD), `/api/activities/:id/checkin` + `/api/checkin/entrance`+`/checkout` (double-check) + `/api/activities/:id/screen-token`, `/api/activities/:id/reserve`, `/api/leads`, `/api/sympla/*`. Ainda faltam: custom claims (`PUT /api/admin/users/:uid/role`, KAN-60), push FCM (KAN-61).
+- `firebase.json` + `.firebaserc` — projeto único `facom-techweek-layerx` pra `default` e `prod` (não há projeto Firebase separado de homolog). `firestore.rules`, `firestore.indexes.json` e `storage.rules` existem e cobrem `users`/`activities`/`announcements`/`bookings`/`leads`/`pointEvents`/`checkins`.
+- Divergência ainda não resolvida: a spec de arquitetura (`Update System/arquitetura-montanha-v2.md`) descreve região `southamerica-east1`, mas o código real está em `us-east1` (free tier).
+- Produção (app antigo Supabase): GitHub Pages, branch `main` — ainda não recebeu a migração Firebase, que só chegou até `develop`/`homolog`.
+- Homologação: Vercel (time `facomtechweek`, projeto `app-techweek-homolog`), Production Branch = `homolog`.
+- Kanban: GitHub Project v2 em github.com/users/Oliveira-Jr/projects/1; Jira projeto `KAN` (`app-teckweek.atlassian.net`) é a fonte de verdade pra tracking, 79+ issues em 2026-09-21.
 
 **Correção de achado anterior:** `.claude/agents/` foi renomeado em 2026-09-20 pra bater 1:1 com `.agent-system/agents/` (`security-reviewer.md`→`security.md`, `pr-review.md`+`dedup-refactor.md`→`code-review.md`, `qa.md` novo — antes só existia como skill). A divergência de nome que existia antes era convenção documentada em `.agent-system/adapters/claude/README.md`, não bug — mas o time decidiu igualar mesmo assim; atualizar esse README se ainda descrever o mapeamento antigo.
 

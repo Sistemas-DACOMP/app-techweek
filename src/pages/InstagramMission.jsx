@@ -25,7 +25,7 @@ export default function InstagramMission() {
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const { completeChallenge, hasCompletedChallenge } = useUser();
+  const { completeChallenge, hasCompletedChallenge, hasSymplaTicket } = useUser();
 
   useEffect(() => {
     if (hasCompletedChallenge('instagram_story')) {
@@ -190,8 +190,14 @@ export default function InstagramMission() {
       const file = new File([blob], 'techweek-story.png', { type: 'image/png' });
 
       if (!isComplete) {
-        await completeChallenge('instagram_story', 50);
-        setIsComplete(true);
+        if (!hasSymplaTicket) {
+          alert('Atenção: Para pontuar no ranking oficial, vincule seu ingresso do Sympla no Perfil.');
+        } else {
+          const ok = await completeChallenge('instagram_story', 50);
+          if (ok) {
+            setIsComplete(true);
+          }
+        }
       }
 
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -229,6 +235,23 @@ export default function InstagramMission() {
         <h1 className="font-lastica" style={{ fontSize: '1rem', fontWeight: '500', textAlign: 'center' }}>Missão Stories</h1>
         <div style={{ width: '40px' }}></div>
       </div>
+
+      {!hasSymplaTicket && (
+        <div
+          style={{
+            marginBottom: '16px',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            background: 'rgba(234, 179, 8, 0.15)',
+            border: '1px solid rgba(234, 179, 8, 0.3)',
+            color: '#fef08a',
+            fontSize: '0.85rem',
+            textAlign: 'center'
+          }}
+        >
+          ⚠️ <strong>Ingresso Sympla Pendente:</strong> você pode gerar e salvar a foto, mas precisa vincular seu ingresso no perfil para pontuar no ranking.
+        </div>
+      )}
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
         

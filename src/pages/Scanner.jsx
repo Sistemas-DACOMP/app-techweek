@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useUser } from '../hooks/useUser';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
 
 export default function Scanner() {
   const [scanResult, setScanResult] = useState(null);
@@ -73,14 +73,10 @@ export default function Scanner() {
     }
 
     if (isUserQr && usernameToValidate) {
-      // Validate with Supabase profiles table
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('username', usernameToValidate)
-        .single();
+      // Valida se o usuário existe no Firestore
+      const profile = await findUserByUsername(usernameToValidate).catch(() => null);
         
-      if (error || !profile) {
+      if (!profile) {
         setIsLoading(false);
         setScanResult({ success: false, message: 'Usuário não encontrado no banco de dados. QR Code inválido.' });
         return;
@@ -119,25 +115,30 @@ export default function Scanner() {
     }
 
     try {
-      // Try to fetch a real user to make simulation work with the new validation
-      const { data: users, error } = await supabase
-        .from('profiles')
-        .select('username, course, participant_type, period')
-        .limit(10);
-        
-      if (!error && users && users.length > 0) {
+      // Tenta buscar usuários do Firestore para a simulação funcionar
+      const users = await getLeaderboardUsers(10).catch(() => []);
+      if (users && users.length > 0) {
         const randomDbUser = users[Math.floor(Math.random() * users.length)];
         const payload = JSON.stringify({
           username: randomDbUser.username,
           course: randomDbUser.course,
-          participantType: randomDbUser.participant_type,
+          participantType: randomDbUser.participant_type || randomDbUser.participantType,
           period: randomDbUser.period
         });
         handleScan(payload);
         return;
       }
+
+      // Usuário de fallback para teste local caso banco esteja vazio
+      const fallbackUser = {
+        username: 'participante_demo',
+        course: 'Sistemas de Informação',
+        participantType: 'Aluno da UFU',
+        period: 2
+      };
+      handleScan(JSON.stringify(fallbackUser));
     } catch (e) {
-      console.error("Failed to fetch real users", e);
+      console.error("Failed to fetch real users for simulation", e);
     }
 
     // Fallback to random if no DB connection or no users
