@@ -31,17 +31,17 @@ export default function MascotDuo() {
             <stop offset="100%" stopColor="#94a3b8" />
           </linearGradient>
           
-          <clipPath id="bodyClipTeko">
+          <clipPath id="bodyClipAlan">
             <rect x="40" y="40" width="120" height="120" rx="16" />
           </clipPath>
-          <clipPath id="bodyClipWeeka">
+          <clipPath id="bodyClipAda">
             <rect x="40" y="40" width="120" height="120" rx="16" />
           </clipPath>
         </defs>
 
-        {/* --- TEKO (Blue, Left) --- */}
+        {/* --- ALAN (Blue, Left) --- */}
         <g transform="translate(10, 0)">
-          {/* Teko's Right Arm (Holding hands) */}
+          {/* Alan's Right Arm (Holding hands) */}
           <path
             d="M 160 100 L 180 130 L 195 160"
             fill="none"
@@ -51,7 +51,7 @@ export default function MascotDuo() {
             strokeLinecap="square"
           />
 
-          {/* Teko's Left Arm (Waving) */}
+          {/* Alan's Left Arm (Waving) */}
           <g className="mascot-arm mascot-arm-left">
             <path
               d="M 40 100 L 15 130 L 30 180"
@@ -64,22 +64,22 @@ export default function MascotDuo() {
             <rect x="20" y="170" width="20" height="20" rx="6" fill="#2563eb" />
           </g>
 
-          {/* Teko's Body */}
+          {/* Alan's Body */}
           <rect x="40" y="40" width="120" height="120" rx="16" fill="url(#bodyGrad-blue)" />
           
           {/* Geometric Accents */}
-          <g clipPath="url(#bodyClipTeko)">
+          <g clipPath="url(#bodyClipAlan)">
             <path d="M 40 160 L 160 40 L 160 160 Z" fill="url(#accentGrad-blue)" />
             <path d="M 40 100 L 100 40 L 160 40 L 40 160 Z" fill="rgba(255,255,255,0.08)" />
           </g>
 
-          {/* Teko's Left Eye */}
+          {/* Alan's Left Eye */}
           <g className="mascot-eye mascot-eye-left">
             <rect x="53" y="63" width="44" height="44" rx="10" fill="url(#eyeGrad)" />
             <rect x="63" y="73" width="24" height="24" rx="6" fill="#0f172a" />
             <rect x="77" y="77" width="6" height="6" rx="2" fill="#fff" />
           </g>
-          {/* Teko's Right Eye */}
+          {/* Alan's Right Eye */}
           <g className="mascot-eye mascot-eye-right">
             <rect x="103" y="63" width="44" height="44" rx="10" fill="url(#eyeGrad)" />
             <rect x="113" y="73" width="24" height="24" rx="6" fill="#0f172a" />
@@ -87,9 +87,9 @@ export default function MascotDuo() {
           </g>
         </g>
 
-        {/* --- WEEKA (Purple, Right) --- */}
+        {/* --- ADA (Purple, Right) --- */}
         <g transform="translate(150, 0)">
-          {/* Weeka's Left Arm (Holding hands) */}
+          {/* Ada's Left Arm (Holding hands) */}
           <path
             d="M 40 100 L 20 130 L 5 160"
             fill="none"
@@ -102,7 +102,7 @@ export default function MascotDuo() {
           <rect x="-5" y="150" width="20" height="20" rx="6" fill="#9333ea" />
           <rect x="-5" y="150" width="18" height="18" rx="6" fill="#2563eb" opacity="0.8" />
 
-          {/* Weeka's Right Arm (Waving) */}
+          {/* Ada's Right Arm (Waving) */}
           <g className="mascot-arm mascot-arm-right">
             <path
               d="M 160 100 L 185 130 L 170 180"
@@ -115,22 +115,22 @@ export default function MascotDuo() {
             <rect x="160" y="170" width="20" height="20" rx="6" fill="#9333ea" />
           </g>
 
-          {/* Weeka's Body */}
+          {/* Ada's Body */}
           <rect x="40" y="40" width="120" height="120" rx="16" fill="url(#bodyGrad-purple)" />
 
           {/* Geometric Accents */}
-          <g clipPath="url(#bodyClipWeeka)">
+          <g clipPath="url(#bodyClipAda)">
             <path d="M 40 160 L 160 40 L 160 160 Z" fill="url(#accentGrad-purple)" />
             <path d="M 40 100 L 100 40 L 160 40 L 40 160 Z" fill="rgba(255,255,255,0.08)" />
           </g>
 
-          {/* Weeka's Left Eye */}
+          {/* Ada's Left Eye */}
           <g className="mascot-eye mascot-eye-left">
             <rect x="53" y="63" width="44" height="44" rx="10" fill="url(#eyeGrad)" />
             <rect x="63" y="73" width="24" height="24" rx="6" fill="#0f172a" />
             <rect x="77" y="77" width="6" height="6" rx="2" fill="#fff" />
           </g>
-          {/* Weeka's Right Eye */}
+          {/* Ada's Right Eye */}
           <g className="mascot-eye mascot-eye-right">
             <rect x="103" y="63" width="44" height="44" rx="10" fill="url(#eyeGrad)" />
             <rect x="113" y="73" width="24" height="24" rx="6" fill="#0f172a" />

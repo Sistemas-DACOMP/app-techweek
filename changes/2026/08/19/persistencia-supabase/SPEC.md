@@ -47,7 +47,7 @@ Migrar o estado de gameplay (pontos, missões concluídas, códigos escaneados, 
 6. Missões manuais são concluídas via formulário e valem pontos uma única vez cada: `sponsor_vaga` (+20), `sponsor_tecnologia` (+20), `sponsor_colecao` (+50), `secret_password` (+30, exige a palavra-chave correta), `network_career` (+20), `network_connect_two` (+20), `network_past_edition` (+15), `network_first_edition` (+15).
 7. O total de pontos de um participante é a soma de todas as ações distintas já concluídas por ele.
 8. O Ranking deve mostrar a posição real de todos os participantes por pontos totais — não mais dados fictícios — ordenado do maior para o menor.
-9. A preferência de mascote (azul "Teko" / roxo "Weeka") é salva por participante, com padrão azul. Hoje não existe UI que altere isso, mas o dado precisa continuar existindo por participante.
+9. A preferência de mascote (azul "Alan" / roxo "Ada") é salva por participante, com padrão azul. Hoje não existe UI que altere isso, mas o dado precisa continuar existindo por participante.
 10. Cada participante só pode ler/alterar os próprios pontos, códigos escaneados e missões — exceto o Ranking, onde os pontos totais (não os eventos individuais) de outros participantes ficam visíveis.
 11. Nada muda no fluxo de login/cadastro — só o estado de gameplay muda de lugar.
 
