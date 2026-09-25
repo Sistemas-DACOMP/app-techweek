@@ -304,26 +304,30 @@ agents by picking the more confident-sounding report over the better-evidenced o
 
 ## Known gaps
 
-- `.agent-system/gates/gates.md` does not exist yet in this system as of this
-  writing — the "Gates" line of the task context template refers to it as the
-  intended source of truth for gate names/approvers; until it exists, the
-  orchestrator uses the mandatory-criteria list in this file directly.
-- `.agent-system/rules/evidence-model.md` and the policy files under
-  `.agent-system/policies/` (quality-gate thresholds, merge-block rule as a
-  standalone policy doc) do not exist yet either — this file currently carries
-  that content inline (copied from the project's existing `CLAUDE.md`/
-  `dev-workflows` skill) rather than pointing to a canonical rules file that isn't
-  written yet. When those files are written, this file's inline copies should be
-  replaced with references, not left duplicated.
-- `spec`, `product`, `architecture`, `qa`, `security`, `backend`, `pwa`, `admin`,
-  `infra`, `code-review`, `adr` agent files beyond the three written alongside
-  this one (`spec.md`, `product.md`, `architecture.md`) are listed in
-  `.agent-system/manifests/system.yaml` but not yet written as of this file's
-  creation — the orchestrator's delegation targets above name them by the id
-  the manifest already assigned, on the assumption those files will exist.
-- No Firebase repo (`apps/pwa`, `apps/admin-web`, `backend/`) exists yet, so the
-  fan-out rules above are dormant by construction, not because they were tested
-  and found unnecessary.
-- Ponytail (anti-overengineering gate, per the wider system's agent list) is
-  NOT INSTALLED on this machine (2026-09-20) and is not wired into any step
-  above — see `agents/ponytail.md` if/when it exists.
+**Closed since this file was written (corrected 2026-09-22, not deleted — kept as history):**
+- `.agent-system/gates/gates.md` now exists (written 2026-09-21/22) — it is the
+  source of truth for gate names/approvers/BLOCKED semantics; the mandatory-criteria
+  list in section 6 above should be read as this repo's instance of those gates
+  (`IMPLEMENTATION COMPLETE`, `QA PASSED`, `SECURITY APPROVED`, etc.), not a
+  competing definition.
+- `.agent-system/rules/evidence-model.md` now exists — the FACT/INFERENCE/
+  ASSUMPTION/UNKNOWN vocabulary in "Evidence rules" above is canonically defined
+  there; this file's mention is a pointer, not a duplicate.
+- All 15 agents in `manifests/system.yaml` → `agents:` now have real files under
+  `.agent-system/agents/` (confirmed 2026-09-22) — the delegation targets above
+  are not aspirational.
+- Ponytail is installed for real since 2026-09-20 (`agents/ponytail.md` exists,
+  gate row in `gates/gates.md` corrected 2026-09-22).
+
+**Still open:**
+- No Firebase repo split (`apps/pwa`, `apps/admin-web` as separate repos) exists —
+  Firebase code lives in-place in `src/` + `backend/` of this same repo instead
+  (confirmed 2026-09-22, see `manifests/system.yaml` → `project_context`). Whether
+  the split is still planned is UNDEFINED. The fan-out rules above stay dormant
+  either way until either the split happens or is explicitly retired.
+- `.claude/skills/dev-workflows/SKILL.md` is this file's Claude Code execution
+  copy (per `adapters/claude/README.md`'s sync convention) — it has not been
+  re-diffed against this file's full content since gates.md/evidence-model.md
+  were added; a fidelity check (does the skill actually reference gates.md and
+  evidence-model.md by name, or still carry only its own inline copy) is
+  recommended before treating this file and the skill as guaranteed in sync.

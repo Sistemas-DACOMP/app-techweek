@@ -1,35 +1,51 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMyProfile, updateMascot, uploadAvatar, getMyPointEvents, addPointEvent } from '../lib/gameplay';
-import { addNotification } from '../lib/notifications';
+import { onAuthChange } from '../lib/auth';
+import { calculateLevel } from '../lib/level';
+import { useNotifications } from './useNotifications';
 
 export function useUser() {
   const [profile, setProfile] = useState(null);
   const [pointEvents, setPointEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { addNotification } = useNotifications();
 
   const load = useCallback(async () => {
-    const [profileData, events] = await Promise.all([getMyProfile(), getMyPointEvents()]);
-    setProfile(profileData);
-    setPointEvents(events);
-    setLoading(false);
+    try {
+      const [profileData, events] = await Promise.all([getMyProfile(), getMyPointEvents()]);
+      setProfile(profileData);
+      setPointEvents(events || []);
+    } catch (_err) {
+      // Offline fallback: mantém estado vazio sem quebrar a UI
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     load();
+    const unsubscribe = onAuthChange(() => {
+      load();
+    });
+    return () => unsubscribe();
   }, [load]);
 
-  const points = pointEvents.reduce((sum, event) => sum + event.points, 0);
+  const points = pointEvents.reduce((sum, event) => sum + (event.points || 0), 0);
+  const userLevel = calculateLevel(points);
 
   const scannedCodes = pointEvents
-    .filter(event => event.event_type === 'scan')
-    .map(event => event.reference_id);
+    .filter(event => (event.event_type || event.eventType) === 'scan')
+    .map(event => event.reference_id || event.referenceId);
 
   const completedChallenges = pointEvents
-    .filter(event => event.event_type === 'challenge' || event.event_type === 'manual_challenge')
-    .map(event => event.reference_id);
+    .filter(event => {
+      const type = event.event_type || event.eventType;
+      return type === 'challenge' || type === 'manual_challenge';
+    })
+    .map(event => event.reference_id || event.referenceId);
 
   const mascot = profile?.mascot || 'blue';
-  const avatarUrl = profile?.avatar_url || null;
+  const avatarUrl = profile?.avatar_url || profile?.avatarUrl || profile?.photoURL || null;
 
   const hasScannedCode = (code) => scannedCodes.includes(code);
   const hasCompletedChallenge = (challengeId) => completedChallenges.includes(challengeId);
@@ -45,8 +61,8 @@ export function useUser() {
     return publicUrl;
   };
 
-  // Grava o evento no Supabase; a constraint UNIQUE(user_id, event_type, reference_id)
-  // do banco garante que a mesma ação nunca rende pontos duas vezes.
+  // Grava o evento via backend (KAN-79); o doc id determinístico
+  // (eventType+referenceId) garante que a mesma ação nunca rende pontos duas vezes.
   const recordEvent = async (eventType, referenceId, amount, metadata = null) => {
     const result = await addPointEvent({ eventType, referenceId, points: amount, metadata });
     if (result.success) {
@@ -163,9 +179,23 @@ export function useUser() {
     return ok;
   };
 
+  const hasSymplaTicket = Boolean(
+    profile?.hasSymplaTicket ||
+    profile?.symplaTicket ||
+    profile?.sympla_ticket ||
+    profile?.role === 'ADMIN'
+  );
+  const symplaTicket = profile?.symplaTicket || profile?.sympla_ticket || null;
+
   return {
+    profile,
+    hasSymplaTicket,
+    symplaTicket,
+    refreshProfile: load,
     loading,
     points,
+    level: userLevel.level,
+    userLevel,
     scannedCodes,
     completedChallenges,
     mascot,
