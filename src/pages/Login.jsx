@@ -83,7 +83,7 @@ export default function Login() {
   const isPeeking = focusedInput === 'password' && showPassword;
 
   return (
-    <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '48px 16px 40px 16px', boxSizing: 'border-box' }}>
       
       {/* Ada espiando pelo canto */}
       <div 
@@ -101,7 +101,7 @@ export default function Login() {
 
       <div className="login-glow"></div>
       
-      <div className="login-glass-card" style={{ zIndex: 2, position: 'relative', width: '100%', maxWidth: '400px' }}>
+      <div className="login-glass-card" style={{ zIndex: 2, position: 'relative', width: '100%', maxWidth: '400px', margin: 'auto 0' }}>
         
         <div style={{ textAlign: 'center', marginBottom: '8px' }}>
           <img src={logoTw} alt="FACOM Tech Week" style={{ height: '50px', marginBottom: '8px' }} />

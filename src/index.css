@@ -328,6 +328,52 @@ body.modal-open .login-container {
   background: rgba(59, 130, 246, 0.05);
 }
 
+select.login-input {
+  cursor: pointer;
+}
+
+select.login-input option,
+select option,
+option {
+  background-color: #0d1527;
+  color: #ffffff;
+}
+
+select.login-input option:disabled,
+select option:disabled,
+option:disabled {
+  color: #94a3b8;
+}
+
+@keyframes customSelectFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.custom-select-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-select-dropdown::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+}
+
+.custom-select-dropdown::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.4);
+  border-radius: 8px;
+}
+
+.custom-select-dropdown::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.6);
+}
+
 .login-btn {
   width: 100%;
   background: var(--primary-gradient);

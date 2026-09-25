@@ -6,6 +6,7 @@ import { auth } from '../lib/firebase';
 import { validateAvatarFile, isValidEmail } from '../lib/validators';
 import AvatarCropperModal from '../components/AvatarCropperModal';
 import MascotDuo from '../components/MascotDuo';
+import CustomSelect from '../components/CustomSelect';
 import { QRCodeSVG } from 'qrcode.react';
 import { SYMPLA_EVENT_URL, verifySymplaTicket, getBadgeQrValue } from '../lib/sympla';
 import { getUserProfile, uploadUserAvatar, updateUserEmail, updateUserProfile } from '../lib/userService';
@@ -958,16 +959,13 @@ export default function Profile() {
                       <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
                         Perfil no Evento
                       </label>
-                      <select
+                      <CustomSelect
+                        name="participantType"
                         value={editForm.participantType}
                         onChange={(e) => setEditForm({ ...editForm, participantType: e.target.value })}
-                        className="login-input"
-                        style={{ width: '100%' }}
-                      >
-                        {PARTICIPANT_TYPES.map(type => (
-                          <option key={type} value={type}>{type}</option>
-                        ))}
-                      </select>
+                        options={PARTICIPANT_TYPES}
+                        placeholder="Selecione seu perfil"
+                      />
                     </div>
 
                     {(editForm.participantType === 'Aluno da UFU' || editForm.participantType === 'Aluno de outra instituição') ? (
@@ -977,17 +975,13 @@ export default function Profile() {
                             <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
                               Curso
                             </label>
-                            <select
+                            <CustomSelect
+                              name="course"
                               value={editForm.course}
                               onChange={(e) => setEditForm({ ...editForm, course: e.target.value })}
-                              className="login-input"
-                              style={{ width: '100%' }}
-                            >
-                              <option value="" disabled>Selecione seu curso</option>
-                              {UFU_COURSES.map(courseName => (
-                                <option key={courseName} value={courseName}>{courseName}</option>
-                              ))}
-                            </select>
+                              options={UFU_COURSES}
+                              placeholder="Selecione seu curso"
+                            />
                           </div>
 
                           <div style={{ flex: 1 }}>

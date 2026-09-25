@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Mascot from '../components/Mascot';
 import AvatarCropperModal from '../components/AvatarCropperModal';
+import CustomSelect from '../components/CustomSelect';
 import { Eye, EyeOff, Loader2, Upload, Camera, RefreshCw, Trash2, Plus, ShieldCheck } from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
 import { signUpWithEmail } from '../lib/auth';
@@ -182,16 +183,16 @@ export default function Register() {
   const isPeeking = isPasswordFocused && showPassword;
 
   return (
-    <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 16px 40px 16px' }}>
+    <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '48px 16px 48px 16px', boxSizing: 'border-box' }}>
       <div className="login-glow"></div>
       
-      <div className="login-glass-card" style={{ zIndex: 2, position: 'relative', width: '100%', maxWidth: '500px', padding: '36px 24px 28px 24px' }}>
+      <div className="login-glass-card" style={{ zIndex: 2, position: 'relative', width: '100%', maxWidth: '500px', padding: '36px 24px 28px 24px', margin: 'auto 0' }}>
         
-        <div style={{ textAlign: 'center', marginBottom: '14px', paddingTop: '4px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '14px', paddingTop: '8px' }}>
           <img 
             src={logoTw} 
             alt="FACOM Tech Week" 
-            style={{ height: '48px', width: 'auto', objectFit: 'contain', marginBottom: '14px', display: 'inline-block' }} 
+            style={{ height: '48px', width: 'auto', objectFit: 'contain', marginBottom: '16px', display: 'inline-block' }} 
           />
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0px' }}>
             <Mascot 
@@ -245,19 +246,19 @@ export default function Register() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Perfil no Evento</label>
-                <select 
+                <CustomSelect 
                   name="participantType"
-                  value={formData.participantType} onChange={handleChange}
-                  onFocus={() => setFocusedInput('participantType')} onBlur={() => setFocusedInput(null)}
-                  className="login-input" required
-                  style={{ width: '100%' }}
-                >
-                  <option value="" disabled>Selecione uma opção</option>
-                  <option value="Aluno da UFU">Aluno da UFU</option>
-                  <option value="Aluno de outra instituição">Aluno de outra instituição</option>
-                  <option value="Servidor / Professor">Servidor / Professor</option>
-                  <option value="Comunidade Externa">Comunidade Externa</option>
-                </select>
+                  value={formData.participantType}
+                  onChange={handleChange}
+                  options={[
+                    'Aluno da UFU',
+                    'Aluno de outra instituição',
+                    'Servidor / Professor',
+                    'Comunidade Externa'
+                  ]}
+                  placeholder="Selecione uma opção"
+                  required
+                />
               </div>
 
               {(formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição') && (
@@ -265,18 +266,14 @@ export default function Register() {
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <div style={{ flex: 2 }}>
                       <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Curso</label>
-                      <select 
+                      <CustomSelect 
                         name="course"
-                        value={formData.course} onChange={handleChange}
-                        onFocus={() => setFocusedInput('course')} onBlur={() => setFocusedInput(null)}
-                        className="login-input" required
-                        style={{ width: '100%' }}
-                      >
-                        <option value="" disabled>Selecione seu curso</option>
-                        {UFU_COURSES.map(courseName => (
-                          <option key={courseName} value={courseName}>{courseName}</option>
-                        ))}
-                      </select>
+                        value={formData.course}
+                        onChange={handleChange}
+                        options={UFU_COURSES}
+                        placeholder="Selecione seu curso"
+                        required
+                      />
                     </div>
                     <div style={{ flex: 1 }}>
                       <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Período</label>
