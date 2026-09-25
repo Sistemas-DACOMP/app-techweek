@@ -3,26 +3,53 @@ import { useNavigate } from 'react-router-dom';
 import MascotDuo from '../components/MascotDuo';
 import logoTw from '../assets/logo-tw.png';
 import { getMyProfile } from '../lib/gameplay';
+import { onAuthChange } from '../lib/auth';
+import { getUserProfile } from '../lib/userService';
 import LectureCard from '../components/LectureCard';
 import LectureModal from '../components/LectureModal';
 import LectureScanner from '../components/LectureScanner';
 import NotificationBell from '../components/NotificationBell';
+import { useUser } from '../hooks/useUser';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { hasSymplaTicket } = useUser();
   const [firstName, setFirstName] = useState('Visitante');
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [showLectureScanner, setShowLectureScanner] = useState(false);
 
   useEffect(() => {
-    getMyProfile()
-      .then(profile => {
-        if (!profile) return;
-        setFirstName(profile.first_name || profile.username || 'Visitante');
-        setAvatarUrl(profile.avatar_url);
-      })
-      .catch(() => { });
+    async function loadUserProfile(user) {
+      if (!user) {
+        setFirstName('Visitante');
+        setAvatarUrl(null);
+        return;
+      }
+
+      try {
+        const profile = await getUserProfile(user.uid);
+        if (profile) {
+          const name = profile.firstName || profile.displayName?.split(' ')[0] || profile.username || user.displayName?.split(' ')[0] || 'Visitante';
+          const avatar = profile.avatarUrl || profile.photoURL || user.photoURL || null;
+          setFirstName(name);
+          setAvatarUrl(avatar);
+        } else {
+          setFirstName(user.displayName?.split(' ')[0] || 'Visitante');
+          setAvatarUrl(user.photoURL || null);
+        }
+      } catch (err) {
+        console.warn('Aviso: Erro ao carregar perfil do Firestore no Dashboard:', err);
+        setFirstName(user.displayName?.split(' ')[0] || 'Visitante');
+        setAvatarUrl(user.photoURL || null);
+      }
+    }
+
+    const unsubscribe = onAuthChange((user) => {
+      loadUserProfile(user);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   return (
@@ -86,25 +113,31 @@ export default function Dashboard() {
             })
           }
         />
-
-        <LectureModal
-          lecture={selectedLecture}
-          onClose={() => setSelectedLecture(null)}
-          onValidate={() => setShowLectureScanner(true)}
-        />
-
-        {showLectureScanner && (
-          <LectureScanner
-            lecture={selectedLecture}
-            onClose={() => {
-              setShowLectureScanner(false);
-              setSelectedLecture(null);
-            }}
-            onBack={() => setShowLectureScanner(false)}
-          />
-        )}
-
       </div>
+
+      <LectureModal
+        lecture={selectedLecture}
+        hasSymplaTicket={hasSymplaTicket}
+        onClose={() => setSelectedLecture(null)}
+        onValidate={() => {
+          if (!hasSymplaTicket) {
+            navigate('/profile');
+            return;
+          }
+          setShowLectureScanner(true);
+        }}
+      />
+
+      {showLectureScanner && (
+        <LectureScanner
+          lecture={selectedLecture}
+          onClose={() => {
+            setShowLectureScanner(false);
+            setSelectedLecture(null);
+          }}
+          onBack={() => setShowLectureScanner(false)}
+        />
+      )}
     </div>
   );
 }

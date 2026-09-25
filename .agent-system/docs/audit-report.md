@@ -9,6 +9,7 @@ Data da auditoria: 2026-09-20. Escopo: repo atual (`app-techweek`, era Supabase)
 > - `gcloud` CLI continua não instalado — esse bloqueador segue de pé.
 > - Os 8 agentes que este relatório lista como "documentação, sem despacho automático" (spec/product/architecture/backend/pwa/admin/infra/adr) ganharam arquivo real em `.claude/agents/` no mesmo dia (PR #36) — hoje todos os 13 despacham sozinhos no Claude Code.
 > - Detalhe completo e atual: `.agent-system/manifests/capability-matrix.md` e `.agent-system/agents/infra.md`.
+> - **2026-09-22, segunda rodada (a mesma data desta nota anterior, mas um novo passe de auditoria):** `.agent-system/context/` (7 arquivos) criado — não existia até então, era a lacuna mais visível deste relatório original. `state/active-task.md`, `blockers.md`, `current-workflow.md` e um handoff real populados (antes só scaffolding vazio). Descoberto que o CLI `agy` (Antigravity) está instalado nesta máquina (v1.2.7) — a premissa "não instalado" usada em várias notas anteriores (inclusive nesta) estava errada; status real é "CLI presente, não exercitado ponta a ponta" (ver ADR-003). Maestri (`themaestri.app`, app externo de canvas multi-agente, pedido pelo Fabio) documentado como conector em `manifests/system.yaml` + `adapters/maestri/README.md` — bloqueado em ação humana (GUI-only, sem CLI/API), ver ADR-004. `scripts/agent-system-doctor.mjs` corrigido (lista de 13 agentes esperados estava desatualizada, faltavam `git-ops`/`devops`).
 
 ---
 

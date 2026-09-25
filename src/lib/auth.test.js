@@ -1,125 +1,162 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signOut,
+  onAuthStateChanged
+} from 'firebase/auth';
 
-// supabase.auth.signUp e mockado - estes sao testes unitarios da funcao
-// de normalizacao de resultado, nao testes de integracao com o Supabase
-// de verdade (isso fica em tests/integration).
-vi.mock('./supabaseClient', () => ({
-  supabase: { auth: { signUp: vi.fn() } },
+// Mock das funções do Firebase Auth
+vi.mock('firebase/auth', () => ({
+  signInWithEmailAndPassword: vi.fn(),
+  sendPasswordResetEmail: vi.fn(),
+  signOut: vi.fn(),
+  onAuthStateChanged: vi.fn()
 }));
 
-import { supabase } from './supabaseClient';
-import { signUpWithEmail, AUTH_MESSAGES } from './auth';
+vi.mock('./firebase', () => ({
+  auth: { currentUser: { uid: 'mock-user-123', email: 'teste@ufu.br' } }
+}));
 
-const CREDENTIALS = { email: 'pessoa@example.com', password: 'senha123', metadata: { first_name: 'Pessoa' } };
+import {
+  loginWithEmailAndPassword,
+  sendPasswordReset,
+  logoutUser,
+  mapAuthError,
+  AUTH_MESSAGES,
+  onAuthChange,
+  getCurrentAuthUser
+} from './auth';
 
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
-// REG-C4 (KAN-15 / SPEC.md D2): cadastro novo com sessao real criada.
-describe('signUpWithEmail - status signed_in', () => {
-  it('retorna signed_in quando o Supabase cria sessao (confirmacao de e-mail desativada)', async () => {
-    supabase.auth.signUp.mockResolvedValue({
-      data: { user: { id: 'u1' }, session: { access_token: 'tok' } },
-      error: null,
-    });
-
-    const result = await signUpWithEmail(CREDENTIALS);
-
-    expect(result.status).toBe('signed_in');
-    expect(result.message).toBeNull();
-  });
-});
-
-// REG-C4 (KAN-15 / SPEC.md D2): anti-enumeracao de conta. O Supabase
-// devolve a MESMA resposta (sem erro, sem sessao) tanto pra conta nova
-// aguardando confirmacao quanto pra e-mail ja cadastrado nao confirmado
-// - a funcao NAO pode diferenciar os dois casos, sob risco de vazar se
-// um e-mail ja tem conta.
-describe('signUpWithEmail - status needs_email_confirmation (anti-enumeracao)', () => {
-  it('conta nova aguardando confirmacao de e-mail', async () => {
-    supabase.auth.signUp.mockResolvedValue({
-      data: { user: { id: 'u1' }, session: null },
-      error: null,
-    });
-
-    const result = await signUpWithEmail(CREDENTIALS);
-
-    expect(result.status).toBe('needs_email_confirmation');
-    expect(result.message).toBe(AUTH_MESSAGES.needs_email_confirmation);
+describe('Módulo de Autenticação Firebase (auth.js)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('e-mail ja cadastrado e nao confirmado - mesma resposta da conta nova, mesma mensagem', async () => {
-    // O Supabase reenvia confirmacao e devolve o usuario antigo, sem erro.
-    supabase.auth.signUp.mockResolvedValue({
-      data: { user: { id: 'u-existente' }, session: null },
-      error: null,
+  describe('mapAuthError', () => {
+    it('deve traduzir auth/invalid-credential para mensagem amigável', () => {
+      const msg = mapAuthError({ code: 'auth/invalid-credential' });
+      expect(msg).toBe(AUTH_MESSAGES.invalid_credentials);
     });
 
-    const result = await signUpWithEmail(CREDENTIALS);
-
-    expect(result.status).toBe('needs_email_confirmation');
-    expect(result.message).toBe(AUTH_MESSAGES.needs_email_confirmation);
-  });
-});
-
-// REG-C5 (KAN-15 / SPEC.md D2): rate limit de envio de e-mail.
-describe('signUpWithEmail - status rate_limited', () => {
-  it('mapeia error.status 429 para rate_limited', async () => {
-    supabase.auth.signUp.mockResolvedValue({
-      data: { user: null, session: null },
-      error: { status: 429, code: 'some_other_code', message: 'too many requests' },
+    it('deve traduzir auth/user-not-found para mensagem amigável', () => {
+      const msg = mapAuthError({ code: 'auth/user-not-found' });
+      expect(msg).toBe(AUTH_MESSAGES.user_not_found);
     });
 
-    const result = await signUpWithEmail(CREDENTIALS);
+    it('deve traduzir auth/too-many-requests para aviso de rate limit', () => {
+      const msg = mapAuthError({ code: 'auth/too-many-requests' });
+      expect(msg).toBe(AUTH_MESSAGES.too_many_requests);
+    });
 
-    expect(result.status).toBe('rate_limited');
-    expect(result.message).toBe(AUTH_MESSAGES.rate_limited);
+    it('deve retornar mensagem padrão quando o erro for desconhecido', () => {
+      const msg = mapAuthError({});
+      expect(msg).toBe(AUTH_MESSAGES.generic_error);
+    });
   });
 
-  it('mapeia error.code over_email_send_rate_limit para rate_limited mesmo sem status 429', async () => {
-    supabase.auth.signUp.mockResolvedValue({
-      data: { user: null, session: null },
-      error: { code: 'over_email_send_rate_limit', message: 'email rate limit exceeded' },
+  describe('loginWithEmailAndPassword', () => {
+    it('deve autenticar com sucesso quando as credenciais forem válidas', async () => {
+      signInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'u123', email: 'aluno@ufu.br' }
+      });
+
+      const res = await loginWithEmailAndPassword('aluno@ufu.br', 'senha123');
+
+      expect(res.success).toBe(true);
+      expect(res.user.uid).toBe('u123');
+      expect(res.error).toBeNull();
     });
 
-    const result = await signUpWithEmail(CREDENTIALS);
+    it('deve normalizar e-mail com espaços ou maiúsculas antes do login', async () => {
+      signInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'u123', email: 'aluno@ufu.br' }
+      });
 
-    expect(result.status).toBe('rate_limited');
-    expect(result.message).toBe(AUTH_MESSAGES.rate_limited);
+      await loginWithEmailAndPassword('  Aluno@UFU.br  ', 'senha123');
+
+      expect(signInWithEmailAndPassword).toHaveBeenCalledWith(
+        expect.anything(),
+        'aluno@ufu.br',
+        'senha123'
+      );
+    });
+
+    it('deve falhar se e-mail ou senha não forem informados', async () => {
+      const resSemEmail = await loginWithEmailAndPassword('', 'senha123');
+      expect(resSemEmail.success).toBe(false);
+
+      const resSemSenha = await loginWithEmailAndPassword('aluno@ufu.br', '');
+      expect(resSemSenha.success).toBe(false);
+    });
+
+    it('deve capturar e traduzir erros de credenciais inválidas', async () => {
+      signInWithEmailAndPassword.mockRejectedValue({ code: 'auth/invalid-credential' });
+
+      const res = await loginWithEmailAndPassword('aluno@ufu.br', 'senha-errada');
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe(AUTH_MESSAGES.invalid_credentials);
+    });
   });
-});
 
-// Regressao do bug reportado em KAN-27: um erro de senha fraca (que nao e
-// rate limit) precisa continuar caindo em "error" com mensagem generica -
-// nunca deve ser confundido com rate_limited so por acontecer depois de
-// tentativas repetidas.
-describe('signUpWithEmail - status error (nao deve virar rate_limited)', () => {
-  it('mapeia weak_password para error, com mensagem generica, nao rate_limited', async () => {
-    supabase.auth.signUp.mockResolvedValue({
-      data: { user: null, session: null },
-      error: {
-        status: 422,
-        code: 'weak_password',
-        message: 'Password should be at least 6 characters.',
-      },
+  describe('sendPasswordReset', () => {
+    it('deve disparar e-mail de redefinição de senha com sucesso', async () => {
+      sendPasswordResetEmail.mockResolvedValue();
+
+      const res = await sendPasswordReset('aluno@ufu.br');
+
+      expect(res.success).toBe(true);
+      expect(res.message).toBe(AUTH_MESSAGES.reset_email_sent);
+      expect(sendPasswordResetEmail).toHaveBeenCalledWith(expect.anything(), 'aluno@ufu.br');
     });
 
-    const result = await signUpWithEmail(CREDENTIALS);
+    it('deve retornar erro se o e-mail estiver vazio', async () => {
+      const res = await sendPasswordReset('');
 
-    expect(result.status).toBe('error');
-    expect(result.message).toBe(AUTH_MESSAGES.error);
+      expect(res.success).toBe(false);
+      expect(sendPasswordResetEmail).not.toHaveBeenCalled();
+    });
+
+    it('deve tratar e traduzir erro caso o Firebase falhe no envio', async () => {
+      sendPasswordResetEmail.mockRejectedValue({ code: 'auth/too-many-requests' });
+
+      const res = await sendPasswordReset('aluno@ufu.br');
+
+      expect(res.success).toBe(false);
+      expect(res.message).toBe(AUTH_MESSAGES.too_many_requests);
+    });
   });
 
-  it('mapeia qualquer outro erro desconhecido para error generico', async () => {
-    supabase.auth.signUp.mockResolvedValue({
-      data: { user: null, session: null },
-      error: { status: 500, code: 'unexpected', message: 'boom' },
+  describe('logoutUser', () => {
+    it('deve encerrar a sessão e limpar flag local', async () => {
+      signOut.mockResolvedValue();
+      const mockStorage = {
+        removeItem: vi.fn()
+      };
+      vi.stubGlobal('localStorage', mockStorage);
+      vi.stubGlobal('window', { localStorage: mockStorage });
+
+      const res = await logoutUser();
+
+      expect(res.success).toBe(true);
+      expect(signOut).toHaveBeenCalled();
+      expect(mockStorage.removeItem).toHaveBeenCalledWith('facom_logged_in');
+
+      vi.unstubAllGlobals();
+    });
+  });
+
+  describe('Sessão Global', () => {
+    it('deve registrar callback no onAuthStateChanged', () => {
+      const mockCb = vi.fn();
+      onAuthChange(mockCb);
+      expect(onAuthStateChanged).toHaveBeenCalledWith(expect.anything(), mockCb);
     });
 
-    const result = await signUpWithEmail(CREDENTIALS);
-
-    expect(result.status).toBe('error');
-    expect(result.message).toBe(AUTH_MESSAGES.error);
+    it('deve retornar o currentUser', () => {
+      const user = getCurrentAuthUser();
+      expect(user.uid).toBe('mock-user-123');
+    });
   });
 });

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -13,6 +14,7 @@ import {
   Inbox
 } from 'lucide-react';
 import { useNotifications } from '../hooks/useNotifications';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export function formatTimestamp(isoString) {
   try {
@@ -53,6 +55,8 @@ function getNotificationIcon(type) {
 }
 
 export default function NotificationModal({ isOpen, onClose }) {
+  useScrollLock(isOpen);
+
   const navigate = useNavigate();
   const {
     notifications,
@@ -85,7 +89,9 @@ export default function NotificationModal({ isOpen, onClose }) {
     }
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div className="notification-backdrop animate-fade-in" onClick={onClose}>
       <div
         className="notification-panel"
@@ -233,6 +239,7 @@ export default function NotificationModal({ isOpen, onClose }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -25,6 +25,15 @@ service-account*.json
 # Notas/contexto de sessão com o Claude — local, nunca versionado
 claude-context/
 
+# Git worktrees de agente (isolamento por tarefa) — cópia local completa do repo,
+# nunca versionar (encontrado sem ignore em 2026-09-22, .claude/worktrees/kan45 aparecia
+# como untracked em vez de ignorado)
+.claude/worktrees/
+
+# Config local do Maestri (roles/terminais desta máquina) — mesma categoria de .claude/,
+# nunca versionar (encontrado sem ignore em 2026-09-22)
+.maestri/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
