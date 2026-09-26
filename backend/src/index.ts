@@ -11,6 +11,7 @@ import screenTokenRouter from './routes/screenToken';
 import checkinDoubleCheckRouter from './routes/checkinDoubleCheck';
 import pointsRouter from './routes/points';
 import adminRouter from './routes/admin';
+import entranceRouter from './routes/entrance';
 
 const app = express();
 
@@ -62,6 +63,9 @@ app.use(['/api/activities', '/activities'], screenTokenRouter);
 
 // Double-check de presença: entrada (Staff) + checkout (aluno via QR do telão) (KAN-51)
 app.use(['/api/checkin', '/checkin'], checkinDoubleCheckRouter);
+
+// Modo Staff: entrada direta na portaria e salas (KAN-48)
+app.use(['/api/staff', '/staff'], entranceRouter);
 
 // Captura de Leads e Gamificação de Estande para Patrocinadores (KAN-55)
 app.use(['/api/leads', '/leads'], leadsRouter);
