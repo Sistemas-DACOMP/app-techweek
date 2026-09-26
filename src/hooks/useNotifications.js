@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   getNotifications,
-  getUnreadCount,
   markAsRead as markAsReadLib,
   markAllAsRead as markAllAsReadLib,
   addNotification as addNotificationLib,
@@ -10,15 +9,16 @@ import {
   syncWelcomeNotificationWithUserCreatedAt,
   EVENT_NAME
 } from '../lib/notifications';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 export function useNotifications() {
   const [notifications, setNotifications] = useState(() => getNotifications());
-  const [unreadCount, setUnreadCount] = useState(() => getUnreadCount());
+  const [announcements, setAnnouncements] = useState([]);
 
   const syncState = useCallback(() => {
     const list = getNotifications();
     setNotifications(list);
-    setUnreadCount(list.filter(n => !n.read).length);
   }, []);
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export function useNotifications() {
           syncWelcomeNotificationWithUserCreatedAt(profile.created_at);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return () => {
       isMounted = false;
@@ -48,6 +48,45 @@ export function useNotifications() {
       window.removeEventListener('storage', handleUpdate);
     };
   }, [syncState]);
+  useEffect(() => {
+    const announcementsRef = collection(db, 'announcements');
+
+    const unsubscribe = onSnapshot(
+      announcementsRef,
+      (snapshot) => {
+        const list = snapshot.docs.map((document) => {
+          const data = document.data();
+
+          let timestamp = new Date().toISOString();
+
+          if (data.createdAt?.toDate) {
+            timestamp = data.createdAt.toDate().toISOString();
+          } else if (data.createdAt) {
+            timestamp = new Date(data.createdAt).toISOString();
+          }
+
+          return {
+            id: document.id,
+            title: data.title || 'Comunicado',
+            message: data.message || '',
+            type: 'system',
+            priority: data.priority || 'NORMAL',
+            timestamp,
+            read: false,
+            source: 'announcement'
+          };
+        });
+
+        list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        setAnnouncements(list);
+      },
+      (error) => {
+        console.error('Erro ao carregar announcements:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   const markAsRead = useCallback((id) => {
     markAsReadLib(id);
@@ -69,9 +108,15 @@ export function useNotifications() {
     clearAllNotificationsLib();
   }, []);
 
+  const allNotifications = [...announcements, ...notifications];
+
+  const totalUnreadCount = allNotifications.filter(
+    notification => !notification.read
+  ).length;
+
   return {
-    notifications,
-    unreadCount,
+    notifications: allNotifications,
+    unreadCount: totalUnreadCount,
     markAsRead,
     markAllAsRead,
     addNotification,
