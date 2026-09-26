@@ -41,6 +41,8 @@ export default function LectureScanner({
     } catch (err) {
       if (err.status === 409) {
         setSaveError('Você já registrou presença nesta palestra!');
+      } else if (err.status === 403 && (err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')) {
+        setSaveError('É necessário possuir ingresso oficial do Sympla validado para confirmar presença.');
       } else {
         setSaveError(err.message || 'Não foi possível registrar sua presença. Tente novamente.');
       }

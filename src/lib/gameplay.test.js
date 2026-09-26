@@ -71,6 +71,19 @@ describe('addPointEvent (KAN-79)', () => {
     expect(result).not.toEqual(expect.objectContaining({ success: true }));
     expect(result.error).toBe('Falha ao conectar ao backend');
   });
+
+  it('falha por ausência de ingresso Sympla (403 SYMPLA_TICKET_REQUIRED): retorna {success:false, code: "SYMPLA_TICKET_REQUIRED"}', async () => {
+    const err = new Error('Acesso negado');
+    err.status = 403;
+    err.data = { error: 'SYMPLA_TICKET_REQUIRED', message: 'Ingresso do Sympla obrigatório.' };
+    apiRequest.mockRejectedValueOnce(err);
+
+    const result = await addPointEvent({ eventType: 'mission', referenceId: 'm1', points: 50 });
+
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('SYMPLA_TICKET_REQUIRED');
+    expect(result.error).toBe('Ingresso do Sympla obrigatório.');
+  });
 });
 
 describe('getMyPointEvents (KAN-79/KAN-71)', () => {

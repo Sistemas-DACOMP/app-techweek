@@ -4,9 +4,11 @@ import {
   getUserProfile, 
   updateUserProfile, 
   uploadUserAvatar,
-  updateUserEmail
+  updateUserEmail,
+  getLeaderboardUsers,
+  subscribeToLeaderboardUsers
 } from './userService';
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updateProfile, updateEmail } from 'firebase/auth';
 
@@ -21,6 +23,7 @@ vi.mock('firebase/firestore', () => ({
   where: vi.fn(),
   orderBy: vi.fn(),
   limit: vi.fn(),
+  onSnapshot: vi.fn(),
   increment: vi.fn(),
   serverTimestamp: vi.fn(() => 'MOCK_TIMESTAMP')
 }));
@@ -172,4 +175,132 @@ describe('userService', () => {
       );
     });
   });
+
+  describe('getLeaderboardUsers e subscribeToLeaderboardUsers (KAN-55)', () => {
+    it('getLeaderboardUsers consulta /users filtrando PARTICIPANT e ordenando por pontuacaoTotal desc limit 50', async () => {
+      const mockDocs = [
+        {
+          id: 'user-1',
+          data: () => ({
+            role: 'PARTICIPANT',
+            username: 'alice',
+            firstName: 'Alice',
+            pontuacaoTotal: 150,
+            avatarUrl: 'https://avatar/alice.png'
+          })
+        },
+        {
+          id: 'user-2',
+          data: () => ({
+            role: 'PARTICIPANT',
+            username: 'bob',
+            firstName: 'Bob',
+            pontuacaoTotal: 100,
+            avatarUrl: null
+          })
+        }
+      ];
+
+      vi.mocked(getDocs).mockResolvedValueOnce({ docs: mockDocs });
+
+      const result = await getLeaderboardUsers(50);
+
+      expect(where).toHaveBeenCalledWith('role', '==', 'PARTICIPANT');
+      expect(orderBy).toHaveBeenCalledWith('pontuacaoTotal', 'desc');
+      expect(limit).toHaveBeenCalledWith(50);
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({ id: 'user-1', rank: 1, points: 150, username: 'alice' });
+      expect(result[1]).toMatchObject({ id: 'user-2', rank: 2, points: 100, username: 'bob' });
+    });
+
+    it('aplica critério de tie-break (REG-RANK-001) quando há empate em pontos', async () => {
+      const mockDocs = [
+        {
+          id: 'user-b',
+          data: () => ({
+            role: 'PARTICIPANT',
+            username: 'zack',
+            pontuacaoTotal: 100,
+            createdAt: { toMillis: () => 2000 }
+          })
+        },
+        {
+          id: 'user-a',
+          data: () => ({
+            role: 'PARTICIPANT',
+            username: 'ana',
+            pontuacaoTotal: 100,
+            createdAt: { toMillis: () => 1000 }
+          })
+        }
+      ];
+
+      vi.mocked(getDocs).mockResolvedValueOnce({ docs: mockDocs });
+
+      const result = await getLeaderboardUsers(50);
+
+      expect(result).toHaveLength(2);
+      // 'ana' tem createdAt mais antigo (1000 < 2000), então desempata em 1º lugar
+      expect(result[0].id).toBe('user-a');
+      expect(result[0].rank).toBe(1);
+      expect(result[1].id).toBe('user-b');
+      expect(result[1].rank).toBe(2);
+    });
+
+    it('faz fallback gracioso se consulta pontuacaoTotal lançar erro de índice', async () => {
+      vi.mocked(getDocs)
+        .mockRejectedValueOnce(new Error('The query requires an index'))
+        .mockResolvedValueOnce({
+          docs: [
+            {
+              id: 'user-fallback',
+              data: () => ({
+                role: 'PARTICIPANT',
+                username: 'carlos',
+                totalPoints: 80
+              })
+            }
+          ]
+        });
+
+      const result = await getLeaderboardUsers(50);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ id: 'user-fallback', rank: 1, points: 80, username: 'carlos' });
+    });
+
+    it('subscribeToLeaderboardUsers escuta via onSnapshot e entrega lista formatada', () => {
+      const mockUnsubscribe = vi.fn();
+      let capturedCallback;
+
+      vi.mocked(onSnapshot).mockImplementation((_query, onNext) => {
+        capturedCallback = onNext;
+        return mockUnsubscribe;
+      });
+
+      const userCallback = vi.fn();
+      const unsub = subscribeToLeaderboardUsers(userCallback, vi.fn(), 50);
+
+      expect(onSnapshot).toHaveBeenCalled();
+      expect(typeof unsub).toBe('function');
+
+      // Simula emissão do Firestore
+      capturedCallback({
+        docs: [
+          {
+            id: 'snap-1',
+            data: () => ({ role: 'PARTICIPANT', username: 'daniela', pontuacaoTotal: 250 })
+          }
+        ]
+      });
+
+      expect(userCallback).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'snap-1', rank: 1, points: 250, username: 'daniela' })
+      ]);
+
+      unsub();
+      expect(mockUnsubscribe).toHaveBeenCalled();
+    });
+  });
 });
+

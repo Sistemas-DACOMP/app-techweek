@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
-import { requireAuth } from '../middlewares/authMiddleware';
+import { requireAuth, requireSymplaTicket } from '../middlewares/authMiddleware';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 
@@ -9,11 +9,10 @@ const router = Router();
 // POST /api/activities/:activityId/reserve
 //
 // Reserva atômica de vaga (ou entrada na lista de espera) numa atividade.
-// Qualquer PARTICIPANT autenticado pode reservar — sem requireRole, a
-// checagem de vaga é a única regra de acesso que importa aqui. bookingId
-// determinístico ({uid}_{activityId}, mesmo padrão de checkin.ts) permite
+// Exige autenticação e ingresso oficial validado do Sympla (KAN-84).
+// bookingId determinístico ({uid}_{activityId}, mesmo padrão de checkin.ts) permite
 // checar duplicidade dentro da própria transação, sem query extra.
-router.post('/:activityId/reserve', requireAuth, participantActionLimiter, async (req: Request, res: Response) => {
+router.post('/:activityId/reserve', requireAuth, participantActionLimiter, requireSymplaTicket, async (req: Request, res: Response) => {
   const { activityId } = req.params;
   const uid = req.user!.uid;
 

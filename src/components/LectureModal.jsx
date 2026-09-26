@@ -1,9 +1,10 @@
 import { createPortal } from 'react-dom';
-import { Clock, MapPin, QrCode, X } from 'lucide-react';
+import { Clock, MapPin, QrCode, Ticket, X } from 'lucide-react';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function LectureModal({
   lecture,
+  hasSymplaTicket = true,
   onClose,
   onValidate
 }) {
@@ -285,6 +286,23 @@ export default function LectureModal({
         </div>
 
 
+        {!hasSymplaTicket && (
+          <div
+            style={{
+              marginTop: '16px',
+              padding: '12px 14px',
+              borderRadius: '12px',
+              background: 'rgba(234, 179, 8, 0.15)',
+              border: '1px solid rgba(234, 179, 8, 0.3)',
+              color: '#fef08a',
+              fontSize: '0.82rem',
+              lineHeight: '1.4'
+            }}
+          >
+            ⚠️ <strong>Ingresso Sympla Pendente:</strong> Vincule seu ingresso oficial no seu perfil para poder validar presença e pontuar nesta palestra.
+          </div>
+        )}
+
         {/* Ação principal */}
         <button
           className="btn-primary"
@@ -293,7 +311,7 @@ export default function LectureModal({
             width: '100%',
             height: '52px',
 
-            marginTop: '26px',
+            marginTop: '20px',
 
             display: 'flex',
             justifyContent: 'center',
@@ -314,8 +332,17 @@ export default function LectureModal({
               '0 10px 30px rgba(20, 120, 255, 0.25)'
           }}
         >
-          <QrCode size={19} />
-          Validar presença
+          {hasSymplaTicket ? (
+            <>
+              <QrCode size={19} />
+              Validar presença
+            </>
+          ) : (
+            <>
+              <Ticket size={19} />
+              Vincular ingresso Sympla
+            </>
+          )}
         </button>
 
       </div>

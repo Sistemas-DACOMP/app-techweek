@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 export interface RegisterProfileData {
   firstName?: string;
@@ -37,18 +38,24 @@ export async function registerUser(
   const alreadyRegistered = await db.runTransaction(async (tx) => {
     const snapshot = await tx.get(userRef);
 
-    if (snapshot.exists) {
+    if (snapshot.exists && snapshot.data()?.termsAcceptedAt) {
       return true;
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const existingData = snapshot.data() || {};
+    const now = typeof FieldValue?.serverTimestamp === 'function'
+      ? FieldValue.serverTimestamp()
+      : (typeof admin.firestore?.FieldValue?.serverTimestamp === 'function'
+          ? admin.firestore.FieldValue.serverTimestamp()
+          : new Date().toISOString());
     const docData: Record<string, any> = {
       uid,
-      email,
+      email: email ?? existingData.email ?? null,
       role: 'PARTICIPANT',
-      totalPoints: 0,
+      totalPoints: existingData.totalPoints ?? 0,
+      pontuacaoTotal: existingData.pontuacaoTotal ?? existingData.totalPoints ?? 0,
       termsAcceptedAt: now,
-      createdAt: now
+      createdAt: existingData.createdAt || now
     };
 
     if (profileData) {
@@ -69,7 +76,7 @@ export async function registerUser(
       if (profileData.photoURL) docData.photoURL = profileData.photoURL;
     }
 
-    tx.set(userRef, docData);
+    tx.set(userRef, docData, { merge: true });
 
     return false;
   });

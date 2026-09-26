@@ -213,21 +213,34 @@ export async function addPointEvent({ eventType, referenceId, points, metadata =
     metadata,
     createdAt: new Date().toISOString(),
   };
-  saveLocalPointEvent(user.uid, localEvent);
-
   try {
     const data = await apiRequest('/points/claim', {
       method: 'POST',
       body: JSON.stringify({ eventType, referenceId, points, metadata })
     });
+    if (data && (data.success || data.alreadyClaimed)) {
+      saveLocalPointEvent(user.uid, localEvent);
+    }
     return data;
   } catch (err) {
     if (err.status === 409 || err.data?.alreadyClaimed) {
+      saveLocalPointEvent(user.uid, localEvent);
       return { success: false, alreadyClaimed: true };
     }
+    if (err.status === 403 && (err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')) {
+      return {
+        success: false,
+        error: err.data?.message || 'Ingresso do Sympla obrigatório para pontuar.',
+        code: 'SYMPLA_TICKET_REQUIRED'
+      };
+    }
     // Falha real (rede indisponível, backend fora do ar) precisa aparecer
-    // como falha real — nunca mais mascarar como sucesso aqui.
-    return { success: false, error: err.message || 'Não foi possível registrar os pontos.' };
+    // como falha real — nunca mais mascarar como sucesso aqui nem salvar estado local falso.
+    return {
+      success: false,
+      error: err.message || 'Não foi possível registrar os pontos.',
+      code: err.data?.error || null
+    };
   }
 }
 

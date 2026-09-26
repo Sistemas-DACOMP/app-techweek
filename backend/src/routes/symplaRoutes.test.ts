@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response } from 'express';
 
+const mockSet = vi.fn().mockResolvedValue({});
+const mockDoc = vi.fn().mockReturnValue({ set: mockSet });
+const mockCollection = vi.fn().mockReturnValue({ doc: mockDoc });
+
 vi.mock('../config/firebaseAdmin', () => ({
   db: {
-    collection: vi.fn()
+    collection: (name: string) => mockCollection(name)
   }
 }));
 
@@ -65,7 +69,7 @@ describe('POST /verify-ticket (SEC-002: Proteção de PII e Ingressos Sympla)', 
     );
   });
 
-  it('permite que participante consulte seu próprio ingresso com sucesso', async () => {
+  it('permite que participante consulte seu próprio ingresso e persiste no Firestore', async () => {
     const req = {
       user: { uid: 'user-1', email: 'aluno@ufu.br', role: 'PARTICIPANT' },
       body: { email: 'aluno@ufu.br' }
@@ -96,8 +100,24 @@ describe('POST /verify-ticket (SEC-002: Proteção de PII e Ingressos Sympla)', 
           ticketNumber: 'TCK-101',
           qrCodeData: 'QR-101',
           email: 'aluno@ufu.br'
+        }),
+        symplaTicket: expect.objectContaining({
+          ticketNumber: 'TCK-101',
+          ticketName: 'Geral'
         })
       })
+    );
+
+    expect(mockDoc).toHaveBeenCalledWith('user-1');
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hasSymplaTicket: true,
+        symplaTicket: expect.objectContaining({
+          ticketNumber: 'TCK-101',
+          ticketName: 'Geral'
+        })
+      }),
+      { merge: true }
     );
   });
 
@@ -162,6 +182,48 @@ describe('POST /verify-ticket (SEC-002: Proteção de PII e Ingressos Sympla)', 
           email: 'outro@ufu.br'
         })
       })
+    );
+  });
+});
+
+describe('POST /sync-user', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const syncHandlers = getRouteHandlers('/sync-user', 'post');
+
+  it('sincroniza ingresso por ticketNumber diretamente com Firestore', async () => {
+    const req = {
+      user: { uid: 'user-2', email: 'user@ufu.br', role: 'PARTICIPANT' },
+      body: { ticketNumber: 'TCK-555' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    vi.mocked(symplaService.findParticipantByTicket).mockResolvedValueOnce({
+      id: 555,
+      order_id: 'ORD-555',
+      ticket_number: 'TCK-555',
+      ticket_name: 'Geral',
+      first_name: 'Maria',
+      last_name: 'Souza',
+      email: 'user@ufu.br',
+      ticket_num_qr_code: 'QR-555'
+    } as any);
+
+    const finalHandler = syncHandlers[syncHandlers.length - 1];
+    await finalHandler(req, res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(mockDoc).toHaveBeenCalledWith('user-2');
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hasSymplaTicket: true,
+        symplaTicket: expect.objectContaining({
+          ticketNumber: 'TCK-555'
+        })
+      }),
+      { merge: true }
     );
   });
 });

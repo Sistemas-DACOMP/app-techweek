@@ -179,7 +179,19 @@ export function useUser() {
     return ok;
   };
 
+  const hasSymplaTicket = Boolean(
+    profile?.hasSymplaTicket ||
+    profile?.symplaTicket ||
+    profile?.sympla_ticket ||
+    profile?.role === 'ADMIN'
+  );
+  const symplaTicket = profile?.symplaTicket || profile?.sympla_ticket || null;
+
   return {
+    profile,
+    hasSymplaTicket,
+    symplaTicket,
+    refreshProfile: load,
     loading,
     points,
     level: userLevel.level,
