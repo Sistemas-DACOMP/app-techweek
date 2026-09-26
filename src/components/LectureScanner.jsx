@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, QrCode, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { addPointEvent } from '../lib/gameplay';
 import { isQrForLecture } from '../lib/qrValidation';
+import { apiRequest } from '../lib/api';
+import { useScrollLock } from '../hooks/useScrollLock';
 export default function LectureScanner({
   lecture,
   onClose,
   onBack
 }) {
+  useScrollLock(true);
   const [scanResult, setScanResult] = useState(null);
   const [rating, setRating] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -27,15 +30,22 @@ export default function LectureScanner({
 
     setSaving(true);
     try {
-      await addPointEvent({
-        eventType: 'lecture_attendance',
-        referenceId: lecture?.id,
-        points: lecture?.points || 0,
-        metadata: { rating },
+      // Path relativo direto (fetch('/api/...')) não chega em lugar nenhum
+      // sem proxy/rewrite configurado — apiRequest usa VITE_API_BASE_URL e
+      // já injeta o Bearer token do Firebase Auth (achado KAN-79).
+      await apiRequest(`/activities/${lecture?.id}/checkin`, {
+        method: 'POST',
+        body: JSON.stringify({ lectureId: lecture?.id, rating })
       });
       onClose();
-    } catch {
-      setSaveError('Não foi possível registrar sua presença. Tente novamente.');
+    } catch (err) {
+      if (err.status === 409) {
+        setSaveError('Você já registrou presença nesta palestra!');
+      } else if (err.status === 403 && (err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')) {
+        setSaveError('É necessário possuir ingresso oficial do Sympla validado para confirmar presença.');
+      } else {
+        setSaveError(err.message || 'Não foi possível registrar sua presença. Tente novamente.');
+      }
     } finally {
       setSaving(false);
     }
@@ -117,27 +127,25 @@ export default function LectureScanner({
     };
   }, [scanResult]);
 
+  if (typeof document === 'undefined') return null;
+
   if (scanResult) {
-    return (
+    return createPortal(
       <>
         <style>{scannerStyles}</style>
 
         <div
+          className="modal-overlay-fixed"
           onClick={onClose}
           style={{
-            position: 'fixed',
-            inset: 0,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1100,
             padding: '20px',
-            background: 'rgba(5, 15, 35, 0.18)',
+            background: 'rgba(5, 15, 35, 0.45)',
             backdropFilter: 'blur(14px)',
             WebkitBackdropFilter: 'blur(14px)'
           }}
         >
           <div
+            className="modal-card-fixed"
             onClick={(e) => e.stopPropagation()}
             style={{
               width: '100%',
@@ -233,34 +241,27 @@ export default function LectureScanner({
             )}
           </div>
         </div>
-      </>
+      </>,
+      document.body
     );
   }
 
-  return (
+  return createPortal(
     <>
 
       <style>{scannerStyles}</style>
       <div
+        className="modal-overlay-fixed"
         onClick={onClose}
         style={{
-          position: 'fixed',
-          inset: 0,
-
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-
-          zIndex: 1100,
           padding: '20px',
-
-          background: 'rgba(5, 15, 35, 0.18)',
-
+          background: 'rgba(5, 15, 35, 0.45)',
           backdropFilter: 'blur(14px)',
           WebkitBackdropFilter: 'blur(14px)'
         }}
       >
         <div
+          className="modal-card-fixed"
           onClick={(e) => e.stopPropagation()}
           style={{
             width: '100%',
@@ -541,6 +542,7 @@ export default function LectureScanner({
 
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

@@ -6,8 +6,9 @@ vi.mock('../services/registerUser', () => ({
   registerUser: vi.fn()
 }));
 
-import { registerHandler } from './auth';
+import router, { registerHandler } from './auth';
 import { registerUser } from '../services/registerUser';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -15,6 +16,17 @@ function makeRes() {
   res.json = vi.fn().mockReturnValue(res);
   return res as Response;
 }
+
+// KAN-75: prova que o rate limiter está montado na rota real (não só que a
+// função do limiter funciona isolada, ver rateLimiter.test.ts).
+it('KAN-75: participantActionLimiter está montado na rota real, antes do handler final', () => {
+  const layer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/register'
+  );
+  const handles = layer.route.stack.map((l: any) => l.handle);
+  expect(handles).toContain(participantActionLimiter);
+  expect(handles.indexOf(participantActionLimiter)).toBeLessThan(handles.length - 1);
+});
 
 describe('POST /api/auth/register (registerHandler) — REG-LGPD-001 / KAN-72', () => {
   beforeEach(() => {

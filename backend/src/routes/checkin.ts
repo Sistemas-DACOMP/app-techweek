@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../config/firebaseAdmin';
+import { db, FieldValue } from '../config/firebaseAdmin';
 import { requireAuth } from '../middlewares/authMiddleware';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
+import { resolveAttendanceMode } from '../lib/attendanceMode';
 
 const router = Router();
 
@@ -13,7 +15,7 @@ const router = Router();
 // faz no client, mas o client sozinho não é confiável nessa arquitetura
 // (REG-SCANNER-001 / KAN-71). Também garante que o mesmo usuário não credita
 // pontos duas vezes pra mesma palestra (dedup via id determinístico do doc).
-router.post('/:activityId/checkin', requireAuth, async (req: Request, res: Response) => {
+router.post('/:activityId/checkin', requireAuth, participantActionLimiter, async (req: Request, res: Response) => {
   const { activityId } = req.params;
   const { lectureId, rating } = req.body ?? {};
   const uid = req.user!.uid;
@@ -59,6 +61,19 @@ router.post('/:activityId/checkin', requireAuth, async (req: Request, res: Respo
         };
       }
 
+      const activityData = activitySnap.data() ?? {};
+
+      // KAN-51/D2: atividade com double-check usa /api/checkin/entrance +
+      // /checkout (Staff registra entrada, aluno faz checkout via QR do
+      // telão) — este fluxo de autoatendimento não se aplica a ela, senão
+      // dá pra contar presença duas vezes pela mesma atividade.
+      if (resolveAttendanceMode(activityData) === 'DOUBLE_CHECK') {
+        return {
+          status: 400 as const,
+          body: { error: 'WRONG_ATTENDANCE_MODE', message: 'Esta atividade usa double-check de presença (Staff + QR do telão).' }
+        };
+      }
+
       if (pointEventSnap.exists) {
         return {
           status: 409 as const,
@@ -66,7 +81,6 @@ router.post('/:activityId/checkin', requireAuth, async (req: Request, res: Respo
         };
       }
 
-      const activityData = activitySnap.data() ?? {};
       const points = typeof activityData.points === 'number' ? activityData.points : 0;
 
       tx.set(pointEventRef, {
@@ -77,6 +91,14 @@ router.post('/:activityId/checkin', requireAuth, async (req: Request, res: Respo
         metadata: typeof rating === 'number' ? { rating } : null,
         createdAt: new Date()
       });
+
+      if (points > 0) {
+        const userRef = db.collection('users').doc(uid);
+        tx.set(userRef, {
+          totalPoints: FieldValue.increment(points),
+          pontuacaoTotal: FieldValue.increment(points)
+        }, { merge: true });
+      }
 
       return {
         status: 201 as const,

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { CheckCircle, AlertCircle, Loader2, XCircle } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { getMyProfile } from '../lib/gameplay';
 
 export default function Staff() {
@@ -37,25 +37,17 @@ export default function Staff() {
     checkAuth();
   }, [navigate]);
 
-  const fetchActivities = async () => {
-    // Mocking fetching activities from backend/supabase
-    // Ideally we'd fetch from activities table
+  const fetchActivities = () => {
     try {
-      const { data, error } = await supabase.from('activities').select('id, title, type');
-      if (!error && data) {
-        setActivities(data);
-      } else {
-        // Fallback for tests
-        setActivities([
-          { id: 'act_1', title: 'Palestra de Abertura' },
-          { id: 'act_2', title: 'Workshop React' },
-        ]);
-      }
-    } catch (e) {
-      setActivities([
-        { id: 'act_1', title: 'Palestra de Abertura' },
-        { id: 'act_2', title: 'Workshop React' },
-      ]);
+      subscribeToActivities((list) => {
+        if (list && list.length > 0) {
+          setActivities(list);
+        } else {
+          setActivities(DEFAULT_ACTIVITIES);
+        }
+      });
+    } catch (_e) {
+      setActivities(DEFAULT_ACTIVITIES);
     }
   };
 

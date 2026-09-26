@@ -23,7 +23,7 @@ outputs:
 portable: true
 portability_note: >
   Processo de revisão de config e detecção de drift não depende de ferramenta
-  específica de um runtime de IA — funciona igual sob Claude Code, Codex ou
+  específica de um runtime de IA — funciona igual sob Claude Code ou
   Antigravity assim que o adapter de cada um apontar pra este arquivo. A
   limitação real (CLIs ausentes) é do ambiente de execução, não do runtime de IA.
 

@@ -4,7 +4,9 @@
 
 ## Sistema de engenharia portável (`.agent-system/`)
 
-A partir de 2026-09-20 o comportamento operacional dos agentes (orquestração, regras, gates, workflows) tem fonte canônica em `.agent-system/` — ver `.agent-system/manifests/system.yaml`. Este CLAUDE.md continua sendo o bootstrap que o Claude Code lê automaticamente, mas para trabalho de engenharia não trivial, consulte também `.agent-system/agents/` (comportamento de cada agente) e `.agent-system/docs/audit-report.md` (auditoria completa: o que existe, o que é portável entre Claude Code/Codex/Antigravity, o que falta). Os arquivos em `.claude/agents/` e `.claude/skills/` continuam sendo os adapters reais que o Claude Code executa — mantidos sincronizados com a fonte canônica, não substituídos por ela.
+A partir de 2026-09-20 o comportamento operacional dos agentes (orquestração, regras, gates, workflows) tem fonte canônica em `.agent-system/` — ver `.agent-system/manifests/system.yaml`. Este CLAUDE.md continua sendo o bootstrap que o Claude Code lê automaticamente, mas para trabalho de engenharia não trivial, consulte também `.agent-system/agents/` (comportamento de cada agente) e `.agent-system/docs/audit-report.md` (auditoria completa: o que existe, o que é portável entre Claude Code/Antigravity, o que falta). Os arquivos em `.claude/agents/` e `.claude/skills/` continuam sendo os adapters reais que o Claude Code executa — mantidos sincronizados com a fonte canônica, não substituídos por ela.
+
+**Runtimes suportados: Claude Code + Antigravity apenas (decisão do Fabio, 2026-09-22)** — Codex e GitHub Copilot foram descontinuados. `.agent-system/adapters/codex/` e `.github/copilot-instructions.md` foram removidos. Codex nunca teve adapter real (só um README documentando o que faltava construir), então nada foi perdido; Antigravity mantém os wrappers reais em `.agent-system/adapters/antigravity/agents/`. Todo agente/skill novo daqui pra frente precisa de paridade (ou gap documentado) só entre esses dois runtimes.
 
 ## Quem é o time
 
@@ -15,7 +17,7 @@ Time de **iniciantes, primeiro projeto de software real** (evento FACOM Tech Wee
 - **Nunca inclua o trailer `Co-Authored-By: Claude` em commits.**
 - **Nunca altere variáveis de ambiente do Windows** (nem pra debug) sem pedir antes.
 - Padrão de commit: `[TIPO] - descrição curta`, tipos `ADD` `FIX` `UPD` `DEL` `DOC` `CFG`.
-- Git Flow: `feature/*` → `develop` → `homolog` → `main`. Branch protection ativa em `main`/`homolog` (PR obrigatório, 0 aprovações) **e também em `develop`** (PR obrigatório, **1 aprovação** — confirmado via API em 2026-09-10, corrigindo a nota antiga que só citava main/homolog).
+- Git Flow: `feature/*` → `develop` → `homolog` → `main`. Branch protection ativa em `main`/`homolog`/`develop` (PR obrigatório nas três). Exigência de aprovação: `main`/`homolog` **0 aprovações**; `develop` também **0 aprovações** desde 2026-09-21 (era 1, desativado a pedido do Fabio via API — motivo: GitHub bloqueia autor de aprovar a própria PR mesmo via API/CLI, e o time é pequeno demais pra sempre ter um segundo revisor disponível). PR continua obrigatório em `develop` — só a contagem de aprovação foi zerada, merge direto sem PR continua bloqueado.
 - Comentário em PR e em card do Jira sempre em linguagem natural, como um dev escrevendo pra outro — nunca com tom de relatório gerado por IA, nem jargão desnecessário. Direto, sem enrolação, mas humano.
 
 ## Processo de revisão de PRs / merge
@@ -36,12 +38,13 @@ Toda mudança de comportamento de negócio (nova regra, correção de gap) passa
 
 Este projeto reconhece o tipo de tarefa sozinho — não é preciso dizer "use o fluxo de QA" ou "faça revisão de segurança". A skill `.claude/skills/dev-workflows/SKILL.md` é o orquestrador: classifica o pedido (feature/bugfix/PR review/testing), delega pro agente ou skill certo, e aplica o quality gate e o loop de reprocessamento (limite de 3 tentativas antes de escalar pro Fabio).
 
-Agentes e skills disponíveis:
+Agentes e skills disponíveis (lista corrigida em 2026-09-21 — os 3 nomes de arquivo abaixo estavam desatualizados desde o rename de 2026-09-20, ver `.agent-system/adapters/claude/README.md`):
 
 - `.claude/skills/qa-agent/SKILL.md` — regras de negócio, planejamento e execução de testes.
-- `.claude/agents/pr-review.md` — análise/correção/revalidação/preparação de PR (nunca mergeia).
-- `.claude/agents/security-reviewer.md` — revisão de segurança independente (auth, RLS, uploads, tokens); só reporta, não corrige.
-- `.claude/agents/dedup-refactor.md` — análise de duplicação sob pedido explícito.
+- `.claude/agents/code-review.md` — análise/correção/revalidação/preparação de PR (nunca mergeia); também roda análise de duplicação (DRY) sob pedido explícito.
+- `.claude/agents/security.md` — revisão de segurança independente (auth, RLS, uploads, tokens); só reporta, não corrige.
+- `.claude/agents/git-ops.md` (2026-09-21) — cirurgia de branch/PR (recria branch órfã/desatualizada/conflitante, resolve conflito mecânico, abre PR de substituição) e higiene do board Jira (status que não bate com PR real, duplicata, link de bloqueio, issue Bug fora da coluna certa). Camada mecânica embaixo do `code-review`, nunca no lugar dele — nunca julga corretude de código, nunca mexe em branch protection/config de repositório, nunca mergeia. Despacha sozinho, ver `.claude/skills/dev-workflows/SKILL.md`.
+- `.claude/agents/devops.md` (novo, 2026-09-22) — pipelines de CI/CD (`.github/workflows/*.yml`), scripts de build (`quality-gate.mjs`), config de hospedagem (Vercel/GitHub Pages), fluxo de release `develop`→`homolog`→`main`. Nunca mexe em Firebase/Firestore (isso é `infra`), nunca em lógica de negócio/UI (isso é `backend`/`pwa`/`admin`), nunca em branch protection sem permissão explícita, nunca em cirurgia de branch/PR/Jira (isso é `git-ops`).
 
 Quality gate objetivo (lint/build/test) roda com `npm run quality-gate`. Checagem do ambiente de IA (o que existe, o que falta configurar) roda com `npm run check-ai-infra`. Detalhes de threshold, critérios obrigatórios e classificação de falha estão na skill `dev-workflows`.
 
@@ -55,21 +58,21 @@ Catálogo persistente em `docs/business-rules/` (ver `docs/business-rules/README
 
 ## Testes automatizados
 
-**Legado Supabase, ainda em uso enquanto o PWA não migra pra Firebase** (ver "Estado da infra" acima): Vitest mergeado na `develop` (PR #17/KAN-31, 2026-09-11). `npm run test` = unitário (`src/**/*.test.js`, mocka o Supabase), `npm run test:integration` = bate direto no `@supabase/supabase-js` do projeto de HOMOLOGAÇÃO, sem passar pela UI — precisa de `.env.local` com credenciais reais de homolog; se não tiver, os testes usam `describe.skipIf` e pulam em vez de falhar. **`test:integration` cria contas reais no Supabase de homolog a cada execução** (e-mail com timestamp) — normal, mas não rodar sem necessidade nem contra produção. Toda regra de negócio nova ou corrigida deveria ganhar teste. Quando o PWA migrar pra Firebase, essa suíte precisa ser reescrita contra Firestore/Auth emulators — não apagar antes de ter o equivalente novo funcionando, senão perde cobertura de regressão do app que ainda tá no ar.
+**Supabase 100% removido do projeto (2026-09-21)** — `@supabase/supabase-js` saiu do `package.json`, `src/lib/supabaseClient.js` e `tests/integration/kan28-lgpd.test.js` (só existiam pra ele) foram apagados. `npm run test` = `npx vitest run src scripts tests/unit` (mocka Firebase Auth/Firestore, nunca bate em rede real). Não existe mais `test:integration`/suíte contra ambiente real — se um teste de integração fizer sentido de novo no futuro (ex: contra Firebase Emulator Suite), é infra nova, não a reativação da antiga.
 
 Existe uma skill do Claude Code (`qa-agent`) que encapsula esse processo inteiro — versionada em `.claude/skills/qa-agent/SKILL.md` neste repo (também existe uma cópia em `~/.claude/skills/qa-agent/SKILL.md` a nível de usuário, pra quando a sessão abre fora do repo). Invocar em vez de reexplicar o framework de teste do zero numa sessão nova.
 
-## Estado da infra (resumo — ver handoff pra detalhes)
+## Estado da infra (resumo — verificado em 2026-09-21, ler código antes de confiar em qualquer status do Jira — esse board historicamente mostra card em "develop" sem PR real por trás, já aconteceu com KAN-45, KAN-73 e outros)
 
-**Migração Supabase → Firebase em andamento (verificado em 2026-09-20, dual-stack ativo neste momento):**
+**Migração Supabase → Firebase concluída no `src/` e no `backend/`:**
 
-- Frontend PWA (`src/`) ainda 100% Supabase — `src/lib/supabaseClient.js`, `Login.jsx`, `Register.jsx`, `Ranking.jsx`, `Scanner.jsx`, `Challenges.jsx`, `useUser.js`, `gameplay.js` continuam usando `@supabase/supabase-js` (ainda dependency ativa no `package.json` raiz). Nenhuma tela do PWA foi migrada pra Firebase ainda.
-- Backend novo (`backend/`) já é Firebase de verdade: Express + TypeScript, Cloud Function 2ª geração (`onRequest`, região `us-east1`, 256MiB, maxInstances 10) — mas só tem rotas de esqueleto (`/api/health`, `/api/me`, `/api/staff/test`, `/api/admin/test`); nenhuma rota de negócio real (booking, checkin, leads, admin/activities) foi implementada ainda, apesar de já estar toda especificada em `Update System/arquitetura-montanha-v2.md`.
-- `firebase.json` + `.firebaserc` existem na raiz — projeto único `facom-techweek-layerx` pra `default` e `prod` (**não há projeto Firebase separado de homolog**, diferente do padrão que existia no Supabase de dois projetos). `firestore.rules` existe e já cobre `users`/`activities`/`announcements`/`bookings`/`leads`. `firestore.indexes.json` e `storage.rules` **não existem ainda**, embora a spec de arquitetura já os preveja.
-- Divergência a confirmar com Fabio: a spec de arquitetura (`Update System/arquitetura-montanha-v2.md`) descreve região `southamerica-east1`, mas o código (`backend/src/index.ts`) está deployado em `us-east1` (free tier).
-- Produção (app antigo): GitHub Pages, branch `main`, deploy via `.github/workflows/deploy.yml` — ainda a versão Supabase, migração não chegou lá.
-- Homologação (app antigo): Vercel (time `facomtechweek`, projeto `app-techweek-homolog`), Production Branch = `homolog`.
-- Kanban: GitHub Project v2 em github.com/users/Oliveira-Jr/projects/1; Jira projeto `KAN` (`app-teckweek.atlassian.net`) é a fonte de verdade pra tracking — 62 issues em 2026-09-20 (22 Backlog, 21 Prod/Concluído, 11 develop, 4 Desenvolvimento, 3 homolog, 1 Bugs).
+- Frontend PWA (`src/`) 100% Firebase — `Login.jsx`/`Register.jsx` usam Firebase Auth de verdade via `src/lib/auth.js`, sessão global vem de `src/contexts/AuthContext.jsx` (`onAuthChange`/`onAuthStateChanged`, não mais `localStorage.facom_logged_in`). `gameplay.js`/`userService.js`/`Scanner.jsx`/`Ranking.jsx`/`Challenges.jsx` leem/gravam Firestore/Storage. `@supabase/supabase-js` removido do `package.json` (2026-09-21) — nenhum código de app depende mais dele.
+- Backend (`backend/`) Express + TypeScript, Cloud Function 2ª geração (`onRequest`, região `us-east1`, 256MiB, maxInstances 10) — rotas de negócio reais implementadas: `/api/auth/register` (LGPD), `/api/activities/:id/checkin` + `/api/checkin/entrance`+`/checkout` (double-check) + `/api/activities/:id/screen-token`, `/api/activities/:id/reserve`, `/api/leads`, `/api/sympla/*`. Ainda faltam: custom claims (`PUT /api/admin/users/:uid/role`, KAN-60), push FCM (KAN-61).
+- `firebase.json` + `.firebaserc` — projeto único `facom-techweek-layerx` pra `default` e `prod` (não há projeto Firebase separado de homolog). `firestore.rules`, `firestore.indexes.json` e `storage.rules` existem e cobrem `users`/`activities`/`announcements`/`bookings`/`leads`/`pointEvents`/`checkins`.
+- Divergência ainda não resolvida: a spec de arquitetura (`Update System/arquitetura-montanha-v2.md`) descreve região `southamerica-east1`, mas o código real está em `us-east1` (free tier).
+- Produção (app antigo Supabase): GitHub Pages, branch `main` — ainda não recebeu a migração Firebase, que só chegou até `develop`/`homolog`.
+- Homologação: Vercel (time `facomtechweek`, projeto `app-techweek-homolog`), Production Branch = `homolog`.
+- Kanban: GitHub Project v2 em github.com/users/Oliveira-Jr/projects/1; Jira projeto `KAN` (`app-teckweek.atlassian.net`) é a fonte de verdade pra tracking, 79+ issues em 2026-09-21.
 
 **Correção de achado anterior:** `.claude/agents/` foi renomeado em 2026-09-20 pra bater 1:1 com `.agent-system/agents/` (`security-reviewer.md`→`security.md`, `pr-review.md`+`dedup-refactor.md`→`code-review.md`, `qa.md` novo — antes só existia como skill). A divergência de nome que existia antes era convenção documentada em `.agent-system/adapters/claude/README.md`, não bug — mas o time decidiu igualar mesmo assim; atualizar esse README se ainda descrever o mapeamento antigo.
 
@@ -90,13 +93,15 @@ Persistência de gameplay (pontos, missões, ranking) migrou pro Supabase (`prof
 ```
 FASE 1 — memória persistente (feita: CLAUDE.md, docs/business-rules/, CI, qa-agent versionada)
 FASE 2 — orquestrador (feita: .claude/skills/dev-workflows/SKILL.md)
-FASE 3 — QA Agent (feita, já existia) + PR Review Agent (feita: .claude/agents/pr-review.md)
-FASE 4 — Security Reviewer (feita: .claude/agents/security-reviewer.md)
+FASE 3 — QA Agent (feita, já existia) + PR Review Agent (feita: .claude/agents/code-review.md)
+FASE 4 — Security Reviewer (feita: .claude/agents/security.md)
 FASE 5 — integrações Jira/GitHub (feita com o que já existe: gh CLI + MCP Atlassian; sem
           integração mais profunda além disso por enquanto — expandir só se necessidade real aparecer)
-FASE 6 — expansão / agentes adicionais (não iniciada — só quando houver responsabilidade
-          claramente distinta que justifique um agente novo; ver `docs/ai-infra/README.md`)
-FASE 7 — portabilidade multi-runtime (em andamento: 2026-09-20 — .agent-system/ canônico criado, adapters Claude prontos, Codex/Antigravity documentados mas não testados localmente — CLIs não instalados nesta máquina)
+FASE 6 — expansão / agentes adicionais (git-ops adicionado 2026-09-21; devops adicionado
+          2026-09-22, CI/CD e release flow — ver `docs/ai-infra/README.md`)
+FASE 7 — portabilidade multi-runtime (2026-09-22: reduzida pra Claude Code + Antigravity
+          apenas, por decisão do Fabio — Codex e Copilot descontinuados. Antigravity segue
+          não testado localmente nesta máquina, CLI não instalado)
 ```
 
 Ver `docs/superpowers/specs/2026-09-10-persistent-project-memory-design.md` pro design da Fase 1 e `docs/superpowers/specs/2026-09-11-agent-infra-fase2-6-design.md` pras decisões das Fases 2-6 (por que a estrutura de pastas foi adaptada, por que só 2 agentes novos, etc). `docs/ai-infra/README.md` é a arquitetura completa, como configurar num checkout novo e como estender (novo agente/skill/regra). Não pular fase sem validar a anterior funcionando.

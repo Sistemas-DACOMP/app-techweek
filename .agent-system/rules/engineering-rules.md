@@ -1,31 +1,25 @@
-# Engineering rules (canonical)
+# Engineering rules (canonical) — index
 
 Fonte canônica; CLAUDE.md em cada repo é o bootstrap que aponta para cá — se este arquivo e um CLAUDE.md divergirem, este arquivo vence, mas avise o Fabio, não resolva sozinho.
 
-Origem: `app-techweek/CLAUDE.md` seções "Regras que não mudam" e "Processo de revisão de PRs / merge" (lidas integralmente em 2026-09-20). Cópia canônica, não paráfrase — qualquer agente/runtime lê isto em vez de reconstruir a regra de memória.
+**Reestruturado 2026-09-22**: as regras abaixo viviam como texto corrido neste arquivo. Cada uma
+agora tem seu próprio registro por ID (`RULE-NNN-*.md`, schema: title/status/scope/source/
+trigger/must/must_not/confidence/validation/supersedes), pra bater com o formato que a spec do
+Fabio pede e pra permitir marcar status (ACTIVE/SUPERSEDED/REJECTED/DEPRECATED) por regra
+individualmente em vez de um bloco só. Este arquivo virou índice — não duplica o conteúdo.
 
-## Regras que não mudam
+## Regras ativas
 
-- **Nunca inclua o trailer `Co-Authored-By: Claude` em commits.**
-- **Nunca altere variáveis de ambiente do Windows** (nem para debug) sem pedir antes.
-- Padrão de commit: `[TIPO] - descrição curta`, tipos `ADD` `FIX` `UPD` `DEL` `DOC` `CFG`.
-- Git Flow: `feature/*` → `develop` → `homolog` → `main`.
-- Branch protection ativa em `main`/`homolog` (PR obrigatório, 0 aprovações) **e também em `develop`** (PR obrigatório, **1 aprovação** — confirmado via API em 2026-09-10; corrige nota antiga que só citava main/homolog).
-- Comentário em PR e em card do Jira sempre em linguagem natural, como um dev escrevendo pra outro — nunca com tom de relatório gerado por IA, nem jargão desnecessário. Direto, sem enrolação, mas humano (detalhado em `policies/pr-jira-tone.md`).
-
-## Processo de revisão de PRs / merge
-
-Fluxo obrigatório em 3 fases separadas, não misturar:
-
-1. **Análise** — mapear todos os PRs abertos (objetivo, arquivos, conflitos, riscos) sem alterar código.
-2. **Correção** — corrigir problemas encontrados na branch de cada PR (menor mudança possível), rodar lint/build (e teste, ver `policies/quality-gate.md`), comentar no PR e no Jira o que foi achado e corrigido (tom: `policies/pr-jira-tone.md`).
-3. **Merge** — só depois que Análise e Correção estiverem prontas. Merge é **sempre humano** — ver `policies/merge-policy.md` pra regra completa (nenhum runtime de IA mergeia, nunca, mesmo com autorização prévia).
-
-Regras adicionais do fluxo:
-
-- Ordem de merge entre PRs que tocam os mesmos arquivos (ex.: `Dashboard.jsx`) importa — resolver primeiro o de menor risco/dependência, depois atualizar os PRs seguintes com a `develop` mais nova antes de assumir que estão sem conflito.
-- Mais de uma atividade independente (revisar PRs diferentes, escrever testes de regras diferentes) → delegar em agentes paralelos em vez de sequencial.
-- Toda mudança de comportamento de negócio (nova regra, correção de gap) passa antes pelo catálogo de regras de negócio (`docs/business-rules/` no repo Supabase atual; ver `rules/evidence-model.md` pra classificação obrigatória antes de virar teste permanente).
+- [RULE-001](RULE-001-no-ai-coauthor-trailer.md) — nunca incluir trailer de co-autoria de IA em commits
+- [RULE-002](RULE-002-no-windows-env-changes-without-asking.md) — nunca alterar variável de ambiente do Windows sem pedir antes
+- [RULE-003](RULE-003-commit-message-format.md) — formato de mensagem de commit
+- [RULE-004](RULE-004-git-flow-branch-sequence.md) — sequência de branch do Git Flow
+- [RULE-005](RULE-005-branch-protection-approvals.md) — branch protection e exigência de aprovação
+- [RULE-006](RULE-006-pr-jira-comment-tone.md) — tom de comentário em PR/Jira
+- [RULE-007](RULE-007-three-phase-pr-review-merge-human-only.md) — processo de PR em 3 fases, merge sempre humano
+- [RULE-008](RULE-008-merge-order-overlapping-prs.md) — ordem de merge entre PRs que tocam os mesmos arquivos
+- [RULE-009](RULE-009-parallelize-independent-work.md) — paralelizar trabalho independente
+- [RULE-010](RULE-010-business-rule-catalog-gate.md) — toda mudança de regra de negócio passa pelo catálogo antes
 
 ## Ver também
 

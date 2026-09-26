@@ -1,9 +1,8 @@
 // Regras de negocio do cadastro/perfil, isoladas em funcoes puras pra poder
-// testar sem precisar renderizar componente nem chamar o Supabase.
+// testar sem precisar renderizar componente nem chamar o Firebase Auth.
 
-// REG-C2 (KAN-27, ainda nao aplicada em Register.jsx): Supabase recusa
-// senha com menos de 6 caracteres. Este valor espelha o minimo real do
-// projeto Supabase, nao um numero arbitrario.
+// REG-C2 (KAN-27): Firebase Auth recusa senha com menos de 6 caracteres.
+// Este valor espelha o minimo real do Firebase Auth, nao um numero arbitrario.
 export const MIN_PASSWORD_LENGTH = 6;
 
 export function passwordsMatch(password, confirmPassword) {
@@ -30,6 +29,23 @@ export function validateAvatarFile(file, { maxBytes = MAX_AVATAR_BYTES } = {}) {
   return { valid: true, reason: null };
 }
 
+// REG-MISSION-002: Fotos comprovantes de missões (máximo 5MB e formatos aceitos pelo Storage)
+export const MAX_MISSION_PHOTO_BYTES = 5 * 1024 * 1024;
+export const ALLOWED_MISSION_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
+export function validateMissionPhoto(file, { maxBytes = MAX_MISSION_PHOTO_BYTES, allowedTypes = ALLOWED_MISSION_IMAGE_TYPES } = {}) {
+  if (!file) {
+    return { valid: false, reason: 'missing' };
+  }
+  if (!file.type || !allowedTypes.includes(file.type)) {
+    return { valid: false, reason: 'invalid_type' };
+  }
+  if (file.size > maxBytes) {
+    return { valid: false, reason: 'too_large' };
+  }
+  return { valid: true, reason: null };
+}
+
 // Validação e normalização de e-mail (suporta domínios institucionais com múltiplos níveis como @ufu.br, @ufu.edu.br)
 export function normalizeEmail(email) {
   if (typeof email !== 'string') return '';
@@ -41,6 +57,31 @@ export function isValidEmail(email) {
   const normalized = email.trim();
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   return emailRegex.test(normalized);
+}
+
+// Avalia a força da senha de forma reativa (score 0 a 4)
+export function getPasswordStrength(password) {
+  if (typeof password !== 'string' || !password) {
+    return { score: 0, label: 'Muito fraca', color: '#6b7280', percent: 0, valid: false };
+  }
+
+  let score = 0;
+  if (password.length >= 6) score += 1;
+  if (password.length >= 8) score += 1;
+  if (/[0-9]/.test(password) && /[a-zA-Z]/.test(password)) score += 1;
+  if (/[^a-zA-Z0-9]/.test(password) || /[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
+
+  const labels = ['Muito fraca', 'Fraca', 'Média', 'Boa', 'Forte'];
+  const colors = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#10b981'];
+  const percents = [10, 25, 50, 75, 100];
+
+  return {
+    score,
+    label: labels[score],
+    color: colors[score],
+    percent: percents[score],
+    valid: password.length >= MIN_PASSWORD_LENGTH
+  };
 }
 
 // Auxilia na correção de domínios comuns como @ufu.edu.br -> @ufu.br

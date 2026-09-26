@@ -10,6 +10,8 @@ vi.mock('../config/firebaseAdmin', () => ({
 
 import router from './booking';
 import { db } from '../config/firebaseAdmin';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
+import { requireSymplaTicket } from '../middlewares/authMiddleware';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -36,6 +38,28 @@ function getReserveHandler() {
 }
 
 const handler = getReserveHandler();
+
+// KAN-75: prova que o rate limiter está montado na rota real (não só que a
+// função do limiter funciona isolada, ver rateLimiter.test.ts).
+it('KAN-75: participantActionLimiter está montado na rota real, antes do handler final', () => {
+  const layer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/:activityId/reserve'
+  );
+  const handles = layer.route.stack.map((l: any) => l.handle);
+  expect(handles).toContain(participantActionLimiter);
+  expect(handles.indexOf(participantActionLimiter)).toBeLessThan(handles.length - 1);
+});
+
+// KAN-84: prova que requireSymplaTicket está montado na rota real, antes do handler final
+it('KAN-84: requireSymplaTicket está montado na rota real, antes do handler final', () => {
+  const layer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/:activityId/reserve'
+  );
+  const handles = layer.route.stack.map((l: any) => l.handle);
+  expect(handles).toContain(requireSymplaTicket);
+  expect(handles.indexOf(requireSymplaTicket)).toBeLessThan(handles.length - 1);
+});
+
 
 function makeTx(snaps: { bookingSnap: any; activitySnap: any }) {
   const { bookingSnap, activitySnap } = snaps;

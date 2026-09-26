@@ -10,9 +10,9 @@ Auditoria feita em 2026-09-20, nesta máquina (Windows 11, Fabio). Cada linha é
 | github (gh CLI) | AVAILABLE | 2.98.0, autenticado como `Oliveira-Jr` |
 | node / npm | AVAILABLE | node v22.16.0, npm 11.10.0 |
 | test-runner | AVAILABLE | Vitest via `npm run test` / `npm run test:integration` (ver `package.json` do repo atual) — específico do repo Supabase-era, não confirmado para os 3 repos Firebase futuros até eles existirem |
-| jira | AVAILABLE (Claude Code apenas) | via Atlassian MCP (`mcp__claude_ai_Atlassian__*`). É config do lado do cliente MCP da sessão Claude Code — **não garantido** numa sessão Codex/Antigravity a menos que essa MCP seja configurada lá também |
+| jira | AVAILABLE (Claude Code apenas) | via Atlassian MCP (`mcp__claude_ai_Atlassian__*`). É config do lado do cliente MCP da sessão Claude Code — **não garantido** numa sessão Antigravity a menos que essa MCP seja configurada lá também |
 | browser | AVAILABLE (Claude Code apenas) | via `claude-in-chrome` MCP. Mesma ressalva: config específica da sessão Claude Code, não portável automaticamente |
-| rtk (Rust Token Killer) | AVAILABLE, mas parcial | binário standalone 0.45.0 em `/c/Users/fabio/bin/rtk`, funciona via `rtk proxy <cmd>` manual em qualquer shell. A reescrita transparente automática (`git status` → `rtk git status` sem esforço) só funciona através do hook `PreToolUse` de Bash do Claude Code — não existe equivalente confirmado em Codex/Antigravity |
+| rtk (Rust Token Killer) | AVAILABLE, mas parcial | binário standalone 0.45.0 em `/c/Users/fabio/bin/rtk`, funciona via `rtk proxy <cmd>` manual em qualquer shell. A reescrita transparente automática (`git status` → `rtk git status` sem esforço) só funciona através do hook `PreToolUse` de Bash do Claude Code — não existe equivalente confirmado em Antigravity |
 | docker | NOT FOUND | não instalado nesta máquina |
 | firebase CLI | AVAILABLE | 15.30.2, instalado em 2026-09-20 nesta máquina |
 | gcloud CLI | NOT FOUND | não instalado nesta máquina |

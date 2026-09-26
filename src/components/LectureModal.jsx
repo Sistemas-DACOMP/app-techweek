@@ -1,33 +1,28 @@
-import { Clock, MapPin, QrCode, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Clock, MapPin, QrCode, Ticket, X } from 'lucide-react';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function LectureModal({
   lecture,
+  hasSymplaTicket = true,
   onClose,
   onValidate
 }) {
-  if (!lecture) {
+  useScrollLock(!!lecture);
+
+  if (!lecture || typeof document === 'undefined') {
     return null;
   }
 
-  return (
+  return createPortal(
     <div
+      className="modal-overlay-fixed"
       onClick={onClose}
       style={{
-        position: 'fixed',
-        inset: 0,
-
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-
-        zIndex: 1000,
         padding: '20px',
-
-        background: 'rgba(5, 15, 35, 0.18)',
-
+        background: 'rgba(5, 15, 35, 0.45)',
         backdropFilter: 'blur(14px)',
         WebkitBackdropFilter: 'blur(14px)',
-
         animation: 'lectureOverlayIn 0.25s ease-out'
       }}
     >
@@ -45,11 +40,14 @@ export default function LectureModal({
         `}
       </style>
       <div
+        className="modal-card-fixed"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxWidth: '470px',
 
+          maxHeight: '85dvh',
+          overflowY: 'auto',
           padding: '30px',
 
           position: 'relative',
@@ -288,6 +286,23 @@ export default function LectureModal({
         </div>
 
 
+        {!hasSymplaTicket && (
+          <div
+            style={{
+              marginTop: '16px',
+              padding: '12px 14px',
+              borderRadius: '12px',
+              background: 'rgba(234, 179, 8, 0.15)',
+              border: '1px solid rgba(234, 179, 8, 0.3)',
+              color: '#fef08a',
+              fontSize: '0.82rem',
+              lineHeight: '1.4'
+            }}
+          >
+            ⚠️ <strong>Ingresso Sympla Pendente:</strong> Vincule seu ingresso oficial no seu perfil para poder validar presença e pontuar nesta palestra.
+          </div>
+        )}
+
         {/* Ação principal */}
         <button
           className="btn-primary"
@@ -296,7 +311,7 @@ export default function LectureModal({
             width: '100%',
             height: '52px',
 
-            marginTop: '26px',
+            marginTop: '20px',
 
             display: 'flex',
             justifyContent: 'center',
@@ -317,12 +332,22 @@ export default function LectureModal({
               '0 10px 30px rgba(20, 120, 255, 0.25)'
           }}
         >
-          <QrCode size={19} />
-          Validar presença
+          {hasSymplaTicket ? (
+            <>
+              <QrCode size={19} />
+              Validar presença
+            </>
+          ) : (
+            <>
+              <Ticket size={19} />
+              Vincular ingresso Sympla
+            </>
+          )}
         </button>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

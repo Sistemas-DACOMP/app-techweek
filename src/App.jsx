@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route, NavLink, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { Home, QrCode, ScanLine, Trophy, User } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Dashboard from './pages/Dashboard';
 import Scanner from './pages/Scanner';
 import Profile from './pages/Profile';
@@ -10,34 +11,36 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Onboarding from './pages/Onboarding';
 import Staff from './pages/Staff';
-
 import InstagramMission from './pages/InstagramMission';
-import { useState } from 'react';
+import Sponsor from './pages/Sponsor';
 import logoTw from './assets/logo-tw.png';
-import { Loader2 } from 'lucide-react';
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding';
 
   const [isSplashVisible, setIsSplashVisible] = useState(true);
 
   useEffect(() => {
-    const isLoggedIn = localStorage.getItem('facom_logged_in');
-    if (!isLoggedIn && !isAuthPage && !isSplashVisible) {
-      navigate('/login');
-    }
-  }, [isAuthPage, navigate, isSplashVisible]);
-
-  useEffect(() => {
     const timer = setTimeout(() => {
       setIsSplashVisible(false);
-    }, 4000);
+    }, 2000);
     return () => clearTimeout(timer);
   }, []);
 
-  if (isSplashVisible) {
+  useEffect(() => {
+    if (!isSplashVisible && !authLoading) {
+      if (!user && !isAuthPage) {
+        navigate('/login', { replace: true });
+      } else if (user && (location.pathname === '/login' || location.pathname === '/cadastro')) {
+        navigate('/', { replace: true });
+      }
+    }
+  }, [user, authLoading, isSplashVisible, isAuthPage, navigate, location.pathname]);
+
+  if (isSplashVisible || authLoading) {
     return (
       <div className="app-wrapper animate-fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'transparent', zIndex: 9999 }}>
         <img src={logoTw} alt="FACOM Tech Week" style={{ width: '180px', marginBottom: '40px' }} className="animate-fade-in" />
@@ -56,7 +59,7 @@ function AppContent() {
                 width: '100%',
                 background: 'linear-gradient(90deg, var(--primary), #a855f7)', 
                 borderRadius: '4px',
-                animation: 'loadingBar 4s ease-in-out forwards'
+                animation: 'loadingBar 2s ease-in-out forwards'
               }} 
             />
           </div>
@@ -64,9 +67,7 @@ function AppContent() {
         <style>{`
           @keyframes loadingBar {
             0% { width: 0%; }
-            20% { width: 30%; }
-            50% { width: 60%; }
-            80% { width: 90%; }
+            50% { width: 70%; }
             100% { width: 100%; }
           }
         `}</style>
@@ -81,14 +82,13 @@ function AppContent() {
         <Route path="/cadastro" element={<Register />} />
         <Route path="/onboarding" element={<Onboarding />} />
         
-        {/* Protected Routes (we can just render them directly for demo purposes, 
-            but in a real app we'd use a ProtectedRoute component) */}
         <Route path="/" element={<Dashboard />} />
         <Route path="/scanner" element={<Scanner />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/challenges" element={<Challenges />} />
         <Route path="/ranking" element={<Ranking />} />
         <Route path="/instagram-mission" element={<InstagramMission />} />
+        <Route path="/sponsor" element={<Sponsor />} />
         <Route path="/staff" element={<Staff />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -120,9 +120,11 @@ function AppContent() {
 
 function App() {
   return (
-    <HashRouter>
-      <AppContent />
-    </HashRouter>
+    <AuthProvider>
+      <HashRouter>
+        <AppContent />
+      </HashRouter>
+    </AuthProvider>
   );
 }
 
