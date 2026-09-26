@@ -73,19 +73,19 @@ export default function Login() {
     setResetSuccessMessage('');
   };
 
-  // Cálculo da posição dos olhos do Teko
+  // Cálculo da posição dos olhos do Alan
   const lookOffset = focusedInput === 'email' ? -4 + (email.length * 0.8) : 0;
   const lookOffsetY = focusedInput === 'email' ? 6 : 0;
   
-  // Teko cobre os olhos ao digitar senha
+  // Alan cobre os olhos ao digitar senha
   const isCoveringEyes = focusedInput === 'password';
-  // Teko espia se o campo de senha estiver em foco E a senha estiver visível
+  // Alan espia se o campo de senha estiver em foco E a senha estiver visível
   const isPeeking = focusedInput === 'password' && showPassword;
 
   return (
     <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       
-      {/* Weeka espiando pelo canto */}
+      {/* Ada espiando pelo canto */}
       <div 
         style={{
           position: 'absolute',
@@ -106,7 +106,7 @@ export default function Login() {
         <div style={{ textAlign: 'center', marginBottom: '8px' }}>
           <img src={logoTw} alt="FACOM Tech Week" style={{ height: '50px', marginBottom: '8px' }} />
           
-          {/* Mascote Interativo Teko */}
+          {/* Mascote Interativo Alan */}
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0px', marginTop: '-10px' }}>
             <Mascot 
               color="blue" 
