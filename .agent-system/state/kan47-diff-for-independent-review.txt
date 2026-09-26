@@ -1,0 +1,143 @@
+diff --git a/package.json b/package.json
+index 2a9c681..6261c6e 100644
+--- a/package.json
++++ b/package.json
+@@ -23,6 +23,7 @@
+     "firebase": "^12.19.0",
+     "html5-qrcode": "^2.3.8",
+     "lucide-react": "^1.28.0",
++    "qrcode.react": "^4.2.0",
+     "react": "^19.2.8",
+     "react-dom": "^19.2.8",
+     "react-router-dom": "^7.18.2"
+diff --git a/src/lib/sympla.js b/src/lib/sympla.js
+index a4a2090..e3cc3af 100644
+--- a/src/lib/sympla.js
++++ b/src/lib/sympla.js
+@@ -10,6 +10,23 @@ export function hasSymplaTicket(userProfile) {
+   return Boolean(userProfile.symplaTicket || userProfile.sympla_ticket);
+ }
+ 
++/**
++ * Valor codificado no QR do crachá digital (KAN-47). Mesmo `ticketId`/`qrCodeData` do crachá
++ * físico impresso quando o ingresso Sympla está vinculado; cai pra um identificador local só até
++ * o participante vincular o ingresso (nunca bloqueia a tela por falta de ingresso).
++ */
++export function getBadgeQrValue(profile) {
++  const ticket = profile?.symplaTicket;
++  if (ticket?.qrCodeData) return ticket.qrCodeData;
++  if (ticket?.ticketNumber) return ticket.ticketNumber;
++  return JSON.stringify({
++    username: (profile?.username || 'user').replace(/^@/, ''),
++    participantType: profile?.participantType || 'Participante',
++    course: profile?.course || '',
++    period: profile?.period || null
++  });
++}
++
+ const getApiBaseUrl = () => {
+   return import.meta.env.VITE_API_URL || '/api';
+ };
+diff --git a/src/lib/sympla.test.js b/src/lib/sympla.test.js
+index fe78fe4..ece7ed5 100644
+--- a/src/lib/sympla.test.js
++++ b/src/lib/sympla.test.js
+@@ -1,5 +1,5 @@
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
+-import { verifySymplaTicket, hasSymplaTicket, SYMPLA_EVENT_URL } from './sympla';
++import { verifySymplaTicket, hasSymplaTicket, SYMPLA_EVENT_URL, getBadgeQrValue } from './sympla';
+ 
+ describe('Sympla Integration Client', () => {
+   beforeEach(() => {
+@@ -43,5 +43,18 @@ describe('Sympla Integration Client', () => {
+     expect(hasSymplaTicket({ sympla_ticket: { ticketNumber: '123' } })).toBe(true);
+     expect(SYMPLA_EVENT_URL).toContain('sympla.com.br');
+   });
++
++  it('getBadgeQrValue usa o mesmo ticketId do crachá físico quando o ingresso está vinculado (KAN-47)', () => {
++    expect(getBadgeQrValue({ symplaTicket: { qrCodeData: 'SYMPLA:T999999' } })).toBe('SYMPLA:T999999');
++    expect(getBadgeQrValue({ symplaTicket: { ticketNumber: 'T111' } })).toBe('T111');
++  });
++
++  it('getBadgeQrValue cai pra um identificador local sem ingresso vinculado, sem quebrar', () => {
++    const value = getBadgeQrValue({ username: '@fulano', participantType: 'Aluno', course: 'SI', period: 3 });
++    const parsed = JSON.parse(value);
++    expect(parsed).toEqual({ username: 'fulano', participantType: 'Aluno', course: 'SI', period: 3 });
++    expect(() => JSON.parse(getBadgeQrValue(null))).not.toThrow();
++    expect(() => JSON.parse(getBadgeQrValue(undefined))).not.toThrow();
++  });
+ });
+ 
+diff --git a/src/pages/Profile.jsx b/src/pages/Profile.jsx
+index 0b463b7..f3c4aea 100644
+--- a/src/pages/Profile.jsx
++++ b/src/pages/Profile.jsx
+@@ -5,7 +5,9 @@ import { logoutUser, onAuthChange } from '../lib/auth';
+ import { auth } from '../lib/firebase';
+ import { validateAvatarFile, isValidEmail } from '../lib/validators';
+ import AvatarCropperModal from '../components/AvatarCropperModal';
+-import { SYMPLA_EVENT_URL, verifySymplaTicket } from '../lib/sympla';
++import MascotDuo from '../components/MascotDuo';
++import { QRCodeSVG } from 'qrcode.react';
++import { SYMPLA_EVENT_URL, verifySymplaTicket, getBadgeQrValue } from '../lib/sympla';
+ import { getUserProfile, uploadUserAvatar, updateUserEmail, updateUserProfile } from '../lib/userService';
+ import { 
+   LogOut, Camera, Edit2, Edit3, Loader2, X, RefreshCw, Lock, 
+@@ -382,17 +384,9 @@ export default function Profile() {
+     navigate('/login');
+   };
+ 
+-  const qrData = encodeURIComponent(
+-    profile.symplaTicket?.qrCodeData ||
+-    profile.symplaTicket?.ticketNumber ||
+-    JSON.stringify({
+-      username: (profile.username || 'user').replace(/^@/, ''),
+-      participantType: profile.participantType || 'Participante',
+-      course: profile.course || '',
+-      period: profile.period || null
+-    })
+-  );
+-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${qrData}&bgcolor=ffffff&color=000000`;
++  // Renderizado client-side (qrcode.react, KAN-47) em vez de imagem de serviço externo: funciona
++  // offline, o crachá continua visível sem rede depois do primeiro carregamento do perfil.
++  const qrValue = getBadgeQrValue(profile);
+ 
+   const formatUrl = (url, prefix = '') => {
+     if (!url) return null;
+@@ -536,6 +530,12 @@ export default function Profile() {
+ 
+       <div className="card" style={{ marginBottom: '24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+         <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: 'white', marginBottom: '10px' }}>Meu Crachá & QR Code</h3>
++        <div style={{ transform: 'scale(0.7)', margin: '-16px 0' }}>
++          <MascotDuo />
++        </div>
++        <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'white', marginBottom: '14px' }}>
++          {points} pts
++        </div>
+         {profile.symplaTicket?.ticketName ? (
+           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '20px', color: '#10b981', fontSize: '0.8rem', fontWeight: '600', marginBottom: '16px' }}>
+             🎟️ {profile.symplaTicket.ticketName} • Confirmado
+@@ -555,19 +555,16 @@ export default function Profile() {
+           boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+           overflow: 'hidden'
+         }}>
+-          <img
+-            src={qrUrl}
+-            alt="Meu QR Code"
++          <div
+             style={{
+-              width: '160px',
+-              height: '160px',
+-              display: 'block',
+               filter: profile.symplaTicket ? 'none' : 'blur(9px) grayscale(50%)',
+               transition: 'filter 0.3s ease',
+               userSelect: 'none',
+               pointerEvents: 'none'
+             }}
+-          />
++          >
++            <QRCodeSVG value={qrValue} size={160} bgColor="#ffffff" fgColor="#000000" />
++          </div>
+           {!profile.symplaTicket && (
+             <div
+               style={{

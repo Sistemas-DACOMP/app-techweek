@@ -1,14 +1,16 @@
 ---
 id: REG-PROFILE-001
-nome: RLS de profiles e lookup cross-user do Scanner
-fonte: observado na policy SQL (não testado ao vivo)
-tipo: NÃO DEFINIDA
-criterio: Um usuário só deveria conseguir ler a própria linha de profiles via RLS — se o lookup por username do Scanner retorna dado de outro usuário sem policy explícita pra isso, é bug; se retorna vazio, o fluxo do Scanner está quebrado. Nenhum dos dois foi confirmado ainda.
+nome: Leitura cross-user de users/{uid} pro lookup por username do Scanner
+fonte: firestore.rules (match /users/{userId}) + src/lib/userService.js (findUserByUsername)
+tipo: CONFIRMADA
+criterio: Qualquer usuário autenticado pode ler qualquer documento em /users/{uid} (não só o próprio) — necessário pro Scanner.jsx encontrar outro participante pelo username via query com where('username','==',...).
 prioridade: alta
-status: falta teste em homolog antes de confiar
-testes_relacionados: nenhum ainda
-implementacao_relacionada: supabase/migrations (RLS policy de profiles), src/pages/Scanner.jsx
-ultima_validacao: 2026-09-10
+status: implementado, sem gap
+testes_relacionados: nenhum automatizado ainda (comportamento decorre direto de `allow read: if isAuthenticated()` em firestore.rules)
+implementacao_relacionada: firestore.rules (`match /users/{userId} { allow read: if isAuthenticated(); ... }`), src/lib/userService.js (findUserByUsername), src/pages/Scanner.jsx
+ultima_validacao: 2026-09-22
 ---
 
-A RLS de `profiles` só permite `auth.uid() = id` (leitura da própria linha). `Scanner.jsx` faz lookup de outro participante pelo `username` pra validar o crachá — sob essa policy, isso provavelmente retorna vazio. Não foi testado ao vivo contra um usuário não-dono; é inferência lida da SQL, não confirmação. Antes de recomendar merge do PR #9 (`develop`→`homolog`), rodar uma query como não-dono (via `execute_sql` do MCP ou conta de teste) pra confirmar o comportamento real. Se confirmado como bug, precisa de policy nova (ex: leitura pública de `username`/`course`/`participant_type` só) — decisão de produto, validar com o Fabio.
+**Superado pela migração Firebase — o problema original nem existe mais.** Este registro nasceu da era Supabase: a RLS de `profiles` só permitia `auth.uid() = id`, e o lookup do Scanner por `username` provavelmente retornava vazio pra outro participante — nunca chegou a ser testado ao vivo antes da migração.
+
+No Firestore, a regra de `/users/{userId}` é deliberadamente aberta pra leitura (`allow read: if isAuthenticated()`, qualquer uid) — não restrita ao dono como era a RLS antiga. `findUserByUsername` (`src/lib/userService.js`) faz `query(usersRef, where('username','==', cleanUsername), limit(1))`, e como a regra permite leitura cross-user, isso funciona por desenho, não por acidente. Confirmado lendo `firestore.rules` e o código do Scanner — sem gap.

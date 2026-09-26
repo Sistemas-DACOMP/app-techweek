@@ -1,14 +1,14 @@
 ---
 id: REG-SCANNER-001
-nome: Scanner de presença deveria aceitar só o QR da palestra selecionada
-fonte: KAN-30 (Backlog)
-tipo: INFERIDA
-criterio: QR code escaneado só deve gerar ponto se o reference_id corresponder à palestra que o usuário selecionou/está inscrito — QR de outra palestra deve ser rejeitado, não pontuado.
+nome: Scanner só pode creditar pontos para o QR da palestra selecionada
+fonte: KAN-71
+tipo: CONFIRMADA
+criterio: QR code escaneado só deve gerar ponto se o `lectureId` decodificado do QR corresponder exatamente à palestra que o usuário selecionou — QR de outra palestra deve ser rejeitado, não pontuado. Payload malformado/inesperado também deve ser rejeitado, nunca lançar exceção.
 prioridade: alta
-status: gap de segurança conhecido, sem correção agendada
-testes_relacionados: nenhum ainda
-implementacao_relacionada: src/pages/Scanner.jsx, src/components/LectureScanner.jsx
-ultima_validacao: 2026-09-10
+status: implementado (client + servidor)
+testes_relacionados: src/lib/qrValidation.test.js
+implementacao_relacionada: src/lib/qrValidation.js, src/components/LectureScanner.jsx, backend/src/routes/checkin.ts, firestore.rules
+ultima_validacao: 2026-09-20
 ---
 
-O scanner de presença de palestra aceita QR code de qualquer palestra, não só da que o usuário selecionou/está inscrito. Inferência de que deveria validar `reference_id` do QR contra a palestra ativa antes de dar o ponto — não documentado como critério de aceite oficial. Card KAN-30 já existe no Backlog. Não promover a regra "validação de palestra específica" a CONFIRMADA sem validar com o Fabio.
+O scanner de presença de palestra antes aceitava QR code de qualquer palestra (gap registrado como inferência em KAN-30/Backlog). KAN-71 promoveu a regra a critério de aceite oficial e implementou a validação em duas camadas: `isQrForLecture` (função pura em `src/lib/qrValidation.js`) barra no client antes de creditar o ponto, e `POST /:activityId/checkin` (`backend/src/routes/checkin.ts`) revalida `lectureId === activityId` no servidor dentro de uma transação — o client sozinho não é confiável nessa arquitetura. `firestore.rules` também referencia a regra. Cobertura de teste unitário da função pura em `src/lib/qrValidation.test.js`; o endpoint de backend e a firestore rule ainda não têm teste automatizado dedicado (fora do escopo desta campanha de KAN-71).

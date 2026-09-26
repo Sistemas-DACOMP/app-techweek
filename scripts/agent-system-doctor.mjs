@@ -31,8 +31,20 @@ const EXPECTED_AGENTS = [
   'security.md',
   'infra.md',
   'code-review.md',
+  'git-ops.md', // added 2026-09-21
+  'devops.md', // added 2026-09-22
   'adr.md',
   'ponytail.md',
+];
+
+const EXPECTED_CONTEXT_FILES = [
+  'project.md',
+  'architecture.md',
+  'current-state.md',
+  'conventions.md',
+  'integrations.md',
+  'glossary.md',
+  'environment.md',
 ];
 
 const results = [];
@@ -74,19 +86,38 @@ function checkDirExists(relPath, label) {
 }
 
 function checkAgentFiles() {
+  const label = `.agent-system/agents/ (${EXPECTED_AGENTS.length} agentes esperados)`;
   const dir = path.join(repoRoot, '.agent-system', 'agents');
   let present = [];
   try {
     present = fs.readdirSync(dir);
   } catch {
-    record('FAIL', '.agent-system/agents/ (13 agentes esperados)', 'diretório não encontrado');
+    record('FAIL', label, 'diretório não encontrado');
     return;
   }
   const missing = EXPECTED_AGENTS.filter((f) => !present.includes(f));
   if (missing.length === 0) {
-    record('PASS', '.agent-system/agents/ (13 agentes esperados)', `todos presentes: ${EXPECTED_AGENTS.join(', ')}`);
+    record('PASS', label, `todos presentes: ${EXPECTED_AGENTS.join(', ')}`);
   } else {
-    record('FAIL', '.agent-system/agents/ (13 agentes esperados)', `faltando: ${missing.join(', ')}`);
+    record('FAIL', label, `faltando: ${missing.join(', ')}`);
+  }
+}
+
+function checkContextFiles() {
+  const label = `.agent-system/context/ (${EXPECTED_CONTEXT_FILES.length} arquivos esperados)`;
+  const dir = path.join(repoRoot, '.agent-system', 'context');
+  let present = [];
+  try {
+    present = fs.readdirSync(dir);
+  } catch {
+    record('FAIL', label, 'diretório não encontrado');
+    return;
+  }
+  const missing = EXPECTED_CONTEXT_FILES.filter((f) => !present.includes(f));
+  if (missing.length === 0) {
+    record('PASS', label, `todos presentes: ${EXPECTED_CONTEXT_FILES.join(', ')}`);
+  } else {
+    record('FAIL', label, `faltando: ${missing.join(', ')}`);
   }
 }
 
@@ -104,6 +135,7 @@ function checkCliOnPath(cmd, label, { warnOnly = false, note = '' } = {}) {
 checkFileNonEmpty(path.join('.agent-system', 'manifests', 'system.yaml'), 'manifests/system.yaml existe e não está vazio');
 
 checkAgentFiles();
+checkContextFiles();
 
 checkDirExists(path.join('.claude', 'agents'), '.claude/agents/ existe');
 checkDirExists(path.join('.claude', 'skills'), '.claude/skills/ existe');
@@ -126,6 +158,10 @@ checkCliOnPath('firebase --version', 'firebase CLI no PATH', {
 checkCliOnPath('gcloud --version', 'gcloud CLI no PATH', {
   warnOnly: true,
   note: 'necessário para o alvo Firebase (agente infra), não para trabalhar neste sistema em si',
+});
+checkCliOnPath('agy --version', 'Antigravity CLI (agy) no PATH', {
+  warnOnly: true,
+  note: 'runtime Antigravity não instalado/verificado nesta máquina de referência — ver .agent-system/manifests/system.yaml',
 });
 
 // --- Print report ---

@@ -1,8 +1,13 @@
 # Infraestrutura de IA do App TechWeek
 
+**Reescrito 2026-09-22 — versão anterior estava stale desde a remoção do Supabase (2026-09-21) e desde a expansão de 5 pra 15 agentes/skills. Se algo aqui divergir de `.agent-system/`, `.agent-system/` é a fonte canônica — corrija este arquivo, não confie nele sozinho.**
+
 Este documento explica a arquitetura de agentes/skills/workflows/tools/quality gates deste
 repositório, para que qualquer pessoa do time consiga entender e estender sem depender de
-explicação verbal de quem configurou.
+explicação verbal de quem configurou. A fonte canônica e runtime-agnostic (Claude Code +
+Antigravity) é `.agent-system/` — ver `.agent-system/manifests/system.yaml` e
+`.agent-system/adapters/claude/README.md` pro mapeamento completo. Este arquivo é a versão
+"tour guiado" pra quem está entrando no projeto, não uma segunda fonte de verdade.
 
 ## Por que isso existe
 
@@ -14,16 +19,21 @@ definidas. Ver a missão completa em `Update Prompts/` (fora deste repo, notas p
 ## Arquitetura
 
 ```
-Orchestrator (.claude/skills/dev-workflows/SKILL.md)
-├── Agents
-│   ├── qa-agent            (.claude/skills/qa-agent/SKILL.md)
+Orchestrator (.claude/skills/dev-workflows/SKILL.md ↔ .agent-system/agents/orchestrator.md)
+├── Agents (15 papéis lógicos — canônico em .agent-system/agents/, executado via .claude/)
+│   ├── qa                  (.claude/skills/qa-agent/SKILL.md)
 │   ├── code-review         (.claude/agents/code-review.md — inclui a análise de duplicação, sob pedido)
-│   └── security            (.claude/agents/security.md)
-├── Workflows                (dentro de dev-workflows/SKILL.md: FEATURE, BUGFIX, PR REVIEW, TESTING)
-├── Tools                    (built-in: Read/Edit/Grep/Glob/Bash; externas: gh CLI, MCP Atlassian/Jira,
-│                              MCP Supabase homolog; script: scripts/quality-gate.mjs)
-├── Persistent Rules         (docs/business-rules/*.md)
-├── Quality Gates            (scripts/quality-gate.mjs + threshold documentado em dev-workflows)
+│   ├── security             (.claude/agents/security.md)
+│   ├── git-ops               (.claude/agents/git-ops.md — cirurgia mecânica de branch/PR/Jira)
+│   ├── devops               (.claude/agents/devops.md — CI/CD, build scripts, release flow)
+│   ├── spec, product, adr, architecture, backend, pwa, admin, infra  (.claude/agents/<id>.md)
+│   └── ponytail              (plugin real instalado — não é arquivo .claude/agents/)
+├── Workflows                (dentro de dev-workflows/SKILL.md: FEATURE, BUGFIX, PR REVIEW, TESTING;
+│                              git-ops e devops despacham sozinhos quando a situação bate)
+├── Tools                    (built-in: Read/Edit/Grep/Glob/Bash; externas: gh CLI, MCP Atlassian/Jira;
+│                              script: scripts/quality-gate.mjs)
+├── Persistent Rules         (docs/business-rules/*.md + .agent-system/rules/)
+├── Quality Gates            (scripts/quality-gate.mjs + .agent-system/gates/gates.md)
 └── Repository                (este repo — tudo acima é versionado)
 ```
 
@@ -58,19 +68,27 @@ descartada — só remapeada pro que o Claude Code de fato executa.
 | `.claude/agents/code-review.md` | Agente de revisão de PR (análise → correção → revalidação → preparação); também roda análise de duplicação sob pedido. |
 | `.claude/agents/security.md` | Agente de revisão de segurança independente. |
 | `.claude/agents/git-ops.md` | Camada mecânica de cirurgia de branch/PR e higiene de Jira, embaixo do `code-review`. |
+| `.claude/agents/devops.md` | CI/CD, scripts de build, config de hospedagem, fluxo de release develop→homolog→main. |
+| `.claude/agents/spec.md`, `product.md`, `adr.md`, `architecture.md`, `backend.md`, `pwa.md`, `admin.md`, `infra.md` | Um agente por responsabilidade distinta — ver `.agent-system/agents/<id>.md` pro processo completo, runtime-agnostic; o arquivo `.claude/` é a cópia executável. |
+| `.agent-system/` | Fonte canônica runtime-agnostic: manifests, rules, gates, ADRs, adapters (Claude Code + Antigravity). Ver `.agent-system/manifests/system.yaml`. |
 | `scripts/quality-gate.mjs` | Roda lint+build+test e imprime o resultado estruturado do quality gate. |
 | `scripts/check-ai-infra.mjs` | Bootstrap — confirma o que existe/falta configurar num checkout. |
 | `.github/workflows/ci.yml` | CI: `npm ci` → lint → build → test (`--if-present`). |
 
 ## Matriz de responsabilidades
 
+Lista completa e atualizada dos 15 papéis vive em `.agent-system/manifests/system.yaml` →
+`agents:`, com o processo de cada um em `.agent-system/agents/<id>.md`. Resumo dos mais usados
+no dia a dia:
+
 | Agente/Skill | Responsabilidade | Tools principais | Entrada | Saída |
 |---|---|---|---|---|
 | dev-workflows (orquestrador) | classificar tarefa, delegar, aplicar quality gate e loop de reprocessamento | — (roteamento) | pedido do usuário | workflow + agentes acionados |
-| qa-agent | regras de negócio → testes multicamada | Read/Grep/Glob/Edit/Bash | regra ou feature/bug | matriz de cobertura, bugs reportados |
-| pr-review | analisar/corrigir/revalidar/preparar PR | Read/Grep/Glob/Bash/Edit + `gh` | número do PR | achados, correções, comentário no PR/Jira |
-| security-reviewer | achar problema de segurança, não corrigir | Read/Grep/Glob/Bash | diff ou área do código | lista de achados por severidade + security_score |
-| dedup-refactor | achar duplicação, propor abstração | Read/Grep/Glob | pedido explícito | lista de duplicações + refatoração sugerida |
+| qa | regras de negócio → testes multicamada | Read/Grep/Glob/Edit/Bash | regra ou feature/bug | matriz de cobertura, bugs reportados |
+| code-review | analisar/corrigir/revalidar/preparar PR (nunca mergeia) | Read/Grep/Glob/Bash/Edit + `gh` | número do PR | achados, correções, comentário no PR/Jira |
+| security | achar problema de segurança, não corrigir | Read/Grep/Glob/Bash | diff ou área do código | lista de achados por severidade + security_score |
+| git-ops | cirurgia mecânica de branch/PR, higiene de Jira | Read/Grep/Glob/Bash/Edit + Atlassian MCP | branch/PR/card com drift | branch corrigida, PR de substituição, card sincronizado |
+| devops | CI/CD, build, release flow | Read/Grep/Glob/Bash/Edit | mudança em workflow/pipeline | pipeline corrigido/validado |
 
 ## Fluxo de execução (exemplos)
 
@@ -80,7 +98,7 @@ qa-agent → security-reviewer (se área sensível) → `npm run quality-gate` �
 **Bugfix**: reproduzir → causa raiz → corrigir → teste de regressão (qa-agent) →
 `npm run quality-gate` → PR.
 
-**PR review**: delegado ao agente `pr-review`, que já implementa as 4 fases obrigatórias.
+**PR review**: delegado ao agente `code-review`, que já implementa as 4 fases obrigatórias.
 
 **Testing**: delegado à skill `qa-agent`.
 
@@ -92,7 +110,7 @@ falha: `.claude/skills/dev-workflows/SKILL.md`.
 1. Claude Code carrega `CLAUDE.md` automaticamente ao abrir o repo.
 2. Skills (`qa-agent`, `dev-workflows`) são carregadas sob demanda quando o pedido do usuário
    casa com a descrição delas — não é preciso invocar manualmente.
-3. Agentes (`pr-review`, `security-reviewer`, `dedup-refactor`, e os demais em `.claude/agents/`)
+3. Agentes (`code-review`, `security`, `git-ops`, `devops`, e os demais em `.claude/agents/`)
    são chamados via delegação (workflow ou pedido direto) — **mas só ficam disponíveis como
    `subagent_type` de verdade se a sessão do Claude Code for aberta com o diretório de trabalho
    DENTRO deste repo (`app-techweek/` ou mais fundo), nunca numa pasta pai** (ex.:
@@ -105,7 +123,8 @@ falha: `.claude/skills/dev-workflows/SKILL.md`.
    sessão. Verificado em 2026-09-20 (research via `claude-code-guide`, docs oficiais
    `code.claude.com/docs/en/sub-agents.md`). Sem fix de config — é comportamento fixo do Claude
    Code. **Sempre abrir o Claude Code com cwd em `app-techweek/`** (não na pasta pai) pra ter os
-   13 agentes/skills funcionando como time de verdade.
+   13 agentes (`.claude/agents/`) + 2 skills (`dev-workflows`, `qa-agent`) + Ponytail funcionando
+   como time de verdade.
 4. Regras de negócio ficam em `docs/business-rules/` — sempre consultadas antes de reclassificar
    uma regra do zero.
 
@@ -116,27 +135,31 @@ gitignored) não é pré-requisito — ver aviso em `CLAUDE.md`.
 
 ```
 git clone <repo>
-cp .env.example .env.local   # preencher com as credenciais do Supabase de HOMOLOGAÇÃO (nunca produção)
+cp .env.example .env.local   # preencher com as credenciais Firebase do projeto facom-techweek-layerx
 npm install
 npm run check-ai-infra       # confirma o que já está pronto e o que falta configurar
+firebase login                # CLI 15.30.2+ — necessário pra emuladores/deploy Firebase
 gh auth login                # necessário só para quem for usar `gh` (PR/issue) diretamente
 ```
 
+**Correção 2026-09-22**: Supabase foi removido 100% do projeto em 2026-09-21 (`@supabase/supabase-js`
+fora do `package.json`, nenhum código de app depende dele). Este projeto é Firebase/GCP — não peça
+nem configure credencial Supabase, ela não existe mais em lugar nenhum do fluxo real.
+
 O que **cada pessoa configura localmente** (nunca vai pro Git):
 
-- **`.env.local`** — credenciais Supabase de homolog (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`),
-  a partir de `.env.example`. Pedir os valores pro Fabio, nunca reusar os de produção.
+- **`.env.local`** — credenciais Firebase do projeto `facom-techweek-layerx`, a partir de
+  `.env.example`. Pedir os valores pro Fabio.
 - **`gh` CLI** — `gh auth login --web` (OAuth, evita colar token em texto). Necessário só pra quem
   for interagir com PR/issue direto pelo terminal.
 - **MCP Atlassian/Jira** — conector do Claude Code (`claude.ai Atlassian` neste projeto). Cada
   pessoa autentica com a própria conta Atlassian/Jira na primeira vez que uma tool desse MCP for
   chamada (fluxo OAuth guiado pelo próprio Claude Code); não precisa de token manual.
-- **MCP Supabase** — conector apontando pro projeto de homologação (`supabase-homolog` neste
-  projeto). Configurado a nível de usuário/máquina, não no repo; sem acesso a ele os agentes ainda
-  funcionam, só perdem a leitura direta de logs/advisors/tabelas do Supabase (o `@supabase/supabase-js`
-  via `.env.local` continua funcionando pros testes de integração independente do MCP).
+- **Firebase CLI** — `firebase login`, depois `firebase use facom-techweek-layerx` (ou o alias
+  configurado em `.firebaserc`). `gcloud` CLI ainda **não** está instalado nesta máquina de
+  referência — trabalho direto de API/IAM/Cloud Build do GCP fica bloqueado até alguém instalar.
 - Sem essas autenticações, `npm run check-ai-infra` ainda passa (ele confere arquivos do repo, não
-  sessão de MCP) — a ausência só aparece na hora de usar a tool específica.
+  sessão de MCP/Firebase) — a ausência só aparece na hora de usar a tool específica.
 
 ## Quality Gate
 
@@ -151,15 +174,20 @@ passando, teste passando quando existir suíte). Rodar com `npm run quality-gate
   GitHub, mesmo com autorização prévia.
 - Regra INFERIDA nunca vira regra oficial/teste permanente sem validação humana (AskUserQuestion
   com opção recomendada).
-- `npm run test:integration` cria contas reais no Supabase de HOMOLOGAÇÃO a cada execução — não
-  rodar sem necessidade, nunca contra produção.
+- **Correção 2026-09-22**: `npm run test:integration` não existe mais — era a suíte contra Supabase
+  homolog, removida junto com o Supabase (2026-09-21). `npm run test` hoje = `npx vitest run src
+  scripts tests/unit`, mocka Firebase Auth/Firestore, nunca bate em rede real. Se um teste de
+  integração fizer sentido de novo (ex.: contra Firebase Emulator Suite), é infra nova a construir,
+  não a reativação da antiga.
 - **Não existe suíte de E2E ainda** (nenhum Playwright/Cypress instalado) — a skill `qa-agent`
-  lista E2E como camada esperada de cobertura, mas hoje só unit (`npm run test`) e integração
-  (`npm run test:integration`) existem de fato. Fica como lacuna conhecida, não decisão definitiva
-  de não fazer.
-- Gaps de segurança conhecidos sem correção agendada: KAN-27 (senha fraca), KAN-28 (LGPD só no
-  front), KAN-29 (limite de avatar só no front), KAN-30 (scanner aceita QR de qualquer palestra)
-  — ver `docs/business-rules/`.
+  lista E2E como camada esperada de cobertura, mas hoje só unit existe de fato. Fica como lacuna
+  conhecida, não decisão definitiva de não fazer.
+- **Correção 2026-09-22**: KAN-27/28/29/30 (gaps de segurança Supabase-era citados numa versão
+  anterior deste documento) foram fechados como superseded — as versões Firebase reais são
+  KAN-71/72/73 (mergeadas) e KAN-75 (rate limit, mergeado). Ver `docs/business-rules/` pro estado
+  atual de cada regra.
+- `scripts/seed-admin.js` ainda importa `@supabase/supabase-js` (removido do `package.json`) —
+  script quebrado/morto, leftover do app antigo, sem correção agendada (baixa prioridade).
 - **Abrir sessão fora do repo quebra descoberta de agente customizado** — ver detalhe na seção
   "Como uma sessão nova recupera o contexto" acima. Sem symlink, sem flag de settings.json que
   resolva; único fix real é abrir a sessão com cwd dentro de `app-techweek/`.

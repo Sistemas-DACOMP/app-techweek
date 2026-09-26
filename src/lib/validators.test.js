@@ -4,6 +4,9 @@ import {
   isPasswordLongEnough,
   validateAvatarFile,
   MAX_AVATAR_BYTES,
+  validateMissionPhoto,
+  MAX_MISSION_PHOTO_BYTES,
+  ALLOWED_MISSION_IMAGE_TYPES,
   normalizeEmail,
   isValidEmail,
   suggestEmailCorrection,
@@ -22,9 +25,8 @@ describe('passwordsMatch', () => {
 });
 
 // REG-C2 (KAN-27): senha deve ter pelo menos 6 caracteres, o minimo real
-// exigido pelo Supabase. Esta funcao ainda NAO esta ligada ao
-// Register.jsx (KAN-27 continua no backlog) - o teste documenta a regra
-// que falta ser aplicada no fluxo real.
+// exigido pelo Firebase Auth. Ligada de verdade ao fluxo em Register.jsx
+// desde a migracao pra Firebase (KAN-69) - REG-AUTH-001 = CONFIRMADA.
 describe('isPasswordLongEnough (KAN-27)', () => {
   it('rejeita senha vazia', () => {
     expect(isPasswordLongEnough('')).toBe(false);
@@ -117,5 +119,44 @@ describe('suggestEmailCorrection', () => {
     expect(suggestEmailCorrection('samuel.amorim@ufu.br')).toBeNull();
     expect(suggestEmailCorrection('usuario@gmail.com')).toBeNull();
     expect(suggestEmailCorrection(null)).toBeNull();
+  });
+});
+
+// REG-MISSION-002: Fotos comprovantes de missões manuais
+describe('validateMissionPhoto (REG-MISSION-002)', () => {
+  it('rejeita quando nao ha arquivo', () => {
+    expect(validateMissionPhoto(null)).toEqual({ valid: false, reason: 'missing' });
+  });
+
+  it('rejeita tipo que nao esta na lista de formatos seguros permitidos', () => {
+    expect(validateMissionPhoto({ type: 'application/pdf', size: 1000 })).toEqual({
+      valid: false,
+      reason: 'invalid_type',
+    });
+    expect(validateMissionPhoto({ type: 'image/svg+xml', size: 1000 })).toEqual({
+      valid: false,
+      reason: 'invalid_type',
+    });
+  });
+
+  it('rejeita arquivo com tamanho acima de 5MB', () => {
+    const file = { type: 'image/png', size: MAX_MISSION_PHOTO_BYTES + 1 };
+    expect(validateMissionPhoto(file)).toEqual({ valid: false, reason: 'too_large' });
+  });
+
+  it('aceita imagens validas (PNG, JPEG, WebP, GIF) dentro do limite de 5MB', () => {
+    for (const type of ALLOWED_MISSION_IMAGE_TYPES) {
+      expect(validateMissionPhoto({ type, size: 1024 * 1024 })).toEqual({
+        valid: true,
+        reason: null,
+      });
+    }
+  });
+
+  it('aceita imagem no limite exato de 5MB', () => {
+    expect(validateMissionPhoto({ type: 'image/jpeg', size: MAX_MISSION_PHOTO_BYTES })).toEqual({
+      valid: true,
+      reason: null,
+    });
   });
 });

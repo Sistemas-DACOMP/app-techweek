@@ -17,16 +17,42 @@ service cloud.firestore {
         (request.auth.token.role == 'ADMIN' || request.auth.token.admin == true);
     }
 
+    function isStaffOrAdmin() {
+      return isAdmin() || (isAuthenticated() && request.auth.token.role == 'STAFF');
+    }
+
     // Regras de Usuários: Todos autenticados leem; só o próprio dono atualiza dados pessoais
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
-      allow write: if isAdmin();
+      allow create: if false; // Apenas backend via Firebase Admin SDK (POST /api/auth/register)
+      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'createdAt', 'totalPoints', 'pontuacaoTotal']));
+      // Achado do security review (KAN-60): "allow write: if isAdmin()" deixava
+      // qualquer sessão ADMIN escrever QUALQUER campo (inclusive role) direto
+      // pelo client, contornando PUT /api/admin/users/:uid/role (que sincroniza
+      // custom claim + Firestore juntos, com divergência relatada explicitamente
+      // se algo falhar). Fabio confirmou: toda troca de role passa pelo backend
+      // — write:false força isso, mesmo padrão já usado em bookings/leads/checkins.
+
+      // Histórico de pontos de missão/desafio (KAN-79, POST /api/points/claim).
+      // Regra do documento pai não cobre subcollection — sem isso aqui, a
+      // leitura cai no default-deny e o histórico nunca aparece pro dono.
+      match /point_events/{eventId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if false; // Apenas backend via Firebase Admin SDK
+      }
     }
 
     // Regras de Atividades: Leitura pública autenticada; escrita apenas para ADMIN
     match /activities/{activityId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Catálogo de missões/desafios (KAN-80): mesmo padrão de activities —
+    // ADMIN escreve/edita direto pelo Firestore (sem admin-web ainda pra
+    // isso). POST /api/points/claim (backend/src/routes/points.ts) usa o
+    // Admin SDK, que ignora esta regra — ela protege o write client-side.
+    match /missions/{missionId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
@@ -37,9 +63,9 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Regras de Reservas e Leads: Escritas diretas do cliente proibidas (feitas pelo backend)
+    // Regras de Reservas: leitura restrita ao dono da inscrição ou ADMIN (REG-BOOKING-001)
     match /bookings/{bookingId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
@@ -47,6 +73,17 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (request.auth.uid == sponsorId || isAdmin());
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
+
+    // Regras de Pontos: cada usuário lê os próprios eventos; escrita sempre pelo backend
+    match /pointEvents/{eventId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if false; // Apenas backend via Firebase Admin SDK
+    }
+
+    // Regras de Check-ins (double-check de presença): leitura restrita ao participante ou Staff/ADMIN
+    match /checkins/{checkinId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isStaffOrAdmin());
+      allow write: if false; // Apenas backend via Firebase Admin SDK
+    }
   }
 }
-
