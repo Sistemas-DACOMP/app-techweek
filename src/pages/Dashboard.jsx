@@ -10,13 +10,15 @@ import {
   AlertCircle,
   Clock,
   MapPin,
-  QrCode
+  QrCode,
+  Bell
 } from 'lucide-react';
 import MascotDuo from '../components/MascotDuo';
 import logoTw from '../assets/logo-tw.png';
 import { onAuthChange } from '../lib/auth';
 import { getUserProfile } from '../lib/userService';
 import NotificationBell from '../components/NotificationBell';
+import { useNotifications } from '../hooks/useNotifications';
 import { useUser } from '../hooks/useUser';
 import ActivityCard from '../components/ActivityCard';
 import ActivityModal from '../components/ActivityModal';
@@ -62,7 +64,15 @@ export default function Dashboard() {
   const [checkoutModalActivity, setCheckoutModalActivity] = useState(null);
   const [selfScanActivity, setSelfScanActivity] = useState(null);
 
-  // 1. Auth & User Profile
+  // Notificacoes e Comunicados Urgentes (develop / KAN-56)
+  const { notifications } = useNotifications();
+
+  const urgentAnnouncement = notifications.find(
+    notification =>
+      notification.source === 'announcement' &&
+      notification.priority === 'URGENT'
+  );
+
   useEffect(() => {
     async function loadUserProfile(user) {
       if (!user) {
@@ -304,6 +314,19 @@ export default function Dashboard() {
         <h2 style={{ color: 'white', textAlign: 'center', marginTop: '16px', marginBottom: '24px', fontSize: '1.5rem', fontWeight: '700' }}>
           Olá, {firstName}!
         </h2>
+        {urgentAnnouncement && (
+          <div className="dashboard-urgent-announcement">
+            <div>
+              <strong>{urgentAnnouncement.title}</strong>
+              <p>{urgentAnnouncement.message}</p>
+            </div>
+
+            <Bell
+              size={20}
+              className="dashboard-urgent-announcement-icon"
+            />
+          </div>
+        )}
       </div>
 
       {/* Interactive Tabs Header (Todas as Atividades / Minha Agenda) */}
