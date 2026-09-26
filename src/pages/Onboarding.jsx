@@ -90,7 +90,7 @@ export default function Onboarding() {
             <div style={{ position: 'relative', transform: 'scale(0.8)' }}>
               {step === 0 && (
                 <TypewriterBubble 
-                  text="Oi! Eu sou o Teko" 
+                  text="Oi! Eu sou o Alan" 
                   delay={300} 
                   icon={Hand} 
                   color="#3b82f6" 
@@ -102,7 +102,7 @@ export default function Onboarding() {
             <div style={{ position: 'relative', transform: 'scale(0.8)' }}>
               {step === 0 && (
                 <TypewriterBubble 
-                  text="E eu sou a Weeka!" 
+                  text="E eu sou a Ada!" 
                   delay={1500} // Waits 1.5 seconds to start typing
                   icon={Heart} 
                   color="#a855f7" 
@@ -125,7 +125,7 @@ export default function Onboarding() {
             O propósito <Rocket size={24} />
           </h2>
           <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '16px', textAlign: 'justify' }}>
-            Teko e Weeka querem conhecer a TechWeek inteira, e precisam de você para isso!
+            Alan e Ada querem conhecer a TechWeek inteira, e precisam de você para isso!
           </p>
           <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', lineHeight: '1.6', textAlign: 'justify' }}>
             Aqui, você vai explorar o evento, descobrir novas tecnologias, conhecer empresas e, principalmente, conectar-se com pessoas incríveis.
@@ -187,7 +187,7 @@ export default function Onboarding() {
           </h2>
           <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '32px', textAlign: 'justify' }}>
             Pronto para começar sua jornada?<br/>
-            Teko e Weeka já estão esperando.
+            Alan e Ada já estão esperando.
           </p>
         </>
       )

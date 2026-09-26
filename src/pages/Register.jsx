@@ -171,7 +171,7 @@ export default function Register() {
     }
   };
 
-  // Lógica de interação do mascote Teko
+  // Lógica de interação do mascote Alan
   const isPasswordFocused = (focusedInput === 'password' || focusedInput === 'confirmPassword');
   const isTypingSomething = focusedInput !== null && !isPasswordFocused;
   const currentTextLength = isTypingSomething ? (formData[focusedInput] || '').length : 0;
