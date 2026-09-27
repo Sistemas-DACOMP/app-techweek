@@ -78,6 +78,25 @@ body {
   }
 }
 
+.portal-wrapper {
+  width: 100%;
+  max-width: 1380px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  margin: 0 auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 768px) {
+  .portal-wrapper {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+}
+
 .page-container {
   width: 100%;
   max-width: 100%;

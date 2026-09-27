@@ -93,7 +93,7 @@ function AppContent() {
   }
 
   return (
-    <div className="app-wrapper">
+    <div className={isPortalPage ? "portal-wrapper" : "app-wrapper"}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/cadastro" element={<Register />} />

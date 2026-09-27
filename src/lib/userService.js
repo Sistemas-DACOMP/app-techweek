@@ -511,4 +511,60 @@ export async function findUserByUsername(username) {
   return { id: snap.docs[0].id, ...snap.docs[0].data() };
 }
 
+/**
+ * Escuta todos os usuários para o painel administrativo.
+ */
+export function subscribeToAllUsers(callback) {
+  const usersRef = collection(db, 'users');
+  return onSnapshot(
+    usersRef,
+    (snap) => {
+      const list = snap.docs.map(docSnap => ({
+        id: docSnap.id,
+        uid: docSnap.id,
+        ...docSnap.data()
+      }));
+      callback(list);
+    },
+    (err) => {
+      console.warn('Erro ao escutar usuários para o admin:', err);
+      // Fallback para perfis em cache
+      const cachedList = [];
+      if (typeof localStorage !== 'undefined') {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('facom_profile_')) {
+            try {
+              cachedList.push(JSON.parse(localStorage.getItem(key)));
+            } catch (_e) {}
+          }
+        }
+      }
+      callback(cachedList);
+    }
+  );
+}
+
+/**
+ * Atualiza o papel do usuário no Firestore a partir do painel de administração.
+ */
+export async function updateUserRoleInFirestore(uid, newRole) {
+  if (!uid || !newRole) return { success: false, error: 'UID e role são obrigatórios.' };
+  try {
+    const userRef = doc(db, 'users', uid);
+    const participantType = newRole === 'ADMIN' || newRole === 'STAFF' ? 'Organizador' : (newRole === 'SPONSOR' ? 'Patrocinador' : 'Aluno da UFU');
+    await updateDoc(userRef, {
+      role: newRole,
+      participantType,
+      participant_type: participantType,
+      updatedAt: new Date().toISOString()
+    });
+    return { success: true };
+  } catch (err) {
+    console.error('Erro ao atualizar papel do usuário:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+
 
