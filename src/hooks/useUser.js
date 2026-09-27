@@ -291,6 +291,8 @@ export function useUser() {
 
   return {
     profile,
+    role: profile?.role || 'PARTICIPANT',
+    participantType: profile?.participantType || profile?.participant_type || 'Aluno da UFU',
     hasSymplaTicket,
     symplaTicket,
     refreshProfile: load,

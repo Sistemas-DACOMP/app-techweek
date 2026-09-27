@@ -38,7 +38,7 @@ const PARTICIPANT_TYPES = [
 ];
 
 export default function Profile() {
-  const { points, userLevel } = useUser();
+  const { points, userLevel, role, participantType } = useUser();
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef(null);
@@ -628,6 +628,84 @@ export default function Profile() {
           <Edit3 size={18} strokeWidth={1.75} />
         </button>
       </header>
+
+      {/* 1.1 ATALHOS DE GESTÃO / ORGANIZAÇÃO E STAFF */}
+      {(role === 'ADMIN' || role === 'STAFF' || profile?.role === 'ADMIN' || profile?.role === 'STAFF' || profile?.participantType === 'Organizador' || participantType === 'Organizador') && (
+        <section
+          style={{
+            backgroundColor: '#0F141F',
+            border: '1px solid rgba(56, 189, 248, 0.3)',
+            borderRadius: '20px',
+            padding: '14px 16px',
+            marginBottom: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShieldCheck size={18} color="#38BDF8" />
+              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#F8FAFC', letterSpacing: '-0.01em' }}>
+                Atalhos de Gestão & Organização
+              </span>
+            </div>
+            <span style={{ fontSize: '0.65rem', fontFamily: "'JetBrains Mono', monospace", backgroundColor: 'rgba(56, 189, 248, 0.12)', color: '#38BDF8', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, textTransform: 'uppercase' }}>
+              {role === 'ADMIN' || profile?.role === 'ADMIN' ? 'ADMIN' : 'STAFF'}
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: (role === 'ADMIN' || profile?.role === 'ADMIN') ? '1fr 1fr' : '1fr', gap: '10px' }}>
+            {(role === 'ADMIN' || profile?.role === 'ADMIN') && (
+              <button
+                type="button"
+                onClick={() => navigate('/admin')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  backgroundColor: '#2563EB',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '10px 12px',
+                  color: '#FFFFFF',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'opacity 0.15s ease'
+                }}
+              >
+                <ShieldCheck size={16} />
+                <span>Painel Admin</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => navigate('/staff')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                borderRadius: '12px',
+                padding: '10px 12px',
+                color: '#38BDF8',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'opacity 0.15s ease'
+              }}
+            >
+              <Ticket size={16} />
+              <span>Validador Staff</span>
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* 2. O CRACHÁ HERÓI (LANYARD BADGE) - PROTAGONISTA VISUAL DA TELA */}
       <section

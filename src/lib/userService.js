@@ -33,6 +33,26 @@ function fileToDataUrl(file) {
 /**
  * Lê o perfil do usuário de forma 100% síncrona do cache local (zero layout flash).
  */
+export function resolveRoleByEmail(email, existingRole = 'PARTICIPANT') {
+  const clean = (email || '').trim().toLowerCase();
+  if (clean === 'admin@admin.com' || clean === 'sam03amorim@gmail.com') {
+    return { role: 'ADMIN', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
+  }
+  if (clean === 'staff@techweek.com') {
+    return { role: 'STAFF', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
+  }
+  if (clean === 'aluno@ufu.br') {
+    return { role: 'PARTICIPANT', participantType: 'Aluno da UFU', participant_type: 'Aluno da UFU', hasSymplaTicket: true };
+  }
+  if (existingRole === 'ADMIN') {
+    return { role: 'ADMIN', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
+  }
+  if (existingRole === 'STAFF') {
+    return { role: 'STAFF', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
+  }
+  return null;
+}
+
 export function getCachedUserProfile(uid) {
   try {
     const targetUid = uid || auth?.currentUser?.uid;
@@ -40,12 +60,9 @@ export function getCachedUserProfile(uid) {
       const cached = localStorage.getItem(`facom_profile_${targetUid}`);
       if (cached) {
         const parsed = JSON.parse(cached);
-        const cleanEmail = (parsed.email || '').trim().toLowerCase();
-        if (cleanEmail === 'sam03amorim@gmail.com' || cleanEmail === 'admin@admin.com' || parsed.role === 'ADMIN') {
-          parsed.role = 'ADMIN';
-          parsed.participantType = 'Organizador';
-          parsed.participant_type = 'Organizador';
-          parsed.hasSymplaTicket = true;
+        const resolved = resolveRoleByEmail(parsed.email, parsed.role);
+        if (resolved) {
+          Object.assign(parsed, resolved);
         }
         return parsed;
       }
@@ -58,12 +75,9 @@ export function getCachedUserProfile(uid) {
           const item = localStorage.getItem(key);
           if (item) {
             const parsed = JSON.parse(item);
-            const cleanEmail = (parsed.email || '').trim().toLowerCase();
-            if (cleanEmail === 'sam03amorim@gmail.com' || cleanEmail === 'admin@admin.com' || parsed.role === 'ADMIN') {
-              parsed.role = 'ADMIN';
-              parsed.participantType = 'Organizador';
-              parsed.participant_type = 'Organizador';
-              parsed.hasSymplaTicket = true;
+            const resolved = resolveRoleByEmail(parsed.email, parsed.role);
+            if (resolved) {
+              Object.assign(parsed, resolved);
             }
             return parsed;
           }
@@ -84,7 +98,7 @@ export async function createUserProfile(uid, data) {
   const now = serverTimestamp();
 
   const cleanEmail = data.email ? data.email.trim().toLowerCase() : '';
-  const isAdminEmail = cleanEmail === 'sam03amorim@gmail.com' || cleanEmail === 'admin@admin.com' || data.role === 'ADMIN';
+  const resolved = resolveRoleByEmail(cleanEmail, data.role);
 
   const profileData = {
     uid,
@@ -93,15 +107,15 @@ export async function createUserProfile(uid, data) {
     lastName: data.lastName || '',
     username: data.username ? data.username.trim().toLowerCase() : '',
     phone: data.phone || '',
-    participantType: isAdminEmail ? 'Organizador' : (data.participantType || 'Aluno da UFU'),
-    participant_type: isAdminEmail ? 'Organizador' : (data.participantType || 'Aluno da UFU'),
+    participantType: resolved ? resolved.participantType : (data.participantType || 'Aluno da UFU'),
+    participant_type: resolved ? resolved.participantType : (data.participantType || 'Aluno da UFU'),
     course: data.course || '',
     period: data.period ? Number(data.period) : null,
     linkedin: data.linkedin || '',
     instagram: data.instagram || '',
     avatarUrl: data.avatarUrl || null,
-    hasSymplaTicket: isAdminEmail ? true : Boolean(data.hasSymplaTicket || data.symplaTicket),
-    role: isAdminEmail ? 'ADMIN' : (data.role || 'PARTICIPANT'),
+    hasSymplaTicket: resolved ? resolved.hasSymplaTicket : Boolean(data.hasSymplaTicket || data.symplaTicket),
+    role: resolved ? resolved.role : (data.role || 'PARTICIPANT'),
     totalPoints: 0,
     pontuacaoTotal: 0,
     ticketId: data.ticketId || data.symplaTicket?.ticketNumber || null,
@@ -160,19 +174,21 @@ export async function getUserProfile(uid) {
     if (snap.exists()) {
       const data = snap.data();
       const cleanEmail = (data.email || localData?.email || '').trim().toLowerCase();
-      const isAdminEmail = cleanEmail === 'sam03amorim@gmail.com' || cleanEmail === 'admin@admin.com' || data.role === 'ADMIN' || localData?.role === 'ADMIN';
+      const resolved = resolveRoleByEmail(cleanEmail, data.role || localData?.role);
 
       // Fusão segura: nunca substitui um avatarUrl ou symplaTicket preenchido localmente por null/indefinido do Firestore
       const merged = {
         ...localData,
         ...data,
-        role: isAdminEmail ? 'ADMIN' : (data.role || localData?.role || 'PARTICIPANT'),
-        participantType: isAdminEmail ? 'Organizador' : (data.participantType || localData?.participantType || 'Aluno da UFU'),
-        participant_type: isAdminEmail ? 'Organizador' : (data.participantType || localData?.participantType || 'Aluno da UFU'),
         avatarUrl: data.avatarUrl || data.photoURL || localData?.avatarUrl || null,
         symplaTicket: data.symplaTicket || localData?.symplaTicket || null,
-        hasSymplaTicket: isAdminEmail ? true : !!(data.hasSymplaTicket || data.symplaTicket || localData?.hasSymplaTicket || localData?.symplaTicket)
+        hasSymplaTicket: !!(data.hasSymplaTicket || data.symplaTicket || localData?.hasSymplaTicket || localData?.symplaTicket)
       };
+
+      if (resolved) {
+        Object.assign(merged, resolved);
+      }
+
       try {
         localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(merged));
       } catch (_e) {}
@@ -186,11 +202,9 @@ export async function getUserProfile(uid) {
 
   if (localData) {
     const cleanEmail = (localData.email || '').trim().toLowerCase();
-    if (cleanEmail === 'sam03amorim@gmail.com' || cleanEmail === 'admin@admin.com' || localData.role === 'ADMIN') {
-      localData.role = 'ADMIN';
-      localData.participantType = 'Organizador';
-      localData.participant_type = 'Organizador';
-      localData.hasSymplaTicket = true;
+    const resolved = resolveRoleByEmail(cleanEmail, localData.role);
+    if (resolved) {
+      Object.assign(localData, resolved);
     }
   }
 
