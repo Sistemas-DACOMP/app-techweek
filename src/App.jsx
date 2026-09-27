@@ -12,6 +12,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Onboarding from './pages/Onboarding';
 import Staff from './pages/Staff';
+import Admin from './pages/Admin';
 import InstagramMission from './pages/InstagramMission';
 import Sponsor from './pages/Sponsor';
 import Terms from './pages/Terms';
@@ -97,6 +98,7 @@ function AppContent() {
         <Route path="/instagram-mission" element={<InstagramMission />} />
         <Route path="/sponsor" element={<Sponsor />} />
         <Route path="/staff" element={<Staff />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       

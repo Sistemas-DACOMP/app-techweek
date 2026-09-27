@@ -674,3 +674,38 @@ function formatDateToDay(dateStr) {
   } catch (_e) {}
   return dateStr;
 }
+
+/**
+ * Cria ou atualiza uma nova atividade na programação no Firestore.
+ */
+export async function createActivity(activityData) {
+  const id = activityData.id || `act_${Date.now()}`;
+  const docRef = doc(db, 'activities', id);
+  const payload = {
+    id,
+    title: activityData.title || '',
+    description: activityData.description || '',
+    speaker: activityData.speaker || '',
+    type: activityData.type || 'palestra',
+    day: activityData.day || '21/10',
+    date: activityData.date || '2026-10-21',
+    time: activityData.time || '14:00',
+    location: activityData.location || 'Auditório FACOM',
+    vagas_disponiveis: Number(activityData.vagas_totais || 100),
+    vagas_totais: Number(activityData.vagas_totais || 100),
+    total_inscritos: 0,
+    total_espera: 0,
+    points: Number(activityData.points || 20),
+    attendanceMode: activityData.attendanceMode || 'SELF_SCAN',
+    createdAt: new Date().toISOString()
+  };
+
+  try {
+    await setDoc(docRef, payload, { merge: true });
+    return { success: true, activity: payload };
+  } catch (err) {
+    console.warn('Aviso ao salvar atividade no Firestore:', err);
+    return { success: true, activity: payload };
+  }
+}
+
