@@ -18,14 +18,26 @@ import Sponsor from './pages/Sponsor';
 import Terms from './pages/Terms';
 import BottomNavigation from './components/BottomNavigation';
 import logoTw from './assets/logo-tw.png';
+import { getAppSubdomain } from './lib/subdomain';
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const isPortalPage = location.pathname === '/admin' || location.pathname === '/staff';
   const isAuthPage = location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding' || location.pathname === '/termos';
 
   const [isSplashVisible, setIsSplashVisible] = useState(true);
+
+  // Detecção de subdomínio: admin.* ou staff.*
+  useEffect(() => {
+    const sub = getAppSubdomain();
+    if (sub === 'admin' && location.pathname !== '/admin') {
+      navigate('/admin', { replace: true });
+    } else if (sub === 'staff' && location.pathname !== '/staff') {
+      navigate('/staff', { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -36,14 +48,14 @@ function AppContent() {
 
   useEffect(() => {
     if (!isSplashVisible && !authLoading) {
-      if (!user && !isAuthPage) {
+      if (!user && !isAuthPage && !isPortalPage) {
         navigate('/login', { replace: true });
       } else if (user && location.pathname === '/login') {
         const hasOnboarding = localStorage.getItem('facom_onboarding_completed') === 'true';
         navigate(hasOnboarding ? '/' : '/onboarding', { replace: true });
       }
     }
-  }, [user, authLoading, isSplashVisible, isAuthPage, navigate, location.pathname]);
+  }, [user, authLoading, isSplashVisible, isAuthPage, isPortalPage, navigate, location.pathname]);
 
   if (isSplashVisible || authLoading) {
     return (
@@ -102,7 +114,7 @@ function AppContent() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       
-      {!isAuthPage && <BottomNavigation />}
+      {!isAuthPage && !isPortalPage && <BottomNavigation />}
     </div>
   );
 }

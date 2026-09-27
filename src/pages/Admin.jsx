@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ShieldCheck, 
@@ -6,19 +6,22 @@ import {
   MessageSquare, 
   Bell, 
   QrCode, 
-  ArrowLeft, 
   CheckCircle2, 
   AlertCircle, 
   Sparkles,
   Calendar,
   UserCheck,
   Send,
-  Loader2
+  Loader2,
+  Lock,
+  Mail,
+  LogOut
 } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
 import { createActivity } from '../lib/activityService';
 import { createFeedPost } from '../lib/feedService';
 import { addNotification } from '../lib/notifications';
+import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
 import FeedbackModal from '../components/FeedbackModal';
 
 export default function Admin() {
@@ -29,13 +32,13 @@ export default function Admin() {
   // Guard de autorização Admin
   const isAuthorized = role === 'ADMIN' || participantType === 'Organizador' || userProfile?.role === 'ADMIN';
 
-  useEffect(() => {
-    if (!isAuthorized) {
-      navigate('/', { replace: true });
-    }
-  }, [isAuthorized, navigate]);
+  // Estados de Login Dedicado do Portal Admin
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
-  // Estados dos formulários
+  // Estados dos formulários de gestão
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
@@ -65,6 +68,36 @@ export default function Admin() {
     title: '',
     message: ''
   });
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    if (!adminEmail || !adminPassword || loginLoading) return;
+    setLoginLoading(true);
+    setLoginError('');
+
+    try {
+      const res = await loginWithEmailAndPassword(adminEmail, adminPassword);
+      if (!res.success) {
+        setLoginError(res.error || 'Credenciais inválidas.');
+      } else {
+        window.location.reload();
+      }
+    } catch (err) {
+      setLoginError(err.message || 'Falha ao autenticar.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleQuickAdmin = () => {
+    setAdminEmail('admin@admin.com');
+    setAdminPassword('AdminPassword123!');
+  };
+
+  const handleAdminLogout = async () => {
+    await logoutUser();
+    window.location.reload();
+  };
 
   const handleActivitySubmit = async (e) => {
     e.preventDefault();
@@ -162,8 +195,106 @@ export default function Admin() {
     }
   };
 
+  // Se o usuário não for administrador, renderiza o Portal de Login Dedicado do Admin
   if (!isAuthorized) {
-    return null;
+    return (
+      <div className="page-container animate-fade-in" style={{ maxWidth: '420px', margin: '40px auto', padding: '24px 20px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '16px', backgroundColor: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#38BDF8' }}>
+            <ShieldCheck size={28} />
+          </div>
+          <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", color: '#38BDF8', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            PORTAL ADMINISTRATIVO
+          </span>
+          <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.65rem', fontWeight: 800, color: '#F8FAFC', margin: '6px 0 8px' }}>
+            FACOM TechWeek
+          </h1>
+          <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0, lineHeight: 1.5 }}>
+            Acesso exclusivo à comissão organizadora, cadastro de programação e avisos.
+          </p>
+        </div>
+
+        <form onSubmit={handleAdminLogin} style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '20px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
+          {loginError && (
+            <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '10px', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '8px', color: '#EF4444', fontSize: '0.78rem' }}>
+              <AlertCircle size={16} />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94A3B8', marginBottom: '6px' }}>E-mail Administrativo</label>
+            <div style={{ position: 'relative' }}>
+              <Mail size={16} color="#64748B" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                type="email"
+                required
+                placeholder="admin@admin.com"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                style={{ width: '100%', backgroundColor: '#090E21', border: '1px solid #1E293B', borderRadius: '10px', padding: '10px 12px 10px 36px', color: '#F8FAFC', fontSize: '0.85rem' }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94A3B8', marginBottom: '6px' }}>Senha</label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={16} color="#64748B" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                type="password"
+                required
+                placeholder="••••••••••••"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                style={{ width: '100%', backgroundColor: '#090E21', border: '1px solid #1E293B', borderRadius: '10px', padding: '10px 12px 10px 36px', color: '#F8FAFC', fontSize: '0.85rem' }}
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loginLoading}
+            style={{
+              backgroundColor: '#2563EB',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '12px',
+              fontWeight: 700,
+              fontSize: '0.88rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              marginTop: '4px'
+            }}
+          >
+            {loginLoading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+            <span>Acessar Painel Admin</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleQuickAdmin}
+            style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              border: '1px dashed #334155',
+              borderRadius: '10px',
+              padding: '10px',
+              color: '#94A3B8',
+              fontSize: '0.72rem',
+              cursor: 'pointer',
+              textAlign: 'center',
+              marginTop: '4px'
+            }}
+          >
+            Usar credencial de teste Admin (1 clique)
+          </button>
+        </form>
+      </div>
+    );
   }
 
   return (
@@ -172,25 +303,6 @@ export default function Admin() {
       {/* HEADER PRINCIPAL DE ADMIN */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            aria-label="Voltar para a Home"
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B',
-              color: '#F8FAFC',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
-          >
-            <ArrowLeft size={18} />
-          </button>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <ShieldCheck size={16} color="#38BDF8" />
@@ -204,27 +316,50 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Botão de Atalho para o Operador de Porta (Staff) */}
-        <button
-          type="button"
-          onClick={() => navigate('/staff')}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            backgroundColor: 'rgba(56, 189, 248, 0.12)',
-            border: '1px solid rgba(56, 189, 248, 0.3)',
-            borderRadius: '10px',
-            padding: '8px 10px',
-            color: '#38BDF8',
-            fontSize: '0.72rem',
-            fontWeight: 700,
-            cursor: 'pointer'
-          }}
-        >
-          <QrCode size={14} />
-          <span>Validar Porta</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Botão de Atalho para o Operador de Porta (Staff) */}
+          <button
+            type="button"
+            onClick={() => navigate('/staff')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              backgroundColor: 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              borderRadius: '10px',
+              padding: '8px 10px',
+              color: '#38BDF8',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            <QrCode size={14} />
+            <span>Porta</span>
+          </button>
+
+          {/* Botão Desconectar Admin */}
+          <button
+            type="button"
+            onClick={handleAdminLogout}
+            title="Sair do Painel Admin"
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              backgroundColor: '#0F141F',
+              border: '1px solid #1E293B',
+              color: '#94A3B8',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
       </div>
 
       {/* TABS NAVEGAÇÃO DE ADMIN */}
