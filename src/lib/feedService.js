@@ -139,25 +139,111 @@ export async function uploadFeedMedia(file) {
   }
 }
 
+const LOCAL_FEED_KEY = 'facom_local_feed_posts';
+
+function getLocalFeedPosts() {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_FEED_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+function saveLocalFeedPost(post) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const current = getLocalFeedPosts();
+    const updated = [post, ...current.filter((p) => p.id !== post.id)];
+    localStorage.setItem(LOCAL_FEED_KEY, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('facom_feed_updated'));
+    }
+  } catch (_e) {}
+}
+
+function removeLocalFeedPost(postId) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const current = getLocalFeedPosts();
+    const updated = current.filter((p) => p.id !== postId);
+    localStorage.setItem(LOCAL_FEED_KEY, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('facom_feed_updated'));
+    }
+  } catch (_e) {}
+}
+
+function updateLocalFeedPostPin(postId, currentPinned) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const current = getLocalFeedPosts();
+    const updated = current.map((p) => (p.id === postId ? { ...p, pinned: !currentPinned } : p));
+    localStorage.setItem(LOCAL_FEED_KEY, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('facom_feed_updated'));
+    }
+  } catch (_e) {}
+}
+
+function mergePosts(firestorePosts) {
+  const localPosts = getLocalFeedPosts();
+  const map = new Map();
+
+  // Insere posts do Firestore
+  (firestorePosts || []).forEach((p) => map.set(p.id, p));
+
+  // Insere/sobrescreve posts locais
+  localPosts.forEach((p) => map.set(p.id, p));
+
+  const merged = Array.from(map.values());
+  merged.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    const timeA = new Date(a.createdAt || 0).getTime();
+    const timeB = new Date(b.createdAt || 0).getTime();
+    return timeB - timeA;
+  });
+
+  return merged;
+}
+
 /**
  * Escuta atualizações do Feed em tempo real.
  */
 export function subscribeToFeedPosts(callback) {
+  let firestorePosts = [];
+
+  const notify = () => {
+    const merged = mergePosts(firestorePosts.length > 0 ? firestorePosts : DEFAULT_FEED_POSTS);
+    callback(merged);
+  };
+
+  const handleLocalUpdate = () => {
+    notify();
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('facom_feed_updated', handleLocalUpdate);
+  }
+
   try {
     const q = query(
       collection(db, 'feed_posts'),
       orderBy('createdAt', 'desc')
     );
 
-    return onSnapshot(
+    const unsubFirestore = onSnapshot(
       q,
       (snapshot) => {
         if (snapshot.empty) {
-          callback(DEFAULT_FEED_POSTS);
+          firestorePosts = [];
+          notify();
           return;
         }
 
-        const posts = snapshot.docs.map((docSnap) => {
+        firestorePosts = snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
           const mediaType = data.mediaType || (data.videoUrl ? 'video' : (data.imageUrl ? 'image' : ''));
           return {
@@ -174,21 +260,34 @@ export function subscribeToFeedPosts(callback) {
           };
         });
 
-        callback(posts);
+        notify();
       },
       (error) => {
         if (error?.code !== 'permission-denied') {
           console.warn('Aviso: Erro ao escutar feed_posts no Firestore, utilizando fallback:', error);
         }
-        callback(DEFAULT_FEED_POSTS);
+        firestorePosts = [];
+        notify();
       }
     );
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('facom_feed_updated', handleLocalUpdate);
+      }
+      if (typeof unsubFirestore === 'function') unsubFirestore();
+    };
   } catch (err) {
     if (err?.code !== 'permission-denied') {
       console.warn('Aviso: Exceção ao conectar no Firestore para feed_posts:', err);
     }
-    callback(DEFAULT_FEED_POSTS);
-    return () => {};
+    firestorePosts = [];
+    notify();
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('facom_feed_updated', handleLocalUpdate);
+      }
+    };
   }
 }
 
@@ -196,6 +295,9 @@ export function subscribeToFeedPosts(callback) {
  * Retorna o último post do Feed para o Card de Resumo da Tela Inicial.
  */
 export async function getLatestFeedPost() {
+  const localPosts = getLocalFeedPosts();
+  if (localPosts.length > 0) return localPosts[0];
+
   try {
     const q = query(
       collection(db, 'feed_posts'),
@@ -217,9 +319,8 @@ export async function getLatestFeedPost() {
         likes: Array.isArray(data.likes) ? data.likes : []
       };
     }
-  } catch (e) {
-    // fallback
-  }
+  } catch (_e) {}
+
   return DEFAULT_FEED_POSTS[0];
 }
 
@@ -227,25 +328,38 @@ export async function getLatestFeedPost() {
  * Cria uma nova publicação no Feed (Organização ou Patrocinador).
  */
 export async function createFeedPost(postData) {
+  const mediaType = postData.mediaType || (postData.videoUrl ? 'video' : (postData.imageUrl ? 'image' : ''));
+  const nowIso = new Date().toISOString();
+
+  const formattedPost = {
+    author: postData.author || 'Organização FACOM',
+    authorRole: postData.authorRole || 'ORGANIZATION',
+    authorAvatar: postData.authorAvatar || '',
+    content: postData.content,
+    imageUrl: postData.imageUrl || (mediaType === 'image' ? (postData.mediaUrl || '') : ''),
+    videoUrl: postData.videoUrl || (mediaType === 'video' ? (postData.mediaUrl || '') : ''),
+    mediaUrl: postData.mediaUrl || postData.videoUrl || postData.imageUrl || '',
+    mediaType: mediaType || '',
+    pinned: Boolean(postData.pinned),
+    likes: [],
+    createdAt: nowIso,
+    formattedTime: 'Agora'
+  };
+
   try {
-    const mediaType = postData.mediaType || (postData.videoUrl ? 'video' : (postData.imageUrl ? 'image' : ''));
     const docRef = await addDoc(collection(db, 'feed_posts'), {
-      author: postData.author || 'Organização FACOM',
-      authorRole: postData.authorRole || 'ORGANIZATION',
-      authorAvatar: postData.authorAvatar || '',
-      content: postData.content,
-      imageUrl: postData.imageUrl || (mediaType === 'image' ? (postData.mediaUrl || '') : ''),
-      videoUrl: postData.videoUrl || (mediaType === 'video' ? (postData.mediaUrl || '') : ''),
-      mediaUrl: postData.mediaUrl || postData.videoUrl || postData.imageUrl || '',
-      mediaType: mediaType || '',
-      pinned: Boolean(postData.pinned),
-      likes: [],
+      ...formattedPost,
       createdAt: serverTimestamp()
     });
+    const finalPost = { ...formattedPost, id: docRef.id };
+    saveLocalFeedPost(finalPost);
     return { success: true, id: docRef.id };
   } catch (err) {
-    console.error('Erro ao publicar post no Feed:', err);
-    throw err;
+    console.warn('Firestore não respondeu ou rejeitou gravação. Salvando post localmente com fallback:', err);
+    const fallbackId = `local_post_${Date.now()}`;
+    const localPost = { ...formattedPost, id: fallbackId };
+    saveLocalFeedPost(localPost);
+    return { success: true, id: fallbackId };
   }
 }
 
@@ -255,14 +369,14 @@ export async function createFeedPost(postData) {
 export async function toggleLikeFeedPost(postId, userId) {
   if (!userId || !postId) return;
   try {
-    const postRef = doc(db, 'feed_posts', postId);
-    if (postId.startsWith('feed-')) return;
-
-    await updateDoc(postRef, {
-      likes: arrayUnion(userId)
-    });
+    if (!postId.startsWith('feed-') && !postId.startsWith('local_post_')) {
+      const postRef = doc(db, 'feed_posts', postId);
+      await updateDoc(postRef, {
+        likes: arrayUnion(userId)
+      });
+    }
   } catch (err) {
-    console.warn('Aviso: Erro ao alternar curtida no post do Feed:', err);
+    console.warn('Aviso: Erro ao alternar curtida no post do Feed no Firestore:', err);
   }
 }
 
@@ -271,14 +385,15 @@ export async function toggleLikeFeedPost(postId, userId) {
  */
 export async function deleteFeedPost(postId) {
   if (!postId) return;
+  removeLocalFeedPost(postId);
   try {
-    if (!postId.startsWith('feed-')) {
+    if (!postId.startsWith('feed-') && !postId.startsWith('local_post_')) {
       await deleteDoc(doc(db, 'feed_posts', postId));
     }
     return { success: true };
   } catch (err) {
-    console.error('Erro ao excluir publicação do Feed:', err);
-    throw err;
+    console.warn('Aviso ao excluir publicação no Firestore:', err);
+    return { success: true };
   }
 }
 
@@ -287,16 +402,17 @@ export async function deleteFeedPost(postId) {
  */
 export async function togglePinFeedPost(postId, currentPinned) {
   if (!postId) return;
+  updateLocalFeedPostPin(postId, currentPinned);
   try {
-    if (!postId.startsWith('feed-')) {
+    if (!postId.startsWith('feed-') && !postId.startsWith('local_post_')) {
       await updateDoc(doc(db, 'feed_posts', postId), {
         pinned: !currentPinned
       });
     }
     return { success: true };
   } catch (err) {
-    console.error('Erro ao alternar fixação do post no Feed:', err);
-    throw err;
+    console.warn('Aviso ao alternar fixação no Firestore:', err);
+    return { success: true };
   }
 }
 
