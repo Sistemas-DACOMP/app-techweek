@@ -95,9 +95,10 @@ export async function uploadFeedMedia(file) {
     throw new Error('Formato inválido. Envie uma imagem (JPG, PNG, WebP, GIF) ou vídeo (MP4, WebM, MOV).');
   }
 
-  const maxBytes = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+  // Limites expandidos para fotos e vídeos em alta resolução/pesados
+  const maxBytes = isVideo ? 250 * 1024 * 1024 : 50 * 1024 * 1024;
   if (file.size > maxBytes) {
-    throw new Error(isVideo ? 'O vídeo deve ter no máximo 50MB.' : 'A imagem deve ter no máximo 10MB.');
+    throw new Error(isVideo ? 'O vídeo deve ter no máximo 250MB.' : 'A imagem deve ter no máximo 50MB.');
   }
 
   const ext = file.name ? file.name.split('.').pop() : (isVideo ? 'mp4' : 'jpg');
@@ -110,8 +111,9 @@ export async function uploadFeedMedia(file) {
       return await getDownloadURL(storageRef);
     })();
 
+    // Timeout estendido para 120s para acomodar uploads pesados
     const timeoutTask = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Tempo limite excedido no upload da mídia.')), 25000);
+      setTimeout(() => reject(new Error('Tempo limite excedido no upload da mídia. Verifique sua conexão.')), 120000);
     });
 
     const finalUrl = await Promise.race([uploadTask, timeoutTask]);
@@ -120,8 +122,8 @@ export async function uploadFeedMedia(file) {
       mediaType: isVideo ? 'video' : 'image'
     };
   } catch (err) {
-    console.warn('Storage indisponível ou conexão lenta. Convertendo via Data URL:', err);
-    if (isImage && file.size < 4 * 1024 * 1024) {
+    console.warn('Storage indisponível ou conexão lenta. Convertendo via Data URL / ObjectURL:', err);
+    if (isImage && file.size < 20 * 1024 * 1024) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve({ url: reader.result, mediaType: 'image' });
