@@ -6,6 +6,7 @@ import {
   addDoc, 
   doc, 
   updateDoc, 
+  deleteDoc,
   arrayUnion, 
   arrayRemove, 
   serverTimestamp,
@@ -181,5 +182,59 @@ export async function toggleLikeFeedPost(postId, userId) {
     });
   } catch (err) {
     console.warn('Aviso: Erro ao alternar curtida no post do Feed:', err);
+  }
+}
+
+/**
+ * Remove uma publicação do Feed (exclusivo para Organizadores/Admin).
+ */
+export async function deleteFeedPost(postId) {
+  if (!postId) return;
+  try {
+    if (!postId.startsWith('feed-')) {
+      await deleteDoc(doc(db, 'feed_posts', postId));
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('Erro ao excluir publicação do Feed:', err);
+    throw err;
+  }
+}
+
+/**
+ * Alterna se uma publicação fica fixada no topo do Feed.
+ */
+export async function togglePinFeedPost(postId, currentPinned) {
+  if (!postId) return;
+  try {
+    if (!postId.startsWith('feed-')) {
+      await updateDoc(doc(db, 'feed_posts', postId), {
+        pinned: !currentPinned
+      });
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('Erro ao alternar fixação do post no Feed:', err);
+    throw err;
+  }
+}
+
+/**
+ * Dispara um comunicado / aviso em tempo real para todos os participantes (Sino de Notificações).
+ */
+export async function broadcastAnnouncement({ title, message, priority = 'HIGH', actionUrl = null, actionLabel = null }) {
+  try {
+    const docRef = await addDoc(collection(db, 'announcements'), {
+      title,
+      message,
+      priority,
+      actionUrl,
+      actionLabel,
+      createdAt: serverTimestamp()
+    });
+    return { success: true, id: docRef.id };
+  } catch (err) {
+    console.warn('Aviso: Erro ao enviar comunicado no Firestore:', err);
+    throw err;
   }
 }

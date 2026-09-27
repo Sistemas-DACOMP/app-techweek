@@ -36,7 +36,14 @@ import {
   AlertCircle,
   Download,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  MessageSquare,
+  Send,
+  Pin,
+  Radio,
+  Heart,
+  Share2,
+  Image as ImageIcon
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import logoTw from '../assets/logo-tw.png';
@@ -54,6 +61,14 @@ import {
   createLocation,
   DEFAULT_LOCATIONS
 } from '../lib/activityService';
+import { 
+  subscribeToFeedPosts, 
+  createFeedPost, 
+  deleteFeedPost, 
+  togglePinFeedPost,
+  broadcastAnnouncement,
+  DEFAULT_FEED_POSTS 
+} from '../lib/feedService';
 import { subscribeToAllUsers, updateUserRoleInFirestore } from '../lib/userService';
 import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
 import FeedbackModal from '../components/FeedbackModal';
@@ -85,6 +100,13 @@ const SAMPLE_SPEAKER_PHOTOS = [
   { label: 'Mulher Tech', url: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&auto=format&fit=crop&q=80' },
   { label: 'Especialista IA', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80' },
   { label: 'Professora UFU', url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80' }
+];
+
+const FEED_TEMPLATES = [
+  { label: '📢 Palestra em 15 min', text: '📢 ATENÇÃO: A próxima palestra no Anfiteatro Principal iniciará em 15 minutos! Preparem o app para fazer o check-in presencial.' },
+  { label: '☕ Coffee Break', text: '☕ Coffee Break liberado no Hall Central! Convidamos todos a aproveitar para recarregar as energias e fazer networking com os palestrantes.' },
+  { label: '🚀 Nova Missão', text: '🚀 Nova missão de pontuação liberada no app! Visite os estandes dos patrocinadores para desbloquear palavras-chave e subir no ranking.' },
+  { label: '⚠️ Mudança de Sala', text: '⚠️ Informamos que a oficina prática foi transferida para o Laboratório de Informática 2 (Bloco 5R). Esperamos vocês!' }
 ];
 
 export default function Admin() {
@@ -128,7 +150,7 @@ export default function Admin() {
   const [loginError, setLoginError] = useState('');
 
   // Navegação
-  const [activeMenu, setActiveMenu] = useState('programacao'); // 'inicio' | 'pessoas' | 'vendas' | 'inscricoes' | 'pagina' | 'programacao' | 'credenciamento' | 'certificados' | 'config' | 'ferramentas'
+  const [activeMenu, setActiveMenu] = useState('programacao'); // 'inicio' | 'pessoas' | 'vendas' | 'feed' | 'inscricoes' | 'pagina' | 'programacao' | 'credenciamento' | 'certificados' | 'config' | 'ferramentas'
   const [progTab, setProgTab] = useState('atividades'); // 'atividades' | 'convidados' | 'locais' | 'cupons' | 'configuracoes'
 
   // Dados em tempo real
@@ -136,6 +158,15 @@ export default function Admin() {
   const [speakers, setSpeakers] = useState([]);
   const [locations, setLocations] = useState([]);
   const [usersList, setUsersList] = useState([]);
+  const [feedPosts, setFeedPosts] = useState(DEFAULT_FEED_POSTS);
+
+  // Estados do Feed & Chat
+  const [feedInput, setFeedInput] = useState('');
+  const [feedImageUrl, setFeedImageUrl] = useState('');
+  const [feedIsPinned, setFeedIsPinned] = useState(false);
+  const [feedChannel, setFeedChannel] = useState('feed'); // 'feed' | 'broadcast' | 'both'
+  const [feedSubmitting, setFeedSubmitting] = useState(false);
+  const [feedFilter, setFeedFilter] = useState('ALL');
 
   // Filtros e busca
   const [activitySearch, setActivitySearch] = useState('');
@@ -213,13 +244,116 @@ export default function Admin() {
       setUsersList(users || []);
     });
 
+    const unsubFeed = subscribeToFeedPosts((posts) => {
+      setFeedPosts(posts || DEFAULT_FEED_POSTS);
+    });
+
     return () => {
       if (typeof unsubActivities === 'function') unsubActivities();
       if (typeof unsubSpeakers === 'function') unsubSpeakers();
       if (typeof unsubLocations === 'function') unsubLocations();
       if (typeof unsubUsers === 'function') unsubUsers();
+      if (typeof unsubFeed === 'function') unsubFeed();
     };
   }, [isAuthorized]);
+
+  // Publicar Mensagem no Feed / Broadcast
+  const handlePublishFeed = async (e) => {
+    if (e) e.preventDefault();
+    if (!feedInput.trim() || feedSubmitting) return;
+
+    setFeedSubmitting(true);
+    try {
+      const content = feedInput.trim();
+      const imageUrl = feedImageUrl.trim();
+      const isPinned = Boolean(feedIsPinned);
+
+      if (feedChannel === 'feed' || feedChannel === 'both') {
+        await createFeedPost({
+          author: 'Comissão FACOM TechWeek',
+          authorRole: 'ORGANIZATION',
+          authorAvatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
+          content,
+          imageUrl,
+          pinned: isPinned
+        });
+      }
+
+      if (feedChannel === 'broadcast' || feedChannel === 'both') {
+        await broadcastAnnouncement({
+          title: 'Aviso da Organização FACOM',
+          message: content,
+          priority: isPinned ? 'HIGH' : 'NORMAL',
+          actionUrl: '/feed',
+          actionLabel: 'Ver no Feed'
+        });
+      }
+
+      setFeedInput('');
+      setFeedImageUrl('');
+      setFeedIsPinned(false);
+      setFeedback({
+        type: 'success',
+        title: 'Mensagem Publicada! 🚀',
+        message: feedChannel === 'both'
+          ? 'Enviada para o Feed dos alunos e transmitida como notificação para todos os celulares.'
+          : (feedChannel === 'feed' ? 'Publicação no Feed enviada com sucesso!' : 'Comunicado transmitido para o sino dos alunos!')
+      });
+    } catch (err) {
+      setFeedback({
+        type: 'error',
+        title: 'Erro ao Publicar',
+        message: err.message || 'Falha ao transmitir publicação.'
+      });
+    } finally {
+      setFeedSubmitting(false);
+    }
+  };
+
+  // Excluir Post do Feed
+  const handleDeletePost = async (postId) => {
+    if (!window.confirm('Deseja excluir esta publicação do Feed dos alunos?')) return;
+    try {
+      await deleteFeedPost(postId);
+      setFeedPosts(prev => prev.filter(p => p.id !== postId));
+      setFeedback({
+        type: 'success',
+        title: 'Post Removido',
+        message: 'A publicação foi removida do Feed oficial.'
+      });
+    } catch (err) {
+      setFeedback({ type: 'error', title: 'Erro', message: err.message });
+    }
+  };
+
+  // Fixar / Desfixar Post do Feed
+  const handleTogglePinPost = async (postId, currentPinned) => {
+    try {
+      await togglePinFeedPost(postId, currentPinned);
+      setFeedPosts(prev => prev.map(p => p.id === postId ? { ...p, pinned: !currentPinned } : p));
+      setFeedback({
+        type: 'success',
+        title: currentPinned ? 'Publicação Desfixada' : 'Publicação Fixada no Topo 📌',
+        message: currentPinned ? 'O post agora segue a ordem cronológica.' : 'O post agora aparece no topo de todos os feeds.'
+      });
+    } catch (err) {
+      setFeedback({ type: 'error', title: 'Erro', message: err.message });
+    }
+  };
+
+  // Assistente de Redação com IA para o Feed
+  const handleAiFeedDescription = () => {
+    if (!feedInput) {
+      setFeedInput('🚀 Sejam bem-vindos à FACOM TechWeek 2026! Não percam as palestras do dia, visitem os estandes de patrocinadores e participem dos sorteios no app.');
+    } else {
+      setFeedInput(`📢 COMUNICADO OFICIAL FACOM TECHWEEK:\n\n${feedInput.trim()}\n\nContamos com a presença de todos! 🚀 #FACOMTechWeek2026`);
+    }
+    setFeedback({
+      type: 'success',
+      title: 'Assistente TechWeek ✨',
+      message: 'Texto formatado para máxima atenção dos alunos!'
+    });
+  };
 
   // Atualiza linhas de data conforme duração escolhida
   const handleDurationChange = (newDuration) => {
@@ -513,7 +647,7 @@ export default function Admin() {
               Painel Admin TechWeek
             </h1>
             <p style={{ fontSize: '0.82rem', color: '#94A3B8', margin: 0 }}>
-              Gestão da programação, palestrantes e credenciamento oficial.
+              Gestão da programação, feed de avisos, palestrantes e credenciamento oficial.
             </p>
           </div>
 
@@ -603,8 +737,18 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Direita: Ações, Perfil e App Aluno */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {/* Direita: Ações Rápidas, Envio de Feed, Perfil */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          {/* Botão de Envio Rápido no Feed */}
+          <button
+            type="button"
+            onClick={() => setActiveMenu('feed')}
+            style={{ background: 'linear-gradient(135deg, #0284C7, #38BDF8)', color: '#FFFFFF', border: 'none', borderRadius: '10px', padding: '7px 14px', fontSize: '0.80rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 10px rgba(56, 189, 248, 0.3)' }}
+          >
+            <MessageSquare size={14} />
+            <span>Mandar no Feed</span>
+          </button>
+
           <button
             type="button"
             onClick={() => navigate('/')}
@@ -715,6 +859,35 @@ export default function Admin() {
           >
             <CreditCard size={17} color={activeMenu === 'vendas' ? '#38BDF8' : '#64748B'} />
             <span>Sympla & Vendas</span>
+          </button>
+
+          {/* ITEM FEED & CHAT OFICIAL */}
+          <button
+            type="button"
+            onClick={() => setActiveMenu('feed')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 18px',
+              border: 'none',
+              backgroundColor: activeMenu === 'feed' ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+              borderLeft: activeMenu === 'feed' ? '3px solid #38BDF8' : '3px solid transparent',
+              color: activeMenu === 'feed' ? '#38BDF8' : '#94A3B8',
+              fontWeight: activeMenu === 'feed' ? 700 : 500,
+              fontSize: '0.86rem',
+              cursor: 'pointer',
+              textAlign: 'left',
+              width: '100%'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <MessageSquare size={17} color={activeMenu === 'feed' ? '#38BDF8' : '#64748B'} />
+              <span>Feed & Avisos</span>
+            </div>
+            <span style={{ fontSize: '0.68rem', backgroundColor: activeMenu === 'feed' ? '#38BDF8' : '#1E293B', color: activeMenu === 'feed' ? '#0F172A' : '#38BDF8', padding: '1px 6px', borderRadius: '10px', fontWeight: 800 }}>
+              {feedPosts.length}
+            </span>
           </button>
 
           {/* Seção PRÉ-EVENTO */}
@@ -885,6 +1058,402 @@ export default function Admin() {
 
         {/* 3. ÁREA DE CONTEÚDO PRINCIPAL TECHWEEK */}
         <main style={{ flex: 1, padding: '36px 40px', overflowY: 'auto', backgroundColor: '#070B19' }}>
+          {/* SE MENU === 'feed' (MANDAR MENSAGEM NO CHAT / FEED) */}
+          {activeMenu === 'feed' && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.75rem', fontWeight: 800, color: '#F8FAFC', margin: 0 }}>
+                      Feed Oficial & Transmissão de Mensagens
+                    </h1>
+                    <span style={{ fontSize: '0.72rem', backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', padding: '3px 10px', borderRadius: '12px', fontWeight: 700, border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                      TEMPO REAL
+                    </span>
+                  </div>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#94A3B8' }}>
+                    Publique comunicados oficiais no Feed dos alunos e dispare notificações push nos celulares da comunidade.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/feed')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', border: '1px solid #1E293B', backgroundColor: '#0F172A', color: '#94A3B8', fontSize: '0.84rem', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    <Eye size={15} color="#38BDF8" />
+                    <span>Ver Feed do Aluno</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Indicadores Rápidos */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '16px', padding: '18px' }}>
+                  <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#38BDF8' }}>TOTAL DE POSTS</span>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#F8FAFC', margin: '4px 0 2px' }}>
+                    {feedPosts.length}
+                  </div>
+                  <span style={{ fontSize: '0.74rem', color: '#94A3B8' }}>Publicações ativas</span>
+                </div>
+
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '16px', padding: '18px' }}>
+                  <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#C084FC' }}>POSTS FIXADOS</span>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#C084FC', margin: '4px 0 2px' }}>
+                    {feedPosts.filter(p => p.pinned).length}
+                  </div>
+                  <span style={{ fontSize: '0.74rem', color: '#94A3B8' }}>Em destaque no topo</span>
+                </div>
+
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '16px', padding: '18px' }}>
+                  <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#F43F5E' }}>CURTIDAS RECEBIDAS</span>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#F43F5E', margin: '4px 0 2px' }}>
+                    {feedPosts.reduce((acc, p) => acc + (Array.isArray(p.likes) ? p.likes.length : 0), 0)}
+                  </div>
+                  <span style={{ fontSize: '0.74rem', color: '#94A3B8' }}>Engajamento dos alunos</span>
+                </div>
+
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '16px', padding: '18px' }}>
+                  <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#34D399' }}>ALCANCE ESTIMADO</span>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#34D399', margin: '4px 0 2px' }}>
+                    {Math.max(usersList.length, 142)}
+                  </div>
+                  <span style={{ fontSize: '0.74rem', color: '#94A3B8' }}>Dispositivos conectados</span>
+                </div>
+              </div>
+
+              {/* GRID: CONSOLE DE ENVIO (ESQUERDA) + FEED ATIVO (DIREITA) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 460px) 1fr', gap: '28px', alignItems: 'start' }}>
+                {/* Coluna Esquerda: Console de Mensagem / Chat */}
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '20px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Send size={18} color="#38BDF8" />
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#F8FAFC' }}>
+                        Nova Mensagem / Post
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAiFeedDescription}
+                      style={{ background: 'rgba(56, 189, 248, 0.10)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '12px', padding: '3px 8px', color: '#38BDF8', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <Sparkles size={12} />
+                      <span>Otimizar IA</span>
+                    </button>
+                  </div>
+
+                  {/* Canal de Destino */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#94A3B8', marginBottom: '8px' }}>
+                      ONDE PUBLICAR:
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setFeedChannel('feed')}
+                        style={{
+                          padding: '8px 6px',
+                          borderRadius: '8px',
+                          border: feedChannel === 'feed' ? '1px solid #38BDF8' : '1px solid #1E293B',
+                          backgroundColor: feedChannel === 'feed' ? 'rgba(56, 189, 248, 0.15)' : '#090E21',
+                          color: feedChannel === 'feed' ? '#38BDF8' : '#94A3B8',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Apenas Feed
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFeedChannel('broadcast')}
+                        style={{
+                          padding: '8px 6px',
+                          borderRadius: '8px',
+                          border: feedChannel === 'broadcast' ? '1px solid #38BDF8' : '1px solid #1E293B',
+                          backgroundColor: feedChannel === 'broadcast' ? 'rgba(56, 189, 248, 0.15)' : '#090E21',
+                          color: feedChannel === 'broadcast' ? '#38BDF8' : '#94A3B8',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Sino / Push
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFeedChannel('both')}
+                        style={{
+                          padding: '8px 6px',
+                          borderRadius: '8px',
+                          border: feedChannel === 'both' ? '1px solid #38BDF8' : '1px solid #1E293B',
+                          backgroundColor: feedChannel === 'both' ? 'rgba(56, 189, 248, 0.15)' : '#090E21',
+                          color: feedChannel === 'both' ? '#38BDF8' : '#94A3B8',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ⚡ Feed + Push
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Modelos Rápidos com 1 clique */}
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#94A3B8', marginBottom: '6px' }}>
+                      MODELOS RÁPIDOS (1 CLIQUE):
+                    </label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {FEED_TEMPLATES.map((tpl, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setFeedInput(tpl.text)}
+                          style={{
+                            padding: '4px 9px',
+                            borderRadius: '12px',
+                            border: '1px solid #1E293B',
+                            backgroundColor: '#090E21',
+                            color: '#F8FAFC',
+                            fontSize: '0.72rem',
+                            cursor: 'pointer',
+                            textAlign: 'left'
+                          }}
+                        >
+                          {tpl.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Campo de Texto */}
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#94A3B8', marginBottom: '6px' }}>
+                      MENSAGEM DO COMUNICADO
+                    </label>
+                    <textarea
+                      rows={5}
+                      required
+                      placeholder="Escreva a mensagem para todos os participantes da TechWeek..."
+                      value={feedInput}
+                      onChange={(e) => setFeedInput(e.target.value)}
+                      style={{ width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: '#090E21', border: '1px solid #1E293B', color: '#F8FAFC', fontSize: '0.88rem', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.5 }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                      <span style={{ fontSize: '0.70rem', color: '#64748B' }}>{feedInput.length} caracteres</span>
+                    </div>
+                  </div>
+
+                  {/* Anexo de Imagem Opcional */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#94A3B8', marginBottom: '6px' }}>
+                      URL DE IMAGEM OU BANNER (OPCIONAL)
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <ImageIcon size={15} color="#64748B" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                      <input
+                        type="url"
+                        placeholder="https://exemplo.com/banner-palestra.jpg"
+                        value={feedImageUrl}
+                        onChange={(e) => setFeedImageUrl(e.target.value)}
+                        style={{ width: '100%', padding: '10px 12px 10px 34px', borderRadius: '10px', backgroundColor: '#090E21', border: '1px solid #1E293B', color: '#F8FAFC', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Checkbox Fixar no Topo */}
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.80rem', color: '#94A3B8', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={feedIsPinned}
+                        onChange={(e) => setFeedIsPinned(e.target.checked)}
+                      />
+                      <span>Fixar esta publicação no topo do Feed</span>
+                    </label>
+                  </div>
+
+                  {/* Botão de Envio */}
+                  <button
+                    type="button"
+                    onClick={handlePublishFeed}
+                    disabled={!feedInput.trim() || feedSubmitting}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      background: !feedInput.trim() || feedSubmitting ? '#1E293B' : 'linear-gradient(135deg, #0284C7, #38BDF8)',
+                      color: !feedInput.trim() || feedSubmitting ? '#64748B' : '#FFFFFF',
+                      fontSize: '0.90rem',
+                      fontWeight: 700,
+                      cursor: !feedInput.trim() || feedSubmitting ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: !feedInput.trim() || feedSubmitting ? 'none' : '0 4px 14px rgba(56, 189, 248, 0.35)'
+                    }}
+                  >
+                    {feedSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                    <span>{feedSubmitting ? 'Enviando ao Feed...' : 'Transmitir Mensagem Agora'}</span>
+                  </button>
+                </div>
+
+                {/* Coluna Direita: Publicações Ativas no Feed com Gestão */}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#F8FAFC' }}>
+                      Feed em Tempo Real ({feedPosts.length})
+                    </h3>
+
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setFeedFilter('ALL')}
+                        style={{ padding: '4px 10px', borderRadius: '8px', border: '1px solid #1E293B', backgroundColor: feedFilter === 'ALL' ? 'rgba(56, 189, 248, 0.15)' : '#0F172A', color: feedFilter === 'ALL' ? '#38BDF8' : '#94A3B8', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        Todos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFeedFilter('PINNED')}
+                        style={{ padding: '4px 10px', borderRadius: '8px', border: '1px solid #1E293B', backgroundColor: feedFilter === 'PINNED' ? 'rgba(56, 189, 248, 0.15)' : '#0F172A', color: feedFilter === 'PINNED' ? '#38BDF8' : '#94A3B8', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        Fixados 📌
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {feedPosts
+                      .filter(p => feedFilter === 'ALL' || (feedFilter === 'PINNED' && p.pinned))
+                      .map((post) => (
+                        <div
+                          key={post.id}
+                          style={{
+                            backgroundColor: '#0F172A',
+                            border: post.pinned ? '1px solid #38BDF8' : '1px solid #1E293B',
+                            borderRadius: '16px',
+                            padding: '20px',
+                            boxShadow: post.pinned ? '0 0 20px rgba(56, 189, 248, 0.15)' : 'none',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          {/* Topo do Card do Post */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <img
+                                src={post.authorAvatar || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80'}
+                                alt={post.author}
+                                style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #1E293B' }}
+                              />
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontSize: '0.90rem', fontWeight: 700, color: '#F8FAFC' }}>
+                                    {post.author}
+                                  </span>
+                                  {post.authorRole === 'ORGANIZATION' && (
+                                    <span style={{ fontSize: '0.65rem', backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', padding: '1px 6px', borderRadius: '6px', fontWeight: 800 }}>
+                                      OFICIAL
+                                    </span>
+                                  )}
+                                  {post.authorRole === 'SPONSOR' && (
+                                    <span style={{ fontSize: '0.65rem', backgroundColor: 'rgba(251, 191, 36, 0.15)', color: '#FBBF24', padding: '1px 6px', borderRadius: '6px', fontWeight: 800 }}>
+                                      PATROCINADOR
+                                    </span>
+                                  )}
+                                </div>
+                                <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                  {post.formattedTime || (post.createdAt ? new Date(post.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Hoje')}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Ações do Admin sobre o Post */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePinPost(post.id, post.pinned)}
+                                title={post.pinned ? 'Desafixar do topo' : 'Fixar no topo'}
+                                style={{
+                                  padding: '6px',
+                                  borderRadius: '8px',
+                                  border: '1px solid #1E293B',
+                                  backgroundColor: post.pinned ? 'rgba(56, 189, 248, 0.2)' : '#090E21',
+                                  color: post.pinned ? '#38BDF8' : '#64748B',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <Pin size={15} />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePost(post.id)}
+                                title="Excluir do Feed"
+                                style={{
+                                  padding: '6px',
+                                  borderRadius: '8px',
+                                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                                  backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                                  color: '#EF4444',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Conteúdo */}
+                          <p style={{ margin: '0 0 12px', fontSize: '0.88rem', color: '#F8FAFC', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
+                            {post.content}
+                          </p>
+
+                          {/* Imagem (se houver) */}
+                          {post.imageUrl && (
+                            <div style={{ marginBottom: '14px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #1E293B', maxHeight: '280px' }}>
+                              <img
+                                src={post.imageUrl}
+                                alt="Mídia do Post"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                              />
+                            </div>
+                          )}
+
+                          {/* Rodapé do Post (Engajamento) */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1E293B', paddingTop: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#F43F5E', fontSize: '0.80rem', fontWeight: 700 }}>
+                                <Heart size={15} fill="#F43F5E" />
+                                <span>{Array.isArray(post.likes) ? post.likes.length : 0} curtidas</span>
+                              </div>
+
+                              {post.pinned && (
+                                <span style={{ fontSize: '0.72rem', color: '#38BDF8', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}>
+                                  <Pin size={12} /> Fixado no topo
+                                </span>
+                              )}
+                            </div>
+
+                            <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                              ID: {post.id}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* SE MENU === 'programacao' */}
           {activeMenu === 'programacao' && (
             <div>
@@ -1499,11 +2068,10 @@ export default function Admin() {
         </main>
       </div>
 
-      {/* 4. MODAL ADICIONAR ATIVIDADE NA ID DA TECHWEEK */}
+      {/* 4. MODAL ADICIONAR ATIVIDADE */}
       {isActivityModalOpen && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(3, 7, 18, 0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
           <div style={{ width: '100%', maxWidth: '640px', maxHeight: '90vh', backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '20px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.8)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {/* Header Dark Tech */}
             <div style={{ background: 'linear-gradient(135deg, #0F172A, #1E293B)', borderBottom: '1px solid #1E293B', padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#F8FAFC' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(56, 189, 248, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38BDF8' }}>
@@ -1522,9 +2090,7 @@ export default function Admin() {
               </button>
             </div>
 
-            {/* Formulário */}
             <form onSubmit={handleSaveActivity} style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              {/* Título */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#94A3B8', marginBottom: '6px' }}>Título</label>
                 <input
@@ -1537,7 +2103,6 @@ export default function Admin() {
                 />
               </div>
 
-              {/* Descrição com Assistente */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#94A3B8' }}>Descrição</label>
@@ -1559,7 +2124,6 @@ export default function Admin() {
                 />
               </div>
 
-              {/* Linha: Tipo (+ Tipo) e Inscrição */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#94A3B8', marginBottom: '6px' }}>Tipo</label>
@@ -1603,7 +2167,6 @@ export default function Admin() {
                 </div>
               </div>
 
-              {/* Duração */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#94A3B8', marginBottom: '6px' }}>Duração</label>
                 <select
@@ -1617,7 +2180,6 @@ export default function Admin() {
                 </select>
               </div>
 
-              {/* Datas Dinâmicas */}
               {activityForm.duration !== 'A definir' && (
                 <div style={{ backgroundColor: '#090E21', padding: '14px', borderRadius: '12px', border: '1px solid #1E293B' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '10px', marginBottom: '8px' }}>
@@ -1671,7 +2233,6 @@ export default function Admin() {
                 </div>
               )}
 
-              {/* Convidados (+ Convidado) */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#94A3B8', marginBottom: '6px' }}>Convidados (Palestrantes)</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -1708,7 +2269,6 @@ export default function Admin() {
                 </div>
               </div>
 
-              {/* Materiais de apoio */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>
                   <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#94A3B8' }}>Materiais de apoio</label>
@@ -1724,7 +2284,6 @@ export default function Admin() {
                 </button>
               </div>
 
-              {/* Link Expansível */}
               <div>
                 <button
                   type="button"
@@ -1794,7 +2353,6 @@ export default function Admin() {
                 )}
               </div>
 
-              {/* Footer do Modal */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid #1E293B', paddingTop: '18px', marginTop: '8px' }}>
                 <button
                   type="button"
@@ -1816,7 +2374,7 @@ export default function Admin() {
         </div>
       )}
 
-      {/* 5. MODAL ADICIONAR CONVIDADO NA ID DA TECHWEEK */}
+      {/* 5. MODAL ADICIONAR CONVIDADO */}
       {isGuestModalOpen && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(3, 7, 18, 0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
           <div style={{ width: '100%', maxWidth: '540px', maxHeight: '90vh', backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '20px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.8)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
