@@ -18,37 +18,82 @@ import { getCachedUserProfile } from './userService';
  */
 export const DEFAULT_ACTIVITIES = [
   {
-    id: 'palestra_abertura',
-    title: 'Palestra de Abertura: O Futuro da Computação e IA',
-    description: 'Boas-vindas oficiais e palestra magna sobre as principais tendências tecnológicas.',
-    speaker: 'Comissão Organizadora & Convidados',
+    id: 'act_1588971',
+    number: '1588971',
+    title: 'Workshoop',
+    description: 'Imersão prática com ferramentas de desenvolvimento moderno e arquitetura de software.',
+    speaker: 'Samuel Amorim',
+    speakerRole: 'Tech Lead',
+    type: 'curso',
+    day: '21/10',
+    date: '2026-10-21',
+    time: '14:00',
+    endTime: '15:00',
+    schedule: [
+      { date: '21 de out de 2026', time: '14:00-15:00', startTime: '14:00', endTime: '15:00' }
+    ],
+    duration: 'Um dia',
+    location: 'Laboratório 1 - FACOM',
+    vagas_disponiveis: 50,
+    vagas_totais: 50,
+    total_inscritos: 0,
+    total_espera: 0,
+    points: 25,
+    registrationType: 'Gratuita',
+    value: 'Grátis',
+    attendanceMode: 'SELF_SCAN'
+  },
+  {
+    id: 'act_1589102',
+    number: '1589102',
+    title: 'DACOMP - Mini Curso',
+    description: 'Mini curso intensivo oferecido pelo DACOMP com tópicos avançados de computação.',
+    speaker: 'Dra. Aline Souza',
+    speakerRole: 'Professora UFU',
+    type: 'palestra',
+    day: '21/10',
+    date: '2026-10-21',
+    time: '15:00',
+    endTime: '18:00',
+    schedule: [
+      { date: '21 de out de 2026', time: '15:00-18:00', startTime: '15:00', endTime: '18:00' },
+      { date: '23 de out de 2026', time: '14:00-15:00', startTime: '14:00', endTime: '15:00' }
+    ],
+    duration: 'Dois dias',
+    location: 'Sala 5R',
+    vagas_disponiveis: 199,
+    vagas_totais: 200,
+    total_inscritos: 1,
+    total_espera: 0,
+    points: 30,
+    registrationType: 'Gratuita',
+    value: 'Grátis',
+    attendanceMode: 'SELF_SCAN'
+  },
+  {
+    id: 'act_1588972',
+    number: '1588972',
+    title: 'Palestra Mesa Abertura',
+    description: 'Mesa redonda oficial de abertura da FACOM TechWeek com convidados do mercado e academia.',
+    speaker: 'Comissão Organizadora',
+    speakerRole: 'Coordenação FACOM',
     type: 'palestra',
     day: '21/10',
     date: '2026-10-21',
     time: '19:00',
-    location: 'Anfiteatro principal',
-    vagas_disponiveis: 120,
-    vagas_totais: 150,
-    total_inscritos: 30,
+    endTime: '21:00',
+    schedule: [
+      { date: 'Horário a definir', time: '', startTime: '', endTime: '' }
+    ],
+    duration: 'A definir',
+    location: 'Anfiteatro FACOM',
+    vagas_disponiveis: 999,
+    vagas_totais: 999,
+    total_inscritos: 0,
     total_espera: 0,
     points: 20,
-    attendanceMode: 'SELF_SCAN'
-  },
-  {
-    id: 'palestra_samuel_amorim',
-    title: 'Palestra: Dev que não aparece, não cresce',
-    description: 'Como construir sua marca técnica, portfólio de impacto e se destacar no mercado.',
-    speaker: 'Samuel Amorim',
-    type: 'palestra',
-    day: '21/10',
-    date: '2026-10-21',
-    time: '20:00',
-    location: 'Sala 5R',
-    vagas_disponiveis: 50,
-    vagas_totais: 60,
-    total_inscritos: 10,
-    total_espera: 0,
-    points: 20,
+    registrationType: 'Não requer inscrição',
+    value: 'Grátis',
     attendanceMode: 'SELF_SCAN'
   },
   {
@@ -681,23 +726,37 @@ function formatDateToDay(dateStr) {
 export async function createActivity(activityData) {
   const id = activityData.id || `act_${Date.now()}`;
   const docRef = doc(db, 'activities', id);
-  const vagasTotais = Number(activityData.vagas_totais || 100);
+  const vagasTotais = Number(activityData.vagas_totais || activityData.capacity || 100);
   const inscritos = Number(activityData.total_inscritos || 0);
+  const generatedNumber = activityData.number || String(Math.floor(1588000 + Math.random() * 9999));
 
   const payload = {
     id,
+    number: generatedNumber,
     title: activityData.title || '',
     description: activityData.description || '',
     speaker: activityData.speaker || '',
     speakerRole: activityData.speakerRole || '',
     speakerPhoto: activityData.speakerPhoto || '',
     speakerBio: activityData.speakerBio || '',
+    speakerEmail: activityData.speakerEmail || '',
+    speakerId: activityData.speakerId || '',
     type: activityData.type || 'palestra',
+    registrationType: activityData.registrationType || 'Não requer inscrição',
+    duration: activityData.duration || 'Um dia',
+    schedule: Array.isArray(activityData.schedule) && activityData.schedule.length > 0 
+      ? activityData.schedule 
+      : [{ 
+          date: activityData.date || '2026-10-21', 
+          day: activityData.day || '21/10', 
+          time: activityData.time || '14:00', 
+          endTime: activityData.endTime || '15:30' 
+        }],
     day: activityData.day || '21/10',
     date: activityData.date || '2026-10-21',
     time: activityData.time || '14:00',
     endTime: activityData.endTime || '15:30',
-    location: activityData.location || 'Auditório FACOM',
+    location: activityData.location || 'Anfiteatro FACOM',
     vagas_totais: vagasTotais,
     vagas_disponiveis: Math.max(0, vagasTotais - inscritos),
     total_inscritos: inscritos,
@@ -705,6 +764,9 @@ export async function createActivity(activityData) {
     points: Number(activityData.points || 20),
     tags: Array.isArray(activityData.tags) ? activityData.tags : (activityData.tags ? String(activityData.tags).split(',').map(t => t.trim()) : []),
     attendanceMode: activityData.attendanceMode || 'SELF_SCAN',
+    materials: Array.isArray(activityData.materials) ? activityData.materials : [],
+    hidden: Boolean(activityData.hidden),
+    value: activityData.value || 'Grátis',
     createdAt: activityData.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -729,6 +791,154 @@ export async function deleteActivity(id) {
   } catch (err) {
     console.warn('Erro ao deletar atividade no Firestore:', err);
     return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Convidados padrão (Speakers) para a TechWeek
+ */
+export const DEFAULT_SPEAKERS = [
+  {
+    id: 'spk_1',
+    name: 'Samuel Amorim',
+    email: 'sam03amorim@gmail.com',
+    role: 'Engenheiro de Software & Fundador',
+    institution: 'TechWeek / Sistemas DACOMP',
+    bio: 'Especialista em arquiteturas modernas, React e ecossistema Firebase.',
+    photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+    socialLinks: ['https://linkedin.com/in/samuelamorim', 'https://github.com/samuelamorim'],
+    inviteStatus: 'Aceito'
+  },
+  {
+    id: 'spk_2',
+    name: 'Dra. Aline Souza',
+    email: 'aline.souza@ufu.br',
+    role: 'Professora e Pesquisadora em IA',
+    institution: 'FACOM - UFU',
+    bio: 'Pesquisadora em Inteligência Artificial Generativa e Sistemas Multi-Agentes.',
+    photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
+    socialLinks: ['https://linkedin.com'],
+    inviteStatus: 'Aceito'
+  },
+  {
+    id: 'spk_3',
+    name: 'Lucas Mendes',
+    email: 'lucas.mendes@cloudtech.io',
+    role: 'Tech Lead Cloud & DevOps',
+    institution: 'CloudTech Soluções',
+    bio: 'Atua há mais de 8 anos liderando migrações cloud e arquiteturas orientadas a eventos.',
+    photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
+    socialLinks: ['https://linkedin.com'],
+    inviteStatus: 'Aceito'
+  }
+];
+
+/**
+ * Escuta convidados/palestrantes em tempo real.
+ */
+export function subscribeToSpeakers(callback) {
+  try {
+    const q = collection(db, 'speakers');
+    return onSnapshot(q, (snapshot) => {
+      const list = [];
+      snapshot.forEach(docSnap => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      callback(list.length > 0 ? list : DEFAULT_SPEAKERS);
+    }, (_err) => {
+      callback(DEFAULT_SPEAKERS);
+    });
+  } catch (_e) {
+    callback(DEFAULT_SPEAKERS);
+    return () => {};
+  }
+}
+
+/**
+ * Cria ou atualiza um convidado no Firestore.
+ */
+export async function createSpeaker(speakerData) {
+  const id = speakerData.id || `spk_${Date.now()}`;
+  const docRef = doc(db, 'speakers', id);
+  const payload = {
+    id,
+    name: speakerData.name || '',
+    email: speakerData.email || '',
+    role: speakerData.role || speakerData.institution || '',
+    institution: speakerData.institution || '',
+    bio: speakerData.bio || '',
+    photo: speakerData.photo || '',
+    socialLinks: Array.isArray(speakerData.socialLinks) ? speakerData.socialLinks : [],
+    inviteViaEmail: Boolean(speakerData.inviteViaEmail),
+    inviteStatus: speakerData.inviteStatus || 'Aceito',
+    createdAt: speakerData.createdAt || new Date().toISOString()
+  };
+
+  try {
+    await setDoc(docRef, payload, { merge: true });
+    return { success: true, speaker: payload };
+  } catch (err) {
+    console.warn('Erro ao salvar speaker no Firestore:', err);
+    return { success: true, speaker: payload };
+  }
+}
+
+/**
+ * Remove um convidado do Firestore.
+ */
+export async function deleteSpeaker(id) {
+  try {
+    const docRef = doc(db, 'speakers', id);
+    await deleteDoc(docRef);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Locais padrão (Venues)
+ */
+export const DEFAULT_LOCATIONS = [
+  { id: 'loc_1', name: 'Anfiteatro FACOM', capacity: 150, description: 'Auditório principal bloco 1B' },
+  { id: 'loc_2', name: 'Sala 5R', capacity: 60, description: 'Sala de palestras técnicas' },
+  { id: 'loc_3', name: 'Laboratório 1 - FACOM', capacity: 30, description: 'Lab com 30 computadores' },
+  { id: 'loc_4', name: 'Laboratório 2 - FACOM', capacity: 25, description: 'Lab de IA e Sistemas' },
+  { id: 'loc_5', name: 'Hall Central de Estandes', capacity: 200, description: 'Área de networking' }
+];
+
+export function subscribeToLocations(callback) {
+  try {
+    const q = collection(db, 'locations');
+    return onSnapshot(q, (snapshot) => {
+      const list = [];
+      snapshot.forEach(docSnap => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      callback(list.length > 0 ? list : DEFAULT_LOCATIONS);
+    }, (_err) => {
+      callback(DEFAULT_LOCATIONS);
+    });
+  } catch (_e) {
+    callback(DEFAULT_LOCATIONS);
+    return () => {};
+  }
+}
+
+export async function createLocation(locData) {
+  const id = locData.id || `loc_${Date.now()}`;
+  const docRef = doc(db, 'locations', id);
+  const payload = {
+    id,
+    name: locData.name || '',
+    capacity: Number(locData.capacity || 100),
+    description: locData.description || ''
+  };
+  try {
+    await setDoc(docRef, payload, { merge: true });
+    return { success: true, location: payload };
+  } catch (err) {
+    return { success: true, location: payload };
   }
 }
 
