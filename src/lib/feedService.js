@@ -83,7 +83,19 @@ export const DEFAULT_FEED_POSTS = [
 ];
 
 /**
- * Faz upload de foto ou vídeo para o Firebase Storage com fallback resiliente.
+ * Converte um arquivo em Data URL (Base64) compartilhável entre todos os dispositivos.
+ */
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (e) => reject(e);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Faz upload de foto ou vídeo para o Firebase Storage com fallback resiliente para Data URL compartilhável.
  */
 export async function uploadFeedMedia(file) {
   if (!file) throw new Error('Nenhum arquivo de mídia fornecido.');
@@ -111,9 +123,9 @@ export async function uploadFeedMedia(file) {
       return await getDownloadURL(storageRef);
     })();
 
-    // Timeout estendido para 120s para acomodar uploads pesados
+    // Timeout de 45s para upload no Storage
     const timeoutTask = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Tempo limite excedido no upload da mídia. Verifique sua conexão.')), 120000);
+      setTimeout(() => reject(new Error('Tempo limite excedido no upload do Storage.')), 45000);
     });
 
     const finalUrl = await Promise.race([uploadTask, timeoutTask]);
@@ -122,20 +134,20 @@ export async function uploadFeedMedia(file) {
       mediaType: isVideo ? 'video' : 'image'
     };
   } catch (err) {
-    console.warn('Storage indisponível ou conexão lenta. Convertendo via Data URL / ObjectURL:', err);
-    if (isImage && file.size < 20 * 1024 * 1024) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve({ url: reader.result, mediaType: 'image' });
-        reader.onerror = (e) => reject(e);
-        reader.readAsDataURL(file);
-      });
+    console.warn('Firebase Storage offline ou não configurado. Convertendo mídia para Data URL universal:', err);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      return {
+        url: dataUrl,
+        mediaType: isVideo ? 'video' : 'image'
+      };
+    } catch (_readErr) {
+      const objectUrl = URL.createObjectURL(file);
+      return {
+        url: objectUrl,
+        mediaType: isVideo ? 'video' : 'image'
+      };
     }
-    const objectUrl = URL.createObjectURL(file);
-    return {
-      url: objectUrl,
-      mediaType: isVideo ? 'video' : 'image'
-    };
   }
 }
 
@@ -216,7 +228,8 @@ export function subscribeToFeedPosts(callback) {
   let firestorePosts = [];
 
   const notify = () => {
-    const merged = mergePosts(firestorePosts.length > 0 ? firestorePosts : DEFAULT_FEED_POSTS);
+    const basePosts = firestorePosts.length > 0 ? firestorePosts : DEFAULT_FEED_POSTS;
+    const merged = mergePosts(basePosts);
     callback(merged);
   };
 
@@ -229,20 +242,11 @@ export function subscribeToFeedPosts(callback) {
   }
 
   try {
-    const q = query(
-      collection(db, 'feed_posts'),
-      orderBy('createdAt', 'desc')
-    );
+    const feedCol = collection(db, 'feed_posts');
 
     const unsubFirestore = onSnapshot(
-      q,
+      feedCol,
       (snapshot) => {
-        if (snapshot.empty) {
-          firestorePosts = [];
-          notify();
-          return;
-        }
-
         firestorePosts = snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
           const mediaType = data.mediaType || (data.videoUrl ? 'video' : (data.imageUrl ? 'image' : ''));
@@ -263,10 +267,7 @@ export function subscribeToFeedPosts(callback) {
         notify();
       },
       (error) => {
-        if (error?.code !== 'permission-denied') {
-          console.warn('Aviso: Erro ao escutar feed_posts no Firestore, utilizando fallback:', error);
-        }
-        firestorePosts = [];
+        console.warn('Aviso: Erro ao escutar feed_posts no Firestore:', error);
         notify();
       }
     );
@@ -278,10 +279,7 @@ export function subscribeToFeedPosts(callback) {
       if (typeof unsubFirestore === 'function') unsubFirestore();
     };
   } catch (err) {
-    if (err?.code !== 'permission-denied') {
-      console.warn('Aviso: Exceção ao conectar no Firestore para feed_posts:', err);
-    }
-    firestorePosts = [];
+    console.warn('Aviso: Exceção ao conectar no Firestore para feed_posts:', err);
     notify();
     return () => {
       if (typeof window !== 'undefined') {
@@ -299,25 +297,25 @@ export async function getLatestFeedPost() {
   if (localPosts.length > 0) return localPosts[0];
 
   try {
-    const q = query(
-      collection(db, 'feed_posts'),
-      orderBy('createdAt', 'desc'),
-      limit(1)
-    );
-    const snap = await getDocs(q);
+    const snap = await getDocs(collection(db, 'feed_posts'));
     if (!snap.empty) {
-      const docSnap = snap.docs[0];
-      const data = docSnap.data();
-      const mediaType = data.mediaType || (data.videoUrl ? 'video' : (data.imageUrl ? 'image' : ''));
-      return {
-        id: docSnap.id,
-        ...data,
-        imageUrl: data.imageUrl || (mediaType === 'image' ? data.mediaUrl : '') || '',
-        videoUrl: data.videoUrl || (mediaType === 'video' ? data.mediaUrl : '') || '',
-        mediaUrl: data.mediaUrl || data.videoUrl || data.imageUrl || '',
-        mediaType,
-        likes: Array.isArray(data.likes) ? data.likes : []
-      };
+      const posts = snap.docs.map((docSnap) => {
+        const data = docSnap.data();
+        const mediaType = data.mediaType || (data.videoUrl ? 'video' : (data.imageUrl ? 'image' : ''));
+        return {
+          id: docSnap.id,
+          ...data,
+          imageUrl: data.imageUrl || (mediaType === 'image' ? data.mediaUrl : '') || '',
+          videoUrl: data.videoUrl || (mediaType === 'video' ? data.mediaUrl : '') || '',
+          mediaUrl: data.mediaUrl || data.videoUrl || data.imageUrl || '',
+          mediaType,
+          likes: Array.isArray(data.likes) ? data.likes : [],
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString()
+        };
+      });
+
+      posts.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      return posts[0];
     }
   } catch (_e) {}
 
@@ -332,34 +330,28 @@ export async function createFeedPost(postData) {
   const nowIso = new Date().toISOString();
 
   const formattedPost = {
-    author: postData.author || 'Organização FACOM',
-    authorRole: postData.authorRole || 'ORGANIZATION',
-    authorAvatar: postData.authorAvatar || '',
-    content: postData.content,
-    imageUrl: postData.imageUrl || (mediaType === 'image' ? (postData.mediaUrl || '') : ''),
-    videoUrl: postData.videoUrl || (mediaType === 'video' ? (postData.mediaUrl || '') : ''),
-    mediaUrl: postData.mediaUrl || postData.videoUrl || postData.imageUrl || '',
-    mediaType: mediaType || '',
+    author: String(postData.author || 'Organização FACOM'),
+    authorRole: String(postData.authorRole || 'ORGANIZATION'),
+    authorAvatar: String(postData.authorAvatar || ''),
+    content: String(postData.content || '').trim(),
+    imageUrl: String(postData.imageUrl || (mediaType === 'image' ? (postData.mediaUrl || '') : '')),
+    videoUrl: String(postData.videoUrl || (mediaType === 'video' ? (postData.mediaUrl || '') : '')),
+    mediaUrl: String(postData.mediaUrl || postData.videoUrl || postData.imageUrl || ''),
+    mediaType: String(mediaType || ''),
     pinned: Boolean(postData.pinned),
     likes: [],
-    createdAt: nowIso,
-    formattedTime: 'Agora'
+    createdAt: nowIso
   };
 
   try {
-    const docRef = await addDoc(collection(db, 'feed_posts'), {
-      ...formattedPost,
-      createdAt: serverTimestamp()
-    });
+    const docRef = await addDoc(collection(db, 'feed_posts'), formattedPost);
     const finalPost = { ...formattedPost, id: docRef.id };
     saveLocalFeedPost(finalPost);
     return { success: true, id: docRef.id };
   } catch (err) {
-    console.warn('Firestore não respondeu ou rejeitou gravação. Salvando post localmente com fallback:', err);
-    const fallbackId = `local_post_${Date.now()}`;
-    const localPost = { ...formattedPost, id: fallbackId };
-    saveLocalFeedPost(localPost);
-    return { success: true, id: fallbackId };
+    console.error('Falha ao gravar no Firestore feed_posts:', err);
+    saveLocalFeedPost({ ...formattedPost, id: `local_post_${Date.now()}` });
+    throw new Error('Erro ao sincronizar com o banco de dados: ' + (err.message || 'Verifique sua conexão ou permissões.'));
   }
 }
 
