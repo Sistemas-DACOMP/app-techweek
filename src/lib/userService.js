@@ -38,7 +38,17 @@ export function getCachedUserProfile(uid) {
     const targetUid = uid || auth?.currentUser?.uid;
     if (targetUid) {
       const cached = localStorage.getItem(`facom_profile_${targetUid}`);
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const cleanEmail = (parsed.email || '').trim().toLowerCase();
+        if (cleanEmail === 'sam03amorim@gmail.com' || cleanEmail === 'admin@admin.com' || parsed.role === 'ADMIN') {
+          parsed.role = 'ADMIN';
+          parsed.participantType = 'Organizador';
+          parsed.participant_type = 'Organizador';
+          parsed.hasSymplaTicket = true;
+        }
+        return parsed;
+      }
     }
     // Procura em qualquer chave de perfil em cache caso o uid ainda não tenha sido emitido
     if (typeof localStorage !== 'undefined') {
@@ -46,7 +56,17 @@ export function getCachedUserProfile(uid) {
         const key = localStorage.key(i);
         if (key && key.startsWith('facom_profile_')) {
           const item = localStorage.getItem(key);
-          if (item) return JSON.parse(item);
+          if (item) {
+            const parsed = JSON.parse(item);
+            const cleanEmail = (parsed.email || '').trim().toLowerCase();
+            if (cleanEmail === 'sam03amorim@gmail.com' || cleanEmail === 'admin@admin.com' || parsed.role === 'ADMIN') {
+              parsed.role = 'ADMIN';
+              parsed.participantType = 'Organizador';
+              parsed.participant_type = 'Organizador';
+              parsed.hasSymplaTicket = true;
+            }
+            return parsed;
+          }
         }
       }
     }
@@ -63,21 +83,25 @@ export async function createUserProfile(uid, data) {
   const userRef = doc(db, 'users', uid);
   const now = serverTimestamp();
 
+  const cleanEmail = data.email ? data.email.trim().toLowerCase() : '';
+  const isAdminEmail = cleanEmail === 'sam03amorim@gmail.com' || cleanEmail === 'admin@admin.com' || data.role === 'ADMIN';
+
   const profileData = {
     uid,
-    email: data.email ? data.email.trim().toLowerCase() : '',
+    email: cleanEmail,
     firstName: data.firstName || '',
     lastName: data.lastName || '',
     username: data.username ? data.username.trim().toLowerCase() : '',
     phone: data.phone || '',
-    participantType: data.participantType || 'Aluno da UFU',
+    participantType: isAdminEmail ? 'Organizador' : (data.participantType || 'Aluno da UFU'),
+    participant_type: isAdminEmail ? 'Organizador' : (data.participantType || 'Aluno da UFU'),
     course: data.course || '',
     period: data.period ? Number(data.period) : null,
     linkedin: data.linkedin || '',
     instagram: data.instagram || '',
     avatarUrl: data.avatarUrl || null,
-    hasSymplaTicket: Boolean(data.hasSymplaTicket || data.symplaTicket),
-    role: data.role || 'PARTICIPANT',
+    hasSymplaTicket: isAdminEmail ? true : Boolean(data.hasSymplaTicket || data.symplaTicket),
+    role: isAdminEmail ? 'ADMIN' : (data.role || 'PARTICIPANT'),
     totalPoints: 0,
     pontuacaoTotal: 0,
     ticketId: data.ticketId || data.symplaTicket?.ticketNumber || null,
@@ -135,13 +159,19 @@ export async function getUserProfile(uid) {
 
     if (snap.exists()) {
       const data = snap.data();
+      const cleanEmail = (data.email || localData?.email || '').trim().toLowerCase();
+      const isAdminEmail = cleanEmail === 'sam03amorim@gmail.com' || cleanEmail === 'admin@admin.com' || data.role === 'ADMIN' || localData?.role === 'ADMIN';
+
       // Fusão segura: nunca substitui um avatarUrl ou symplaTicket preenchido localmente por null/indefinido do Firestore
       const merged = {
         ...localData,
         ...data,
+        role: isAdminEmail ? 'ADMIN' : (data.role || localData?.role || 'PARTICIPANT'),
+        participantType: isAdminEmail ? 'Organizador' : (data.participantType || localData?.participantType || 'Aluno da UFU'),
+        participant_type: isAdminEmail ? 'Organizador' : (data.participantType || localData?.participantType || 'Aluno da UFU'),
         avatarUrl: data.avatarUrl || data.photoURL || localData?.avatarUrl || null,
         symplaTicket: data.symplaTicket || localData?.symplaTicket || null,
-        hasSymplaTicket: !!(data.hasSymplaTicket || data.symplaTicket || localData?.hasSymplaTicket || localData?.symplaTicket)
+        hasSymplaTicket: isAdminEmail ? true : !!(data.hasSymplaTicket || data.symplaTicket || localData?.hasSymplaTicket || localData?.symplaTicket)
       };
       try {
         localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(merged));
@@ -151,6 +181,16 @@ export async function getUserProfile(uid) {
   } catch (err) {
     if (err?.code !== 'permission-denied') {
       console.warn('[userService] Aviso: Leitura do Firestore falhou, utilizando cache local:', err);
+    }
+  }
+
+  if (localData) {
+    const cleanEmail = (localData.email || '').trim().toLowerCase();
+    if (cleanEmail === 'sam03amorim@gmail.com' || cleanEmail === 'admin@admin.com' || localData.role === 'ADMIN') {
+      localData.role = 'ADMIN';
+      localData.participantType = 'Organizador';
+      localData.participant_type = 'Organizador';
+      localData.hasSymplaTicket = true;
     }
   }
 
