@@ -562,6 +562,23 @@ export async function updateUserRoleInFirestore(uid, newRole) {
   try {
     const userRef = doc(db, 'users', uid);
     const participantType = newRole === 'ADMIN' || newRole === 'STAFF' ? 'Organizador' : (newRole === 'SPONSOR' ? 'Patrocinador' : 'Aluno da UFU');
+    
+    // Atualiza imediatamente cache local do perfil
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const cachedKey = `facom_profile_${uid}`;
+        const currentCached = localStorage.getItem(cachedKey);
+        const parsed = currentCached ? JSON.parse(currentCached) : {};
+        localStorage.setItem(cachedKey, JSON.stringify({
+          ...parsed,
+          role: newRole,
+          participantType,
+          participant_type: participantType
+        }));
+        window.dispatchEvent(new Event('facom_profile_updated'));
+      }
+    } catch (_e) {}
+
     await updateDoc(userRef, {
       role: newRole,
       participantType,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Radio, 
@@ -8,31 +8,41 @@ import {
   Send, 
   Plus, 
   Image as ImageIcon, 
+  Video as VideoIcon,
   X, 
   CheckCircle2, 
   Building2, 
   Sparkles,
   ArrowLeft,
   Search,
-  MessageSquare
+  MessageSquare,
+  UploadCloud,
+  Loader2,
+  ShieldCheck,
+  Film
 } from 'lucide-react';
-import { subscribeToFeedPosts, createFeedPost, toggleLikeFeedPost, DEFAULT_FEED_POSTS } from '../lib/feedService';
+import { subscribeToFeedPosts, createFeedPost, toggleLikeFeedPost, uploadFeedMedia, DEFAULT_FEED_POSTS } from '../lib/feedService';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserProfile } from '../lib/userService';
+import { getUserProfile, getCachedUserProfile } from '../lib/userService';
 import logoTw from '../assets/logo-tw.png';
 
 export default function Feed() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const fileInputRef = useRef(null);
+
   const [posts, setPosts] = useState(DEFAULT_FEED_POSTS);
   const [selectedFilter, setSelectedFilter] = useState('ALL'); // 'ALL' | 'ORGANIZATION' | 'SPONSOR'
-  const [userProfile, setUserProfile] = useState(null);
+  const [userProfile, setUserProfile] = useState(() => getCachedUserProfile());
   const [likedPosts, setLikedPosts] = useState({});
 
   // Modal de Publicação
   const [isNewPostOpen, setIsNewPostOpen] = useState(false);
   const [newPostContent, setNewPostContent] = useState('');
   const [newPostImageUrl, setNewPostImageUrl] = useState('');
+  const [selectedMediaFile, setSelectedMediaFile] = useState(null);
+  const [mediaPreview, setMediaPreview] = useState(null); // { url, type: 'image' | 'video' }
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [isPublishing, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -42,6 +52,12 @@ export default function Feed() {
         if (p) setUserProfile(p);
       });
     }
+    const handleProfileUpdate = () => {
+      const p = getCachedUserProfile();
+      if (p) setUserProfile(p);
+    };
+    window.addEventListener('facom_profile_updated', handleProfileUpdate);
+    return () => window.removeEventListener('facom_profile_updated', handleProfileUpdate);
   }, [user?.uid]);
 
   // Escuta postagens em tempo real
@@ -54,11 +70,17 @@ export default function Feed() {
     };
   }, []);
 
+  const isAdminOrOrg = useMemo(() => {
+    const role = userProfile?.role || userProfile?.userRole || '';
+    const email = (userProfile?.email || user?.email || '').toLowerCase();
+    return role === 'ADMIN' || role === 'ORGANIZATION' || email === 'admin@admin.com' || email === 'sam03amorim@gmail.com';
+  }, [userProfile, user]);
+
   const canCreatePost = useMemo(() => {
     if (!userProfile) return true; // Permite para testes/demonstração
     const role = userProfile.role || userProfile.userRole || '';
-    return role === 'ADMIN' || role === 'ORGANIZATION' || role === 'SPONSOR';
-  }, [userProfile]);
+    return role === 'ADMIN' || role === 'ORGANIZATION' || role === 'SPONSOR' || isAdminOrOrg;
+  }, [userProfile, isAdminOrOrg]);
 
   const filteredPosts = useMemo(() => {
     return posts.filter((p) => {
@@ -110,32 +132,81 @@ export default function Feed() {
     }
   };
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isVideo = file.type.startsWith('video/');
+    const isImage = file.type.startsWith('image/');
+
+    if (!isVideo && !isImage) {
+      alert('Selecione um arquivo de foto ou vídeo válido.');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setSelectedMediaFile(file);
+    setMediaPreview({
+      url: previewUrl,
+      type: isVideo ? 'video' : 'image',
+      name: file.name
+    });
+    setNewPostImageUrl(''); // Limpa URL manual se escolheu arquivo
+  };
+
+  const handleRemoveMedia = () => {
+    setSelectedMediaFile(null);
+    if (mediaPreview?.url && mediaPreview.url.startsWith('blob:')) {
+      URL.revokeObjectURL(mediaPreview.url);
+    }
+    setMediaPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleCreatePost = async (e) => {
     e.preventDefault();
     if (!newPostContent.trim()) return;
 
     setIsSubmitting(true);
     try {
+      let finalMediaUrl = newPostImageUrl.trim();
+      let finalMediaType = finalMediaUrl ? 'image' : '';
+
+      // Upload do arquivo selecionado (foto ou vídeo)
+      if (selectedMediaFile) {
+        setIsUploadingMedia(true);
+        const uploadRes = await uploadFeedMedia(selectedMediaFile);
+        finalMediaUrl = uploadRes.url;
+        finalMediaType = uploadRes.mediaType;
+        setIsUploadingMedia(false);
+      }
+
       const isSponsor = userProfile?.role === 'SPONSOR';
       await createFeedPost({
         author: userProfile?.companyName || userProfile?.displayName || (isSponsor ? 'Patrocinador Oficial' : 'Organização FACOM'),
         authorRole: isSponsor ? 'SPONSOR' : 'ORGANIZATION',
         authorAvatar: userProfile?.avatarUrl || userProfile?.photoURL || '',
         content: newPostContent.trim(),
-        imageUrl: newPostImageUrl.trim(),
+        imageUrl: finalMediaType === 'image' ? finalMediaUrl : '',
+        videoUrl: finalMediaType === 'video' ? finalMediaUrl : '',
+        mediaUrl: finalMediaUrl,
+        mediaType: finalMediaType,
         pinned: false
       });
 
       setNewPostContent('');
       setNewPostImageUrl('');
+      handleRemoveMedia();
       setIsNewPostOpen(false);
       setToast('Publicação enviada com sucesso para o Feed!');
       setTimeout(() => setToast(null), 3500);
     } catch (err) {
-      setToast('Erro ao publicar post. Tente novamente.');
+      console.error(err);
+      setToast('Erro ao publicar: ' + (err.message || 'Tente novamente.'));
       setTimeout(() => setToast(null), 3500);
     } finally {
       setIsSubmitting(false);
+      setIsUploadingMedia(false);
     }
   };
 
@@ -174,7 +245,7 @@ export default function Feed() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '22px'
+          marginBottom: '20px'
         }}
       >
         <div>
@@ -199,34 +270,60 @@ export default function Feed() {
               fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
             }}
           >
-            Comunicados oficiais e novidades ao vivo
+            Comunicados oficiais, fotos e vídeos ao vivo
           </p>
         </div>
 
-        {canCreatePost && (
-          <button
-            type="button"
-            onClick={() => setIsNewPostOpen(true)}
-            style={{
-              backgroundColor: '#2563EB',
-              border: '1px solid #3B82F6',
-              color: '#FFFFFF',
-              borderRadius: '10px',
-              padding: '8px 12px',
-              fontSize: '0.78rem',
-              fontWeight: 700,
-              fontFamily: "'Inter', system-ui, sans-serif",
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)'
-            }}
-          >
-            <Plus size={16} strokeWidth={2.2} />
-            <span>Publicar</span>
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {isAdminOrOrg && (
+            <button
+              type="button"
+              onClick={() => navigate('/admin')}
+              title="Acessar Painel do Organizador"
+              style={{
+                backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                color: '#38BDF8',
+                borderRadius: '10px',
+                padding: '8px 10px',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                cursor: 'pointer'
+              }}
+            >
+              <ShieldCheck size={14} />
+              <span>Admin</span>
+            </button>
+          )}
+
+          {canCreatePost && (
+            <button
+              type="button"
+              onClick={() => setIsNewPostOpen(true)}
+              style={{
+                background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)',
+                border: '1px solid #38BDF8',
+                color: '#FFFFFF',
+                borderRadius: '10px',
+                padding: '8px 12px',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                fontFamily: "'Inter', system-ui, sans-serif",
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)'
+              }}
+            >
+              <Plus size={16} strokeWidth={2.2} />
+              <span>Publicar</span>
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Chips de Filtro */}
@@ -257,12 +354,13 @@ export default function Feed() {
                 fontWeight: 700,
                 padding: '7px 14px',
                 borderRadius: '999px',
-                backgroundColor: isActive ? '#2563EB' : '#0F141F',
-                border: isActive ? '1px solid #3B82F6' : '1px solid #1E293B',
+                backgroundColor: isActive ? '#0284C7' : '#0F141F',
+                border: isActive ? '1px solid #38BDF8' : '1px solid #1E293B',
                 color: isActive ? '#FFFFFF' : '#94A3B8',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease'
+                transition: 'all 0.15s ease',
+                boxShadow: isActive ? '0 0 10px rgba(56, 189, 248, 0.3)' : 'none'
               }}
             >
               {tab.label}
@@ -284,7 +382,7 @@ export default function Feed() {
               color: '#94A3B8'
             }}
           >
-            <MessageSquare size={32} color="#3B82F6" style={{ marginBottom: '10px' }} />
+            <MessageSquare size={32} color="#38BDF8" style={{ marginBottom: '10px' }} />
             <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600 }}>Nenhuma publicação nesta categoria ainda.</p>
           </div>
         ) : (
@@ -292,16 +390,18 @@ export default function Feed() {
             const isOrg = post.authorRole === 'ORGANIZATION';
             const likesCount = Array.isArray(post.likes) ? post.likes.length : 0;
             const isLiked = likedPosts[post.id] || (user?.uid && post.likes?.includes(user.uid));
+            const hasVideo = post.videoUrl || (post.mediaType === 'video' && post.mediaUrl);
+            const hasImage = post.imageUrl || (post.mediaType === 'image' && post.mediaUrl) || (!hasVideo && post.mediaUrl);
 
             return (
               <article
                 key={post.id}
                 style={{
                   backgroundColor: '#0F141F',
-                  border: post.pinned ? '1px solid rgba(59, 130, 246, 0.45)' : '1px solid #1E293B',
+                  border: post.pinned ? '1px solid rgba(56, 189, 248, 0.5)' : '1px solid #1E293B',
                   borderRadius: '16px',
                   padding: '16px',
-                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
+                  boxShadow: post.pinned ? '0 0 20px rgba(56, 189, 248, 0.15)' : '0 4px 16px rgba(0, 0, 0, 0.4)',
                   position: 'relative'
                 }}
               >
@@ -314,8 +414,9 @@ export default function Feed() {
                       gap: '4px',
                       fontSize: '0.68rem',
                       fontWeight: 700,
-                      color: '#60A5FA',
-                      backgroundColor: 'rgba(37, 99, 235, 0.15)',
+                      color: '#38BDF8',
+                      backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                      border: '1px solid rgba(56, 189, 248, 0.3)',
                       padding: '2px 8px',
                       borderRadius: '6px',
                       marginBottom: '10px',
@@ -344,7 +445,7 @@ export default function Feed() {
                         height: '40px',
                         borderRadius: '12px',
                         backgroundColor: '#07090E',
-                        border: isOrg ? '1px solid #3B82F6' : '1px solid #10B981',
+                        border: isOrg ? '1px solid #38BDF8' : '1px solid #10B981',
                         overflow: 'hidden',
                         display: 'flex',
                         alignItems: 'center',
@@ -376,7 +477,7 @@ export default function Feed() {
                           {post.author}
                         </h3>
                         {isOrg ? (
-                          <CheckCircle2 size={14} color="#3B82F6" strokeWidth={2.2} />
+                          <CheckCircle2 size={14} color="#38BDF8" strokeWidth={2.2} />
                         ) : (
                           <span
                             style={{
@@ -416,12 +517,35 @@ export default function Feed() {
                   {post.content}
                 </p>
 
-                {/* Imagem Anexada */}
-                {post.imageUrl && (
+                {/* MÍDIA: VÍDEO ANEXADO */}
+                {hasVideo && (
                   <div
                     style={{
                       width: '100%',
-                      maxHeight: '260px',
+                      borderRadius: '12px',
+                      overflow: 'hidden',
+                      marginBottom: '12px',
+                      border: '1px solid #1E293B',
+                      backgroundColor: '#07090E',
+                      boxShadow: '0 4px 15px rgba(0,0,0,0.4)'
+                    }}
+                  >
+                    <video
+                      controls
+                      playsInline
+                      preload="metadata"
+                      src={post.videoUrl || post.mediaUrl}
+                      style={{ width: '100%', maxHeight: '380px', display: 'block', backgroundColor: '#000000' }}
+                    />
+                  </div>
+                )}
+
+                {/* MÍDIA: IMAGEM ANEXADA */}
+                {!hasVideo && hasImage && (
+                  <div
+                    style={{
+                      width: '100%',
+                      maxHeight: '300px',
                       borderRadius: '12px',
                       overflow: 'hidden',
                       marginBottom: '12px',
@@ -430,7 +554,7 @@ export default function Feed() {
                     }}
                   >
                     <img
-                      src={post.imageUrl}
+                      src={post.imageUrl || post.mediaUrl}
                       alt="Anexo da publicação"
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
@@ -498,7 +622,7 @@ export default function Feed() {
         )}
       </div>
 
-      {/* Modal de Nova Publicação */}
+      {/* Modal de Nova Publicação com Upload de Foto & Vídeo */}
       {isNewPostOpen && (
         <div
           role="dialog"
@@ -519,7 +643,9 @@ export default function Feed() {
           <div
             style={{
               width: '100%',
-              maxWidth: '430px',
+              maxWidth: '460px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
               backgroundColor: '#0F141F',
               border: '1px solid #1E293B',
               borderRadius: '20px',
@@ -528,7 +654,7 @@ export default function Feed() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h3 style={{ fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif", fontSize: '1rem', fontWeight: 800, color: '#F8FAFC', margin: 0 }}>
+              <h3 style={{ fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif", fontSize: '1.05rem', fontWeight: 800, color: '#F8FAFC', margin: 0 }}>
                 Publicar no Feed
               </h3>
               <button
@@ -561,34 +687,152 @@ export default function Feed() {
                     fontSize: '0.84rem',
                     fontFamily: "'Inter', system-ui, sans-serif",
                     outline: 'none',
-                    resize: 'none'
+                    resize: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
 
+              {/* Botões de Upload de Foto e Vídeo */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>
-                  URL da Imagem (Opcional)
+                  Anexar Foto ou Vídeo
                 </label>
+
+                {/* Input escondido */}
                 <input
-                  type="url"
-                  placeholder="https://suaimagem.com/foto.jpg"
-                  value={newPostImageUrl}
-                  onChange={(e) => setNewPostImageUrl(e.target.value)}
-                  style={{
-                    width: '100%',
-                    backgroundColor: '#07090E',
-                    border: '1px solid #1E293B',
-                    borderRadius: '10px',
-                    padding: '10px 12px',
-                    color: '#F8FAFC',
-                    fontSize: '0.82rem',
-                    outline: 'none'
-                  }}
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
                 />
+
+                {!mediaPreview ? (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (fileInputRef.current) {
+                          fileInputRef.current.accept = 'image/*';
+                          fileInputRef.current.click();
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(56, 189, 248, 0.3)',
+                        backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                        color: '#38BDF8',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <ImageIcon size={15} />
+                      <span>Anexar Foto</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (fileInputRef.current) {
+                          fileInputRef.current.accept = 'video/*';
+                          fileInputRef.current.click();
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(192, 132, 252, 0.3)',
+                        backgroundColor: 'rgba(192, 132, 252, 0.08)',
+                        color: '#C084FC',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Film size={15} />
+                      <span>Anexar Vídeo</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', border: '1px solid #1E293B', backgroundColor: '#07090E', padding: '6px' }}>
+                    {mediaPreview.type === 'video' ? (
+                      <video
+                        controls
+                        src={mediaPreview.url}
+                        style={{ width: '100%', maxHeight: '180px', borderRadius: '6px', display: 'block' }}
+                      />
+                    ) : (
+                      <img
+                        src={mediaPreview.url}
+                        alt="Preview"
+                        style={{ width: '100%', maxHeight: '180px', objectFit: 'cover', borderRadius: '6px', display: 'block' }}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleRemoveMedia}
+                      style={{
+                        position: 'absolute',
+                        top: '12px',
+                        right: '12px',
+                        backgroundColor: 'rgba(0,0,0,0.75)',
+                        border: '1px solid #EF4444',
+                        color: '#EF4444',
+                        borderRadius: '50%',
+                        width: '24px',
+                        height: '24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+              {/* URL externa de fallback */}
+              {!mediaPreview && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.74rem', color: '#64748B', marginBottom: '4px' }}>
+                    Ou insira URL de imagem:
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://exemplo.com/banner.jpg"
+                    value={newPostImageUrl}
+                    onChange={(e) => setNewPostImageUrl(e.target.value)}
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#07090E',
+                      border: '1px solid #1E293B',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      color: '#F8FAFC',
+                      fontSize: '0.80rem',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
                 <button
                   type="button"
                   onClick={() => setIsNewPostOpen(false)}
@@ -608,13 +852,14 @@ export default function Feed() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isPublishing || !newPostContent.trim()}
+                  disabled={isPublishing || isUploadingMedia || !newPostContent.trim()}
                   style={{
                     flex: 1,
                     padding: '10px',
                     borderRadius: '10px',
-                    backgroundColor: '#2563EB',
-                    border: '1px solid #3B82F6',
+                    background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)',
+                    boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)',
+                    border: 'none',
                     color: '#FFFFFF',
                     fontSize: '0.82rem',
                     fontWeight: 700,
@@ -625,8 +870,17 @@ export default function Feed() {
                     gap: '6px'
                   }}
                 >
-                  <Send size={15} />
-                  <span>{isPublishing ? 'Publicando...' : 'Publicar Agora'}</span>
+                  {isPublishing || isUploadingMedia ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>{isUploadingMedia ? 'Enviando mídia...' : 'Publicando...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send size={15} />
+                      <span>Publicar Agora</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

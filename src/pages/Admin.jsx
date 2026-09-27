@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Home,
@@ -46,7 +46,9 @@ import {
   Edit,
   Pencil,
   Sparkles,
-  Zap
+  Zap,
+  User,
+  Film
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import logoTw from '../assets/logo-tw.png';
@@ -70,6 +72,7 @@ import {
   deleteFeedPost, 
   togglePinFeedPost,
   broadcastAnnouncement,
+  uploadFeedMedia,
   DEFAULT_FEED_POSTS 
 } from '../lib/feedService';
 import { subscribeToAllUsers, updateUserRoleInFirestore } from '../lib/userService';
@@ -166,9 +169,19 @@ export default function Admin() {
   // Estados do Feed & Avisos
   const [feedInput, setFeedInput] = useState('');
   const [feedImageUrl, setFeedImageUrl] = useState('');
+  const [feedMediaFile, setFeedMediaFile] = useState(null);
+  const [feedMediaPreview, setFeedMediaPreview] = useState(null);
+  const [isUploadingFeedMedia, setIsUploadingFeedMedia] = useState(false);
+  const adminFeedFileInputRef = useRef(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [feedIsPinned, setFeedIsPinned] = useState(false);
   const [feedChannel, setFeedChannel] = useState('feed');
   const [feedSubmitting, setFeedSubmitting] = useState(false);
+
+  // Perfil dinâmico do Administrador logado
+  const currentAdminName = profile?.displayName || profile?.fullName || [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || (profile?.email ? profile.email.split('@')[0] : 'Samuel Amorim');
+  const currentAdminInitials = currentAdminName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() || 'SA';
+  const currentAdminAvatar = profile?.avatarUrl || profile?.photoURL || null;
 
   // Filtros e busca
   const [activitySearch, setActivitySearch] = useState('');
@@ -259,24 +272,65 @@ export default function Admin() {
     };
   }, [isAuthorized]);
 
+  const handleAdminFeedFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const isVideo = file.type.startsWith('video/');
+    const isImage = file.type.startsWith('image/');
+    if (!isVideo && !isImage) {
+      alert('Selecione uma imagem ou vídeo válido.');
+      return;
+    }
+    const previewUrl = URL.createObjectURL(file);
+    setFeedMediaFile(file);
+    setFeedMediaPreview({
+      url: previewUrl,
+      type: isVideo ? 'video' : 'image',
+      name: file.name
+    });
+    setFeedImageUrl('');
+  };
+
+  const handleRemoveAdminFeedMedia = () => {
+    setFeedMediaFile(null);
+    if (feedMediaPreview?.url && feedMediaPreview.url.startsWith('blob:')) {
+      URL.revokeObjectURL(feedMediaPreview.url);
+    }
+    setFeedMediaPreview(null);
+    if (adminFeedFileInputRef.current) adminFeedFileInputRef.current.value = '';
+  };
+
   // Publicar Mensagem no Feed / Broadcast
   const handlePublishFeed = async (e) => {
     if (e) e.preventDefault();
-    if (!feedInput.trim() || feedSubmitting) return;
+    if (!feedInput.trim() || feedSubmitting || isUploadingFeedMedia) return;
 
     setFeedSubmitting(true);
     try {
+      let finalMediaUrl = feedImageUrl.trim();
+      let finalMediaType = finalMediaUrl ? 'image' : '';
+
+      if (feedMediaFile) {
+        setIsUploadingFeedMedia(true);
+        const uploadRes = await uploadFeedMedia(feedMediaFile);
+        finalMediaUrl = uploadRes.url;
+        finalMediaType = uploadRes.mediaType;
+        setIsUploadingFeedMedia(false);
+      }
+
       const content = feedInput.trim();
-      const imageUrl = feedImageUrl.trim();
       const isPinned = Boolean(feedIsPinned);
 
       if (feedChannel === 'feed' || feedChannel === 'both') {
         await createFeedPost({
           author: 'Comissão FACOM TechWeek',
           authorRole: 'ORGANIZATION',
-          authorAvatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
+          authorAvatar: currentAdminAvatar || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
           content,
-          imageUrl,
+          imageUrl: finalMediaType === 'image' ? finalMediaUrl : '',
+          videoUrl: finalMediaType === 'video' ? finalMediaUrl : '',
+          mediaUrl: finalMediaUrl,
+          mediaType: finalMediaType,
           pinned: isPinned
         });
       }
@@ -293,6 +347,7 @@ export default function Admin() {
 
       setFeedInput('');
       setFeedImageUrl('');
+      handleRemoveAdminFeedMedia();
       setFeedIsPinned(false);
       setFeedback({
         type: 'success',
@@ -309,6 +364,7 @@ export default function Admin() {
       });
     } finally {
       setFeedSubmitting(false);
+      setIsUploadingFeedMedia(false);
     }
   };
 
@@ -733,12 +789,78 @@ export default function Admin() {
             <ChevronDown size={14} color="#64748B" />
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-            <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg, #0284C7, #38BDF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontWeight: 800, fontSize: '0.72rem', boxShadow: '0 0 8px rgba(56, 189, 248, 0.4)' }}>
-              SA
+          {/* Perfil Dinâmico do Usuário / Admin com Menu Dropdown */}
+          <div style={{ position: 'relative' }}>
+            <div 
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '4px 8px', borderRadius: '8px', backgroundColor: userMenuOpen ? 'rgba(30, 41, 59, 0.8)' : 'transparent', transition: 'background-color 0.15s ease' }}
+            >
+              {currentAdminAvatar ? (
+                <img 
+                  src={currentAdminAvatar} 
+                  alt="" 
+                  style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #38BDF8' }} 
+                />
+              ) : (
+                <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg, #0284C7, #38BDF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontWeight: 800, fontSize: '0.72rem', boxShadow: '0 0 8px rgba(56, 189, 248, 0.4)' }}>
+                  {currentAdminInitials}
+                </div>
+              )}
+              <span style={{ color: '#F8FAFC', fontWeight: 600 }}>{currentAdminName}</span>
+              <ChevronDown size={14} color="#64748B" />
             </div>
-            <span style={{ color: '#F8FAFC', fontWeight: 600 }}>Samuel Amorim</span>
-            <ChevronDown size={14} color="#64748B" />
+
+            {userMenuOpen && (
+              <div 
+                style={{ 
+                  position: 'absolute', 
+                  right: 0, 
+                  top: '100%', 
+                  marginTop: '6px', 
+                  width: '220px', 
+                  backgroundColor: '#0F141F', 
+                  border: '1px solid #1E293B', 
+                  borderRadius: '12px', 
+                  padding: '8px', 
+                  boxShadow: '0 16px 40px rgba(0,0,0,0.85)', 
+                  zIndex: 1000 
+                }}
+              >
+                <button 
+                  type="button"
+                  onClick={() => { setUserMenuOpen(false); navigate('/profile'); }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'none', border: 'none', color: '#F8FAFC', fontSize: '0.82rem', borderRadius: '6px', cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <User size={14} color="#38BDF8" />
+                  <span>Meu Perfil no App</span>
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setUserMenuOpen(false); navigate('/'); }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'none', border: 'none', color: '#F8FAFC', fontSize: '0.82rem', borderRadius: '6px', cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <ExternalLink size={14} color="#34D399" />
+                  <span>Ver App do Participante</span>
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setUserMenuOpen(false); navigate('/staff'); }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'none', border: 'none', color: '#F8FAFC', fontSize: '0.82rem', borderRadius: '6px', cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <QrCode size={14} color="#FBBF24" />
+                  <span>Portaria & Check-in</span>
+                </button>
+                <div style={{ height: '1px', backgroundColor: '#1E293B', margin: '4px 0' }} />
+                <button 
+                  type="button"
+                  onClick={() => { setUserMenuOpen(false); handleAdminLogout(); }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'none', border: 'none', color: '#EF4444', fontSize: '0.82rem', borderRadius: '6px', cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <LogOut size={14} />
+                  <span>Sair do Painel</span>
+                </button>
+              </div>
+            )}
           </div>
 
           <button
@@ -1559,16 +1681,126 @@ export default function Admin() {
                     />
                   </div>
 
-                  {/* Imagem opcional */}
+                  {/* Upload de Foto / Vídeo e URL */}
                   <div style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>URL da Imagem (opcional)</label>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>
+                      Anexar Foto ou Vídeo
+                    </label>
+
                     <input
-                      type="url"
-                      placeholder="https://exemplo.com/banner.jpg"
-                      value={feedImageUrl}
-                      onChange={(e) => setFeedImageUrl(e.target.value)}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem', boxSizing: 'border-box' }}
+                      ref={adminFeedFileInputRef}
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={handleAdminFeedFileSelect}
+                      style={{ display: 'none' }}
                     />
+
+                    {!feedMediaPreview ? (
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (adminFeedFileInputRef.current) {
+                              adminFeedFileInputRef.current.accept = 'image/*';
+                              adminFeedFileInputRef.current.click();
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '8px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid rgba(56, 189, 248, 0.3)',
+                            backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                            color: '#38BDF8',
+                            fontSize: '0.76rem',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <ImageIcon size={14} />
+                          <span>Anexar Foto</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (adminFeedFileInputRef.current) {
+                              adminFeedFileInputRef.current.accept = 'video/*';
+                              adminFeedFileInputRef.current.click();
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '8px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid rgba(192, 132, 252, 0.3)',
+                            backgroundColor: 'rgba(192, 132, 252, 0.08)',
+                            color: '#C084FC',
+                            fontSize: '0.76rem',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Film size={14} />
+                          <span>Anexar Vídeo</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', border: '1px solid #1E293B', backgroundColor: '#07090E', padding: '6px', marginBottom: '8px' }}>
+                        {feedMediaPreview.type === 'video' ? (
+                          <video
+                            controls
+                            src={feedMediaPreview.url}
+                            style={{ width: '100%', maxHeight: '160px', borderRadius: '4px', display: 'block' }}
+                          />
+                        ) : (
+                          <img
+                            src={feedMediaPreview.url}
+                            alt="Preview"
+                            style={{ width: '100%', maxHeight: '160px', objectFit: 'cover', borderRadius: '4px', display: 'block' }}
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleRemoveAdminFeedMedia}
+                          style={{
+                            position: 'absolute',
+                            top: '10px',
+                            right: '10px',
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            border: '1px solid #EF4444',
+                            color: '#EF4444',
+                            borderRadius: '50%',
+                            width: '22px',
+                            height: '22px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    )}
+
+                    {!feedMediaPreview && (
+                      <input
+                        type="url"
+                        placeholder="Ou digite URL da imagem..."
+                        value={feedImageUrl}
+                        onChange={(e) => setFeedImageUrl(e.target.value)}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.80rem', boxSizing: 'border-box' }}
+                      />
+                    )}
                   </div>
 
                   {/* Checkbox fixar */}
@@ -1587,10 +1819,20 @@ export default function Admin() {
                   <button
                     type="button"
                     onClick={handlePublishFeed}
-                    disabled={!feedInput.trim() || feedSubmitting}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: 'none', background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 15px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', fontSize: '0.86rem', fontWeight: 700, cursor: 'pointer' }}
+                    disabled={!feedInput.trim() || feedSubmitting || isUploadingFeedMedia}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: 'none', background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 15px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', fontSize: '0.86rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                   >
-                    {feedSubmitting ? 'Transmitindo...' : 'Transmitir Publicação'}
+                    {feedSubmitting || isUploadingFeedMedia ? (
+                      <>
+                        <Loader2 size={15} className="animate-spin" />
+                        <span>{isUploadingFeedMedia ? 'Enviando mídia...' : 'Transmitindo...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send size={15} />
+                        <span>Transmitir Publicação</span>
+                      </>
+                    )}
                   </button>
                 </div>
 
@@ -1603,47 +1845,76 @@ export default function Admin() {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {feedPosts.map(post => (
-                      <div key={post.id} style={{ border: '1px solid #1E293B', borderRadius: '6px', padding: '14px', backgroundColor: '#07090E' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#F8FAFC' }}>{post.author}</span>
-                            {post.pinned && (
-                              <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38BDF8', padding: '1px 6px', borderRadius: '3px', fontWeight: 700 }}>
-                                FIXADO
-                              </span>
-                            )}
+                    {feedPosts.map(post => {
+                      const hasVideo = post.videoUrl || (post.mediaType === 'video' && post.mediaUrl);
+                      const hasImage = post.imageUrl || (post.mediaType === 'image' && post.mediaUrl) || (!hasVideo && post.mediaUrl);
+
+                      return (
+                        <div key={post.id} style={{ border: '1px solid #1E293B', borderRadius: '6px', padding: '14px', backgroundColor: '#07090E' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#F8FAFC' }}>{post.author}</span>
+                              {post.pinned && (
+                                <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38BDF8', padding: '1px 6px', borderRadius: '3px', fontWeight: 700 }}>
+                                  FIXADO
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePinPost(post.id, post.pinned)}
+                                title={post.pinned ? 'Desafixar' : 'Fixar'}
+                                style={{ background: 'none', border: 'none', color: post.pinned ? '#38BDF8' : '#64748B', cursor: 'pointer', padding: '2px' }}
+                              >
+                                <Pin size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePost(post.id)}
+                                title="Excluir"
+                                style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '2px' }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <button
-                              type="button"
-                              onClick={() => handleTogglePinPost(post.id, post.pinned)}
-                              title={post.pinned ? 'Desafixar' : 'Fixar'}
-                              style={{ background: 'none', border: 'none', color: post.pinned ? '#38BDF8' : '#64748B', cursor: 'pointer', padding: '2px' }}
-                            >
-                              <Pin size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeletePost(post.id)}
-                              title="Excluir"
-                              style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '2px' }}
-                            >
-                              <Trash2 size={13} />
-                            </button>
+
+                          <p style={{ margin: '0 0 10px', fontSize: '0.82rem', color: '#CBD5E1', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>
+                            {post.content}
+                          </p>
+
+                          {/* Mídia Vídeo */}
+                          {hasVideo && (
+                            <div style={{ width: '100%', borderRadius: '6px', overflow: 'hidden', marginBottom: '10px', border: '1px solid #1E293B', backgroundColor: '#000000' }}>
+                              <video
+                                controls
+                                playsInline
+                                preload="metadata"
+                                src={post.videoUrl || post.mediaUrl}
+                                style={{ width: '100%', maxHeight: '220px', display: 'block' }}
+                              />
+                            </div>
+                          )}
+
+                          {/* Mídia Imagem */}
+                          {!hasVideo && hasImage && (
+                            <div style={{ width: '100%', borderRadius: '6px', overflow: 'hidden', marginBottom: '10px', border: '1px solid #1E293B' }}>
+                              <img
+                                src={post.imageUrl || post.mediaUrl}
+                                alt="Anexo"
+                                style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', display: 'block' }}
+                              />
+                            </div>
+                          )}
+
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.74rem', color: '#64748B' }}>
+                            <span style={{ color: '#F43F5E' }}>❤️ {Array.isArray(post.likes) ? post.likes.length : 0} curtidas</span>
+                            <span>{post.formattedTime || 'Recente'}</span>
                           </div>
                         </div>
-
-                        <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: '#CBD5E1', lineHeight: 1.4 }}>
-                          {post.content}
-                        </p>
-
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.74rem', color: '#64748B' }}>
-                          <span style={{ color: '#F43F5E' }}>❤️ {Array.isArray(post.likes) ? post.likes.length : 0} curtidas</span>
-                          <span>{post.formattedTime || 'Recente'}</span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>

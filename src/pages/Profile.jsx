@@ -186,7 +186,23 @@ export default function Profile() {
       fetchUserData(user);
     });
 
-    return () => unsubscribe();
+    const handleProfileUpdate = () => {
+      const cached = getCachedUserProfile();
+      if (cached) {
+        setProfile(prev => ({
+          ...prev,
+          ...cached,
+          avatarUrl: cached.avatarUrl || cached.avatar_url || cached.photoURL || prev.avatarUrl,
+          hasSymplaTicket: !!(cached.hasSymplaTicket || cached.symplaTicket || prev.hasSymplaTicket)
+        }));
+      }
+    };
+    window.addEventListener('facom_profile_updated', handleProfileUpdate);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('facom_profile_updated', handleProfileUpdate);
+    };
   }, []);
 
   // Abre modal se vier com parâmetro ?edit=true ou ?changeEmail=true
@@ -837,7 +853,7 @@ export default function Profile() {
             fontSize: '0.76rem',
             color: '#94A3B8',
             textAlign: 'center',
-            margin: '0 0 16px',
+            margin: '0 0 10px',
             maxWidth: '280px',
             lineHeight: '1.4'
           }}
@@ -846,6 +862,90 @@ export default function Profile() {
             ? `${profile.course}${profile.period ? ` · ${profile.period}º Período` : ''}`
             : (profile.participantType || 'Estudante')}
         </p>
+
+        {/* Badge Oficial de Papel / Credencial */}
+        <div style={{ marginBottom: '14px' }}>
+          {(role === 'ADMIN' || profile.role === 'ADMIN' || profile.email === 'admin@admin.com' || profile.email === 'sam03amorim@gmail.com') ? (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 10px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                color: '#38BDF8',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                letterSpacing: '0.04em',
+                boxShadow: '0 0 12px rgba(56, 189, 248, 0.25)',
+                textTransform: 'uppercase'
+              }}
+            >
+              <ShieldCheck size={13} strokeWidth={2.5} />
+              <span>Organizador · Admin</span>
+            </span>
+          ) : (role === 'STAFF' || profile.role === 'STAFF' || profile.email === 'staff@techweek.com') ? (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 10px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(251, 191, 36, 0.15)',
+                border: '1px solid rgba(251, 191, 36, 0.4)',
+                color: '#FBBF24',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase'
+              }}
+            >
+              <Award size={13} strokeWidth={2.5} />
+              <span>Equipe Staff · Portaria</span>
+            </span>
+          ) : (role === 'SPONSOR' || profile.role === 'SPONSOR') ? (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 10px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(52, 211, 153, 0.15)',
+                border: '1px solid rgba(52, 211, 153, 0.4)',
+                color: '#34D399',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase'
+              }}
+            >
+              <Building2 size={13} strokeWidth={2.5} />
+              <span>Patrocinador Oficial</span>
+            </span>
+          ) : (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                backgroundColor: '#1E293B',
+                border: '1px solid #334155',
+                color: '#94A3B8',
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                textTransform: 'uppercase'
+              }}
+            >
+              <span>Participante</span>
+            </span>
+          )}
+        </div>
 
         {/* Divisor Circuit-Cut da Marca (inspirado no monograma TW) */}
         <div
@@ -1246,6 +1346,69 @@ export default function Profile() {
           <span style={{ fontSize: '0.72rem', color: '#38BDF8' }}>Modificar</span>
         </button>
 
+        {/* Botão de Painel do Organizador (se for Admin ou Organizador) */}
+        {(role === 'ADMIN' || profile.role === 'ADMIN' || profile.email === 'admin@admin.com' || profile.email === 'sam03amorim@gmail.com') && (
+          <button
+            type="button"
+            onClick={() => navigate('/admin')}
+            style={{
+              width: '100%',
+              minHeight: '48px',
+              padding: '12px 18px',
+              borderRadius: '14px',
+              background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.15) 0%, rgba(37, 99, 235, 0.15) 100%)',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              color: '#F8FAFC',
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontSize: '0.86rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              boxShadow: '0 0 16px rgba(56, 189, 248, 0.15)',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <ShieldCheck size={18} color="#38BDF8" strokeWidth={2.2} />
+              <span>Painel do Organizador (Área Admin)</span>
+            </div>
+            <span style={{ fontSize: '0.72rem', color: '#38BDF8', fontWeight: 800 }}>Acessar</span>
+          </button>
+        )}
+
+        {/* Botão de Portaria e Credenciamento (se for Staff ou Admin) */}
+        {(role === 'STAFF' || role === 'ADMIN' || profile.role === 'STAFF' || profile.role === 'ADMIN' || profile.email === 'staff@techweek.com' || profile.email === 'admin@admin.com' || profile.email === 'sam03amorim@gmail.com') && (
+          <button
+            type="button"
+            onClick={() => navigate('/staff')}
+            style={{
+              width: '100%',
+              minHeight: '48px',
+              padding: '12px 18px',
+              borderRadius: '14px',
+              backgroundColor: '#0F141F',
+              border: '1px solid rgba(251, 191, 36, 0.3)',
+              color: '#F8FAFC',
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontSize: '0.86rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              transition: 'border-color 0.15s ease'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Award size={17} strokeWidth={1.75} color="#FBBF24" />
+              <span>Portaria & Credenciamento (Staff)</span>
+            </div>
+            <span style={{ fontSize: '0.72rem', color: '#FBBF24' }}>Acessar</span>
+          </button>
+        )}
+
         {/* Botão de Modo Patrocinador */}
         <button
           type="button"
@@ -1274,8 +1437,6 @@ export default function Profile() {
           </div>
           <span style={{ fontSize: '0.72rem', color: '#10B981' }}>Acessar</span>
         </button>
-
-
       </section>
 
       {/* 5. ZONA DA CONTA (LOGOUT & EXCLUSAO) */}
