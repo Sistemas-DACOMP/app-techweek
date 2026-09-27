@@ -20,7 +20,6 @@ import {
   LogOut,
   X,
   Check,
-  Sparkles,
   Camera,
   Info,
   Trash2,
@@ -152,8 +151,8 @@ export default function Admin() {
   const [loginError, setLoginError] = useState('');
 
   // Navegação: Menu Lateral & Subabas estilo Even3
-  const [activeMenu, setActiveMenu] = useState('programacao'); // 'inicio' | 'pessoas' | 'vendas' | 'feed' | 'inscricoes' | 'pagina' | 'programacao' | 'credenciamento' | 'certificados' | 'config' | 'ferramentas'
-  const [progTab, setProgTab] = useState('atividades'); // 'atividades' | 'convidados' | 'locais' | 'cupons' | 'configuracoes'
+  const [activeMenu, setActiveMenu] = useState('programacao');
+  const [progTab, setProgTab] = useState('atividades');
 
   // Dados em tempo real
   const [activities, setActivities] = useState([]);
@@ -166,9 +165,8 @@ export default function Admin() {
   const [feedInput, setFeedInput] = useState('');
   const [feedImageUrl, setFeedImageUrl] = useState('');
   const [feedIsPinned, setFeedIsPinned] = useState(false);
-  const [feedChannel, setFeedChannel] = useState('feed'); // 'feed' | 'broadcast' | 'both'
+  const [feedChannel, setFeedChannel] = useState('feed');
   const [feedSubmitting, setFeedSubmitting] = useState(false);
-  const [feedFilter, setFeedFilter] = useState('ALL');
 
   // Filtros e busca
   const [activitySearch, setActivitySearch] = useState('');
@@ -298,8 +296,8 @@ export default function Admin() {
         type: 'success',
         title: 'Mensagem Publicada',
         message: feedChannel === 'both'
-          ? 'Publicada no Feed e enviada como notificação aos alunos.'
-          : (feedChannel === 'feed' ? 'Publicação no Feed enviada com sucesso.' : 'Comunicado disparado no sino dos alunos.')
+          ? 'Publicada no Feed e enviada como notificação aos participantes.'
+          : (feedChannel === 'feed' ? 'Publicação no Feed enviada com sucesso.' : 'Comunicado disparado no sino dos participantes.')
       });
     } catch (err) {
       setFeedback({
@@ -352,7 +350,7 @@ export default function Admin() {
     }
   };
 
-  // Atualiza linhas de data conforme duração escolhida (Even3 dynamic rows)
+  // Atualiza linhas de data conforme duração escolhida
   const handleDurationChange = (newDuration) => {
     let rowCount = 1;
     if (newDuration === 'A definir' || newDuration === 'Um dia') rowCount = 1;
@@ -489,7 +487,7 @@ export default function Admin() {
       setFeedback({
         type: 'success',
         title: 'Atividade salva com sucesso',
-        message: `A atividade "${payload.title}" está disponível na programação.`
+        message: `A atividade "${payload.title}" está disponível na grade do evento.`
       });
     } catch (err) {
       alert('Erro ao salvar atividade: ' + err.message);
@@ -621,8 +619,8 @@ export default function Admin() {
   // Se não estiver autorizado, tela de login limpa estilo Even3
   if (!isAuthorized) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#070B19', padding: '24px 16px' }}>
-        <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', overflow: 'hidden' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9', padding: '24px 16px' }}>
+        <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
           <div style={{ backgroundColor: '#0284C7', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <img src={logoTw} alt="FACOM TechWeek" style={{ height: '24px', width: 'auto' }} />
             <span style={{ color: '#FFFFFF', fontWeight: 600, fontSize: '0.95rem' }}>Área do Organizador</span>
@@ -630,32 +628,32 @@ export default function Admin() {
 
           <form onSubmit={handleAdminLogin} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {loginError && (
-              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #EF4444', color: '#EF4444', padding: '10px 12px', borderRadius: '4px', fontSize: '0.82rem' }}>
+              <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#DC2626', padding: '10px 12px', borderRadius: '4px', fontSize: '0.82rem' }}>
                 {loginError}
               </div>
             )}
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>E-mail</label>
+              <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>E-mail</label>
               <input
                 type="email"
                 required
                 placeholder="admin@admin.com"
                 value={adminEmail}
                 onChange={(e) => setAdminEmail(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', backgroundColor: '#070B19', border: '1px solid #334155', borderRadius: '4px', color: '#F8FAFC', fontSize: '0.88rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '10px 12px', backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '4px', color: '#0F172A', fontSize: '0.88rem', boxSizing: 'border-box' }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>Senha</label>
+              <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Senha</label>
               <input
                 type="password"
                 required
                 placeholder="••••••••••••"
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', backgroundColor: '#070B19', border: '1px solid #334155', borderRadius: '4px', color: '#F8FAFC', fontSize: '0.88rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '10px 12px', backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '4px', color: '#0F172A', fontSize: '0.88rem', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -671,7 +669,7 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => handleQuickAdmin('admin@admin.com', 'AdminPassword123!')}
-              style={{ backgroundColor: 'transparent', color: '#38BDF8', border: '1px solid #0284C7', borderRadius: '4px', padding: '9px', fontWeight: 600, fontSize: '0.80rem', cursor: 'pointer' }}
+              style={{ backgroundColor: '#F0F9FF', color: '#0284C7', border: '1px solid #BAE6FD', borderRadius: '4px', padding: '9px', fontWeight: 600, fontSize: '0.80rem', cursor: 'pointer' }}
             >
               Entrar como admin@admin.com (1 clique)
             </button>
@@ -682,12 +680,11 @@ export default function Admin() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', width: '100%', backgroundColor: '#070B19', display: 'flex', flexDirection: 'column', color: '#F8FAFC', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>
+    <div style={{ minHeight: '100vh', width: '100%', backgroundColor: '#F8FAFC', display: 'flex', flexDirection: 'column', color: '#1E293B', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>
       {/* 1. TOP NAVBAR (ESTILO EVEN3 EXATO, CORES FACOM TECHWEEK) */}
-      <header style={{ height: '52px', backgroundColor: '#0A1122', borderBottom: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', position: 'sticky', top: 0, zIndex: 50 }}>
+      <header style={{ height: '52px', backgroundColor: '#0F172A', borderBottom: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', position: 'sticky', top: 0, zIndex: 50 }}>
         {/* Esquerda: Logo + Breadcrumbs Even3 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          {/* Logo Oficial FACOM TechWeek */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => navigate('/')}>
             <img 
               src={logoTw} 
@@ -706,7 +703,7 @@ export default function Admin() {
             <span style={{ color: '#475569' }}>/</span>
             <span style={{ color: '#F8FAFC', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
               Teste Facom TechWeek
-              <ExternalLink size={12} color="#64748B" />
+              <ExternalLink size={12} color="#94A3B8" />
             </span>
           </div>
         </div>
@@ -716,7 +713,7 @@ export default function Admin() {
           <button
             type="button"
             onClick={() => navigate('/')}
-            style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', padding: 0 }}
+            style={{ background: 'none', border: 'none', color: '#E2E8F0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', padding: 0 }}
           >
             <Plus size={14} />
             <span>Meus eventos</span>
@@ -725,10 +722,10 @@ export default function Admin() {
           <button
             type="button"
             onClick={() => setActiveMenu('programacao')}
-            style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', padding: 0 }}
+            style={{ background: 'none', border: 'none', color: '#E2E8F0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', padding: 0 }}
           >
             <span>Área do Organizador</span>
-            <ChevronDown size={14} color="#64748B" />
+            <ChevronDown size={14} color="#94A3B8" />
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
@@ -736,14 +733,14 @@ export default function Admin() {
               SA
             </div>
             <span style={{ color: '#F8FAFC', fontWeight: 500 }}>Samuel Amorim</span>
-            <ChevronDown size={14} color="#64748B" />
+            <ChevronDown size={14} color="#94A3B8" />
           </div>
 
           <button
             type="button"
             onClick={() => setActiveMenu('feed')}
             title="Avisos e notificações"
-            style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'none', border: 'none', color: '#CBD5E1', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
           >
             <Bell size={17} />
           </button>
@@ -752,7 +749,7 @@ export default function Admin() {
             type="button"
             onClick={() => navigate('/')}
             title="Menu do sistema"
-            style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'none', border: 'none', color: '#CBD5E1', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
           >
             <Grid size={17} />
           </button>
@@ -761,7 +758,7 @@ export default function Admin() {
             type="button"
             onClick={handleAdminLogout}
             title="Sair"
-            style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', marginLeft: '4px' }}
+            style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', marginLeft: '4px' }}
           >
             <LogOut size={16} />
           </button>
@@ -770,8 +767,8 @@ export default function Admin() {
 
       {/* 2. CORPO PRINCIPAL: SIDEBAR EVEN3 + CONTEÚDO */}
       <div style={{ display: 'flex', flex: 1, minHeight: 'calc(100vh - 52px)' }}>
-        {/* SIDEBAR EVEN3 SÓBRIA */}
-        <aside style={{ width: '200px', backgroundColor: '#0B132B', borderRight: '1px solid #1E293B', padding: '16px 0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        {/* SIDEBAR EVEN3 LIMPA / PROFISSIONAL */}
+        <aside style={{ width: '200px', backgroundColor: '#FFFFFF', borderRight: '1px solid #E2E8F0', padding: '16px 0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
           {/* Seção GESTÃO */}
           <div style={{ padding: '4px 18px 8px' }}>
             <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748B', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
@@ -788,8 +785,8 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'inicio' ? '#1E293B' : 'transparent',
-              color: activeMenu === 'inicio' ? '#38BDF8' : '#94A3B8',
+              backgroundColor: activeMenu === 'inicio' ? '#EFF6FF' : 'transparent',
+              color: activeMenu === 'inicio' ? '#0284C7' : '#475569',
               fontWeight: activeMenu === 'inicio' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -797,7 +794,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <Home size={16} color={activeMenu === 'inicio' ? '#38BDF8' : '#64748B'} />
+            <Home size={16} color={activeMenu === 'inicio' ? '#0284C7' : '#64748B'} />
             <span>Início</span>
           </button>
 
@@ -810,8 +807,8 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'pessoas' ? '#1E293B' : 'transparent',
-              color: activeMenu === 'pessoas' ? '#38BDF8' : '#94A3B8',
+              backgroundColor: activeMenu === 'pessoas' ? '#EFF6FF' : 'transparent',
+              color: activeMenu === 'pessoas' ? '#0284C7' : '#475569',
               fontWeight: activeMenu === 'pessoas' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -819,7 +816,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <Users size={16} color={activeMenu === 'pessoas' ? '#38BDF8' : '#64748B'} />
+            <Users size={16} color={activeMenu === 'pessoas' ? '#0284C7' : '#64748B'} />
             <span>Pessoas</span>
           </button>
 
@@ -832,8 +829,8 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'vendas' ? '#1E293B' : 'transparent',
-              color: activeMenu === 'vendas' ? '#38BDF8' : '#94A3B8',
+              backgroundColor: activeMenu === 'vendas' ? '#EFF6FF' : 'transparent',
+              color: activeMenu === 'vendas' ? '#0284C7' : '#475569',
               fontWeight: activeMenu === 'vendas' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -841,7 +838,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <CreditCard size={16} color={activeMenu === 'vendas' ? '#38BDF8' : '#64748B'} />
+            <CreditCard size={16} color={activeMenu === 'vendas' ? '#0284C7' : '#64748B'} />
             <span>Vendas</span>
           </button>
 
@@ -855,8 +852,8 @@ export default function Admin() {
               justifyContent: 'space-between',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'feed' ? '#1E293B' : 'transparent',
-              color: activeMenu === 'feed' ? '#38BDF8' : '#94A3B8',
+              backgroundColor: activeMenu === 'feed' ? '#EFF6FF' : 'transparent',
+              color: activeMenu === 'feed' ? '#0284C7' : '#475569',
               fontWeight: activeMenu === 'feed' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -865,10 +862,10 @@ export default function Admin() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <MessageSquare size={16} color={activeMenu === 'feed' ? '#38BDF8' : '#64748B'} />
+              <MessageSquare size={16} color={activeMenu === 'feed' ? '#0284C7' : '#64748B'} />
               <span>Feed & Avisos</span>
             </div>
-            <span style={{ fontSize: '0.68rem', backgroundColor: '#1E293B', color: '#38BDF8', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
+            <span style={{ fontSize: '0.68rem', backgroundColor: '#F1F5F9', color: '#0284C7', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
               {feedPosts.length}
             </span>
           </button>
@@ -889,8 +886,8 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'inscricoes' ? '#1E293B' : 'transparent',
-              color: activeMenu === 'inscricoes' ? '#38BDF8' : '#94A3B8',
+              backgroundColor: activeMenu === 'inscricoes' ? '#EFF6FF' : 'transparent',
+              color: activeMenu === 'inscricoes' ? '#0284C7' : '#475569',
               fontWeight: activeMenu === 'inscricoes' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -898,7 +895,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <Ticket size={16} color={activeMenu === 'inscricoes' ? '#38BDF8' : '#64748B'} />
+            <Ticket size={16} color={activeMenu === 'inscricoes' ? '#0284C7' : '#64748B'} />
             <span>Inscrições</span>
           </button>
 
@@ -911,8 +908,8 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'pagina' ? '#1E293B' : 'transparent',
-              color: activeMenu === 'pagina' ? '#38BDF8' : '#94A3B8',
+              backgroundColor: activeMenu === 'pagina' ? '#EFF6FF' : 'transparent',
+              color: activeMenu === 'pagina' ? '#0284C7' : '#475569',
               fontWeight: activeMenu === 'pagina' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -920,7 +917,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <Globe size={16} color={activeMenu === 'pagina' ? '#38BDF8' : '#64748B'} />
+            <Globe size={16} color={activeMenu === 'pagina' ? '#0284C7' : '#64748B'} />
             <span>Página do Evento</span>
           </button>
 
@@ -933,8 +930,8 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'programacao' ? '#1E293B' : 'transparent',
-              color: activeMenu === 'programacao' ? '#38BDF8' : '#94A3B8',
+              backgroundColor: activeMenu === 'programacao' ? '#EFF6FF' : 'transparent',
+              color: activeMenu === 'programacao' ? '#0284C7' : '#475569',
               fontWeight: activeMenu === 'programacao' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -942,7 +939,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <Calendar size={16} color={activeMenu === 'programacao' ? '#38BDF8' : '#64748B'} />
+            <Calendar size={16} color={activeMenu === 'programacao' ? '#0284C7' : '#64748B'} />
             <span>Programação</span>
           </button>
 
@@ -963,7 +960,7 @@ export default function Admin() {
               padding: '9px 18px',
               border: 'none',
               backgroundColor: 'transparent',
-              color: '#94A3B8',
+              color: '#475569',
               fontWeight: 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -991,8 +988,8 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'certificados' ? '#1E293B' : 'transparent',
-              color: activeMenu === 'certificados' ? '#38BDF8' : '#94A3B8',
+              backgroundColor: activeMenu === 'certificados' ? '#EFF6FF' : 'transparent',
+              color: activeMenu === 'certificados' ? '#0284C7' : '#475569',
               fontWeight: activeMenu === 'certificados' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -1000,7 +997,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <Award size={16} color={activeMenu === 'certificados' ? '#38BDF8' : '#64748B'} />
+            <Award size={16} color={activeMenu === 'certificados' ? '#0284C7' : '#64748B'} />
             <span>Certificados</span>
           </button>
 
@@ -1020,8 +1017,8 @@ export default function Admin() {
               justifyContent: 'space-between',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'config' ? '#1E293B' : 'transparent',
-              color: '#94A3B8',
+              backgroundColor: activeMenu === 'config' ? '#EFF6FF' : 'transparent',
+              color: '#475569',
               fontWeight: 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -1045,8 +1042,8 @@ export default function Admin() {
               justifyContent: 'space-between',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'ferramentas' ? '#1E293B' : 'transparent',
-              color: '#94A3B8',
+              backgroundColor: activeMenu === 'ferramentas' ? '#EFF6FF' : 'transparent',
+              color: '#475569',
               fontWeight: 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -1062,18 +1059,18 @@ export default function Admin() {
           </button>
         </aside>
 
-        {/* 3. ÁREA DE CONTEÚDO PRINCIPAL EVEN3 */}
-        <main style={{ flex: 1, padding: '28px 36px', overflowY: 'auto', backgroundColor: '#070B19' }}>
+        {/* 3. ÁREA DE CONTEÚDO PRINCIPAL EVEN3 (CLEAN LIGHT THEME) */}
+        <main style={{ flex: 1, padding: '28px 36px', overflowY: 'auto', backgroundColor: '#F8FAFC' }}>
           {/* TELA: PROGRAMAÇÃO */}
           {activeMenu === 'programacao' && (
             <div>
               {/* Título da Página Even3: "Programação" */}
-              <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#F8FAFC', margin: '0 0 20px', letterSpacing: '-0.01em' }}>
+              <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#0F172A', margin: '0 0 20px', letterSpacing: '-0.01em' }}>
                 Programação
               </h1>
 
               {/* Subtabs Even3: Atividades | Convidados | Locais | Cupons de desconto | Configurações */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '24px', borderBottom: '1px solid #1E293B', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '24px', borderBottom: '1px solid #E2E8F0', marginBottom: '24px' }}>
                 <button
                   type="button"
                   onClick={() => setProgTab('atividades')}
@@ -1083,7 +1080,7 @@ export default function Admin() {
                     background: 'none',
                     fontSize: '0.88rem',
                     fontWeight: progTab === 'atividades' ? 600 : 400,
-                    color: progTab === 'atividades' ? '#38BDF8' : '#94A3B8',
+                    color: progTab === 'atividades' ? '#0284C7' : '#64748B',
                     borderBottom: progTab === 'atividades' ? '2px solid #0284C7' : '2px solid transparent',
                     cursor: 'pointer'
                   }}
@@ -1100,7 +1097,7 @@ export default function Admin() {
                     background: 'none',
                     fontSize: '0.88rem',
                     fontWeight: progTab === 'convidados' ? 600 : 400,
-                    color: progTab === 'convidados' ? '#38BDF8' : '#94A3B8',
+                    color: progTab === 'convidados' ? '#0284C7' : '#64748B',
                     borderBottom: progTab === 'convidados' ? '2px solid #0284C7' : '2px solid transparent',
                     cursor: 'pointer'
                   }}
@@ -1117,7 +1114,7 @@ export default function Admin() {
                     background: 'none',
                     fontSize: '0.88rem',
                     fontWeight: progTab === 'locais' ? 600 : 400,
-                    color: progTab === 'locais' ? '#38BDF8' : '#94A3B8',
+                    color: progTab === 'locais' ? '#0284C7' : '#64748B',
                     borderBottom: progTab === 'locais' ? '2px solid #0284C7' : '2px solid transparent',
                     cursor: 'pointer'
                   }}
@@ -1134,7 +1131,7 @@ export default function Admin() {
                     background: 'none',
                     fontSize: '0.88rem',
                     fontWeight: progTab === 'cupons' ? 600 : 400,
-                    color: progTab === 'cupons' ? '#38BDF8' : '#94A3B8',
+                    color: progTab === 'cupons' ? '#0284C7' : '#64748B',
                     borderBottom: progTab === 'cupons' ? '2px solid #0284C7' : '2px solid transparent',
                     cursor: 'pointer'
                   }}
@@ -1151,7 +1148,7 @@ export default function Admin() {
                     background: 'none',
                     fontSize: '0.88rem',
                     fontWeight: progTab === 'configuracoes' ? 600 : 400,
-                    color: progTab === 'configuracoes' ? '#38BDF8' : '#94A3B8',
+                    color: progTab === 'configuracoes' ? '#0284C7' : '#64748B',
                     borderBottom: progTab === 'configuracoes' ? '2px solid #0284C7' : '2px solid transparent',
                     cursor: 'pointer'
                   }}
@@ -1165,7 +1162,7 @@ export default function Admin() {
                 <div>
                   {/* Linha: Título da Seção "Atividades" + Barra de Ações à Direita */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 500, color: '#F1F5F9', margin: 0 }}>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: 500, color: '#1E293B', margin: 0 }}>
                       Atividades
                     </h2>
 
@@ -1174,7 +1171,7 @@ export default function Admin() {
                       <select
                         value={activityFilter}
                         onChange={(e) => setActivityFilter(e.target.value)}
-                        style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#E2E8F0', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
+                        style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#334155', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
                       >
                         <option value="ALL">Todas as atividades</option>
                         <option value="palestra">Palestra</option>
@@ -1185,13 +1182,13 @@ export default function Admin() {
 
                       {/* Campo Buscar Even3 */}
                       <div style={{ position: 'relative' }}>
-                        <Search size={14} color="#64748B" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                        <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                         <input
                           type="text"
                           placeholder="Buscar"
                           value={activitySearch}
                           onChange={(e) => setActivitySearch(e.target.value)}
-                          style={{ padding: '6px 10px 6px 30px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#F8FAFC', fontSize: '0.82rem', height: '34px', width: '160px', boxSizing: 'border-box' }}
+                          style={{ padding: '6px 10px 6px 30px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.82rem', height: '34px', width: '160px', boxSizing: 'border-box' }}
                         />
                       </div>
 
@@ -1199,9 +1196,9 @@ export default function Admin() {
                       <button
                         type="button"
                         onClick={() => navigate('/')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#94A3B8', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
                       >
-                        <Calendar size={13} color="#94A3B8" />
+                        <Calendar size={13} color="#64748B" />
                         <span>Agenda</span>
                       </button>
 
@@ -1217,9 +1214,9 @@ export default function Admin() {
                           a.download = 'programacao-techweek.json';
                           a.click();
                         }}
-                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#94A3B8', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
                       >
-                        <Download size={13} color="#94A3B8" />
+                        <Download size={13} color="#64748B" />
                         <span>Exportar ▾</span>
                       </button>
 
@@ -1240,10 +1237,10 @@ export default function Admin() {
                   </div>
 
                   {/* TABELA DE ATIVIDADES EVEN3 */}
-                  <div style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
                       <thead>
-                        <tr style={{ borderBottom: '1px solid #1E293B', backgroundColor: '#0F172A' }}>
+                        <tr style={{ borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
                           <th style={{ padding: '10px 16px', fontWeight: 600, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>NÚMERO</th>
                           <th style={{ padding: '10px 16px', fontWeight: 600, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>TIPO</th>
                           <th style={{ padding: '10px 16px', fontWeight: 600, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>TÍTULO</th>
@@ -1269,14 +1266,14 @@ export default function Admin() {
                               : [{ date: act.date || '2026-10-21', time: `${act.time || '14:00'}-${act.endTime || '15:30'}` }];
 
                             return (
-                              <tr key={act.id} style={{ borderBottom: '1px solid #1E293B', backgroundColor: 'transparent' }}>
+                              <tr key={act.id} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: 'transparent' }}>
                                 {/* Número */}
-                                <td style={{ padding: '12px 16px', color: '#94A3B8', fontSize: '0.82rem' }}>
+                                <td style={{ padding: '12px 16px', color: '#64748B', fontSize: '0.82rem' }}>
                                   {actNum}
                                 </td>
 
                                 {/* Tipo */}
-                                <td style={{ padding: '12px 16px', color: '#E2E8F0', fontSize: '0.82rem' }}>
+                                <td style={{ padding: '12px 16px', color: '#334155', fontSize: '0.82rem' }}>
                                   {formattedType}
                                 </td>
 
@@ -1284,7 +1281,7 @@ export default function Admin() {
                                 <td style={{ padding: '12px 16px' }}>
                                   <div
                                     onClick={() => handleOpenEditActivity(act)}
-                                    style={{ color: '#38BDF8', fontWeight: 500, fontSize: '0.86rem', cursor: 'pointer', marginBottom: '2px' }}
+                                    style={{ color: '#0284C7', fontWeight: 500, fontSize: '0.86rem', cursor: 'pointer', marginBottom: '2px' }}
                                   >
                                     {act.title}
                                   </div>
@@ -1301,19 +1298,19 @@ export default function Admin() {
                                 <td style={{ padding: '12px 16px' }}>
                                   {act.registrationType === 'Não requer inscrição' ? (
                                     <div>
-                                      <div style={{ color: '#E2E8F0', fontSize: '0.82rem' }}>Não requer inscrição</div>
+                                      <div style={{ color: '#334155', fontSize: '0.82rem' }}>Não requer inscrição</div>
                                       <div style={{ fontSize: '0.74rem', color: '#64748B' }}>Vagas ilimitadas</div>
                                     </div>
                                   ) : (
                                     <div>
-                                      <div style={{ color: '#E2E8F0', fontSize: '0.82rem' }}>{act.total_inscritos || 0} inscritos</div>
+                                      <div style={{ color: '#334155', fontSize: '0.82rem' }}>{act.total_inscritos || 0} inscritos</div>
                                       <div style={{ fontSize: '0.74rem', color: '#64748B' }}>{act.vagas_totais || 100} vagas</div>
                                     </div>
                                   )}
                                 </td>
 
                                 {/* Valor Even3 */}
-                                <td style={{ padding: '12px 16px', color: '#E2E8F0', fontSize: '0.82rem' }}>
+                                <td style={{ padding: '12px 16px', color: '#334155', fontSize: '0.82rem' }}>
                                   {act.value || 'Grátis'}
                                 </td>
 
@@ -1324,7 +1321,7 @@ export default function Admin() {
                                       type="button"
                                       onClick={() => setQrModalActivity(act)}
                                       title="QR Code de Presença"
-                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#38BDF8', cursor: 'pointer' }}
+                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#0284C7', cursor: 'pointer' }}
                                     >
                                       <QrCode size={14} />
                                     </button>
@@ -1332,7 +1329,7 @@ export default function Admin() {
                                       type="button"
                                       onClick={() => handleOpenEditActivity(act)}
                                       title="Editar"
-                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#94A3B8', cursor: 'pointer' }}
+                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', cursor: 'pointer' }}
                                     >
                                       <Edit3 size={14} />
                                     </button>
@@ -1340,7 +1337,7 @@ export default function Admin() {
                                       type="button"
                                       onClick={() => handleDeleteActivity(act.id, act.title)}
                                       title="Excluir"
-                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#EF4444', cursor: 'pointer' }}
+                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#EF4444', cursor: 'pointer' }}
                                     >
                                       <Trash2 size={14} />
                                     </button>
@@ -1360,7 +1357,7 @@ export default function Admin() {
               {progTab === 'convidados' && (
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 500, color: '#F1F5F9', margin: 0 }}>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: 500, color: '#1E293B', margin: 0 }}>
                       Convidados
                     </h2>
 
@@ -1379,30 +1376,30 @@ export default function Admin() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
                     {speakers.map(spk => (
-                      <div key={spk.id} style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', padding: '16px', display: 'flex', gap: '14px' }}>
+                      <div key={spk.id} style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '16px', display: 'flex', gap: '14px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
                         <img
                           src={spk.photo || SAMPLE_SPEAKER_PHOTOS[0].url}
                           alt={spk.name}
-                          style={{ width: '56px', height: '56px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #334155' }}
+                          style={{ width: '56px', height: '56px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #E2E8F0' }}
                         />
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '0.90rem', fontWeight: 600, color: '#F8FAFC' }}>{spk.name}</span>
+                            <span style={{ fontSize: '0.90rem', fontWeight: 600, color: '#0F172A' }}>{spk.name}</span>
                             <button
                               type="button"
                               onClick={() => handleDeleteSpeaker(spk.id, spk.name)}
-                              style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: '2px' }}
+                              style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '2px' }}
                             >
                               <Trash2 size={13} />
                             </button>
                           </div>
-                          <span style={{ fontSize: '0.78rem', color: '#38BDF8', display: 'block', marginTop: '2px' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#0284C7', display: 'block', marginTop: '2px' }}>
                             {spk.role || spk.institution}
                           </span>
                           <span style={{ fontSize: '0.74rem', color: '#64748B', display: 'block' }}>
                             {spk.email}
                           </span>
-                          <span style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '6px', display: 'inline-block' }}>
+                          <span style={{ fontSize: '0.72rem', color: '#475569', marginTop: '6px', display: 'inline-block' }}>
                             Convite: {spk.inviteStatus || 'Aceito'}
                           </span>
                         </div>
@@ -1416,7 +1413,7 @@ export default function Admin() {
               {progTab === 'locais' && (
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 500, color: '#F1F5F9', margin: 0 }}>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: 500, color: '#1E293B', margin: 0 }}>
                       Locais & Salas
                     </h2>
 
@@ -1432,13 +1429,13 @@ export default function Admin() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '14px' }}>
                     {locations.map(loc => (
-                      <div key={loc.id} style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', padding: '16px' }}>
+                      <div key={loc.id} style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '16px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                           <MapPin size={16} color="#0284C7" />
-                          <span style={{ fontSize: '0.90rem', fontWeight: 600, color: '#F8FAFC' }}>{loc.name}</span>
+                          <span style={{ fontSize: '0.90rem', fontWeight: 600, color: '#0F172A' }}>{loc.name}</span>
                         </div>
-                        <div style={{ fontSize: '0.80rem', color: '#94A3B8' }}>
-                          Capacidade: <strong style={{ color: '#F8FAFC' }}>{loc.capacity}</strong> vagas
+                        <div style={{ fontSize: '0.80rem', color: '#64748B' }}>
+                          Capacidade: <strong style={{ color: '#0F172A' }}>{loc.capacity}</strong> vagas
                         </div>
                       </div>
                     ))}
@@ -1448,8 +1445,8 @@ export default function Admin() {
 
               {/* ABA CUPONS & CONFIGURAÇÕES */}
               {(progTab === 'cupons' || progTab === 'configuracoes') && (
-                <div style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', padding: '36px', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.88rem', color: '#94A3B8' }}>
+                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '36px', textAlign: 'center', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                  <span style={{ fontSize: '0.88rem', color: '#64748B' }}>
                     Todas as palestras e minicursos da FACOM TechWeek 2026 são 100% gratuitas com emissão de certificados oficiais.
                   </span>
                 </div>
@@ -1460,27 +1457,27 @@ export default function Admin() {
           {/* TELA: FEED & COMUNICADOS (SÓBRIA EVEN3) */}
           {activeMenu === 'feed' && (
             <div>
-              <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#F8FAFC', margin: '0 0 8px', letterSpacing: '-0.01em' }}>
+              <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#0F172A', margin: '0 0 8px', letterSpacing: '-0.01em' }}>
                 Feed & Comunicados
               </h1>
-              <p style={{ margin: '0 0 20px', fontSize: '0.84rem', color: '#94A3B8' }}>
+              <p style={{ margin: '0 0 20px', fontSize: '0.84rem', color: '#64748B' }}>
                 Envie comunicados para a timeline do evento ou dispare notificações nos aparelhos dos participantes.
               </p>
 
               <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '24px', alignItems: 'start' }}>
                 {/* Formulário de Envio (Even3 clean style) */}
-                <div style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', padding: '20px' }}>
-                  <h3 style={{ margin: '0 0 14px', fontSize: '0.95rem', fontWeight: 600, color: '#F8FAFC' }}>
+                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '20px', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}>
+                  <h3 style={{ margin: '0 0 14px', fontSize: '0.95rem', fontWeight: 600, color: '#0F172A' }}>
                     Publicar Mensagem
                   </h3>
 
                   {/* Canal */}
                   <div style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>Canal de envio</label>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Canal de envio</label>
                     <select
                       value={feedChannel}
                       onChange={(e) => setFeedChannel(e.target.value)}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#F8FAFC', fontSize: '0.84rem' }}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.84rem' }}
                     >
                       <option value="feed">Apenas Feed Público</option>
                       <option value="broadcast">Notificação Push (Sino)</option>
@@ -1490,14 +1487,14 @@ export default function Admin() {
 
                   {/* Modelos rápidos */}
                   <div style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>Modelos rápidos</label>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Modelos rápidos</label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       {FEED_TEMPLATES.map((tpl, idx) => (
                         <button
                           key={idx}
                           type="button"
                           onClick={() => setFeedInput(tpl.text)}
-                          style={{ padding: '3px 8px', borderRadius: '3px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#94A3B8', fontSize: '0.72rem', cursor: 'pointer' }}
+                          style={{ padding: '3px 8px', borderRadius: '3px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', color: '#475569', fontSize: '0.72rem', cursor: 'pointer' }}
                         >
                           {tpl.label}
                         </button>
@@ -1508,11 +1505,11 @@ export default function Admin() {
                   {/* Mensagem */}
                   <div style={{ marginBottom: '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#94A3B8' }}>Mensagem</label>
+                      <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#475569' }}>Mensagem</label>
                       <button
                         type="button"
                         onClick={handleAiFeedDescription}
-                        style={{ background: 'none', border: 'none', color: '#38BDF8', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', padding: 0 }}
+                        style={{ background: 'none', border: 'none', color: '#0284C7', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', padding: 0 }}
                       >
                         <Pencil size={11} />
                         <span>Assistente de redação</span>
@@ -1523,25 +1520,25 @@ export default function Admin() {
                       placeholder="Digite a mensagem do comunicado..."
                       value={feedInput}
                       onChange={(e) => setFeedInput(e.target.value)}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#F8FAFC', fontSize: '0.84rem', boxSizing: 'border-box', resize: 'vertical' }}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.84rem', boxSizing: 'border-box', resize: 'vertical' }}
                     />
                   </div>
 
                   {/* Imagem opcional */}
                   <div style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>URL da Imagem (opcional)</label>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>URL da Imagem (opcional)</label>
                     <input
                       type="url"
                       placeholder="https://exemplo.com/banner.jpg"
                       value={feedImageUrl}
                       onChange={(e) => setFeedImageUrl(e.target.value)}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#F8FAFC', fontSize: '0.84rem', boxSizing: 'border-box' }}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.84rem', boxSizing: 'border-box' }}
                     />
                   </div>
 
                   {/* Checkbox fixar */}
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.80rem', color: '#94A3B8', cursor: 'pointer' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.80rem', color: '#475569', cursor: 'pointer' }}>
                       <input
                         type="checkbox"
                         checked={feedIsPinned}
@@ -1563,19 +1560,19 @@ export default function Admin() {
                 </div>
 
                 {/* Lista de Posts Ativos Even3 */}
-                <div style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', padding: '20px' }}>
+                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '20px', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: '#F8FAFC' }}>
+                    <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: '#0F172A' }}>
                       Publicações no Feed ({feedPosts.length})
                     </h3>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {feedPosts.map(post => (
-                      <div key={post.id} style={{ border: '1px solid #1E293B', borderRadius: '4px', padding: '14px', backgroundColor: '#0F172A' }}>
+                      <div key={post.id} style={{ border: '1px solid #E2E8F0', borderRadius: '4px', padding: '14px', backgroundColor: '#F8FAFC' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#F8FAFC' }}>{post.author}</span>
+                            <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0F172A' }}>{post.author}</span>
                             {post.pinned && (
                               <span style={{ fontSize: '0.68rem', backgroundColor: '#0284C7', color: '#FFFFFF', padding: '1px 5px', borderRadius: '3px' }}>
                                 FIXADO
@@ -1587,7 +1584,7 @@ export default function Admin() {
                               type="button"
                               onClick={() => handleTogglePinPost(post.id, post.pinned)}
                               title={post.pinned ? 'Desafixar' : 'Fixar'}
-                              style={{ background: 'none', border: 'none', color: post.pinned ? '#38BDF8' : '#64748B', cursor: 'pointer', padding: '2px' }}
+                              style={{ background: 'none', border: 'none', color: post.pinned ? '#0284C7' : '#94A3B8', cursor: 'pointer', padding: '2px' }}
                             >
                               <Pin size={13} />
                             </button>
@@ -1602,7 +1599,7 @@ export default function Admin() {
                           </div>
                         </div>
 
-                        <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: '#CBD5E1', lineHeight: 1.4 }}>
+                        <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: '#334155', lineHeight: 1.4 }}>
                           {post.content}
                         </p>
 
@@ -1621,44 +1618,44 @@ export default function Admin() {
           {/* TELA: INÍCIO (MÉTRICAS) */}
           {activeMenu === 'inicio' && (
             <div>
-              <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#F8FAFC', margin: '0 0 20px', letterSpacing: '-0.01em' }}>
+              <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#0F172A', margin: '0 0 20px', letterSpacing: '-0.01em' }}>
                 Visão Geral
               </h1>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-                <div style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', padding: '18px' }}>
-                  <span style={{ fontSize: '0.76rem', color: '#94A3B8', fontWeight: 500 }}>Participantes cadastrados</span>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#F8FAFC', margin: '4px 0 0' }}>
+                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '18px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                  <span style={{ fontSize: '0.76rem', color: '#64748B', fontWeight: 500 }}>Participantes cadastrados</span>
+                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#0F172A', margin: '4px 0 0' }}>
                     {Math.max(usersList.length, 142)}
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', padding: '18px' }}>
-                  <span style={{ fontSize: '0.76rem', color: '#94A3B8', fontWeight: 500 }}>Ingressos Sympla</span>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#34D399', margin: '4px 0 0' }}>
+                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '18px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                  <span style={{ fontSize: '0.76rem', color: '#64748B', fontWeight: 500 }}>Ingressos Sympla</span>
+                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#059669', margin: '4px 0 0' }}>
                     {usersList.filter(u => u.hasSymplaTicket || u.symplaTicket).length || 118}
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', padding: '18px' }}>
-                  <span style={{ fontSize: '0.76rem', color: '#94A3B8', fontWeight: 500 }}>Atividades na grade</span>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#38BDF8', margin: '4px 0 0' }}>
+                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '18px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                  <span style={{ fontSize: '0.76rem', color: '#64748B', fontWeight: 500 }}>Atividades na grade</span>
+                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#0284C7', margin: '4px 0 0' }}>
                     {activities.length}
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', padding: '18px' }}>
-                  <span style={{ fontSize: '0.76rem', color: '#94A3B8', fontWeight: 500 }}>Palestrantes confirmados</span>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#FBBF24', margin: '4px 0 0' }}>
+                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '18px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                  <span style={{ fontSize: '0.76rem', color: '#64748B', fontWeight: 500 }}>Palestrantes confirmados</span>
+                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#D97706', margin: '4px 0 0' }}>
                     {speakers.length}
                   </div>
                 </div>
               </div>
 
-              <div style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: '#F8FAFC' }}>Credenciamento na Entrada</h3>
-                  <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#94A3B8' }}>Acesse a tela de portaria para validar ingressos e presenças via QR Code.</p>
+                  <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: '#0F172A' }}>Credenciamento na Entrada</h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748B' }}>Acesse a tela de portaria para validar ingressos e presenças via QR Code.</p>
                 </div>
                 <button
                   type="button"
@@ -1675,7 +1672,7 @@ export default function Admin() {
           {activeMenu === 'pessoas' && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#F8FAFC', margin: 0 }}>
+                <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#0F172A', margin: 0 }}>
                   Pessoas & Papéis
                 </h1>
 
@@ -1683,7 +1680,7 @@ export default function Admin() {
                   <select
                     value={userRoleFilter}
                     onChange={(e) => setUserRoleFilter(e.target.value)}
-                    style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#F8FAFC', fontSize: '0.82rem', height: '34px' }}
+                    style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.82rem', height: '34px' }}
                   >
                     <option value="ALL">Todos os papéis</option>
                     <option value="PARTICIPANT">Participantes</option>
@@ -1696,15 +1693,15 @@ export default function Admin() {
                     placeholder="Buscar participante..."
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
-                    style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#F8FAFC', fontSize: '0.82rem', height: '34px', width: '180px' }}
+                    style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.82rem', height: '34px', width: '180px' }}
                   />
                 </div>
               </div>
 
-              <div style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
                   <thead>
-                    <tr style={{ backgroundColor: '#0F172A', borderBottom: '1px solid #1E293B' }}>
+                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
                       <th style={{ padding: '10px 16px', color: '#64748B', fontWeight: 600, fontSize: '0.74rem' }}>NOME</th>
                       <th style={{ padding: '10px 16px', color: '#64748B', fontWeight: 600, fontSize: '0.74rem' }}>E-MAIL</th>
                       <th style={{ padding: '10px 16px', color: '#64748B', fontWeight: 600, fontSize: '0.74rem' }}>PAPEL</th>
@@ -1720,10 +1717,10 @@ export default function Admin() {
                         return match && roleMatch;
                       })
                       .map(u => (
-                        <tr key={u.uid || u.id} style={{ borderBottom: '1px solid #1E293B' }}>
-                          <td style={{ padding: '12px 16px', color: '#F8FAFC' }}>{u.fullName || 'Aluno TechWeek'}</td>
-                          <td style={{ padding: '12px 16px', color: '#94A3B8' }}>{u.email}</td>
-                          <td style={{ padding: '12px 16px', color: '#E2E8F0' }}>{u.role || 'PARTICIPANT'}</td>
+                        <tr key={u.uid || u.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                          <td style={{ padding: '12px 16px', color: '#0F172A' }}>{u.fullName || 'Aluno TechWeek'}</td>
+                          <td style={{ padding: '12px 16px', color: '#64748B' }}>{u.email}</td>
+                          <td style={{ padding: '12px 16px', color: '#334155' }}>{u.role || 'PARTICIPANT'}</td>
                           <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                             <select
                               value={u.role || 'PARTICIPANT'}
@@ -1731,7 +1728,7 @@ export default function Admin() {
                                 const newRole = e.target.value;
                                 await updateUserRoleInFirestore(u.uid || u.id, newRole);
                               }}
-                              style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#0F172A', color: '#F8FAFC', fontSize: '0.78rem' }}
+                              style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.78rem' }}
                             >
                               <option value="PARTICIPANT">PARTICIPANT</option>
                               <option value="STAFF">STAFF</option>
@@ -1748,9 +1745,9 @@ export default function Admin() {
 
           {/* DEMAIS SEÇÕES */}
           {['vendas', 'inscricoes', 'pagina', 'certificados', 'config', 'ferramentas'].includes(activeMenu) && (
-            <div style={{ backgroundColor: '#0A1122', border: '1px solid #1E293B', borderRadius: '4px', padding: '36px', textAlign: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#F8FAFC' }}>Módulo Ativo • FACOM TechWeek 2026</h3>
-              <p style={{ margin: '8px 0 16px', fontSize: '0.84rem', color: '#94A3B8' }}>Este item está integrado com a organização do evento.</p>
+            <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '36px', textAlign: 'center', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#0F172A' }}>Módulo Ativo • FACOM TechWeek 2026</h3>
+              <p style={{ margin: '8px 0 16px', fontSize: '0.84rem', color: '#64748B' }}>Este item está integrado com a organização do evento.</p>
               <button
                 type="button"
                 onClick={() => setActiveMenu('programacao')}
@@ -1765,8 +1762,8 @@ export default function Admin() {
 
       {/* 4. MODAL ADICIONAR ATIVIDADE (ESTILO EVEN3 EXATO, SCREENSHOTS 1, 2, 3, 4) */}
       {isActivityModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '560px', maxHeight: '92vh', backgroundColor: '#FFFFFF', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#334155', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '560px', maxHeight: '92vh', backgroundColor: '#FFFFFF', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#334155', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
             {/* Header Even3: Barra Sólida Azul com Título e 'X' */}
             <div style={{ backgroundColor: '#0284C7', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#FFFFFF' }}>
               <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>
@@ -1806,7 +1803,7 @@ export default function Admin() {
                   <button
                     type="button"
                     onClick={handleAiDescription}
-                    style={{ background: 'none', border: '1px solid #93C5FD', borderRadius: '12px', padding: '2px 8px', color: '#0284C7', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    style={{ background: 'none', border: '1px solid #BAE6FD', borderRadius: '12px', padding: '2px 8px', color: '#0284C7', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
                     <Pencil size={11} />
                     <span>Assistente de redação</span>
@@ -1852,7 +1849,7 @@ export default function Admin() {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '5px' }}>
                     <label style={{ fontSize: '0.80rem', fontWeight: 500, color: '#334155' }}>Inscrição</label>
-                    <Info size={12} color="#94A3B8" />
+                    <Info size={12} color="#64748B" />
                   </div>
                   <select
                     value={activityForm.registrationType}
@@ -1979,7 +1976,7 @@ export default function Admin() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '5px' }}>
                   <label style={{ fontSize: '0.80rem', fontWeight: 500, color: '#334155' }}>Materiais de apoio</label>
-                  <Info size={12} color="#94A3B8" />
+                  <Info size={12} color="#64748B" />
                 </div>
                 <button
                   type="button"
@@ -2078,8 +2075,8 @@ export default function Admin() {
 
       {/* 5. MODAL ADICIONAR CONVIDADO (ESTILO EVEN3 EXATO, SCREENSHOT 5) */}
       {isGuestModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '520px', maxHeight: '92vh', backgroundColor: '#FFFFFF', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#334155', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '520px', maxHeight: '92vh', backgroundColor: '#FFFFFF', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#334155', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
             {/* Header Even3 Azul */}
             <div style={{ backgroundColor: '#0284C7', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#FFFFFF' }}>
               <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Adicionar convidado</h3>
@@ -2148,7 +2145,7 @@ export default function Admin() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '5px' }}>
                   <label style={{ fontSize: '0.80rem', fontWeight: 500, color: '#334155' }}>Foto</label>
-                  <Info size={12} color="#94A3B8" />
+                  <Info size={12} color="#64748B" />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <button
@@ -2249,7 +2246,7 @@ export default function Admin() {
 
       {/* 6. MODAL LOCAL */}
       {isLocationModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
           <div style={{ width: '100%', maxWidth: '420px', backgroundColor: '#FFFFFF', borderRadius: '4px', overflow: 'hidden', color: '#334155' }}>
             <div style={{ backgroundColor: '#0284C7', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#FFFFFF' }}>
               <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 600 }}>Cadastrar Local</h3>
@@ -2306,8 +2303,8 @@ export default function Admin() {
 
       {/* 7. MODAL QR CODE DE PRESENÇA */}
       {qrModalActivity && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#FFFFFF', borderRadius: '4px', padding: '24px', textAlign: 'center', color: '#334155' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#FFFFFF', borderRadius: '4px', padding: '24px', textAlign: 'center', color: '#334155', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
             <span style={{ fontSize: '0.74rem', color: '#0284C7', fontWeight: 700, textTransform: 'uppercase' }}>
               QR Code de Check-in
             </span>
