@@ -1,9 +1,9 @@
 import React from 'react';
 import './MascotDuo.css';
 
-export default function MascotDuo() {
+export default function MascotDuo({ className = '', style = {} }) {
   return (
-    <div className="mascot-duo-container">
+    <div className={`mascot-duo-container ${className}`} style={style}>
       <svg
         viewBox="0 0 350 200"
         xmlns="http://www.w3.org/2000/svg"

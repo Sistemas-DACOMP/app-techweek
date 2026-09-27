@@ -93,3 +93,40 @@ export function suggestEmailCorrection(email) {
   }
   return null;
 }
+
+// Validação de Nome / Sobrenome (mínimo de 2 caracteres)
+export function isValidName(name) {
+  if (typeof name !== 'string') return false;
+  return name.trim().length >= 2;
+}
+
+// Validação de Nome de Usuário (@handle, de 3 a 20 caracteres alfanuméricos/underline/ponto)
+export function isValidUsername(username) {
+  if (typeof username !== 'string') return false;
+  const clean = username.trim().replace(/^@/, '');
+  return /^[a-zA-Z0-9._]{3,20}$/.test(clean);
+}
+
+// Formatação automática e aplicação de máscara de telefone (BR)
+export function formatPhone(phone) {
+  if (typeof phone !== 'string') return '';
+  const digits = phone.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) {
+    return digits ? `(${digits}` : '';
+  }
+  if (digits.length <= 6) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  }
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+// Validação de telefone (10 a 11 dígitos numéricos limpos)
+export function isValidPhone(phone) {
+  if (typeof phone !== 'string') return false;
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 10 || digits.length === 11;
+}
+

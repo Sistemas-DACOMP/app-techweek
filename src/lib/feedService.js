@@ -1,0 +1,185 @@
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  onSnapshot, 
+  addDoc, 
+  doc, 
+  updateDoc, 
+  arrayUnion, 
+  arrayRemove, 
+  serverTimestamp,
+  getDocs,
+  limit
+} from 'firebase/firestore';
+import { db } from './firebase';
+
+/**
+ * Posts padrão para o Feed da FACOM TechWeek 2026.
+ * Exibidos como fallback gracioso caso a coleção 'feed_posts' do Firestore esteja vazia.
+ */
+export const DEFAULT_FEED_POSTS = [
+  {
+    id: 'feed-1',
+    author: 'Organização FACOM TechWeek',
+    authorRole: 'ORGANIZATION',
+    authorAvatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
+    content: '🎉 Sejam bem-vindos à FACOM TechWeek 2026! Acompanhem o feed para avisos em tempo real, horários de palestras e novidades dos estandes.',
+    imageUrl: '',
+    pinned: true,
+    likes: ['user1', 'user2', 'user3', 'user4', 'user5'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
+    formattedTime: 'há 25 min'
+  },
+  {
+    id: 'feed-2',
+    author: 'Kanastra (Patrocinador Master)',
+    authorRole: 'SPONSOR',
+    authorAvatar: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=150&auto=format&fit=crop&q=80',
+    content: '⚡️ Nosso estande já está aberto! Venham conversar com nosso time de engenharia sobre backend de alta escala, pegar brindes e descobrir a palavra-chave da Missão Secreta!',
+    imageUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+    pinned: false,
+    likes: ['user1', 'user2', 'user8'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+    formattedTime: 'há 2 horas'
+  },
+  {
+    id: 'feed-3',
+    author: 'Organização FACOM TechWeek',
+    authorRole: 'ORGANIZATION',
+    authorAvatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
+    content: '📢 ATENÇÃO: A palestra sobre Inteligência Artificial Generativa no Auditório 1 começará em 15 minutos. Garantam suas vagas e preparem o QR Code do app para o check-in!',
+    imageUrl: '',
+    pinned: false,
+    likes: ['user2', 'user3', 'user9', 'user10'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+    formattedTime: 'há 4 horas'
+  },
+  {
+    id: 'feed-4',
+    author: 'Sankhya',
+    authorRole: 'SPONSOR',
+    authorAvatar: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=150&auto=format&fit=crop&q=80',
+    content: '🚀 Dica de ouro para quem quer se destacar no mercado: passem no nosso estande para conhecer nossa Trilha de Carreira em Desenvolvimento!',
+    imageUrl: '',
+    pinned: false,
+    likes: ['user1', 'user4'],
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
+    formattedTime: 'há 6 horas'
+  }
+];
+
+/**
+ * Escuta atualizações do Feed em tempo real.
+ */
+export function subscribeToFeedPosts(callback) {
+  try {
+    const q = query(
+      collection(db, 'feed_posts'),
+      orderBy('createdAt', 'desc')
+    );
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        if (snapshot.empty) {
+          callback(DEFAULT_FEED_POSTS);
+          return;
+        }
+
+        const posts = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            ...data,
+            likes: Array.isArray(data.likes) ? data.likes : [],
+            createdAt: data.createdAt?.toDate
+              ? data.createdAt.toDate().toISOString()
+              : data.createdAt || new Date().toISOString()
+          };
+        });
+
+        callback(posts);
+      },
+      (error) => {
+        if (error?.code !== 'permission-denied') {
+          console.warn('Aviso: Erro ao escutar feed_posts no Firestore, utilizando fallback:', error);
+        }
+        callback(DEFAULT_FEED_POSTS);
+      }
+    );
+  } catch (err) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('Aviso: Exceção ao conectar no Firestore para feed_posts:', err);
+    }
+    callback(DEFAULT_FEED_POSTS);
+    return () => {};
+  }
+}
+
+/**
+ * Retorna o último post do Feed para o Card de Resumo da Tela Inicial.
+ */
+export async function getLatestFeedPost() {
+  try {
+    const q = query(
+      collection(db, 'feed_posts'),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const docSnap = snap.docs[0];
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        likes: Array.isArray(data.likes) ? data.likes : []
+      };
+    }
+  } catch (e) {
+    // fallback
+  }
+  return DEFAULT_FEED_POSTS[0];
+}
+
+/**
+ * Cria uma nova publicação no Feed (Organização ou Patrocinador).
+ */
+export async function createFeedPost(postData) {
+  try {
+    const docRef = await addDoc(collection(db, 'feed_posts'), {
+      author: postData.author || 'Organização FACOM',
+      authorRole: postData.authorRole || 'ORGANIZATION',
+      authorAvatar: postData.authorAvatar || '',
+      content: postData.content,
+      imageUrl: postData.imageUrl || '',
+      pinned: Boolean(postData.pinned),
+      likes: [],
+      createdAt: serverTimestamp()
+    });
+    return { success: true, id: docRef.id };
+  } catch (err) {
+    console.error('Erro ao publicar post no Feed:', err);
+    throw err;
+  }
+}
+
+/**
+ * Curte ou descurte uma publicação no Feed.
+ */
+export async function toggleLikeFeedPost(postId, userId) {
+  if (!userId || !postId) return;
+  try {
+    const postRef = doc(db, 'feed_posts', postId);
+    // Para mock IDs estáticos 'feed-1', opera apenas localmente
+    if (postId.startsWith('feed-')) return;
+
+    // Atualização no Firestore real
+    await updateDoc(postRef, {
+      likes: arrayUnion(userId)
+    });
+  } catch (err) {
+    console.warn('Aviso: Erro ao alternar curtida no post do Feed:', err);
+  }
+}

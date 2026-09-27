@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, Share2, ArrowLeft, Loader2, Image as ImageIcon } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
+import SymplaRequirementModal from '../components/SymplaRequirementModal';
+import SymplaStickyBanner from '../components/SymplaStickyBanner';
 import logoTw from '../assets/logo-tw.png';
 
 const alanSvgString = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bB" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2563eb" /><stop offset="100%" stop-color="#1e3a8a" /></linearGradient><linearGradient id="aB" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1e3a8a" stop-opacity="0.4" /><stop offset="100%" stop-color="#2563eb" stop-opacity="0" /></linearGradient><linearGradient id="eB" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e2e8f0" /><stop offset="100%" stop-color="#94a3b8" /></linearGradient><clipPath id="cB"><rect x="40" y="40" width="120" height="120" rx="16" /></clipPath></defs><g><path d="M 40 100 L 15 70 L 30 30" fill="none" stroke="#1e3a8a" stroke-width="16" stroke-linejoin="bevel" stroke-linecap="square"/><rect x="20" y="20" width="20" height="20" rx="6" fill="#2563eb"/></g><g><path d="M 160 100 L 185 130 L 170 180" fill="none" stroke="#1e3a8a" stroke-width="16" stroke-linejoin="bevel" stroke-linecap="square"/><rect x="160" y="170" width="20" height="20" rx="6" fill="#2563eb"/></g><rect x="40" y="40" width="120" height="120" rx="16" fill="url(#bB)"/><g clip-path="url(#cB)"><path d="M 40 160 L 160 40 L 160 160 Z" fill="url(#aB)"/><path d="M 40 100 L 100 40 L 160 40 L 40 160 Z" fill="rgba(255,255,255,0.08)"/></g><g><rect x="53" y="63" width="44" height="44" rx="10" fill="url(#eB)"/><rect x="63" y="73" width="24" height="24" rx="6" fill="#0f172a"/><rect x="77" y="77" width="6" height="6" rx="2" fill="#fff"/></g><g><rect x="103" y="63" width="44" height="44" rx="10" fill="url(#eB)"/><rect x="113" y="73" width="24" height="24" rx="6" fill="#0f172a"/><rect x="127" y="77" width="6" height="6" rx="2" fill="#fff"/></g></svg>`;
@@ -16,16 +18,17 @@ const loadImage = (src) => new Promise((resolve, reject) => {
 });
 
 export default function InstagramMission() {
+  const { completeChallenge, hasCompletedChallenge, hasSymplaTicket } = useUser();
   const [image, setImage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [showSymplaModal, setShowSymplaModal] = useState(false);
   
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const { completeChallenge, hasCompletedChallenge, hasSymplaTicket } = useUser();
 
   useEffect(() => {
     if (hasCompletedChallenge('instagram_story')) {
@@ -191,10 +194,11 @@ export default function InstagramMission() {
 
       if (!isComplete) {
         if (!hasSymplaTicket) {
-          alert('Atenção: Para pontuar no ranking oficial, vincule seu ingresso do Sympla no Perfil.');
+          setShowSymplaModal(true);
+          return;
         } else {
-          const ok = await completeChallenge('instagram_story', 50);
-          if (ok) {
+          const res = await completeChallenge('instagram_story', 50);
+          if (res && (res === true || res.success || res.alreadyCompleted)) {
             setIsComplete(true);
           }
         }
@@ -227,13 +231,56 @@ export default function InstagramMission() {
 
   return (
     <div className="page-container animate-fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', overflowY: 'auto', padding: '24px 24px 120px 24px', zIndex: 10, position: 'relative' }}>
+      <SymplaStickyBanner />
       
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <button onClick={() => navigate('/challenges')} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', color: 'white', cursor: 'pointer' }}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1 className="font-lastica" style={{ fontSize: '1rem', fontWeight: '500', textAlign: 'center' }}>Missão Stories</h1>
-        <div style={{ width: '40px' }}></div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/challenges')}
+            aria-label="Voltar para os desafios"
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '12px',
+              backgroundColor: '#0F141F',
+              border: '1px solid #1E293B',
+              color: '#F8FAFC',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0
+            }}
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h1
+              style={{
+                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                fontSize: '1.75rem',
+                fontWeight: 800,
+                color: '#F8FAFC',
+                margin: 0,
+                letterSpacing: '-0.03em',
+                lineHeight: 1.15
+              }}
+            >
+              Missão Stories
+            </h1>
+            <p
+              style={{
+                fontSize: '0.80rem',
+                color: '#94A3B8',
+                margin: '3px 0 0',
+                fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+              }}
+            >
+              Gere seu card oficial e compartilhe
+            </p>
+          </div>
+        </div>
       </div>
 
       {!hasSymplaTicket && (
@@ -306,7 +353,7 @@ export default function InstagramMission() {
               </button>
               <button 
                 onClick={() => fileInputRef.current?.click()}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', color: 'white', cursor: 'pointer', fontFamily: 'Montserrat, sans-serif', fontWeight: '500' }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', color: 'white', cursor: 'pointer', fontFamily: "'Inter', sans-serif", fontWeight: '600' }}
               >
                 <ImageIcon size={20} />
                 Escolher da Galeria
@@ -340,7 +387,7 @@ export default function InstagramMission() {
                   setImage(null);
                   startCamera();
                 }}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', color: 'white', cursor: 'pointer', fontFamily: 'Montserrat, sans-serif', fontWeight: '500' }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', color: 'white', cursor: 'pointer', fontFamily: "'Inter', sans-serif", fontWeight: '600' }}
               >
                 Tirar outra foto
               </button>
@@ -355,6 +402,12 @@ export default function InstagramMission() {
         </div>
 
       </div>
+
+      <SymplaRequirementModal
+        isOpen={showSymplaModal}
+        onClose={() => setShowSymplaModal(false)}
+        featureName="o envio desta missão"
+      />
     </div>
   );
 }

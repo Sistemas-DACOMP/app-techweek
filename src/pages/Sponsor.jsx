@@ -233,11 +233,11 @@ export default function Sponsor() {
             type="button"
             onClick={() => setDevSponsorOverride(true)}
             style={{
-              background: 'rgba(0, 242, 254, 0.1)',
-              border: '1px solid rgba(0, 242, 254, 0.3)',
+              background: 'rgba(56, 189, 248, 0.1)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
               borderRadius: '14px',
               padding: '10px',
-              color: '#00f2fe',
+              color: '#38BDF8',
               fontSize: '12px',
               fontWeight: '700',
               cursor: 'pointer',
@@ -256,7 +256,7 @@ export default function Sponsor() {
   }
 
   return (
-    <div className="page-container animate-fade-in" style={{ paddingBottom: '100px', fontFamily: "'Montserrat', sans-serif" }}>
+    <div className="page-container animate-fade-in" style={{ paddingBottom: '100px', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}>
       {/* Toast Alert */}
       {toastMessage && (
         <div
@@ -286,38 +286,77 @@ export default function Sponsor() {
         </div>
       )}
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', marginTop: '12px' }}>
-        <button
-          onClick={() => navigate('/')}
-          style={{
-            background: 'rgba(255, 255, 255, 0.06)',
-            border: 'none',
-            borderRadius: '50%',
-            width: '38px',
-            height: '38px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer'
-          }}
-          aria-label="Voltar"
-        >
-          <ArrowLeft size={18} />
-        </button>
+      {/* Header Padronizado */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '12px',
+              backgroundColor: '#0F141F',
+              border: '1px solid #1E293B',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#F8FAFC',
+              cursor: 'pointer',
+              flexShrink: 0
+            }}
+            aria-label="Voltar para o início"
+          >
+            <ArrowLeft size={18} />
+          </button>
 
-        <div style={{ textAlign: 'center' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff', margin: 0 }}>
-            Modo Patrocinador
-          </h2>
-          <div style={{ fontSize: '12px', color: '#00f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: '2px' }}>
-            <Building2 size={13} />
-            <span>{sponsorName}</span>
+          <div>
+            <h1
+              style={{
+                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                fontSize: '1.75rem',
+                fontWeight: 800,
+                color: '#F8FAFC',
+                margin: 0,
+                letterSpacing: '-0.03em',
+                lineHeight: 1.15
+              }}
+            >
+              Patrocinador
+            </h1>
+            <div
+              style={{
+                fontSize: '0.80rem',
+                color: '#38BDF8',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                margin: '3px 0 0',
+                fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+              }}
+            >
+              <Building2 size={13} />
+              <span>{sponsorName}</span>
+            </div>
           </div>
         </div>
 
-        <div style={{ width: '38px' }} />
+        <div
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '12px',
+            backgroundColor: '#0F141F',
+            border: '1px solid #1E293B',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#10B981',
+            flexShrink: 0
+          }}
+        >
+          <QrCode size={18} />
+        </div>
       </div>
 
       {/* Metric Cards */}
@@ -326,7 +365,7 @@ export default function Sponsor() {
           <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>
             Leads Bipados
           </div>
-          <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#00f2fe' }}>
+          <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#38BDF8' }}>
             {capturedLeads.length}
           </div>
         </div>
@@ -344,7 +383,7 @@ export default function Sponsor() {
       {/* Leitor Contínuo de QR Code */}
       <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px', textAlign: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '14px' }}>
-          <QrCode size={18} color="#00f2fe" />
+          <QrCode size={18} color="#38BDF8" />
           <span style={{ fontSize: '13px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#ffffff' }}>
             Leitor de Crachá do Estande
           </span>
@@ -365,7 +404,7 @@ export default function Sponsor() {
             overflow: 'hidden',
             minHeight: '220px',
             background: 'rgba(0, 0, 0, 0.4)',
-            border: '2px solid rgba(0, 242, 254, 0.3)'
+            border: '2px solid rgba(56, 189, 248, 0.3)'
           }}
         />
 
@@ -376,7 +415,7 @@ export default function Sponsor() {
         )}
 
         {isResolving && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#00f2fe', marginTop: '14px', fontSize: '13px', fontWeight: '700' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#38BDF8', marginTop: '14px', fontSize: '13px', fontWeight: '700' }}>
             <Loader2 className="animate-spin" size={18} />
             <span>Processando crachá lido...</span>
           </div>

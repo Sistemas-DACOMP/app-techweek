@@ -1,8 +1,9 @@
-import { HashRouter, Routes, Route, NavLink, useLocation, Navigate, useNavigate } from 'react-router-dom';
-import { Home, QrCode, ScanLine, Trophy, User } from 'lucide-react';
+import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Dashboard from './pages/Dashboard';
+import Feed from './pages/Feed';
+import Agenda from './pages/Agenda';
 import Scanner from './pages/Scanner';
 import Profile from './pages/Profile';
 import Challenges from './pages/Challenges';
@@ -13,13 +14,15 @@ import Onboarding from './pages/Onboarding';
 import Staff from './pages/Staff';
 import InstagramMission from './pages/InstagramMission';
 import Sponsor from './pages/Sponsor';
+import Terms from './pages/Terms';
+import BottomNavigation from './components/BottomNavigation';
 import logoTw from './assets/logo-tw.png';
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding';
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding' || location.pathname === '/termos';
 
   const [isSplashVisible, setIsSplashVisible] = useState(true);
 
@@ -34,8 +37,9 @@ function AppContent() {
     if (!isSplashVisible && !authLoading) {
       if (!user && !isAuthPage) {
         navigate('/login', { replace: true });
-      } else if (user && (location.pathname === '/login' || location.pathname === '/cadastro')) {
-        navigate('/', { replace: true });
+      } else if (user && location.pathname === '/login') {
+        const hasOnboarding = localStorage.getItem('facom_onboarding_completed') === 'true';
+        navigate(hasOnboarding ? '/' : '/onboarding', { replace: true });
       }
     }
   }, [user, authLoading, isSplashVisible, isAuthPage, navigate, location.pathname]);
@@ -81,8 +85,11 @@ function AppContent() {
         <Route path="/login" element={<Login />} />
         <Route path="/cadastro" element={<Register />} />
         <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/termos" element={<Terms />} />
         
         <Route path="/" element={<Dashboard />} />
+        <Route path="/feed" element={<Feed />} />
+        <Route path="/agenda" element={<Agenda />} />
         <Route path="/scanner" element={<Scanner />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/challenges" element={<Challenges />} />
@@ -93,27 +100,7 @@ function AppContent() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       
-      {!isAuthPage && (
-        <div className="bottom-nav-container">
-          <nav className="bottom-nav">
-            <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <Home size={22} />
-            </NavLink>
-            <NavLink to="/ranking" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <Trophy size={22} />
-            </NavLink>
-            <NavLink to="/scanner" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <ScanLine size={24} />
-            </NavLink>
-            <NavLink to="/challenges" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <QrCode size={22} />
-            </NavLink>
-            <NavLink to="/profile" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <User size={22} />
-            </NavLink>
-          </nav>
-        </div>
-      )}
+      {!isAuthPage && <BottomNavigation />}
     </div>
   );
 }

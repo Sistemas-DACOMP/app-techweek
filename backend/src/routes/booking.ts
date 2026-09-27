@@ -6,6 +6,104 @@ import { isValidFirestoreId } from '../lib/firestoreId';
 
 const router = Router();
 
+export const DEFAULT_ACTIVITIES_CATALOG: Record<string, {
+  title: string;
+  description: string;
+  speaker: string;
+  type: string;
+  day: string;
+  date: string;
+  time: string;
+  location: string;
+  vagas_disponiveis: number;
+  vagas_totais: number;
+  total_inscritos: number;
+  total_espera: number;
+  points: number;
+  attendanceMode: string;
+}> = {
+  palestra_abertura: {
+    title: 'Palestra de Abertura: O Futuro da Computação e IA',
+    description: 'Boas-vindas oficiais e palestra magna sobre as principais tendências tecnológicas.',
+    speaker: 'Comissão Organizadora & Convidados',
+    type: 'palestra',
+    day: '19/10',
+    date: '2026-10-19',
+    time: '19:00',
+    location: 'Anfiteatro principal',
+    vagas_disponiveis: 120,
+    vagas_totais: 150,
+    total_inscritos: 0,
+    total_espera: 0,
+    points: 20,
+    attendanceMode: 'SELF_SCAN'
+  },
+  palestra_samuel_amorim: {
+    title: 'Palestra: Dev que não aparece, não cresce',
+    description: 'Como construir sua marca técnica, portfólio de impacto e se destacar no mercado.',
+    speaker: 'Samuel Amorim',
+    type: 'palestra',
+    day: '19/10',
+    date: '2026-10-19',
+    time: '20:00',
+    location: 'Sala 5R',
+    vagas_disponiveis: 50,
+    vagas_totais: 60,
+    total_inscritos: 0,
+    total_espera: 0,
+    points: 20,
+    attendanceMode: 'SELF_SCAN'
+  },
+  workshop_firebase_node: {
+    title: 'Workshop: Arquitetura Serverless com Firebase e Node',
+    description: 'Construção prática de backend serverless, Cloud Functions, regras de segurança e banco em tempo real.',
+    speaker: 'Equipe de Engenharia TechWeek',
+    type: 'workshop',
+    day: '20/10',
+    date: '2026-10-20',
+    time: '14:00',
+    location: 'Laboratório 1 - FACOM',
+    vagas_disponiveis: 25,
+    vagas_totais: 30,
+    total_inscritos: 0,
+    total_espera: 0,
+    points: 35,
+    attendanceMode: 'DOUBLE_CHECK'
+  },
+  minicurso_agentes_ia: {
+    title: 'Minicurso: Agentes Autônomos e Engenharia de Contexto',
+    description: 'Aprenda a orquestrar agentes de IA, tooling, loops de feedback e automações completas de software.',
+    speaker: 'Dra. Aline Souza & Time IA',
+    type: 'minicurso',
+    day: '21/10',
+    date: '2026-10-21',
+    time: '15:30',
+    location: 'Laboratório 2 - FACOM',
+    vagas_disponiveis: 18,
+    vagas_totais: 25,
+    total_inscritos: 0,
+    total_espera: 0,
+    points: 40,
+    attendanceMode: 'DOUBLE_CHECK'
+  },
+  ativacao_stands_tech: {
+    title: 'Ativação: Speed Pitch & Networking com Patrocinadores',
+    description: 'Conecte-se diretamente com líderes de empresas, descubra oportunidades de estágio e ganhe brindes.',
+    speaker: 'Empresas Patrocinadoras',
+    type: 'ativacao',
+    day: '22/10',
+    date: '2026-10-22',
+    time: '10:00',
+    location: 'Hall Central de Estandes',
+    vagas_disponiveis: 80,
+    vagas_totais: 100,
+    total_inscritos: 0,
+    total_espera: 0,
+    points: 15,
+    attendanceMode: 'SELF_SCAN'
+  }
+};
+
 // POST /api/activities/:activityId/reserve
 //
 // Reserva atômica de vaga (ou entrada na lista de espera) numa atividade.
@@ -54,10 +152,52 @@ router.post('/:activityId/reserve', requireAuth, participantActionLimiter, requi
       }
 
       if (!activitySnap.exists) {
-        return {
-          status: 404 as const,
-          body: { error: 'ACTIVITY_NOT_FOUND', message: 'Atividade não encontrada.' }
-        };
+        const defaultActivity = DEFAULT_ACTIVITIES_CATALOG[activityId];
+        if (!defaultActivity) {
+          return {
+            status: 404 as const,
+            body: { error: 'ACTIVITY_NOT_FOUND', message: 'Atividade não encontrada.' }
+          };
+        }
+
+        const availableSeats = defaultActivity.vagas_disponiveis;
+        const totalInscritos = defaultActivity.total_inscritos;
+        const createdAt = new Date();
+
+        if (availableSeats > 0) {
+          tx.set(activityRef, {
+            ...defaultActivity,
+            vagas_disponiveis: availableSeats - 1,
+            total_inscritos: totalInscritos + 1,
+            createdAt
+          });
+
+          tx.set(bookingRef, {
+            userId: uid,
+            activityId,
+            status: 'CONFIRMED',
+            position: null,
+            createdAt
+          });
+
+          return { status: 200 as const, body: { status: 'CONFIRMED', position: null } };
+        } else {
+          tx.set(activityRef, {
+            ...defaultActivity,
+            total_espera: 1,
+            createdAt
+          });
+
+          tx.set(bookingRef, {
+            userId: uid,
+            activityId,
+            status: 'WAITING_LIST',
+            position: 1,
+            createdAt
+          });
+
+          return { status: 200 as const, body: { status: 'WAITING_LIST', position: 1 } };
+        }
       }
 
       const activityData = activitySnap.data() ?? {};
@@ -111,4 +251,69 @@ router.post('/:activityId/reserve', requireAuth, participantActionLimiter, requi
   }
 });
 
+// DELETE /api/activities/:activityId/reserve
+// POST /api/activities/:activityId/cancel
+// Permite cancelar a reserva de vaga ou remover a atividade da agenda pessoal,
+// incrementando vagas_disponíveis de volta para outros participantes.
+const cancelBookingHandler = async (req: Request, res: Response) => {
+  const { activityId } = req.params;
+  const uid = req.user!.uid;
+
+  if (!isValidFirestoreId(activityId)) {
+    res.status(400).json({ error: 'INVALID_ACTIVITY_ID', message: 'activityId inválido.' });
+    return;
+  }
+
+  const activityRef = db.collection('activities').doc(activityId);
+  const bookingRef = db.collection('bookings').doc(`${uid}_${activityId}`);
+
+  try {
+    const result = await db.runTransaction(async (tx) => {
+      const [bookingSnap, activitySnap] = await Promise.all([
+        tx.get(bookingRef),
+        tx.get(activityRef)
+      ]);
+
+      if (!bookingSnap.exists) {
+        return {
+          status: 404 as const,
+          body: { error: 'BOOKING_NOT_FOUND', message: 'Nenhuma reserva encontrada para esta atividade.' }
+        };
+      }
+
+      const bookingData = bookingSnap.data() ?? {};
+      const wasConfirmed = bookingData.status === 'CONFIRMED';
+
+      tx.delete(bookingRef);
+
+      if (activitySnap.exists && wasConfirmed) {
+        const actData = activitySnap.data() ?? {};
+        const available = typeof actData.vagas_disponiveis === 'number' ? actData.vagas_disponiveis : 0;
+        const totalInscritos = typeof actData.total_inscritos === 'number' ? actData.total_inscritos : 1;
+        tx.update(activityRef, {
+          vagas_disponiveis: available + 1,
+          total_inscritos: Math.max(0, totalInscritos - 1)
+        });
+      }
+
+      return {
+        status: 200 as const,
+        body: { success: true, message: 'Reserva cancelada com sucesso.' }
+      };
+    });
+
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    console.error('Erro ao cancelar reserva:', error);
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Não foi possível cancelar a reserva.'
+    });
+  }
+};
+
+router.delete('/:activityId/reserve', requireAuth, participantActionLimiter, cancelBookingHandler);
+router.post('/:activityId/cancel', requireAuth, participantActionLimiter, cancelBookingHandler);
+
 export default router;
+

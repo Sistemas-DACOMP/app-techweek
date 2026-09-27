@@ -3,9 +3,12 @@ import {
   sendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  updateProfile,
+  deleteUser
 } from 'firebase/auth';
-import { auth } from './firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
 import { normalizeEmail } from './validators';
 
 export const AUTH_MESSAGES = {
@@ -39,6 +42,8 @@ export function mapAuthError(error) {
       return AUTH_MESSAGES.user_disabled;
     case 'auth/too-many-requests':
       return AUTH_MESSAGES.too_many_requests;
+    case 'auth/operation-not-allowed':
+      return 'O método de login por E-mail/Senha precisa ser ativado no Firebase Console (Authentication > Sign-in method).';
     case 'auth/network-request-failed':
       return AUTH_MESSAGES.network_error;
     default:
@@ -76,6 +81,7 @@ export async function loginWithEmailAndPassword(email, password) {
       error: null
     };
   } catch (err) {
+    console.error('[auth] Erro no login:', err.code, err.message);
     return {
       success: false,
       user: null,
@@ -139,6 +145,17 @@ export async function signUpWithEmail({ email, password, metadata }) {
 
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+    const firstName = metadata?.first_name || '';
+    const lastName = metadata?.last_name || '';
+    const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() || metadata?.username || '';
+    if (displayName) {
+      try {
+        await updateProfile(userCredential.user, { displayName });
+      } catch (profileErr) {
+        console.warn('Aviso: Falha ao gravar displayName no Firebase Auth:', profileErr);
+      }
+    }
+
     return {
       status: 'signed_in',
       message: null,
@@ -183,4 +200,38 @@ export function onAuthChange(callback) {
  */
 export function getCurrentAuthUser() {
   return auth.currentUser;
+}
+
+/**
+ * Exclui a conta e o perfil do usuário logado (Auth + Firestore + localStorage).
+ */
+export async function deleteCurrentUserAccount() {
+  const user = auth.currentUser;
+  if (!user) return { success: false, error: 'Nenhum usuário autenticado.' };
+
+  const uid = user.uid;
+
+  try {
+    // 1. Remove documento do Firestore
+    try {
+      await deleteDoc(doc(db, 'users', uid));
+    } catch (_dbErr) {
+      console.warn('Erro ao remover documento do Firestore:', _dbErr);
+    }
+
+    // 2. Limpa dados de cache no localStorage
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(`facom_profile_${uid}`);
+      window.localStorage.removeItem('facom_logged_in');
+      window.localStorage.removeItem('facom_onboarding_completed');
+    }
+
+    // 3. Remove a conta do Firebase Authentication
+    await deleteUser(user);
+
+    return { success: true };
+  } catch (err) {
+    console.error('Erro ao excluir conta:', err);
+    return { success: false, error: mapAuthError(err) || err.message };
+  }
 }

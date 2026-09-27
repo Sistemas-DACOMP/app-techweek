@@ -7,7 +7,23 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
  * Injeta automaticamente o token JWT (Bearer) do usuário logado.
  */
 export async function apiRequest(endpoint, options = {}) {
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
+  let url;
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    url = endpoint;
+  } else {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    if (API_BASE) {
+      const baseHasApi = API_BASE.endsWith('/api');
+      const endpointHasApi = cleanEndpoint.startsWith('/api/');
+      if (baseHasApi && endpointHasApi) {
+        url = `${API_BASE}${cleanEndpoint.slice(4)}`;
+      } else {
+        url = `${API_BASE}${cleanEndpoint}`;
+      }
+    } else {
+      url = cleanEndpoint.startsWith('/api/') ? cleanEndpoint : `/api${cleanEndpoint}`;
+    }
+  }
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {})

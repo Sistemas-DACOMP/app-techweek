@@ -2,26 +2,36 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
-import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Loader2, Trash2 } from 'lucide-react';
+import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Loader2, Trash2, QrCode, Sparkles } from 'lucide-react';
 import { getMyProfile, uploadMissionPhoto } from '../lib/gameplay';
 import { onAuthChange } from '../lib/auth';
-import { getUserProfile } from '../lib/userService';
+import { getUserProfile, getCachedUserProfile } from '../lib/userService';
 import { validateMissionPhoto } from '../lib/validators';
 import FeedbackModal from '../components/FeedbackModal';
+import SymplaRequirementModal from '../components/SymplaRequirementModal';
+import SymplaStickyBanner from '../components/SymplaStickyBanner';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function Challenges() {
   const { completedChallenges, completeChallenge, hasCompletedChallenge, hasSymplaTicket } = useUser();
   const navigate = useNavigate();
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
-  useScrollLock(!!activeManualChallenge);
+  const [selectedAutoChallenge, setSelectedAutoChallenge] = useState(null);
+  useScrollLock(!!activeManualChallenge || !!selectedAutoChallenge);
   const [manualForm, setManualForm] = useState({});
   const [photoFiles, setPhotoFiles] = useState({});
   const [photoPreviews, setPhotoPreviews] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [showSymplaModal, setShowSymplaModal] = useState(false);
 
-  const [profile, setProfile] = useState({ firstName: 'Visitante', avatarUrl: '' });
+  const [profile, setProfile] = useState(() => {
+    const cached = getCachedUserProfile();
+    return {
+      firstName: cached?.firstName || 'Participante',
+      avatarUrl: cached?.avatarUrl || ''
+    };
+  });
 
   useEffect(() => {
     const unsubscribe = onAuthChange(async (user) => {
@@ -29,24 +39,29 @@ export default function Challenges() {
         setProfile({ firstName: 'Visitante', avatarUrl: '' });
         return;
       }
+
+      const formatFirstName = (email, displayName) => {
+        if (displayName && displayName.trim()) return displayName.trim().split(' ')[0];
+        if (!email) return 'Participante';
+        const raw = email.split('@')[0].split(/[._-]/)[0];
+        return raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : 'Participante';
+      };
+
+      const fallbackName = formatFirstName(user.email, user.displayName);
+      const fallbackAvatar = user.photoURL || '';
+
+      setProfile({ firstName: fallbackName, avatarUrl: fallbackAvatar });
+
       try {
         const p = await getUserProfile(user.uid);
         if (p) {
           setProfile({
-            firstName: p.firstName || p.displayName?.split(' ')[0] || p.username || 'Visitante',
-            avatarUrl: p.avatarUrl || p.photoURL || user.photoURL || ''
-          });
-        } else {
-          setProfile({
-            firstName: user.displayName?.split(' ')[0] || 'Visitante',
-            avatarUrl: user.photoURL || ''
+            firstName: p.firstName || p.displayName?.split(' ')[0] || p.username || fallbackName,
+            avatarUrl: p.avatarUrl || p.photoURL || fallbackAvatar
           });
         }
       } catch (e) {
-        setProfile({
-          firstName: user.displayName?.split(' ')[0] || 'Visitante',
-          avatarUrl: user.photoURL || ''
-        });
+        // mantém fallback já definido
       }
     });
 
@@ -54,7 +69,17 @@ export default function Challenges() {
   }, []);
 
   const challengesList = [
-    { id: 'instagram_story', name: 'Post no Stories', description: 'Tire uma foto com nossa moldura e compartilhe!', points: 50, icon: Camera, isAction: true },
+    {
+      id: 'instagram_story',
+      name: 'Post no Stories',
+      description: 'Publique um Story marcando a TechWeek e envie a foto da publicação.',
+      points: 50,
+      icon: Camera,
+      type: 'manual',
+      fields: [
+        { id: 'photo', type: 'photo', label: 'Envie a foto ou print do seu Story' }
+      ]
+    },
     { id: 'sponsor_visit', name: 'Conheça Kanastra', description: 'Visite o stand e escaneie o QR Code oficial.', points: 15, icon: MapPin, type: 'auto' },
     {
       id: 'sponsor_vaga', name: 'De Olho na Vaga', description: 'Converse com alguém sobre oportunidades para estudantes.', points: 20, icon: MessageCircle, type: 'manual', fields: [
@@ -110,13 +135,8 @@ export default function Challenges() {
   ];
 
   const handleSimulateChallenge = async (challenge) => {
-    if (challenge.isAction) {
-      if (challenge.id === 'instagram_story') navigate('/instagram-mission');
-      return;
-    }
-
-    if (challenge.type === 'auto') {
-      navigate('/scanner');
+    if (!hasSymplaTicket) {
+      setShowSymplaModal(true);
       return;
     }
 
@@ -128,28 +148,30 @@ export default function Challenges() {
       return;
     }
 
-    if (!hasSymplaTicket) {
-      setFeedback({
-        type: 'warning',
-        title: 'Ingresso Sympla Necessário',
-        message: 'Você precisa vincular seu ingresso oficial do Sympla no Perfil para participar e pontuar nos desafios!'
-      });
+    if (challenge.type === 'auto') {
+      setSelectedAutoChallenge(challenge);
       return;
     }
 
-    const success = await completeChallenge(challenge.id, challenge.points);
-    if (success) {
+    const res = await completeChallenge(challenge.id, challenge.points);
+    if (res && (res.success || res === true)) {
       setFeedback({
         type: 'success',
         title: 'Desafio Concluído! 🎉',
         message: `Parabéns! Você completou "${challenge.name}" e pontuou com sucesso.`,
-        points: challenge.points
+        points: (res && res.points) || challenge.points
       });
-    } else {
+    } else if (res && res.alreadyCompleted) {
       setFeedback({
         type: 'warning',
         title: 'Desafio Já Concluído',
         message: 'Você já completou este desafio anteriormente!'
+      });
+    } else {
+      setFeedback({
+        type: 'error',
+        title: 'Erro ao Pontuar',
+        message: (res && res.error) || 'Não foi possível registrar seus pontos no momento. Tente novamente.'
       });
     }
   };
@@ -157,15 +179,6 @@ export default function Challenges() {
   const handleManualSubmit = async (e) => {
     e.preventDefault();
     if (!activeManualChallenge || isSubmitting) return;
-
-    if (!hasSymplaTicket) {
-      setFeedback({
-        type: 'warning',
-        title: 'Ingresso Sympla Necessário',
-        message: 'Para enviar missões e acumular pontos no ranking oficial, você precisa ter um ingresso do Sympla vinculado à sua conta.'
-      });
-      return;
-    }
 
     if (activeManualChallenge.id === 'secret_password') {
       const pass = manualForm['password'];
@@ -214,25 +227,31 @@ export default function Challenges() {
 
       // Respostas da missão manual vão como metadata do evento de pontos
       // (REG-MISSION-001) em vez de apenas no estado da página
-      const success = await completeChallenge(activeManualChallenge.id, activeManualChallenge.points, finalMetadata);
-      if (success) {
+      const res = await completeChallenge(activeManualChallenge.id, activeManualChallenge.points, finalMetadata);
+      if (res && (res.success || res === true)) {
         setFeedback({
           type: 'success',
           title: 'Missão Concluída! 🎉',
           message: `Você cumpriu a missão "${activeManualChallenge.name}" com sucesso!`,
-          points: activeManualChallenge.points
+          points: (res && res.points) || activeManualChallenge.points
         });
         setActiveManualChallenge(null);
         setManualForm({});
         setPhotoFiles({});
         setPhotoPreviews({});
-      } else {
+      } else if (res && res.alreadyCompleted) {
         setFeedback({
           type: 'warning',
           title: 'Missão Já Concluída',
           message: 'Esta missão já foi concluída anteriormente!'
         });
         setActiveManualChallenge(null);
+      } else {
+        setFeedback({
+          type: 'error',
+          title: 'Não foi possível concluir',
+          message: (res && res.error) || 'Não foi possível registrar sua comprovação. Tente novamente.'
+        });
       }
     } catch (err) {
       console.error('Erro ao enviar missão:', err);
@@ -248,22 +267,45 @@ export default function Challenges() {
 
   return (
     <div className="page-container animate-fade-in" style={{ paddingBottom: '120px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
-        <button onClick={() => navigate(-1)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', color: 'white', cursor: 'pointer' }}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1 className="font-lastica" style={{ fontSize: '1.2rem', fontWeight: '500' }}>Missões</h1>
+      <SymplaStickyBanner />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
+        <div>
+          <h1
+            style={{
+              fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+              fontSize: '1.75rem',
+              fontWeight: 800,
+              color: '#F8FAFC',
+              margin: 0,
+              letterSpacing: '-0.03em',
+              lineHeight: 1.15
+            }}
+          >
+            Missões
+          </h1>
+          <p
+            style={{
+              fontSize: '0.80rem',
+              color: '#94A3B8',
+              margin: '3px 0 0',
+              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+            }}
+          >
+            Complete desafios e acumule pontos
+          </p>
+        </div>
         <div
           style={{
             width: '40px',
             height: '40px',
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.1)',
+            borderRadius: '12px',
+            backgroundColor: '#0F141F',
+            border: '1px solid #1E293B',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontWeight: 'bold',
-            fontSize: '1.2rem',
+            fontSize: '1rem',
             overflow: 'hidden',
             position: 'relative'
           }}
@@ -324,7 +366,7 @@ export default function Challenges() {
         )}
 
         {challengesList.map((challenge, index) => {
-          const isCompleted = completedChallenges.includes(challenge.id);
+          const isCompleted = (hasCompletedChallenge && hasCompletedChallenge(challenge.id)) || completedChallenges.includes(challenge.id);
           const isHighlighted = challenge.id === 'instagram_story' && !isCompleted;
           const isSecret = challenge.isSecret && !isCompleted;
           const IconComponent = challenge.icon || MapPin;
@@ -332,18 +374,19 @@ export default function Challenges() {
           return (
             <div 
               key={challenge.id} 
-              className={`card ${isHighlighted ? 'card-highlight' : isSecret ? 'card-highlight-secondary' : ''}`} 
+              className={`card ${isHighlighted || isSecret ? 'card-highlight' : ''}`} 
               onClick={() => !isCompleted && handleSimulateChallenge(challenge)}
               style={{ 
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                opacity: isCompleted ? 0.7 : 1, 
-                background: isSecret ? 'rgba(168, 85, 247, 0.15)' : '', 
-                borderColor: isSecret ? 'rgba(168, 85, 247, 0.3)' : '',
+                opacity: isCompleted ? 0.78 : 1, 
+                backgroundColor: isSecret ? 'rgba(37, 99, 235, 0.12)' : '#0F141F', 
+                borderColor: isCompleted ? 'rgba(16, 185, 129, 0.3)' : isSecret ? 'rgba(59, 130, 246, 0.35)' : '#1E293B',
+                borderRadius: '14px',
                 cursor: isCompleted ? 'default' : 'pointer'
               }}
             >
               <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                <div style={{ background: isHighlighted || isSecret ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '50%', color: isHighlighted || isSecret ? 'white' : 'var(--primary)' }}>
+                <div style={{ background: isCompleted ? 'rgba(16, 185, 129, 0.15)' : isHighlighted || isSecret ? 'rgba(37, 99, 235, 0.25)' : 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '50%', color: isCompleted ? '#10b981' : isHighlighted || isSecret ? '#93C5FD' : '#3B82F6' }}>
                   <IconComponent size={24} />
                 </div>
                 <div>
@@ -351,30 +394,51 @@ export default function Challenges() {
                     {challenge.name}
                     {isCompleted && <CheckCircle size={16} color="#10b981" />}
                   </h3>
-                  <p style={{ fontSize: '0.75rem', color: isHighlighted || isSecret ? 'rgba(255,255,255,0.8)' : 'var(--text-secondary)' }}>{challenge.description}</p>
-                  <div style={{ marginTop: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: isHighlighted || isSecret ? 'white' : 'var(--primary)' }}>
-                    +{challenge.points} pts
+                  <p style={{ fontSize: '0.75rem', color: isHighlighted || isSecret ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)' }}>{challenge.description}</p>
+                  <div style={{ marginTop: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: isCompleted ? '#10b981' : isHighlighted || isSecret ? '#93C5FD' : '#3B82F6' }}>
+                    {isCompleted ? `✓ Concluída (+${challenge.points} pts)` : `+${challenge.points} pts`}
                   </div>
                 </div>
               </div>
 
-              {!isCompleted && (
+              {!isCompleted ? (
                 <button
                   style={{
                     padding: '8px 12px',
                     fontSize: '0.75rem',
-                    background: isHighlighted || isSecret ? 'white' : 'var(--primary)',
-                    color: isHighlighted ? 'var(--primary)' : isSecret ? '#a855f7' : 'white',
-                    border: 'none',
+                    background: '#2563EB',
+                    color: 'white',
+                    border: '1px solid #3B82F6',
                     borderRadius: '8px',
                     fontWeight: 'bold',
                     cursor: 'pointer',
                     whiteSpace: 'nowrap'
                   }}
-                  onClick={() => handleSimulateChallenge(challenge)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSimulateChallenge(challenge);
+                  }}
                 >
                   {challenge.isAction ? 'Começar' : challenge.type === 'auto' ? 'Escanear' : challenge.type === 'manual' ? 'Responder' : 'Check-in'}
                 </button>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    color: '#10b981',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    padding: '6px 10px',
+                    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(16, 185, 129, 0.28)'
+                  }}
+                >
+                  <CheckCircle size={14} color="#10b981" />
+                  <span>Feito</span>
+                </div>
               )}
             </div>
           );
@@ -464,7 +528,7 @@ export default function Challenges() {
                       onChange={(e) => setManualForm({ ...manualForm, [field.id]: e.target.value })}
                       className="login-input"
                       rows="3"
-                      style={{ resize: 'none', fontFamily: 'Montserrat, sans-serif' }}
+                      style={{ resize: 'none', fontFamily: "'Inter', sans-serif" }}
                       required
                       minLength={activeManualChallenge.id === 'sponsor_tecnologia' ? 15 : undefined}
                     />
@@ -580,6 +644,137 @@ export default function Challenges() {
         document.body
       )}
 
+      {selectedAutoChallenge && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="modal-overlay-fixed"
+          onClick={() => setSelectedAutoChallenge(null)}
+          style={{ 
+            background: 'rgba(0,0,0,0.82)', 
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            padding: '20px'
+          }}
+        >
+          <div 
+            className="card modal-card-fixed" 
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: '400px', background: 'var(--card-bg)', border: '1px solid #1E293B', borderRadius: '16px', padding: '24px' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ background: 'rgba(37, 99, 235, 0.2)', padding: '10px', borderRadius: '12px', color: '#60A5FA' }}>
+                  <QrCode size={22} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', color: 'white', margin: 0 }}>{selectedAutoChallenge.name}</h3>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#38BDF8' }}>+{selectedAutoChallenge.points} XP / Pontos</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedAutoChallenge(null)}
+                style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.4', marginBottom: '24px' }}>
+              {selectedAutoChallenge.description}
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button
+                type="button"
+                className="login-btn"
+                disabled={isSubmitting}
+                onClick={async () => {
+                  setIsSubmitting(true);
+                  try {
+                    const res = await completeChallenge(selectedAutoChallenge.id, selectedAutoChallenge.points);
+                    setSelectedAutoChallenge(null);
+                    if (res && (res.success || res === true)) {
+                      setFeedback({
+                        type: 'success',
+                        title: 'Missão Concluída! 🎉',
+                        message: `Você cumpriu "${selectedAutoChallenge.name}" e pontuou com sucesso!`,
+                        points: (res && res.points) || selectedAutoChallenge.points
+                      });
+                    } else if (res && res.alreadyCompleted) {
+                      setFeedback({
+                        type: 'warning',
+                        title: 'Missão Já Concluída',
+                        message: 'Você já completou este desafio anteriormente!'
+                      });
+                    } else {
+                      setFeedback({
+                        type: 'error',
+                        title: 'Erro ao Pontuar',
+                        message: (res && res.error) || 'Não foi possível registrar seus pontos.'
+                      });
+                    }
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  backgroundColor: '#2563EB',
+                  border: '1px solid #3B82F6',
+                  color: 'white',
+                  height: '46px',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Validando pontos...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={18} />
+                    <span>Concluir Missão e Pontuar</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedAutoChallenge(null);
+                  navigate('/scanner');
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  color: '#E2E8F0',
+                  height: '42px',
+                  borderRadius: '12px',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <Camera size={16} />
+                <span>Escanear QR Code com Câmera</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Card Modal Estilizado de Feedback (Sucesso / Erro / Atenção) */}
       <FeedbackModal
         isOpen={!!feedback}
@@ -588,6 +783,12 @@ export default function Challenges() {
         message={feedback?.message}
         points={feedback?.points}
         onClose={() => setFeedback(null)}
+      />
+
+      <SymplaRequirementModal
+        isOpen={showSymplaModal}
+        onClose={() => setShowSymplaModal(false)}
+        featureName="o envio de missões e pontuação"
       />
     </div>
   );

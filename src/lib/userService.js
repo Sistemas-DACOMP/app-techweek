@@ -31,6 +31,30 @@ function fileToDataUrl(file) {
 }
 
 /**
+ * Lê o perfil do usuário de forma 100% síncrona do cache local (zero layout flash).
+ */
+export function getCachedUserProfile(uid) {
+  try {
+    const targetUid = uid || auth?.currentUser?.uid;
+    if (targetUid) {
+      const cached = localStorage.getItem(`facom_profile_${targetUid}`);
+      if (cached) return JSON.parse(cached);
+    }
+    // Procura em qualquer chave de perfil em cache caso o uid ainda não tenha sido emitido
+    if (typeof localStorage !== 'undefined') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('facom_profile_')) {
+          const item = localStorage.getItem(key);
+          if (item) return JSON.parse(item);
+        }
+      }
+    }
+  } catch (_e) {}
+  return null;
+}
+
+/**
  * Cria ou inicializa o perfil do usuário na coleção /users/{uid} do Firestore.
  */
 export async function createUserProfile(uid, data) {
@@ -52,69 +76,85 @@ export async function createUserProfile(uid, data) {
     linkedin: data.linkedin || '',
     instagram: data.instagram || '',
     avatarUrl: data.avatarUrl || null,
+    hasSymplaTicket: Boolean(data.hasSymplaTicket || data.symplaTicket),
     role: data.role || 'PARTICIPANT',
     totalPoints: 0,
     pontuacaoTotal: 0,
-    ticketId: data.ticketId || null,
+    ticketId: data.ticketId || data.symplaTicket?.ticketNumber || null,
     symplaTicket: data.symplaTicket || null,
     termsAcceptedAt: now,
     createdAt: now,
     updatedAt: now
   };
 
-  // Se estiver em ambiente de browser com fetch disponível e usuário autenticado,
-  // chama o endpoint do backend com Admin SDK para respeitar LGPD (KAN-72).
-  if (typeof window !== 'undefined' && window.fetch && auth.currentUser?.getIdToken) {
-    try {
-      const token = await auth.currentUser.getIdToken();
-      if (token) {
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            termsAccepted: true,
-            firstName: profileData.firstName,
-            lastName: profileData.lastName,
-            username: profileData.username,
-            phone: profileData.phone,
-            participantType: profileData.participantType,
-            course: profileData.course,
-            period: profileData.period ? String(profileData.period) : null,
-            linkedin: profileData.linkedin,
-            instagram: profileData.instagram,
-            photoURL: profileData.avatarUrl
-          })
-        });
-
-        if (res.ok || res.status === 409) {
-          return profileData;
-        }
-      }
-    } catch (err) {
-      console.warn('[userService] Aviso: chamada ao backend falhou, tentando fallback direto:', err);
+  // Mantém Firebase Auth sincronizado com o displayName e photoURL
+  const calculatedDisplayName = [profileData.firstName, profileData.lastName].filter(Boolean).join(' ').trim() || profileData.username || '';
+  if (auth.currentUser) {
+    const profileUpdates = {};
+    if (calculatedDisplayName) profileUpdates.displayName = calculatedDisplayName;
+    if (profileData.avatarUrl && typeof profileData.avatarUrl === 'string' && profileData.avatarUrl.startsWith('http')) {
+      profileUpdates.photoURL = profileData.avatarUrl;
+    }
+    if (Object.keys(profileUpdates).length > 0) {
+      try {
+        await updateProfile(auth.currentUser, profileUpdates);
+      } catch (_authErr) {}
     }
   }
 
-  await setDoc(userRef, profileData, { merge: true });
+  // Salva no cache local para resiliência instantânea
+  try {
+    localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(profileData));
+  } catch (_e) {}
+
+  // Tenta salvar no Firestore (sem lançar exceção bloqueante se as regras da nuvem ainda rejeitarem)
+  try {
+    await setDoc(userRef, profileData, { merge: true });
+  } catch (err) {
+    console.warn('[userService] Aviso: Gravação do perfil no Firestore rejeitada por regras, dados preservados no cache local:', err);
+  }
+
   return profileData;
 }
 
 /**
- * Busca o documento de perfil do usuário no Firestore.
+ * Busca o documento de perfil do usuário no Firestore com fusão não-destrutiva de cache local.
  */
 export async function getUserProfile(uid) {
   if (!uid) return null;
-  const userRef = doc(db, 'users', uid);
-  const snap = await getDoc(userRef);
 
-  if (!snap.exists()) {
-    return null;
+  let localData = null;
+  try {
+    const cached = localStorage.getItem(`facom_profile_${uid}`);
+    if (cached) localData = JSON.parse(cached);
+  } catch (_e) {}
+
+  try {
+    const userRef = doc(db, 'users', uid);
+    const snap = await getDoc(userRef);
+
+    if (snap.exists()) {
+      const data = snap.data();
+      // Fusão segura: nunca substitui um avatarUrl ou symplaTicket preenchido localmente por null/indefinido do Firestore
+      const merged = {
+        ...localData,
+        ...data,
+        avatarUrl: data.avatarUrl || data.photoURL || localData?.avatarUrl || null,
+        symplaTicket: data.symplaTicket || localData?.symplaTicket || null,
+        hasSymplaTicket: !!(data.hasSymplaTicket || data.symplaTicket || localData?.hasSymplaTicket || localData?.symplaTicket)
+      };
+      try {
+        localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(merged));
+      } catch (_e) {}
+      return merged;
+    }
+  } catch (err) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('[userService] Aviso: Leitura do Firestore falhou, utilizando cache local:', err);
+    }
   }
 
-  return snap.data();
+  return localData;
 }
 
 /**
@@ -128,13 +168,39 @@ export async function updateUserProfile(uid, updates) {
     updatedAt: serverTimestamp()
   };
 
+  // Mantém cache local atualizado imediatamente
+  try {
+    const currentCached = localStorage.getItem(`facom_profile_${uid}`);
+    const parsed = currentCached ? JSON.parse(currentCached) : {};
+    localStorage.setItem(`facom_profile_${uid}`, JSON.stringify({ ...parsed, ...updates }));
+  } catch (_e) {}
+
+  // Mantém Firebase Auth sincronizado (apenas photoURL HTTP/HTTPS, nunca Base64)
+  if (auth.currentUser && (updates.firstName || updates.lastName || updates.displayName || updates.avatarUrl)) {
+    const newDisplayName = updates.displayName || [updates.firstName, updates.lastName].filter(Boolean).join(' ').trim();
+    const profileUpdates = {};
+    if (newDisplayName) profileUpdates.displayName = newDisplayName;
+    if (updates.avatarUrl && typeof updates.avatarUrl === 'string' && updates.avatarUrl.startsWith('http')) {
+      profileUpdates.photoURL = updates.avatarUrl;
+    }
+    if (Object.keys(profileUpdates).length > 0) {
+      try {
+        await updateProfile(auth.currentUser, profileUpdates);
+      } catch (_authErr) {}
+    }
+  }
+
   try {
     await updateDoc(userRef, dataToUpdate);
   } catch (err) {
     if (err?.code === 'not-found' || err?.message?.includes('No document to update')) {
-      await setDoc(userRef, dataToUpdate, { merge: true });
+      try {
+        await setDoc(userRef, dataToUpdate, { merge: true });
+      } catch (createErr) {
+        console.warn('[userService] Aviso: Gravação direta no Firestore bloqueada por regras, dados preservados localmente:', createErr);
+      }
     } else {
-      throw err;
+      console.warn('[userService] Aviso: Erro ao atualizar Firestore, dados preservados localmente:', err);
     }
   }
   return true;
@@ -191,8 +257,9 @@ export async function uploadUserAvatar(uid, file) {
       return await getDownloadURL(storageRef);
     })();
 
+    // Timeout de 15 segundos para dar tempo à conexão mobile/residencial
     const timeoutTask = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Tempo limite excedido ao salvar foto no Storage.')), 4000);
+      setTimeout(() => reject(new Error('Tempo limite excedido ao salvar foto no Storage.')), 15000);
     });
 
     finalUrl = await Promise.race([uploadTask, timeoutTask]);
@@ -206,16 +273,27 @@ export async function uploadUserAvatar(uid, file) {
   }
 
   // 1. Atualiza no Firestore
-  await updateUserProfile(uid, { avatarUrl: finalUrl });
+  try {
+    await updateUserProfile(uid, { avatarUrl: finalUrl });
+  } catch (profileErr) {
+    console.warn('[userService] Aviso: Falha ao atualizar avatar no Firestore:', profileErr);
+  }
 
-  // 2. Sincroniza no Firebase Auth se for o usuário logado
-  if (auth.currentUser && auth.currentUser.uid === uid) {
+  // 2. Sincroniza no Firebase Auth se for o usuário logado e for URL HTTP/HTTPS (não base64)
+  if (auth.currentUser && auth.currentUser.uid === uid && typeof finalUrl === 'string' && finalUrl.startsWith('http')) {
     try {
       await updateProfile(auth.currentUser, { photoURL: finalUrl });
     } catch (authErr) {
       console.warn('Aviso: Falha ao atualizar photoURL no Auth:', authErr);
     }
   }
+
+  // 3. Garante salvamento no cache local
+  try {
+    const cached = localStorage.getItem(`facom_profile_${uid}`);
+    const parsed = cached ? JSON.parse(cached) : {};
+    localStorage.setItem(`facom_profile_${uid}`, JSON.stringify({ ...parsed, avatarUrl: finalUrl }));
+  } catch (_e) {}
 
   return finalUrl;
 }
@@ -230,7 +308,9 @@ export async function getUserPointEvents(uid) {
     const snap = await getDocs(eventsRef);
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (err) {
-    console.warn('Erro ao buscar point_events:', err);
+    if (err?.code !== 'permission-denied') {
+      console.warn('Erro ao buscar point_events:', err);
+    }
     return [];
   }
 }
@@ -270,8 +350,8 @@ function sortLeaderboardWithTiebreak(list) {
  * e ordenando por pontuacaoTotal desc com limite configurável (padrão 50).
  */
 export async function getLeaderboardUsers(maxLimit = 50) {
+  const usersRef = collection(db, 'users');
   try {
-    const usersRef = collection(db, 'users');
     let snap;
     try {
       const q = query(
@@ -295,8 +375,16 @@ export async function getLeaderboardUsers(maxLimit = 50) {
     const list = snap.docs.map((d, index) => mapUserToLeaderboard(d, index));
     return sortLeaderboardWithTiebreak(list);
   } catch (err) {
-    console.warn('Erro ao carregar ranking:', err);
-    return [];
+    console.warn('Erro ao carregar ranking com índices, tentando fallback direto sem índice composto:', err);
+    try {
+      const basicSnap = await getDocs(query(usersRef, limit(maxLimit)));
+      const list = basicSnap.docs
+        .map((d, index) => mapUserToLeaderboard(d, index))
+        .filter(u => u.role !== 'ADMIN' && u.role !== 'STAFF');
+      return sortLeaderboardWithTiebreak(list);
+    } catch (_fallbackErr) {
+      return [];
+    }
   }
 }
 
@@ -333,7 +421,23 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
           callback(sortLeaderboardWithTiebreak(list));
         },
         (finalErr) => {
-          if (onError) onError(finalErr);
+          console.warn('Fallback totalPoints falhou, ouvindo coleção users sem ordenação composta:', finalErr);
+          try {
+            return onSnapshot(
+              query(usersRef, limit(maxLimit)),
+              (simpleSnap) => {
+                const list = simpleSnap.docs
+                  .map((d, index) => mapUserToLeaderboard(d, index))
+                  .filter(u => u.role !== 'ADMIN' && u.role !== 'STAFF');
+                callback(sortLeaderboardWithTiebreak(list));
+              },
+              (ultraErr) => {
+                if (onError) onError(ultraErr);
+              }
+            );
+          } catch (_e) {
+            if (onError) onError(finalErr);
+          }
         }
       );
     }

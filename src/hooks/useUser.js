@@ -1,19 +1,29 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMyProfile, updateMascot, uploadAvatar, getMyPointEvents, addPointEvent } from '../lib/gameplay';
 import { onAuthChange } from '../lib/auth';
+import { getCachedUserProfile } from '../lib/userService';
 import { calculateLevel } from '../lib/level';
 import { useNotifications } from './useNotifications';
 
 export function useUser() {
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState(() => getCachedUserProfile());
   const [pointEvents, setPointEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const { addNotification } = useNotifications();
 
   const load = useCallback(async () => {
     try {
       const [profileData, events] = await Promise.all([getMyProfile(), getMyPointEvents()]);
-      setProfile(profileData);
+      setProfile(prev => {
+        if (!prev) return profileData;
+        return {
+          ...prev,
+          ...profileData,
+          avatarUrl: profileData?.avatarUrl || profileData?.avatar_url || prev.avatarUrl || prev.avatar_url,
+          symplaTicket: profileData?.symplaTicket || profileData?.sympla_ticket || prev.symplaTicket || prev.sympla_ticket,
+          hasSymplaTicket: !!(profileData?.hasSymplaTicket || profileData?.symplaTicket || prev.hasSymplaTicket || prev.symplaTicket)
+        };
+      });
       setPointEvents(events || []);
     } catch (_err) {
       // Offline fallback: mantém estado vazio sem quebrar a UI
@@ -27,10 +37,35 @@ export function useUser() {
     const unsubscribe = onAuthChange(() => {
       load();
     });
-    return () => unsubscribe();
+
+    const handlePointsUpdated = (e) => {
+      if (e.detail?.event) {
+        setPointEvents((prev) => {
+          const refId = e.detail.event.reference_id || e.detail.event.referenceId;
+          const exists = prev.some(
+            (ev) => (ev.reference_id || ev.referenceId) === refId || ev.id === e.detail.event.id
+          );
+          if (exists) return prev;
+          return [...prev, e.detail.event];
+        });
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('facom_points_updated', handlePointsUpdated);
+    }
+
+    return () => {
+      unsubscribe();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('facom_points_updated', handlePointsUpdated);
+      }
+    };
   }, [load]);
 
-  const points = pointEvents.reduce((sum, event) => sum + (event.points || 0), 0);
+  const eventPoints = pointEvents.reduce((sum, event) => sum + (event.points || 0), 0);
+  const profilePoints = profile?.totalPoints || profile?.pontuacaoTotal || profile?.total_points || 0;
+  const points = Math.max(eventPoints, profilePoints);
   const userLevel = calculateLevel(points);
 
   const scannedCodes = pointEvents
@@ -39,16 +74,39 @@ export function useUser() {
 
   const completedChallenges = pointEvents
     .filter(event => {
-      const type = event.event_type || event.eventType;
-      return type === 'challenge' || type === 'manual_challenge';
+      const type = (event.event_type || event.eventType || '').toLowerCase();
+      return type === 'challenge' || type === 'manual_challenge' || type === 'mission';
     })
-    .map(event => event.reference_id || event.referenceId);
+    .map(event => {
+      const ref = event.reference_id || event.referenceId;
+      if (ref) return ref;
+      if (event.id) {
+        return event.id.replace(/^(manual_challenge_|challenge_|mission_)/, '');
+      }
+      return null;
+    })
+    .filter(Boolean);
 
   const mascot = profile?.mascot || 'blue';
   const avatarUrl = profile?.avatar_url || profile?.avatarUrl || profile?.photoURL || null;
 
   const hasScannedCode = (code) => scannedCodes.includes(code);
-  const hasCompletedChallenge = (challengeId) => completedChallenges.includes(challengeId);
+  const hasCompletedChallenge = (challengeId) => {
+    if (!challengeId) return false;
+    return (
+      completedChallenges.includes(challengeId) ||
+      pointEvents.some(event => {
+        const ref = event.reference_id || event.referenceId;
+        const id = event.id || '';
+        return (
+          ref === challengeId ||
+          id === challengeId ||
+          id.endsWith(`_${challengeId}`) ||
+          id.includes(challengeId)
+        );
+      })
+    );
+  };
 
   const changeMascot = async (color) => {
     await updateMascot(color);
@@ -65,10 +123,14 @@ export function useUser() {
   // (eventType+referenceId) garante que a mesma ação nunca rende pontos duas vezes.
   const recordEvent = async (eventType, referenceId, amount, metadata = null) => {
     const result = await addPointEvent({ eventType, referenceId, points: amount, metadata });
-    if (result.success) {
-      setPointEvents(prev => [...prev, { event_type: eventType, reference_id: referenceId, points: amount, metadata }]);
+    if (result.success || result.alreadyClaimed) {
+      setPointEvents(prev => {
+        const exists = prev.some(e => (e.reference_id || e.referenceId) === referenceId);
+        if (exists) return prev;
+        return [...prev, { event_type: eventType, reference_id: referenceId, points: amount, metadata }];
+      });
     }
-    return result.success;
+    return result.success || result.alreadyClaimed;
   };
 
   const registerCodeScan = async (data, amount = 5) => {
@@ -164,19 +226,59 @@ export function useUser() {
   };
 
   const completeChallenge = async (challengeId, amount, metadata = null) => {
-    if (hasCompletedChallenge(challengeId)) return false;
-    const eventType = metadata ? 'manual_challenge' : 'challenge';
-    const ok = await recordEvent(eventType, challengeId, amount, metadata);
-    if (ok) {
-      addNotification({
-        title: 'Missão Concluída! 🎉',
-        message: `Você ganhou +${amount} pontos por completar a missão.`,
-        type: 'points',
-        actionUrl: '/ranking',
-        actionLabel: 'Ver Ranking'
-      });
+    if (!hasSymplaTicket) {
+      return {
+        success: false,
+        error: 'É necessário possuir um ingresso oficial do Sympla vinculado à conta para realizar missões.',
+        code: 'SYMPLA_TICKET_REQUIRED'
+      };
     }
-    return ok;
+
+    if (hasCompletedChallenge(challengeId)) {
+      return { success: false, alreadyCompleted: true };
+    }
+    const eventType = metadata ? 'manual_challenge' : 'challenge';
+    const result = await addPointEvent({ eventType, referenceId: challengeId, points: amount, metadata });
+
+    if (result && (result.success || result.alreadyClaimed)) {
+      const awardedPoints = typeof result.points === 'number' ? result.points : amount;
+      setPointEvents(prev => {
+        const exists = prev.some(
+          e => (e.reference_id || e.referenceId) === challengeId || (e.id && e.id.includes(challengeId))
+        );
+        if (exists) return prev;
+        return [
+          ...prev,
+          {
+            event_type: eventType,
+            reference_id: challengeId,
+            points: awardedPoints,
+            metadata
+          }
+        ];
+      });
+
+      if (result.success) {
+        addNotification({
+          title: 'Missão Concluída! 🎉',
+          message: `Você ganhou +${awardedPoints} pontos por completar a missão.`,
+          type: 'points',
+          actionUrl: '/ranking',
+          actionLabel: 'Ver Ranking'
+        });
+        return { success: true, points: awardedPoints };
+      } else {
+        // alreadyClaimed: true
+        return { success: false, alreadyCompleted: true };
+      }
+    }
+
+    return {
+      success: false,
+      alreadyCompleted: false,
+      error: result?.error || 'Não foi possível registrar a missão.',
+      code: result?.code || null
+    };
   };
 
   const hasSymplaTicket = Boolean(

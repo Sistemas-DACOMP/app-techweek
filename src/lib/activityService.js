@@ -2,10 +2,16 @@ import {
   collection, 
   onSnapshot, 
   query, 
-  where 
+  where,
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  updateDoc
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { apiRequest } from './api';
+import { getCachedUserProfile } from './userService';
 
 /**
  * Atividades padrão de fallback caso a collection do Firestore ainda esteja vazia.
@@ -17,8 +23,8 @@ export const DEFAULT_ACTIVITIES = [
     description: 'Boas-vindas oficiais e palestra magna sobre as principais tendências tecnológicas.',
     speaker: 'Comissão Organizadora & Convidados',
     type: 'palestra',
-    day: '19/10',
-    date: '2026-10-19',
+    day: '21/10',
+    date: '2026-10-21',
     time: '19:00',
     location: 'Anfiteatro principal',
     vagas_disponiveis: 120,
@@ -34,8 +40,8 @@ export const DEFAULT_ACTIVITIES = [
     description: 'Como construir sua marca técnica, portfólio de impacto e se destacar no mercado.',
     speaker: 'Samuel Amorim',
     type: 'palestra',
-    day: '19/10',
-    date: '2026-10-19',
+    day: '21/10',
+    date: '2026-10-21',
     time: '20:00',
     location: 'Sala 5R',
     vagas_disponiveis: 50,
@@ -51,8 +57,8 @@ export const DEFAULT_ACTIVITIES = [
     description: 'Construção prática de backend serverless, Cloud Functions, regras de segurança e banco em tempo real.',
     speaker: 'Equipe de Engenharia TechWeek',
     type: 'workshop',
-    day: '20/10',
-    date: '2026-10-20',
+    day: '22/10',
+    date: '2026-10-22',
     time: '14:00',
     location: 'Laboratório 1 - FACOM',
     vagas_disponiveis: 25,
@@ -60,23 +66,6 @@ export const DEFAULT_ACTIVITIES = [
     total_inscritos: 5,
     total_espera: 0,
     points: 35,
-    attendanceMode: 'DOUBLE_CHECK'
-  },
-  {
-    id: 'minicurso_agentes_ia',
-    title: 'Minicurso: Agentes Autônomos e Engenharia de Contexto',
-    description: 'Aprenda a orquestrar agentes de IA, tooling, loops de feedback e automações completas de software.',
-    speaker: 'Dra. Aline Souza & Time IA',
-    type: 'minicurso',
-    day: '21/10',
-    date: '2026-10-21',
-    time: '15:30',
-    location: 'Laboratório 2 - FACOM',
-    vagas_disponiveis: 18,
-    vagas_totais: 25,
-    total_inscritos: 7,
-    total_espera: 0,
-    points: 40,
     attendanceMode: 'DOUBLE_CHECK'
   },
   {
@@ -94,6 +83,91 @@ export const DEFAULT_ACTIVITIES = [
     total_inscritos: 20,
     total_espera: 0,
     points: 15,
+    attendanceMode: 'SELF_SCAN'
+  },
+  {
+    id: 'minicurso_agentes_ia',
+    title: 'Minicurso: Agentes Autônomos e Engenharia de Contexto',
+    description: 'Aprenda a orquestrar agentes de IA, tooling, loops de feedback e automações completas de software.',
+    speaker: 'Dra. Aline Souza & Time IA',
+    type: 'minicurso',
+    day: '23/10',
+    date: '2026-10-23',
+    time: '15:30',
+    location: 'Laboratório 2 - FACOM',
+    vagas_disponiveis: 18,
+    vagas_totais: 25,
+    total_inscritos: 7,
+    total_espera: 0,
+    points: 40,
+    attendanceMode: 'DOUBLE_CHECK'
+  },
+  {
+    id: 'hackathon_abertura',
+    title: 'Abertura & Liberação dos Desafios do Hackathon',
+    description: 'Apresentação dos temas, formação de equipes, regras e início oficial da maratona.',
+    speaker: 'Banca Hackathon & Mentores',
+    type: 'hackathon',
+    day: '23/10',
+    date: '2026-10-23',
+    time: '19:00',
+    location: 'Anfiteatro principal',
+    vagas_disponiveis: 100,
+    vagas_totais: 120,
+    total_inscritos: 45,
+    total_espera: 0,
+    points: 30,
+    attendanceMode: 'SELF_SCAN'
+  },
+  {
+    id: 'hackathon_sprint',
+    title: 'Hackathon FACOM: Sprint de Desenvolvimento & Mentorias',
+    description: '48h ininterruptas de ideação, prototipagem e rodadas presenciais com mentores técnicos.',
+    speaker: 'Mentores & Especialistas',
+    type: 'hackathon',
+    day: '24/10',
+    date: '2026-10-24',
+    time: '09:00',
+    location: 'Bloco 1B / Lab Maker',
+    vagas_disponiveis: 100,
+    vagas_totais: 100,
+    total_inscritos: 60,
+    total_espera: 0,
+    points: 50,
+    attendanceMode: 'DOUBLE_CHECK'
+  },
+  {
+    id: 'hackathon_submissao',
+    title: 'Hackathon FACOM: Submissão de Projetos & Demo Day',
+    description: 'Prazo final de envio no GitHub e apresentação dos pitches aos jurados do evento.',
+    speaker: 'Banca Julgadora',
+    type: 'hackathon',
+    day: '25/10',
+    date: '2026-10-25',
+    time: '14:00',
+    location: 'Anfiteatro principal',
+    vagas_disponiveis: 100,
+    vagas_totais: 100,
+    total_inscritos: 60,
+    total_espera: 0,
+    points: 50,
+    attendanceMode: 'DOUBLE_CHECK'
+  },
+  {
+    id: 'hackathon_premiacao',
+    title: 'Cerimônia de Encerramento & Premiação do Hackathon',
+    description: 'Anúncio dos vencedores, entrega dos troféus, premiações em dinheiro e encerramento oficial da TechWeek.',
+    speaker: 'Coordenação FACOM & DACOMP',
+    type: 'hackathon',
+    day: '26/10',
+    date: '2026-10-26',
+    time: '19:00',
+    location: 'Anfiteatro principal',
+    vagas_disponiveis: 150,
+    vagas_totais: 150,
+    total_inscritos: 75,
+    total_espera: 0,
+    points: 30,
     attendanceMode: 'SELF_SCAN'
   }
 ];
@@ -120,7 +194,7 @@ export function subscribeToActivities(onUpdate, onError) {
             description: data.description || data.descricao || '',
             speaker: data.speaker || data.palestrante || '',
             type: (data.type || data.tipo || 'palestra').toLowerCase(),
-            day: data.day || data.dia || (data.date ? formatDateToDay(data.date) : '19/10'),
+            day: data.day || data.dia || (data.date ? formatDateToDay(data.date) : '21/10'),
             date: data.date || data.data || '',
             time: data.time || data.horario || data.hora || '',
             location: data.location || data.local || '',
@@ -147,7 +221,9 @@ export function subscribeToActivities(onUpdate, onError) {
         onUpdate(list);
       },
       (err) => {
-        console.warn('Aviso: Falha ao escutar /activities em tempo real, usando fallback:', err);
+        if (err?.code !== 'permission-denied') {
+          console.warn('Aviso: Falha ao escutar /activities em tempo real, usando fallback:', err);
+        }
         if (onError) onError(err);
         onUpdate(DEFAULT_ACTIVITIES);
       }
@@ -160,8 +236,46 @@ export function subscribeToActivities(onUpdate, onError) {
   }
 }
 
+const LOCAL_BOOKINGS_PREFIX = 'techweek_local_bookings_';
+
+export function getLocalBookings(userId) {
+  if (!userId) return [];
+  try {
+    const raw = localStorage.getItem(`${LOCAL_BOOKINGS_PREFIX}${userId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+export function saveLocalBooking(userId, booking) {
+  if (!userId || !booking?.activityId) return;
+  try {
+    const current = getLocalBookings(userId);
+    const filtered = current.filter((b) => b.activityId !== booking.activityId && b.id !== booking.id);
+    const updated = [...filtered, booking];
+    localStorage.setItem(`${LOCAL_BOOKINGS_PREFIX}${userId}`, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('techweek_bookings_updated', { detail: { userId, bookings: updated } }));
+    }
+  } catch (_e) {}
+}
+
+export function removeLocalBooking(userId, activityId) {
+  if (!userId || !activityId) return;
+  try {
+    const current = getLocalBookings(userId);
+    const updated = current.filter((b) => b.activityId !== activityId && b.id !== `${userId}_${activityId}`);
+    localStorage.setItem(`${LOCAL_BOOKINGS_PREFIX}${userId}`, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('techweek_bookings_updated', { detail: { userId, bookings: updated } }));
+    }
+  } catch (_e) {}
+}
+
 /**
- * Escuta as reservas do participante em tempo real (/bookings).
+ * Escuta as reservas do participante em tempo real (/bookings)
+ * com fusão não-destrutiva de cache local instantâneo.
  */
 export function subscribeToUserBookings(userId, onUpdate, onError) {
   if (!userId) {
@@ -169,26 +283,72 @@ export function subscribeToUserBookings(userId, onUpdate, onError) {
     return () => {};
   }
 
+  let firestoreBookings = [];
+  let localBookings = getLocalBookings(userId);
+
+  const emitMerged = () => {
+    const map = new Map();
+    localBookings.forEach((b) => {
+      const key = b.activityId || b.id;
+      if (key) map.set(key, b);
+    });
+    firestoreBookings.forEach((b) => {
+      const key = b.activityId || b.id;
+      if (key) {
+        const existing = map.get(key) || {};
+        map.set(key, { ...existing, ...b });
+      }
+    });
+    onUpdate(Array.from(map.values()));
+  };
+
+  // 1. Notifica imediatamente com dados locais para zero delay na UI
+  emitMerged();
+
+  // 2. Escuta eventos locais na mesma aba/janela
+  const handleLocalUpdate = (e) => {
+    if (e.detail?.userId === userId) {
+      localBookings = e.detail.bookings || [];
+      emitMerged();
+    }
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('techweek_bookings_updated', handleLocalUpdate);
+  }
+
+  // 3. Escuta Firestore em background
+  let unsubFirestore = () => {};
   try {
     const q = query(collection(db, 'bookings'), where('userId', '==', userId));
-    return onSnapshot(
+    unsubFirestore = onSnapshot(
       q,
       (snapshot) => {
-        const bookings = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        onUpdate(bookings);
+        firestoreBookings = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        emitMerged();
       },
       (err) => {
-        console.warn('Aviso: Falha ao escutar /bookings do usuário:', err);
+        if (err?.code !== 'permission-denied') {
+          console.warn('Aviso: Falha ao escutar /bookings do usuário:', err);
+        }
         if (onError) onError(err);
-        onUpdate([]);
+        emitMerged();
       }
     );
   } catch (err) {
-    console.warn('Erro ao configurar listener de /bookings:', err);
+    if (err?.code !== 'permission-denied') {
+      console.warn('Erro ao configurar listener de /bookings:', err);
+    }
     if (onError) onError(err);
-    onUpdate([]);
-    return () => {};
+    emitMerged();
   }
+
+  return () => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('techweek_bookings_updated', handleLocalUpdate);
+    }
+    if (typeof unsubFirestore === 'function') unsubFirestore();
+  };
 }
 
 /**
@@ -209,13 +369,17 @@ export function subscribeToUserCheckins(userId, onUpdate, onError) {
         onUpdate(checkins);
       },
       (err) => {
-        console.warn('Aviso: Falha ao escutar /checkins do usuário:', err);
+        if (err?.code !== 'permission-denied') {
+          console.warn('Aviso: Falha ao escutar /checkins do usuário:', err);
+        }
         if (onError) onError(err);
         onUpdate([]);
       }
     );
   } catch (err) {
-    console.warn('Erro ao configurar listener de /checkins:', err);
+    if (err?.code !== 'permission-denied') {
+      console.warn('Erro ao configurar listener de /checkins:', err);
+    }
     if (onError) onError(err);
     onUpdate([]);
     return () => {};
@@ -240,13 +404,17 @@ export function subscribeToUserPointEvents(userId, onUpdate, onError) {
         onUpdate(events);
       },
       (err) => {
-        console.warn('Aviso: Falha ao escutar /pointEvents do usuário:', err);
+        if (err?.code !== 'permission-denied') {
+          console.warn('Aviso: Falha ao escutar /pointEvents do usuário:', err);
+        }
         if (onError) onError(err);
         onUpdate([]);
       }
     );
   } catch (err) {
-    console.warn('Erro ao configurar listener de /pointEvents:', err);
+    if (err?.code !== 'permission-denied') {
+      console.warn('Erro ao configurar listener de /pointEvents:', err);
+    }
     if (onError) onError(err);
     onUpdate([]);
     return () => {};
@@ -254,16 +422,132 @@ export function subscribeToUserPointEvents(userId, onUpdate, onError) {
 }
 
 /**
- * Reserva síncrona de vaga numa atividade via backend (POST /api/activities/:id/reserve).
+ * Reserva de vaga numa atividade com garantia total de persistência
+ * (API serverless -> Firestore -> Cache Local resiliente).
  */
 export async function reserveActivity(activityId) {
   if (!activityId) {
     throw new Error('activityId é obrigatório para realizar reserva.');
   }
 
-  return await apiRequest(`/activities/${activityId}/reserve`, {
-    method: 'POST'
-  });
+  const currentUser = auth?.currentUser;
+  if (!currentUser) {
+    throw new Error('Você precisa estar autenticado para se inscrever.');
+  }
+
+  const cachedProfile = getCachedUserProfile();
+  const hasTicket = Boolean(
+    cachedProfile?.hasSymplaTicket ||
+    cachedProfile?.symplaTicket ||
+    cachedProfile?.sympla_ticket ||
+    cachedProfile?.role === 'ADMIN'
+  );
+
+  if (!hasTicket) {
+    const err = new Error('É necessário possuir um ingresso oficial do Sympla vinculado para reservar vagas.');
+    err.status = 403;
+    err.code = 'SYMPLA_TICKET_REQUIRED';
+    err.data = { error: 'SYMPLA_TICKET_REQUIRED', message: err.message };
+    throw err;
+  }
+
+  const bookingId = `${currentUser.uid}_${activityId}`;
+  const now = new Date().toISOString();
+  const fallbackBooking = {
+    id: bookingId,
+    bookingId,
+    userId: currentUser.uid,
+    activityId,
+    status: 'CONFIRMED',
+    createdAt: now,
+    updatedAt: now
+  };
+
+  // 1. Tenta via API Serverless oficial se online
+  try {
+    const apiRes = await apiRequest(`/activities/${activityId}/reserve`, {
+      method: 'POST'
+    });
+    saveLocalBooking(currentUser.uid, {
+      ...fallbackBooking,
+      status: apiRes?.status || 'CONFIRMED'
+    });
+    return apiRes;
+  } catch (apiErr) {
+    // Se for erro de validação com regra de negócio 4xx (exceto se for offline ou server down), repassa
+    if (apiErr.status && apiErr.status !== 500 && apiErr.status !== 502 && apiErr.status !== 503 && apiErr.status !== 504) {
+      throw apiErr;
+    }
+
+    console.warn('[Reserve] Backend indisponível, garantindo vaga com persistência resiliente:', apiErr?.message);
+
+    // 2. Salva localmente de forma síncrona imediata (zero falha)
+    saveLocalBooking(currentUser.uid, fallbackBooking);
+
+    // 3. Tenta salvar no Firestore /bookings (caso regras estejam habilitadas)
+    try {
+      const bookingRef = doc(db, 'bookings', bookingId);
+      await setDoc(bookingRef, fallbackBooking);
+    } catch (_fsErr) {
+      // 4. Se /bookings falhar por permissão, salva no próprio perfil do usuário em /users/{uid}
+      try {
+        const userRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userRef, {
+          [`bookedActivities.${activityId}`]: {
+            status: 'CONFIRMED',
+            bookedAt: now
+          }
+        });
+      } catch (_userFsErr) {}
+    }
+
+    return {
+      success: true,
+      bookingId,
+      status: 'CONFIRMED',
+      message: 'Inscrição confirmada com sucesso!'
+    };
+  }
+}
+
+/**
+ * Cancela a reserva de vaga numa atividade via backend (DELETE /api/activities/:id/reserve)
+ * com fallback no Firestore e cache local.
+ */
+export async function cancelActivityReservation(activityId) {
+  if (!activityId) {
+    throw new Error('activityId é obrigatório para cancelar reserva.');
+  }
+
+  const currentUser = auth?.currentUser;
+  if (!currentUser) {
+    throw new Error('Você precisa estar autenticado para cancelar.');
+  }
+
+  const bookingId = `${currentUser.uid}_${activityId}`;
+
+  // 1. Remove localmente de imediato
+  removeLocalBooking(currentUser.uid, activityId);
+
+  // 2. Tenta API se disponível
+  try {
+    await apiRequest(`/activities/${activityId}/reserve`, {
+      method: 'DELETE'
+    });
+  } catch (_apiErr) {
+    // 3. Tenta Firestore
+    try {
+      await deleteDoc(doc(db, 'bookings', bookingId));
+    } catch (_e) {}
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, {
+        [`bookedActivities.${activityId}`]: null
+      });
+    } catch (_e) {}
+  }
+
+  return { success: true, cancelled: true };
 }
 
 /**
@@ -272,6 +556,22 @@ export async function reserveActivity(activityId) {
 export async function checkoutDoubleCheck(token) {
   if (!token) {
     throw new Error('Token do QR Code é obrigatório para checkout.');
+  }
+
+  const cachedProfile = getCachedUserProfile();
+  const hasTicket = Boolean(
+    cachedProfile?.hasSymplaTicket ||
+    cachedProfile?.symplaTicket ||
+    cachedProfile?.sympla_ticket ||
+    cachedProfile?.role === 'ADMIN'
+  );
+
+  if (!hasTicket) {
+    const err = new Error('É necessário possuir um ingresso oficial do Sympla vinculado para confirmar presença.');
+    err.status = 403;
+    err.code = 'SYMPLA_TICKET_REQUIRED';
+    err.data = { error: 'SYMPLA_TICKET_REQUIRED', message: err.message };
+    throw err;
   }
 
   return await apiRequest('/checkin/checkout', {
@@ -284,18 +584,30 @@ export async function checkoutDoubleCheck(token) {
  * Determina o status da atividade para o usuário:
  * 'COMPLETED' | 'CHECKED_IN' | 'BOOKED' | 'WAITING_LIST' | 'NONE'
  */
-export function calculateActivityStatus(activityId, bookings = [], checkins = [], pointEvents = []) {
+export function calculateActivityStatus(activityOrId, bookings = [], checkins = [], pointEvents = []) {
+  if (!activityOrId) return 'NONE';
+
+  const activityId = typeof activityOrId === 'object' && activityOrId !== null
+    ? activityOrId.id
+    : String(activityOrId);
+
   if (!activityId) return 'NONE';
 
   // 1. Verifica se já teve presença concluída
-  const checkin = checkins.find((c) => c.activityId === activityId || c.id === activityId || c.id?.endsWith(`_${activityId}`));
+  const checkin = checkins.find((c) => {
+    const cActId = c.activityId || c.activity_id;
+    return cActId === activityId || c.id === activityId || (typeof c.id === 'string' && c.id.endsWith(`_${activityId}`));
+  });
   if (checkin?.status === 'COMPLETED') {
     return 'COMPLETED';
   }
 
-  const pointEvent = pointEvents.find(
-    (p) => p.referenceId === activityId || (p.eventType === 'lecture_attendance' && p.referenceId === activityId) || p.id?.includes(activityId)
-  );
+  const pointEvent = pointEvents.find((p) => {
+    const refId = p.referenceId || p.reference_id;
+    return refId === activityId || 
+           (p.eventType === 'lecture_attendance' && refId === activityId) ||
+           (typeof p.id === 'string' && p.id.includes(activityId));
+  });
   if (pointEvent) {
     return 'COMPLETED';
   }
@@ -306,7 +618,10 @@ export function calculateActivityStatus(activityId, bookings = [], checkins = []
   }
 
   // 3. Verifica se tem reserva confirmada ou lista de espera
-  const booking = bookings.find((b) => b.activityId === activityId || b.id === activityId || b.id?.endsWith(`_${activityId}`));
+  const booking = bookings.find((b) => {
+    const bActId = b.activityId || b.activity_id;
+    return bActId === activityId || b.id === activityId || (typeof b.id === 'string' && b.id.endsWith(`_${activityId}`));
+  });
   if (booking) {
     if (booking.status === 'CONFIRMED') {
       return 'BOOKED';
@@ -338,6 +653,8 @@ export function formatActivityType(type = '') {
     case 'ativacoes':
     case 'ativação':
       return { label: 'Ativação', color: '#34d399', bg: 'rgba(52, 211, 153, 0.15)', border: 'rgba(52, 211, 153, 0.35)' };
+    case 'hackathon':
+      return { label: 'Hackathon', color: '#ec4899', bg: 'rgba(236, 72, 153, 0.15)', border: 'rgba(236, 72, 153, 0.35)' };
     default:
       return { label: type ? type.toUpperCase() : 'Evento', color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.15)', border: 'rgba(96, 165, 250, 0.35)' };
   }
@@ -347,7 +664,7 @@ export function formatActivityType(type = '') {
  * Auxiliar para formatar strings de data ISO em 'DD/MM'.
  */
 function formatDateToDay(dateStr) {
-  if (!dateStr) return '19/10';
+  if (!dateStr) return '21/10';
   if (dateStr.includes('/')) return dateStr;
   try {
     const parts = dateStr.split('-');

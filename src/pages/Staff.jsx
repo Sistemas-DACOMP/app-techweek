@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { CheckCircle, AlertCircle, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, XCircle, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { getMyProfile } from '../lib/gameplay';
 
@@ -204,7 +204,74 @@ export default function Staff() {
 
   return (
     <div className="page-container animate-fade-in" style={{ paddingBottom: '80px' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '24px', fontSize: '1.5rem', marginTop: '16px' }}>Staff: Check-in</h2>
+      {/* Header Padronizado */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '12px',
+              backgroundColor: '#0F141F',
+              border: '1px solid #1E293B',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#F8FAFC',
+              cursor: 'pointer',
+              flexShrink: 0
+            }}
+            aria-label="Voltar para o início"
+          >
+            <ArrowLeft size={18} />
+          </button>
+
+          <div>
+            <h1
+              style={{
+                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                fontSize: '1.75rem',
+                fontWeight: 800,
+                color: '#F8FAFC',
+                margin: 0,
+                letterSpacing: '-0.03em',
+                lineHeight: 1.15
+              }}
+            >
+              Staff Check-in
+            </h1>
+            <p
+              style={{
+                fontSize: '0.80rem',
+                color: '#94A3B8',
+                margin: '3px 0 0',
+                fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+              }}
+            >
+              Validação oficial de presença em atividades
+            </p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '12px',
+            backgroundColor: '#0F141F',
+            border: '1px solid #1E293B',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#3B82F6',
+            flexShrink: 0
+          }}
+        >
+          <ShieldCheck size={18} />
+        </div>
+      </div>
       
       <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         {!scanning ? (

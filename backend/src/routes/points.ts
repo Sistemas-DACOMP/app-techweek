@@ -23,6 +23,26 @@ function sanitizeId(value: string): string {
 // como id da missão, que é justamente o `challenge.id` do client
 // (src/pages/Challenges.jsx) — ver scripts/seed-missions.mjs pro catálogo
 // completo migrado dos valores hoje hardcoded no client.
+// Catálogo padrão de contingência e auto-seed caso o documento em /missions/{missionId} não exista no Firestore
+const DEFAULT_MISSION_CATALOG: Record<string, number> = {
+  scan: 5,
+  network_first: 10,
+  network_course: 15,
+  network_type: 15,
+  network_period: 15,
+  network_career: 20,
+  network_connect_two: 20,
+  network_past_edition: 15,
+  network_first_edition: 15,
+  sponsor_visit: 15,
+  sponsor_vaga: 20,
+  sponsor_tecnologia: 20,
+  sponsor_colecao: 50,
+  secret_password: 30,
+  secret_qr: 40,
+  instagram_story: 50
+};
+
 function resolveMissionId(eventType: string, referenceId: string): string {
   return eventType === 'scan' ? 'scan' : referenceId;
 }
@@ -100,14 +120,20 @@ router.post('/claim', requireAuth, participantActionLimiter, requireSymplaTicket
         };
       }
 
-      if (!missionSnap.exists) {
+      let missionPoints: number | undefined;
+      if (missionSnap.exists) {
+        missionPoints = missionSnap.data()?.points;
+      } else if (DEFAULT_MISSION_CATALOG[missionId] !== undefined) {
+        missionPoints = DEFAULT_MISSION_CATALOG[missionId];
+        // Auto-seed no Firestore para consistência futura
+        tx.set(missionRef, { points: missionPoints, createdAt: FieldValue.serverTimestamp() });
+      } else {
         return {
           status: 404 as const,
           body: { error: 'MISSION_NOT_FOUND', message: `Missão "${eventType}/${referenceId}" não existe no catálogo.` }
         };
       }
 
-      const missionPoints = missionSnap.data()?.points;
       if (typeof missionPoints !== 'number' || !Number.isFinite(missionPoints) || missionPoints < 0) {
         // Catálogo mal formado (dado de seed/edição manual quebrado) — erro de
         // integridade de dado, não payload do client, por isso 500 e não 400.
