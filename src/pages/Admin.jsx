@@ -57,11 +57,38 @@ const SAMPLE_SPEAKER_PHOTOS = [
 
 export default function Admin() {
   const navigate = useNavigate();
-  const { userProfile, role, participantType } = useUser();
+  const { profile, role, participantType, refreshProfile } = useUser();
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'activities' | 'users' | 'feed' | 'notifications'
   
-  // Guard de autorização Admin
-  const isAuthorized = role === 'ADMIN' || participantType === 'Organizador' || userProfile?.role === 'ADMIN';
+  // Guard de autorização Admin verificado tanto via useUser quanto via sessão persistida
+  const [sessionAdmin, setSessionAdmin] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      const testSessionStr = localStorage.getItem('facom_test_session');
+      if (testSessionStr) {
+        try {
+          const s = JSON.parse(testSessionStr);
+          if (s.role === 'ADMIN' || s.email === 'admin@admin.com' || s.email === 'sam03amorim@gmail.com') return true;
+        } catch (_e) {}
+      }
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('facom_profile_')) {
+          try {
+            const p = JSON.parse(localStorage.getItem(key));
+            if (p.role === 'ADMIN' || p.email === 'admin@admin.com' || p.email === 'sam03amorim@gmail.com') return true;
+          } catch (_e) {}
+        }
+      }
+    }
+    return false;
+  });
+
+  const isAuthorized = sessionAdmin || 
+    role === 'ADMIN' || 
+    participantType === 'Organizador' || 
+    profile?.role === 'ADMIN' || 
+    profile?.email === 'admin@admin.com' || 
+    profile?.email === 'sam03amorim@gmail.com';
 
   // Estados de Login Dedicado do Portal Admin
   const [adminEmail, setAdminEmail] = useState('');
@@ -205,7 +232,7 @@ export default function Admin() {
 
   // Handlers de Login / Logout
   const handleAdminLogin = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!adminEmail || !adminPassword || loginLoading) return;
     setLoginLoading(true);
     setLoginError('');
@@ -215,7 +242,10 @@ export default function Admin() {
       if (!res.success) {
         setLoginError(res.error || 'Credenciais inválidas.');
       } else {
-        window.location.reload();
+        setSessionAdmin(true);
+        if (typeof refreshProfile === 'function') {
+          try { await refreshProfile(); } catch (_e) {}
+        }
       }
     } catch (err) {
       setLoginError(err.message || 'Falha ao autenticar.');
@@ -234,7 +264,10 @@ export default function Admin() {
       if (!res.success) {
         setLoginError(res.error || 'Credenciais inválidas.');
       } else {
-        window.location.reload();
+        setSessionAdmin(true);
+        if (typeof refreshProfile === 'function') {
+          try { await refreshProfile(); } catch (_e) {}
+        }
       }
     } catch (err) {
       setLoginError(err.message || 'Falha ao autenticar.');
@@ -244,8 +277,11 @@ export default function Admin() {
   };
 
   const handleAdminLogout = async () => {
+    setSessionAdmin(false);
     await logoutUser();
-    window.location.reload();
+    if (typeof refreshProfile === 'function') {
+      try { await refreshProfile(); } catch (_e) {}
+    }
   };
 
   // Handlers de Atividades

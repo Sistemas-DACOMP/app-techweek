@@ -55,7 +55,16 @@ export function resolveRoleByEmail(email, existingRole = 'PARTICIPANT') {
 
 export function getCachedUserProfile(uid) {
   try {
-    const targetUid = uid || auth?.currentUser?.uid;
+    let targetUid = uid || auth?.currentUser?.uid;
+    if (!targetUid && typeof localStorage !== 'undefined') {
+      const testSessionStr = localStorage.getItem('facom_test_session');
+      if (testSessionStr) {
+        try {
+          const testSession = JSON.parse(testSessionStr);
+          if (testSession.uid) targetUid = testSession.uid;
+        } catch (_e) {}
+      }
+    }
     if (targetUid) {
       const cached = localStorage.getItem(`facom_profile_${targetUid}`);
       if (cached) {
