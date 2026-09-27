@@ -38,7 +38,7 @@ body {
   background-attachment: fixed;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: stretch;
   min-height: 100vh;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
@@ -51,7 +51,7 @@ body {
   min-height: 100dvh;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: stretch;
   overflow-x: hidden;
 }
 
@@ -80,11 +80,11 @@ body {
 
 .portal-wrapper {
   width: 100%;
-  max-width: 1380px;
+  max-width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   position: relative;
-  margin: 0 auto;
+  margin: 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
