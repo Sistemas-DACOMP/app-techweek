@@ -44,7 +44,9 @@ import {
   Share2,
   Image as ImageIcon,
   Edit,
-  Pencil
+  Pencil,
+  Sparkles,
+  Zap
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import logoTw from '../assets/logo-tw.png';
@@ -296,7 +298,7 @@ export default function Admin() {
         type: 'success',
         title: 'Mensagem Publicada',
         message: feedChannel === 'both'
-          ? 'Publicada no Feed e enviada como notificação aos participantes.'
+          ? 'Publicada no Feed e enviada com alerta neon aos participantes.'
           : (feedChannel === 'feed' ? 'Publicação no Feed enviada com sucesso.' : 'Comunicado disparado no sino dos participantes.')
       });
     } catch (err) {
@@ -333,8 +335,8 @@ export default function Admin() {
       setFeedPosts(prev => prev.map(p => p.id === postId ? { ...p, pinned: !currentPinned } : p));
       setFeedback({
         type: 'success',
-        title: currentPinned ? 'Post Desafixado' : 'Post Fixado no Topo',
-        message: currentPinned ? 'A publicação agora segue a ordem cronológica.' : 'A publicação agora aparece no topo.'
+        title: currentPinned ? 'Post Desafixado' : 'Post Fixado no Topo 📌',
+        message: currentPinned ? 'A publicação agora segue a ordem cronológica.' : 'A publicação agora aparece fixada com destaque neon no topo.'
       });
     } catch (err) {
       setFeedback({ type: 'error', title: 'Erro', message: err.message });
@@ -616,51 +618,54 @@ export default function Admin() {
     });
   }, [activities, activitySearch, activityFilter]);
 
-  // Se não estiver autorizado, tela de login limpa estilo Even3
+  // Se não estiver autorizado, tela de login neon cyber
   if (!isAuthorized) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9', padding: '24px 16px' }}>
-        <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
-          <div style={{ backgroundColor: '#0284C7', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <img src={logoTw} alt="FACOM TechWeek" style={{ height: '24px', width: 'auto' }} />
-            <span style={{ color: '#FFFFFF', fontWeight: 600, fontSize: '0.95rem' }}>Área do Organizador</span>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#07090E', padding: '24px 16px' }}>
+        <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 25px rgba(56, 189, 248, 0.1)' }}>
+          <div style={{ background: 'linear-gradient(135deg, #0F141F 0%, #1E293B 100%)', borderBottom: '1px solid rgba(56, 189, 248, 0.2)', padding: '18px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <img src={logoTw} alt="FACOM TechWeek" style={{ height: '26px', width: 'auto', filter: 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.5))' }} />
+            <div>
+              <span style={{ color: '#F8FAFC', fontWeight: 700, fontSize: '0.95rem', display: 'block' }}>Área do Organizador</span>
+              <span style={{ color: '#38BDF8', fontSize: '0.72rem', fontFamily: 'monospace' }}>FACOM TECHWEEK 2026</span>
+            </div>
           </div>
 
           <form onSubmit={handleAdminLogin} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {loginError && (
-              <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#DC2626', padding: '10px 12px', borderRadius: '4px', fontSize: '0.82rem' }}>
+              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#EF4444', padding: '10px 12px', borderRadius: '8px', fontSize: '0.82rem' }}>
                 {loginError}
               </div>
             )}
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>E-mail</label>
+              <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>E-mail</label>
               <input
                 type="email"
                 required
                 placeholder="admin@admin.com"
                 value={adminEmail}
                 onChange={(e) => setAdminEmail(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '4px', color: '#0F172A', fontSize: '0.88rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '10px 12px', backgroundColor: '#07090E', border: '1px solid #1E293B', borderRadius: '8px', color: '#F8FAFC', fontSize: '0.88rem', boxSizing: 'border-box' }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Senha</label>
+              <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>Senha</label>
               <input
                 type="password"
                 required
                 placeholder="••••••••••••"
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '4px', color: '#0F172A', fontSize: '0.88rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '10px 12px', backgroundColor: '#07090E', border: '1px solid #1E293B', borderRadius: '8px', color: '#F8FAFC', fontSize: '0.88rem', boxSizing: 'border-box' }}
               />
             </div>
 
             <button
               type="submit"
               disabled={loginLoading}
-              style={{ backgroundColor: '#0284C7', color: '#FFFFFF', border: 'none', borderRadius: '4px', padding: '11px', fontWeight: 600, fontSize: '0.90rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              style={{ background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 15px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '12px', fontWeight: 700, fontSize: '0.90rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
             >
               {loginLoading ? <Loader2 size={16} className="animate-spin" /> : null}
               <span>Entrar no Painel</span>
@@ -669,9 +674,9 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => handleQuickAdmin('admin@admin.com', 'AdminPassword123!')}
-              style={{ backgroundColor: '#F0F9FF', color: '#0284C7', border: '1px solid #BAE6FD', borderRadius: '4px', padding: '9px', fontWeight: 600, fontSize: '0.80rem', cursor: 'pointer' }}
+              style={{ backgroundColor: 'rgba(56, 189, 248, 0.08)', color: '#38BDF8', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', padding: '10px', fontWeight: 600, fontSize: '0.80rem', cursor: 'pointer' }}
             >
-              Entrar como admin@admin.com (1 clique)
+              ⚡ Entrar como admin@admin.com (1 clique)
             </button>
           </form>
         </div>
@@ -680,16 +685,16 @@ export default function Admin() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', width: '100%', backgroundColor: '#F8FAFC', display: 'flex', flexDirection: 'column', color: '#1E293B', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>
-      {/* 1. TOP NAVBAR (ESTILO EVEN3 EXATO, CORES FACOM TECHWEEK) */}
-      <header style={{ height: '52px', backgroundColor: '#0F172A', borderBottom: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', position: 'sticky', top: 0, zIndex: 50 }}>
-        {/* Esquerda: Logo + Breadcrumbs Even3 */}
+    <div style={{ minHeight: '100vh', width: '100%', backgroundColor: '#07090E', display: 'flex', flexDirection: 'column', color: '#F8FAFC', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>
+      {/* 1. TOP NAVBAR (EVEN3 LAYOUT + NEON TECHWEEK) */}
+      <header style={{ height: '52px', backgroundColor: '#0B101D', borderBottom: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(10px)' }}>
+        {/* Esquerda: Logo Oficial Neon + Breadcrumbs Even3 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => navigate('/')}>
             <img 
               src={logoTw} 
               alt="FACOM TechWeek" 
-              style={{ height: '24px', width: 'auto', objectFit: 'contain' }} 
+              style={{ height: '25px', width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.45))' }} 
             />
           </div>
 
@@ -700,10 +705,10 @@ export default function Admin() {
             >
               Eventos
             </span>
-            <span style={{ color: '#475569' }}>/</span>
-            <span style={{ color: '#F8FAFC', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ color: '#334155' }}>/</span>
+            <span style={{ color: '#F8FAFC', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
               Teste Facom TechWeek
-              <ExternalLink size={12} color="#94A3B8" />
+              <ExternalLink size={12} color="#38BDF8" />
             </span>
           </div>
         </div>
@@ -713,43 +718,43 @@ export default function Admin() {
           <button
             type="button"
             onClick={() => navigate('/')}
-            style={{ background: 'none', border: 'none', color: '#E2E8F0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', padding: 0 }}
+            style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', padding: 0 }}
           >
-            <Plus size={14} />
+            <Plus size={14} color="#38BDF8" />
             <span>Meus eventos</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveMenu('programacao')}
-            style={{ background: 'none', border: 'none', color: '#E2E8F0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', padding: 0 }}
+            style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', padding: 0 }}
           >
             <span>Área do Organizador</span>
-            <ChevronDown size={14} color="#94A3B8" />
+            <ChevronDown size={14} color="#64748B" />
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-            <div style={{ width: '26px', height: '26px', borderRadius: '50%', backgroundColor: '#0284C7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontWeight: 700, fontSize: '0.72rem' }}>
+            <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg, #0284C7, #38BDF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontWeight: 800, fontSize: '0.72rem', boxShadow: '0 0 8px rgba(56, 189, 248, 0.4)' }}>
               SA
             </div>
-            <span style={{ color: '#F8FAFC', fontWeight: 500 }}>Samuel Amorim</span>
-            <ChevronDown size={14} color="#94A3B8" />
+            <span style={{ color: '#F8FAFC', fontWeight: 600 }}>Samuel Amorim</span>
+            <ChevronDown size={14} color="#64748B" />
           </div>
 
           <button
             type="button"
             onClick={() => setActiveMenu('feed')}
             title="Avisos e notificações"
-            style={{ background: 'none', border: 'none', color: '#CBD5E1', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
           >
-            <Bell size={17} />
+            <Bell size={17} color="#38BDF8" />
           </button>
 
           <button
             type="button"
             onClick={() => navigate('/')}
             title="Menu do sistema"
-            style={{ background: 'none', border: 'none', color: '#CBD5E1', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+            style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
           >
             <Grid size={17} />
           </button>
@@ -758,7 +763,7 @@ export default function Admin() {
             type="button"
             onClick={handleAdminLogout}
             title="Sair"
-            style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', marginLeft: '4px' }}
+            style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', marginLeft: '4px' }}
           >
             <LogOut size={16} />
           </button>
@@ -767,11 +772,11 @@ export default function Admin() {
 
       {/* 2. CORPO PRINCIPAL: SIDEBAR EVEN3 + CONTEÚDO */}
       <div style={{ display: 'flex', flex: 1, minHeight: 'calc(100vh - 52px)' }}>
-        {/* SIDEBAR EVEN3 LIMPA / PROFISSIONAL */}
-        <aside style={{ width: '200px', backgroundColor: '#FFFFFF', borderRight: '1px solid #E2E8F0', padding: '16px 0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        {/* SIDEBAR EVEN3 NEON TECHWEEK */}
+        <aside style={{ width: '200px', backgroundColor: '#0B101D', borderRight: '1px solid #1E293B', padding: '16px 0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
           {/* Seção GESTÃO */}
           <div style={{ padding: '4px 18px 8px' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748B', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               GESTÃO
             </span>
           </div>
@@ -785,8 +790,9 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'inicio' ? '#EFF6FF' : 'transparent',
-              color: activeMenu === 'inicio' ? '#0284C7' : '#475569',
+              backgroundColor: activeMenu === 'inicio' ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+              borderLeft: activeMenu === 'inicio' ? '3px solid #38BDF8' : '3px solid transparent',
+              color: activeMenu === 'inicio' ? '#38BDF8' : '#94A3B8',
               fontWeight: activeMenu === 'inicio' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -794,7 +800,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <Home size={16} color={activeMenu === 'inicio' ? '#0284C7' : '#64748B'} />
+            <Home size={16} color={activeMenu === 'inicio' ? '#38BDF8' : '#64748B'} />
             <span>Início</span>
           </button>
 
@@ -807,8 +813,9 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'pessoas' ? '#EFF6FF' : 'transparent',
-              color: activeMenu === 'pessoas' ? '#0284C7' : '#475569',
+              backgroundColor: activeMenu === 'pessoas' ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+              borderLeft: activeMenu === 'pessoas' ? '3px solid #38BDF8' : '3px solid transparent',
+              color: activeMenu === 'pessoas' ? '#38BDF8' : '#94A3B8',
               fontWeight: activeMenu === 'pessoas' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -816,7 +823,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <Users size={16} color={activeMenu === 'pessoas' ? '#0284C7' : '#64748B'} />
+            <Users size={16} color={activeMenu === 'pessoas' ? '#38BDF8' : '#64748B'} />
             <span>Pessoas</span>
           </button>
 
@@ -829,8 +836,9 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'vendas' ? '#EFF6FF' : 'transparent',
-              color: activeMenu === 'vendas' ? '#0284C7' : '#475569',
+              backgroundColor: activeMenu === 'vendas' ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+              borderLeft: activeMenu === 'vendas' ? '3px solid #38BDF8' : '3px solid transparent',
+              color: activeMenu === 'vendas' ? '#38BDF8' : '#94A3B8',
               fontWeight: activeMenu === 'vendas' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -838,7 +846,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <CreditCard size={16} color={activeMenu === 'vendas' ? '#0284C7' : '#64748B'} />
+            <CreditCard size={16} color={activeMenu === 'vendas' ? '#38BDF8' : '#64748B'} />
             <span>Vendas</span>
           </button>
 
@@ -852,8 +860,9 @@ export default function Admin() {
               justifyContent: 'space-between',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'feed' ? '#EFF6FF' : 'transparent',
-              color: activeMenu === 'feed' ? '#0284C7' : '#475569',
+              backgroundColor: activeMenu === 'feed' ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+              borderLeft: activeMenu === 'feed' ? '3px solid #38BDF8' : '3px solid transparent',
+              color: activeMenu === 'feed' ? '#38BDF8' : '#94A3B8',
               fontWeight: activeMenu === 'feed' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -862,17 +871,17 @@ export default function Admin() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <MessageSquare size={16} color={activeMenu === 'feed' ? '#0284C7' : '#64748B'} />
+              <MessageSquare size={16} color={activeMenu === 'feed' ? '#38BDF8' : '#64748B'} />
               <span>Feed & Avisos</span>
             </div>
-            <span style={{ fontSize: '0.68rem', backgroundColor: '#F1F5F9', color: '#0284C7', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+            <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38BDF8', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
               {feedPosts.length}
             </span>
           </button>
 
           {/* Seção PRÉ-EVENTO */}
           <div style={{ padding: '16px 18px 8px' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748B', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               PRÉ-EVENTO
             </span>
           </div>
@@ -886,8 +895,9 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'inscricoes' ? '#EFF6FF' : 'transparent',
-              color: activeMenu === 'inscricoes' ? '#0284C7' : '#475569',
+              backgroundColor: activeMenu === 'inscricoes' ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+              borderLeft: activeMenu === 'inscricoes' ? '3px solid #38BDF8' : '3px solid transparent',
+              color: activeMenu === 'inscricoes' ? '#38BDF8' : '#94A3B8',
               fontWeight: activeMenu === 'inscricoes' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -895,7 +905,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <Ticket size={16} color={activeMenu === 'inscricoes' ? '#0284C7' : '#64748B'} />
+            <Ticket size={16} color={activeMenu === 'inscricoes' ? '#38BDF8' : '#64748B'} />
             <span>Inscrições</span>
           </button>
 
@@ -908,8 +918,9 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'pagina' ? '#EFF6FF' : 'transparent',
-              color: activeMenu === 'pagina' ? '#0284C7' : '#475569',
+              backgroundColor: activeMenu === 'pagina' ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+              borderLeft: activeMenu === 'pagina' ? '3px solid #38BDF8' : '3px solid transparent',
+              color: activeMenu === 'pagina' ? '#38BDF8' : '#94A3B8',
               fontWeight: activeMenu === 'pagina' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -917,7 +928,7 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <Globe size={16} color={activeMenu === 'pagina' ? '#0284C7' : '#64748B'} />
+            <Globe size={16} color={activeMenu === 'pagina' ? '#38BDF8' : '#64748B'} />
             <span>Página do Evento</span>
           </button>
 
@@ -930,22 +941,23 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'programacao' ? '#EFF6FF' : 'transparent',
-              color: activeMenu === 'programacao' ? '#0284C7' : '#475569',
-              fontWeight: activeMenu === 'programacao' ? 600 : 400,
+              backgroundColor: activeMenu === 'programacao' ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+              borderLeft: activeMenu === 'programacao' ? '3px solid #38BDF8' : '3px solid transparent',
+              color: activeMenu === 'programacao' ? '#38BDF8' : '#94A3B8',
+              fontWeight: activeMenu === 'programacao' ? 700 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
               textAlign: 'left',
               width: '100%'
             }}
           >
-            <Calendar size={16} color={activeMenu === 'programacao' ? '#0284C7' : '#64748B'} />
+            <Calendar size={16} color={activeMenu === 'programacao' ? '#38BDF8' : '#64748B'} />
             <span>Programação</span>
           </button>
 
           {/* Seção EVENTO */}
           <div style={{ padding: '16px 18px 8px' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748B', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               EVENTO
             </span>
           </div>
@@ -960,7 +972,7 @@ export default function Admin() {
               padding: '9px 18px',
               border: 'none',
               backgroundColor: 'transparent',
-              color: '#475569',
+              color: '#94A3B8',
               fontWeight: 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -974,7 +986,7 @@ export default function Admin() {
 
           {/* Seção PÓS-EVENTO */}
           <div style={{ padding: '16px 18px 8px' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748B', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               PÓS-EVENTO
             </span>
           </div>
@@ -988,8 +1000,9 @@ export default function Admin() {
               gap: '10px',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'certificados' ? '#EFF6FF' : 'transparent',
-              color: activeMenu === 'certificados' ? '#0284C7' : '#475569',
+              backgroundColor: activeMenu === 'certificados' ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+              borderLeft: activeMenu === 'certificados' ? '3px solid #38BDF8' : '3px solid transparent',
+              color: activeMenu === 'certificados' ? '#38BDF8' : '#94A3B8',
               fontWeight: activeMenu === 'certificados' ? 600 : 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -997,13 +1010,13 @@ export default function Admin() {
               width: '100%'
             }}
           >
-            <Award size={16} color={activeMenu === 'certificados' ? '#0284C7' : '#64748B'} />
+            <Award size={16} color={activeMenu === 'certificados' ? '#38BDF8' : '#64748B'} />
             <span>Certificados</span>
           </button>
 
           {/* Seção GERAL */}
           <div style={{ padding: '16px 18px 8px' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748B', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               GERAL
             </span>
           </div>
@@ -1017,8 +1030,8 @@ export default function Admin() {
               justifyContent: 'space-between',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'config' ? '#EFF6FF' : 'transparent',
-              color: '#475569',
+              backgroundColor: activeMenu === 'config' ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+              color: '#94A3B8',
               fontWeight: 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -1042,8 +1055,8 @@ export default function Admin() {
               justifyContent: 'space-between',
               padding: '9px 18px',
               border: 'none',
-              backgroundColor: activeMenu === 'ferramentas' ? '#EFF6FF' : 'transparent',
-              color: '#475569',
+              backgroundColor: activeMenu === 'ferramentas' ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+              color: '#94A3B8',
               fontWeight: 400,
               fontSize: '0.84rem',
               cursor: 'pointer',
@@ -1059,18 +1072,23 @@ export default function Admin() {
           </button>
         </aside>
 
-        {/* 3. ÁREA DE CONTEÚDO PRINCIPAL EVEN3 (CLEAN LIGHT THEME) */}
-        <main style={{ flex: 1, padding: '28px 36px', overflowY: 'auto', backgroundColor: '#F8FAFC' }}>
+        {/* 3. ÁREA DE CONTEÚDO PRINCIPAL (DARK NEON TECHWEEK) */}
+        <main style={{ flex: 1, padding: '28px 36px', overflowY: 'auto', backgroundColor: '#07090E' }}>
           {/* TELA: PROGRAMAÇÃO */}
           {activeMenu === 'programacao' && (
             <div>
-              {/* Título da Página Even3: "Programação" */}
-              <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#0F172A', margin: '0 0 20px', letterSpacing: '-0.01em' }}>
-                Programação
-              </h1>
+              {/* Título da Página: "Programação" */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+                <h1 style={{ fontSize: '1.65rem', fontWeight: 700, color: '#F8FAFC', margin: 0, letterSpacing: '-0.01em' }}>
+                  Programação
+                </h1>
+                <span style={{ fontSize: '0.70rem', backgroundColor: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38BDF8', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                  PAINEL DE GRADE
+                </span>
+              </div>
 
               {/* Subtabs Even3: Atividades | Convidados | Locais | Cupons de desconto | Configurações */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '24px', borderBottom: '1px solid #E2E8F0', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '24px', borderBottom: '1px solid #1E293B', marginBottom: '24px' }}>
                 <button
                   type="button"
                   onClick={() => setProgTab('atividades')}
@@ -1079,10 +1097,11 @@ export default function Admin() {
                     border: 'none',
                     background: 'none',
                     fontSize: '0.88rem',
-                    fontWeight: progTab === 'atividades' ? 600 : 400,
-                    color: progTab === 'atividades' ? '#0284C7' : '#64748B',
-                    borderBottom: progTab === 'atividades' ? '2px solid #0284C7' : '2px solid transparent',
-                    cursor: 'pointer'
+                    fontWeight: progTab === 'atividades' ? 700 : 500,
+                    color: progTab === 'atividades' ? '#38BDF8' : '#94A3B8',
+                    borderBottom: progTab === 'atividades' ? '2px solid #38BDF8' : '2px solid transparent',
+                    cursor: 'pointer',
+                    textShadow: progTab === 'atividades' ? '0 0 10px rgba(56, 189, 248, 0.5)' : 'none'
                   }}
                 >
                   Atividades
@@ -1096,10 +1115,11 @@ export default function Admin() {
                     border: 'none',
                     background: 'none',
                     fontSize: '0.88rem',
-                    fontWeight: progTab === 'convidados' ? 600 : 400,
-                    color: progTab === 'convidados' ? '#0284C7' : '#64748B',
-                    borderBottom: progTab === 'convidados' ? '2px solid #0284C7' : '2px solid transparent',
-                    cursor: 'pointer'
+                    fontWeight: progTab === 'convidados' ? 700 : 500,
+                    color: progTab === 'convidados' ? '#38BDF8' : '#94A3B8',
+                    borderBottom: progTab === 'convidados' ? '2px solid #38BDF8' : '2px solid transparent',
+                    cursor: 'pointer',
+                    textShadow: progTab === 'convidados' ? '0 0 10px rgba(56, 189, 248, 0.5)' : 'none'
                   }}
                 >
                   Convidados
@@ -1113,9 +1133,9 @@ export default function Admin() {
                     border: 'none',
                     background: 'none',
                     fontSize: '0.88rem',
-                    fontWeight: progTab === 'locais' ? 600 : 400,
-                    color: progTab === 'locais' ? '#0284C7' : '#64748B',
-                    borderBottom: progTab === 'locais' ? '2px solid #0284C7' : '2px solid transparent',
+                    fontWeight: progTab === 'locais' ? 700 : 500,
+                    color: progTab === 'locais' ? '#38BDF8' : '#94A3B8',
+                    borderBottom: progTab === 'locais' ? '2px solid #38BDF8' : '2px solid transparent',
                     cursor: 'pointer'
                   }}
                 >
@@ -1130,9 +1150,9 @@ export default function Admin() {
                     border: 'none',
                     background: 'none',
                     fontSize: '0.88rem',
-                    fontWeight: progTab === 'cupons' ? 600 : 400,
-                    color: progTab === 'cupons' ? '#0284C7' : '#64748B',
-                    borderBottom: progTab === 'cupons' ? '2px solid #0284C7' : '2px solid transparent',
+                    fontWeight: progTab === 'cupons' ? 700 : 500,
+                    color: progTab === 'cupons' ? '#38BDF8' : '#94A3B8',
+                    borderBottom: progTab === 'cupons' ? '2px solid #38BDF8' : '2px solid transparent',
                     cursor: 'pointer'
                   }}
                 >
@@ -1147,9 +1167,9 @@ export default function Admin() {
                     border: 'none',
                     background: 'none',
                     fontSize: '0.88rem',
-                    fontWeight: progTab === 'configuracoes' ? 600 : 400,
-                    color: progTab === 'configuracoes' ? '#0284C7' : '#64748B',
-                    borderBottom: progTab === 'configuracoes' ? '2px solid #0284C7' : '2px solid transparent',
+                    fontWeight: progTab === 'configuracoes' ? 700 : 500,
+                    color: progTab === 'configuracoes' ? '#38BDF8' : '#94A3B8',
+                    borderBottom: progTab === 'configuracoes' ? '2px solid #38BDF8' : '2px solid transparent',
                     cursor: 'pointer'
                   }}
                 >
@@ -1157,12 +1177,12 @@ export default function Admin() {
                 </button>
               </div>
 
-              {/* ABA ATIVIDADES (EVEN3 SCREENSHOT 1) */}
+              {/* ABA ATIVIDADES */}
               {progTab === 'atividades' && (
                 <div>
                   {/* Linha: Título da Seção "Atividades" + Barra de Ações à Direita */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 500, color: '#1E293B', margin: 0 }}>
+                    <h2 style={{ fontSize: '1.20rem', fontWeight: 600, color: '#F8FAFC', margin: 0 }}>
                       Atividades
                     </h2>
 
@@ -1171,7 +1191,7 @@ export default function Admin() {
                       <select
                         value={activityFilter}
                         onChange={(e) => setActivityFilter(e.target.value)}
-                        style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#334155', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
+                        style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#0F141F', color: '#F8FAFC', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
                       >
                         <option value="ALL">Todas as atividades</option>
                         <option value="palestra">Palestra</option>
@@ -1182,13 +1202,13 @@ export default function Admin() {
 
                       {/* Campo Buscar Even3 */}
                       <div style={{ position: 'relative' }}>
-                        <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                        <Search size={14} color="#64748B" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                         <input
                           type="text"
                           placeholder="Buscar"
                           value={activitySearch}
                           onChange={(e) => setActivitySearch(e.target.value)}
-                          style={{ padding: '6px 10px 6px 30px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.82rem', height: '34px', width: '160px', boxSizing: 'border-box' }}
+                          style={{ padding: '6px 10px 6px 30px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#0F141F', color: '#F8FAFC', fontSize: '0.82rem', height: '34px', width: '160px', boxSizing: 'border-box' }}
                         />
                       </div>
 
@@ -1196,9 +1216,9 @@ export default function Admin() {
                       <button
                         type="button"
                         onClick={() => navigate('/')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#0F141F', color: '#94A3B8', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
                       >
-                        <Calendar size={13} color="#64748B" />
+                        <Calendar size={13} color="#38BDF8" />
                         <span>Agenda</span>
                       </button>
 
@@ -1214,13 +1234,13 @@ export default function Admin() {
                           a.download = 'programacao-techweek.json';
                           a.click();
                         }}
-                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#0F141F', color: '#94A3B8', fontSize: '0.82rem', height: '34px', cursor: 'pointer' }}
                       >
-                        <Download size={13} color="#64748B" />
+                        <Download size={13} color="#94A3B8" />
                         <span>Exportar ▾</span>
                       </button>
 
-                      {/* Botão Principal Even3: + Adicionar atividade */}
+                      {/* Botão Principal Neon: + Adicionar atividade */}
                       <button
                         type="button"
                         onClick={() => {
@@ -1228,7 +1248,7 @@ export default function Admin() {
                           setActivityForm(initialActivityForm);
                           setIsActivityModalOpen(true);
                         }}
-                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', borderRadius: '4px', border: 'none', backgroundColor: '#0284C7', color: '#FFFFFF', fontSize: '0.84rem', fontWeight: 600, height: '34px', cursor: 'pointer' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', borderRadius: '6px', border: 'none', background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', fontSize: '0.84rem', fontWeight: 700, height: '34px', cursor: 'pointer' }}
                       >
                         <Plus size={15} />
                         <span>+ Adicionar atividade</span>
@@ -1236,23 +1256,23 @@ export default function Admin() {
                     </div>
                   </div>
 
-                  {/* TABELA DE ATIVIDADES EVEN3 */}
-                  <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}>
+                  {/* TABELA DE ATIVIDADES NEON EVEN3 */}
+                  <div style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
                       <thead>
-                        <tr style={{ borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
-                          <th style={{ padding: '10px 16px', fontWeight: 600, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>NÚMERO</th>
-                          <th style={{ padding: '10px 16px', fontWeight: 600, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>TIPO</th>
-                          <th style={{ padding: '10px 16px', fontWeight: 600, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>TÍTULO</th>
-                          <th style={{ padding: '10px 16px', fontWeight: 600, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>VAGAS</th>
-                          <th style={{ padding: '10px 16px', fontWeight: 600, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>VALOR</th>
-                          <th style={{ padding: '10px 16px', fontWeight: 600, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase', textAlign: 'right' }}>AÇÕES</th>
+                        <tr style={{ borderBottom: '1px solid #1E293B', backgroundColor: 'rgba(15, 20, 31, 0.8)' }}>
+                          <th style={{ padding: '12px 16px', fontWeight: 700, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>NÚMERO</th>
+                          <th style={{ padding: '12px 16px', fontWeight: 700, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>TIPO</th>
+                          <th style={{ padding: '12px 16px', fontWeight: 700, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>TÍTULO</th>
+                          <th style={{ padding: '12px 16px', fontWeight: 700, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>VAGAS</th>
+                          <th style={{ padding: '12px 16px', fontWeight: 700, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>VALOR</th>
+                          <th style={{ padding: '12px 16px', fontWeight: 700, color: '#64748B', fontSize: '0.74rem', letterSpacing: '0.05em', textTransform: 'uppercase', textAlign: 'right' }}>AÇÕES</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredActivities.length === 0 ? (
                           <tr>
-                            <td colSpan={6} style={{ padding: '30px', textAlign: 'center', color: '#64748B' }}>
+                            <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
                               Nenhuma atividade cadastrada.
                             </td>
                           </tr>
@@ -1266,30 +1286,40 @@ export default function Admin() {
                               : [{ date: act.date || '2026-10-21', time: `${act.time || '14:00'}-${act.endTime || '15:30'}` }];
 
                             return (
-                              <tr key={act.id} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: 'transparent' }}>
+                              <tr key={act.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: 'transparent' }}>
                                 {/* Número */}
-                                <td style={{ padding: '12px 16px', color: '#64748B', fontSize: '0.82rem' }}>
+                                <td style={{ padding: '12px 16px', color: '#64748B', fontSize: '0.82rem', fontFamily: 'monospace' }}>
                                   {actNum}
                                 </td>
 
                                 {/* Tipo */}
-                                <td style={{ padding: '12px 16px', color: '#334155', fontSize: '0.82rem' }}>
-                                  {formattedType}
+                                <td style={{ padding: '12px 16px' }}>
+                                  <span style={{ 
+                                    fontSize: '0.74rem', 
+                                    fontWeight: 700, 
+                                    padding: '2px 8px', 
+                                    borderRadius: '12px',
+                                    backgroundColor: act.type === 'palestra' ? 'rgba(56, 189, 248, 0.12)' : (act.type === 'minicurso' || act.type === 'curso' ? 'rgba(168, 85, 247, 0.12)' : 'rgba(245, 158, 11, 0.12)'),
+                                    color: act.type === 'palestra' ? '#38BDF8' : (act.type === 'minicurso' || act.type === 'curso' ? '#C084FC' : '#FBBF24'),
+                                    border: act.type === 'palestra' ? '1px solid rgba(56, 189, 248, 0.3)' : (act.type === 'minicurso' || act.type === 'curso' ? '1px solid rgba(168, 85, 247, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)')
+                                  }}>
+                                    {formattedType}
+                                  </span>
                                 </td>
 
                                 {/* Título e Cronograma Even3 */}
                                 <td style={{ padding: '12px 16px' }}>
                                   <div
                                     onClick={() => handleOpenEditActivity(act)}
-                                    style={{ color: '#0284C7', fontWeight: 500, fontSize: '0.86rem', cursor: 'pointer', marginBottom: '2px' }}
+                                    style={{ color: '#38BDF8', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer', marginBottom: '2px' }}
                                   >
                                     {act.title}
                                   </div>
                                   {schedules.map((sch, idx) => (
-                                    <div key={idx} style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                                    <div key={idx} style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
                                       {sch.date.includes('-') 
-                                        ? `${sch.date.split('-')[2]} de out de ${sch.date.split('-')[0]} ${sch.startTime || sch.time || ''}${sch.endTime ? `-${sch.endTime}` : ''}`
-                                        : `${sch.date} ${sch.time || ''}`}
+                                        ? `${sch.date.split('-')[2]} de out de ${sch.date.split('-')[0]} • ${sch.startTime || sch.time || ''}${sch.endTime ? `-${sch.endTime}` : ''}`
+                                        : `${sch.date} • ${sch.time || ''}`}
                                     </div>
                                   ))}
                                 </td>
@@ -1298,19 +1328,19 @@ export default function Admin() {
                                 <td style={{ padding: '12px 16px' }}>
                                   {act.registrationType === 'Não requer inscrição' ? (
                                     <div>
-                                      <div style={{ color: '#334155', fontSize: '0.82rem' }}>Não requer inscrição</div>
+                                      <div style={{ color: '#F8FAFC', fontSize: '0.82rem' }}>Não requer inscrição</div>
                                       <div style={{ fontSize: '0.74rem', color: '#64748B' }}>Vagas ilimitadas</div>
                                     </div>
                                   ) : (
                                     <div>
-                                      <div style={{ color: '#334155', fontSize: '0.82rem' }}>{act.total_inscritos || 0} inscritos</div>
-                                      <div style={{ fontSize: '0.74rem', color: '#64748B' }}>{act.vagas_totais || 100} vagas</div>
+                                      <div style={{ color: '#34D399', fontSize: '0.82rem', fontWeight: 600 }}>{act.total_inscritos || 0} inscritos</div>
+                                      <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>{act.vagas_totais || 100} vagas totais</div>
                                     </div>
                                   )}
                                 </td>
 
                                 {/* Valor Even3 */}
-                                <td style={{ padding: '12px 16px', color: '#334155', fontSize: '0.82rem' }}>
+                                <td style={{ padding: '12px 16px', color: '#34D399', fontSize: '0.82rem', fontWeight: 700 }}>
                                   {act.value || 'Grátis'}
                                 </td>
 
@@ -1321,7 +1351,7 @@ export default function Admin() {
                                       type="button"
                                       onClick={() => setQrModalActivity(act)}
                                       title="QR Code de Presença"
-                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#0284C7', cursor: 'pointer' }}
+                                      style={{ padding: '6px', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.3)', backgroundColor: 'rgba(56, 189, 248, 0.08)', color: '#38BDF8', cursor: 'pointer' }}
                                     >
                                       <QrCode size={14} />
                                     </button>
@@ -1329,7 +1359,7 @@ export default function Admin() {
                                       type="button"
                                       onClick={() => handleOpenEditActivity(act)}
                                       title="Editar"
-                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', cursor: 'pointer' }}
+                                      style={{ padding: '6px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#94A3B8', cursor: 'pointer' }}
                                     >
                                       <Edit3 size={14} />
                                     </button>
@@ -1337,7 +1367,7 @@ export default function Admin() {
                                       type="button"
                                       onClick={() => handleDeleteActivity(act.id, act.title)}
                                       title="Excluir"
-                                      style={{ padding: '5px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#EF4444', cursor: 'pointer' }}
+                                      style={{ padding: '6px', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)', backgroundColor: 'rgba(239, 68, 68, 0.08)', color: '#EF4444', cursor: 'pointer' }}
                                     >
                                       <Trash2 size={14} />
                                     </button>
@@ -1357,8 +1387,8 @@ export default function Admin() {
               {progTab === 'convidados' && (
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 500, color: '#1E293B', margin: 0 }}>
-                      Convidados
+                    <h2 style={{ fontSize: '1.20rem', fontWeight: 600, color: '#F8FAFC', margin: 0 }}>
+                      Convidados & Palestrantes
                     </h2>
 
                     <button
@@ -1367,7 +1397,7 @@ export default function Admin() {
                         setGuestForm(initialGuestForm);
                         setIsGuestModalOpen(true);
                       }}
-                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', borderRadius: '4px', border: 'none', backgroundColor: '#0284C7', color: '#FFFFFF', fontSize: '0.84rem', fontWeight: 600, height: '34px', cursor: 'pointer' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', borderRadius: '6px', border: 'none', background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', fontSize: '0.84rem', fontWeight: 700, height: '34px', cursor: 'pointer' }}
                     >
                       <Plus size={15} />
                       <span>+ Adicionar convidado</span>
@@ -1376,31 +1406,31 @@ export default function Admin() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
                     {speakers.map(spk => (
-                      <div key={spk.id} style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '16px', display: 'flex', gap: '14px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                      <div key={spk.id} style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', padding: '16px', display: 'flex', gap: '14px', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
                         <img
                           src={spk.photo || SAMPLE_SPEAKER_PHOTOS[0].url}
                           alt={spk.name}
-                          style={{ width: '56px', height: '56px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #E2E8F0' }}
+                          style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', border: '1px solid rgba(56, 189, 248, 0.3)' }}
                         />
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '0.90rem', fontWeight: 600, color: '#0F172A' }}>{spk.name}</span>
+                            <span style={{ fontSize: '0.90rem', fontWeight: 700, color: '#F8FAFC' }}>{spk.name}</span>
                             <button
                               type="button"
                               onClick={() => handleDeleteSpeaker(spk.id, spk.name)}
-                              style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '2px' }}
+                              style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: '2px' }}
                             >
                               <Trash2 size={13} />
                             </button>
                           </div>
-                          <span style={{ fontSize: '0.78rem', color: '#0284C7', display: 'block', marginTop: '2px' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#38BDF8', display: 'block', marginTop: '2px' }}>
                             {spk.role || spk.institution}
                           </span>
                           <span style={{ fontSize: '0.74rem', color: '#64748B', display: 'block' }}>
                             {spk.email}
                           </span>
-                          <span style={{ fontSize: '0.72rem', color: '#475569', marginTop: '6px', display: 'inline-block' }}>
-                            Convite: {spk.inviteStatus || 'Aceito'}
+                          <span style={{ fontSize: '0.72rem', color: '#34D399', marginTop: '6px', display: 'inline-block', fontWeight: 600 }}>
+                            ● Convite {spk.inviteStatus || 'Aceito'}
                           </span>
                         </div>
                       </div>
@@ -1413,14 +1443,14 @@ export default function Admin() {
               {progTab === 'locais' && (
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 500, color: '#1E293B', margin: 0 }}>
+                    <h2 style={{ fontSize: '1.20rem', fontWeight: 600, color: '#F8FAFC', margin: 0 }}>
                       Locais & Salas
                     </h2>
 
                     <button
                       type="button"
                       onClick={() => setIsLocationModalOpen(true)}
-                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', borderRadius: '4px', border: 'none', backgroundColor: '#0284C7', color: '#FFFFFF', fontSize: '0.84rem', fontWeight: 600, height: '34px', cursor: 'pointer' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', borderRadius: '6px', border: 'none', background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', fontSize: '0.84rem', fontWeight: 700, height: '34px', cursor: 'pointer' }}
                     >
                       <Plus size={15} />
                       <span>+ Adicionar local</span>
@@ -1429,13 +1459,13 @@ export default function Admin() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '14px' }}>
                     {locations.map(loc => (
-                      <div key={loc.id} style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '16px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                      <div key={loc.id} style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', padding: '16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                          <MapPin size={16} color="#0284C7" />
-                          <span style={{ fontSize: '0.90rem', fontWeight: 600, color: '#0F172A' }}>{loc.name}</span>
+                          <MapPin size={16} color="#38BDF8" />
+                          <span style={{ fontSize: '0.90rem', fontWeight: 700, color: '#F8FAFC' }}>{loc.name}</span>
                         </div>
-                        <div style={{ fontSize: '0.80rem', color: '#64748B' }}>
-                          Capacidade: <strong style={{ color: '#0F172A' }}>{loc.capacity}</strong> vagas
+                        <div style={{ fontSize: '0.80rem', color: '#94A3B8' }}>
+                          Capacidade: <strong style={{ color: '#38BDF8' }}>{loc.capacity}</strong> vagas
                         </div>
                       </div>
                     ))}
@@ -1445,8 +1475,8 @@ export default function Admin() {
 
               {/* ABA CUPONS & CONFIGURAÇÕES */}
               {(progTab === 'cupons' || progTab === 'configuracoes') && (
-                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '36px', textAlign: 'center', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-                  <span style={{ fontSize: '0.88rem', color: '#64748B' }}>
+                <div style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', padding: '36px', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.88rem', color: '#94A3B8' }}>
                     Todas as palestras e minicursos da FACOM TechWeek 2026 são 100% gratuitas com emissão de certificados oficiais.
                   </span>
                 </div>
@@ -1454,47 +1484,52 @@ export default function Admin() {
             </div>
           )}
 
-          {/* TELA: FEED & COMUNICADOS (SÓBRIA EVEN3) */}
+          {/* TELA: FEED & COMUNICADOS (NEON TECHWEEK) */}
           {activeMenu === 'feed' && (
             <div>
-              <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#0F172A', margin: '0 0 8px', letterSpacing: '-0.01em' }}>
-                Feed & Comunicados
-              </h1>
-              <p style={{ margin: '0 0 20px', fontSize: '0.84rem', color: '#64748B' }}>
-                Envie comunicados para a timeline do evento ou dispare notificações nos aparelhos dos participantes.
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                <h1 style={{ fontSize: '1.65rem', fontWeight: 700, color: '#F8FAFC', margin: 0, letterSpacing: '-0.01em' }}>
+                  Feed & Comunicados
+                </h1>
+                <span style={{ fontSize: '0.70rem', backgroundColor: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38BDF8', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                  TRANSMISSÃO AO VIVO
+                </span>
+              </div>
+              <p style={{ margin: '0 0 20px', fontSize: '0.84rem', color: '#94A3B8' }}>
+                Envie comunicados para a timeline do evento ou dispare notificações em tempo real nos aparelhos dos participantes.
               </p>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '24px', alignItems: 'start' }}>
-                {/* Formulário de Envio (Even3 clean style) */}
-                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '20px', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}>
-                  <h3 style={{ margin: '0 0 14px', fontSize: '0.95rem', fontWeight: 600, color: '#0F172A' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '24px', alignItems: 'start' }}>
+                {/* Formulário de Envio */}
+                <div style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', padding: '20px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)' }}>
+                  <h3 style={{ margin: '0 0 14px', fontSize: '0.95rem', fontWeight: 700, color: '#F8FAFC' }}>
                     Publicar Mensagem
                   </h3>
 
                   {/* Canal */}
                   <div style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Canal de envio</label>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>Canal de envio</label>
                     <select
                       value={feedChannel}
                       onChange={(e) => setFeedChannel(e.target.value)}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.84rem' }}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem' }}
                     >
                       <option value="feed">Apenas Feed Público</option>
                       <option value="broadcast">Notificação Push (Sino)</option>
-                      <option value="both">Feed + Notificação Push</option>
+                      <option value="both">⚡ Feed + Notificação Push</option>
                     </select>
                   </div>
 
                   {/* Modelos rápidos */}
                   <div style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Modelos rápidos</label>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>Modelos rápidos</label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       {FEED_TEMPLATES.map((tpl, idx) => (
                         <button
                           key={idx}
                           type="button"
                           onClick={() => setFeedInput(tpl.text)}
-                          style={{ padding: '3px 8px', borderRadius: '3px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', color: '#475569', fontSize: '0.72rem', cursor: 'pointer' }}
+                          style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#94A3B8', fontSize: '0.72rem', cursor: 'pointer' }}
                         >
                           {tpl.label}
                         </button>
@@ -1505,11 +1540,11 @@ export default function Admin() {
                   {/* Mensagem */}
                   <div style={{ marginBottom: '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#475569' }}>Mensagem</label>
+                      <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#94A3B8' }}>Mensagem</label>
                       <button
                         type="button"
                         onClick={handleAiFeedDescription}
-                        style={{ background: 'none', border: 'none', color: '#0284C7', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', padding: 0 }}
+                        style={{ background: 'none', border: 'none', color: '#38BDF8', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', padding: 0 }}
                       >
                         <Pencil size={11} />
                         <span>Assistente de redação</span>
@@ -1520,31 +1555,31 @@ export default function Admin() {
                       placeholder="Digite a mensagem do comunicado..."
                       value={feedInput}
                       onChange={(e) => setFeedInput(e.target.value)}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.84rem', boxSizing: 'border-box', resize: 'vertical' }}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem', boxSizing: 'border-box', resize: 'vertical' }}
                     />
                   </div>
 
                   {/* Imagem opcional */}
                   <div style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>URL da Imagem (opcional)</label>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#94A3B8', marginBottom: '6px' }}>URL da Imagem (opcional)</label>
                     <input
                       type="url"
                       placeholder="https://exemplo.com/banner.jpg"
                       value={feedImageUrl}
                       onChange={(e) => setFeedImageUrl(e.target.value)}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.84rem', boxSizing: 'border-box' }}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem', boxSizing: 'border-box' }}
                     />
                   </div>
 
                   {/* Checkbox fixar */}
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.80rem', color: '#475569', cursor: 'pointer' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.80rem', color: '#94A3B8', cursor: 'pointer' }}>
                       <input
                         type="checkbox"
                         checked={feedIsPinned}
                         onChange={(e) => setFeedIsPinned(e.target.checked)}
                       />
-                      <span>Fixar publicação no topo do feed</span>
+                      <span>Fixar publicação no topo do feed 📌</span>
                     </label>
                   </div>
 
@@ -1553,28 +1588,28 @@ export default function Admin() {
                     type="button"
                     onClick={handlePublishFeed}
                     disabled={!feedInput.trim() || feedSubmitting}
-                    style={{ width: '100%', padding: '9px', borderRadius: '4px', border: 'none', backgroundColor: '#0284C7', color: '#FFFFFF', fontSize: '0.86rem', fontWeight: 600, cursor: 'pointer' }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: 'none', background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 15px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', fontSize: '0.86rem', fontWeight: 700, cursor: 'pointer' }}
                   >
                     {feedSubmitting ? 'Transmitindo...' : 'Transmitir Publicação'}
                   </button>
                 </div>
 
                 {/* Lista de Posts Ativos Even3 */}
-                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '20px', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}>
+                <div style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', padding: '20px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: '#0F172A' }}>
+                    <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#F8FAFC' }}>
                       Publicações no Feed ({feedPosts.length})
                     </h3>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {feedPosts.map(post => (
-                      <div key={post.id} style={{ border: '1px solid #E2E8F0', borderRadius: '4px', padding: '14px', backgroundColor: '#F8FAFC' }}>
+                      <div key={post.id} style={{ border: '1px solid #1E293B', borderRadius: '6px', padding: '14px', backgroundColor: '#07090E' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0F172A' }}>{post.author}</span>
+                            <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#F8FAFC' }}>{post.author}</span>
                             {post.pinned && (
-                              <span style={{ fontSize: '0.68rem', backgroundColor: '#0284C7', color: '#FFFFFF', padding: '1px 5px', borderRadius: '3px' }}>
+                              <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38BDF8', padding: '1px 6px', borderRadius: '3px', fontWeight: 700 }}>
                                 FIXADO
                               </span>
                             )}
@@ -1584,7 +1619,7 @@ export default function Admin() {
                               type="button"
                               onClick={() => handleTogglePinPost(post.id, post.pinned)}
                               title={post.pinned ? 'Desafixar' : 'Fixar'}
-                              style={{ background: 'none', border: 'none', color: post.pinned ? '#0284C7' : '#94A3B8', cursor: 'pointer', padding: '2px' }}
+                              style={{ background: 'none', border: 'none', color: post.pinned ? '#38BDF8' : '#64748B', cursor: 'pointer', padding: '2px' }}
                             >
                               <Pin size={13} />
                             </button>
@@ -1599,12 +1634,12 @@ export default function Admin() {
                           </div>
                         </div>
 
-                        <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: '#334155', lineHeight: 1.4 }}>
+                        <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: '#CBD5E1', lineHeight: 1.4 }}>
                           {post.content}
                         </p>
 
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.74rem', color: '#64748B' }}>
-                          <span>{Array.isArray(post.likes) ? post.likes.length : 0} curtidas</span>
+                          <span style={{ color: '#F43F5E' }}>❤️ {Array.isArray(post.likes) ? post.likes.length : 0} curtidas</span>
                           <span>{post.formattedTime || 'Recente'}</span>
                         </div>
                       </div>
@@ -1615,52 +1650,57 @@ export default function Admin() {
             </div>
           )}
 
-          {/* TELA: INÍCIO (MÉTRICAS) */}
+          {/* TELA: INÍCIO (MÉTRICAS NEON) */}
           {activeMenu === 'inicio' && (
             <div>
-              <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#0F172A', margin: '0 0 20px', letterSpacing: '-0.01em' }}>
-                Visão Geral
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+                <h1 style={{ fontSize: '1.65rem', fontWeight: 700, color: '#F8FAFC', margin: 0, letterSpacing: '-0.01em' }}>
+                  Visão Geral do Evento
+                </h1>
+                <span style={{ fontSize: '0.70rem', backgroundColor: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38BDF8', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                  FACOM TECHWEEK 2026
+                </span>
+              </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '18px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-                  <span style={{ fontSize: '0.76rem', color: '#64748B', fontWeight: 500 }}>Participantes cadastrados</span>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#0F172A', margin: '4px 0 0' }}>
+                <div style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', padding: '18px', boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)' }}>
+                  <span style={{ fontSize: '0.76rem', color: '#94A3B8', fontWeight: 600 }}>Participantes cadastrados</span>
+                  <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#F8FAFC', margin: '4px 0 0', textShadow: '0 0 10px rgba(255, 255, 255, 0.2)' }}>
                     {Math.max(usersList.length, 142)}
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '18px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-                  <span style={{ fontSize: '0.76rem', color: '#64748B', fontWeight: 500 }}>Ingressos Sympla</span>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#059669', margin: '4px 0 0' }}>
+                <div style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', padding: '18px', boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)' }}>
+                  <span style={{ fontSize: '0.76rem', color: '#94A3B8', fontWeight: 600 }}>Ingressos Sympla</span>
+                  <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#34D399', margin: '4px 0 0', textShadow: '0 0 10px rgba(52, 211, 153, 0.4)' }}>
                     {usersList.filter(u => u.hasSymplaTicket || u.symplaTicket).length || 118}
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '18px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-                  <span style={{ fontSize: '0.76rem', color: '#64748B', fontWeight: 500 }}>Atividades na grade</span>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#0284C7', margin: '4px 0 0' }}>
+                <div style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', padding: '18px', boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)' }}>
+                  <span style={{ fontSize: '0.76rem', color: '#94A3B8', fontWeight: 600 }}>Atividades na grade</span>
+                  <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#38BDF8', margin: '4px 0 0', textShadow: '0 0 10px rgba(56, 189, 248, 0.4)' }}>
                     {activities.length}
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '18px', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-                  <span style={{ fontSize: '0.76rem', color: '#64748B', fontWeight: 500 }}>Palestrantes confirmados</span>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 600, color: '#D97706', margin: '4px 0 0' }}>
+                <div style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', padding: '18px', boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)' }}>
+                  <span style={{ fontSize: '0.76rem', color: '#94A3B8', fontWeight: 600 }}>Palestrantes confirmados</span>
+                  <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FBBF24', margin: '4px 0 0', textShadow: '0 0 10px rgba(251, 191, 36, 0.4)' }}>
                     {speakers.length}
                   </div>
                 </div>
               </div>
 
-              <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+              <div style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)' }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: '#0F172A' }}>Credenciamento na Entrada</h3>
-                  <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748B' }}>Acesse a tela de portaria para validar ingressos e presenças via QR Code.</p>
+                  <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#F8FAFC' }}>Credenciamento na Entrada</h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#94A3B8' }}>Acesse a tela de portaria para validar ingressos e presenças via QR Code.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => navigate('/staff')}
-                  style={{ backgroundColor: '#0284C7', color: '#FFFFFF', border: 'none', borderRadius: '4px', padding: '8px 16px', fontSize: '0.84rem', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', border: 'none', borderRadius: '6px', padding: '8px 16px', fontSize: '0.84rem', fontWeight: 700, cursor: 'pointer' }}
                 >
                   Abrir Credenciamento
                 </button>
@@ -1672,7 +1712,7 @@ export default function Admin() {
           {activeMenu === 'pessoas' && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                <h1 style={{ fontSize: '1.65rem', fontWeight: 600, color: '#0F172A', margin: 0 }}>
+                <h1 style={{ fontSize: '1.65rem', fontWeight: 700, color: '#F8FAFC', margin: 0 }}>
                   Pessoas & Papéis
                 </h1>
 
@@ -1680,7 +1720,7 @@ export default function Admin() {
                   <select
                     value={userRoleFilter}
                     onChange={(e) => setUserRoleFilter(e.target.value)}
-                    style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.82rem', height: '34px' }}
+                    style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#0F141F', color: '#F8FAFC', fontSize: '0.82rem', height: '34px' }}
                   >
                     <option value="ALL">Todos os papéis</option>
                     <option value="PARTICIPANT">Participantes</option>
@@ -1693,19 +1733,19 @@ export default function Admin() {
                     placeholder="Buscar participante..."
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
-                    style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.82rem', height: '34px', width: '180px' }}
+                    style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#0F141F', color: '#F8FAFC', fontSize: '0.82rem', height: '34px', width: '180px' }}
                   />
                 </div>
               </div>
 
-              <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}>
+              <div style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
                   <thead>
-                    <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                      <th style={{ padding: '10px 16px', color: '#64748B', fontWeight: 600, fontSize: '0.74rem' }}>NOME</th>
-                      <th style={{ padding: '10px 16px', color: '#64748B', fontWeight: 600, fontSize: '0.74rem' }}>E-MAIL</th>
-                      <th style={{ padding: '10px 16px', color: '#64748B', fontWeight: 600, fontSize: '0.74rem' }}>PAPEL</th>
-                      <th style={{ padding: '10px 16px', color: '#64748B', fontWeight: 600, fontSize: '0.74rem', textAlign: 'right' }}>AÇÕES</th>
+                    <tr style={{ backgroundColor: '#07090E', borderBottom: '1px solid #1E293B' }}>
+                      <th style={{ padding: '12px 16px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem' }}>NOME</th>
+                      <th style={{ padding: '12px 16px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem' }}>E-MAIL</th>
+                      <th style={{ padding: '12px 16px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem' }}>PAPEL</th>
+                      <th style={{ padding: '12px 16px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem', textAlign: 'right' }}>AÇÕES</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1717,10 +1757,14 @@ export default function Admin() {
                         return match && roleMatch;
                       })
                       .map(u => (
-                        <tr key={u.uid || u.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                          <td style={{ padding: '12px 16px', color: '#0F172A' }}>{u.fullName || 'Aluno TechWeek'}</td>
-                          <td style={{ padding: '12px 16px', color: '#64748B' }}>{u.email}</td>
-                          <td style={{ padding: '12px 16px', color: '#334155' }}>{u.role || 'PARTICIPANT'}</td>
+                        <tr key={u.uid || u.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <td style={{ padding: '12px 16px', color: '#F8FAFC', fontWeight: 600 }}>{u.fullName || 'Aluno TechWeek'}</td>
+                          <td style={{ padding: '12px 16px', color: '#94A3B8' }}>{u.email}</td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ fontSize: '0.74rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: u.role === 'ADMIN' ? 'rgba(239, 68, 68, 0.15)' : (u.role === 'STAFF' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(100, 116, 139, 0.15)'), color: u.role === 'ADMIN' ? '#EF4444' : (u.role === 'STAFF' ? '#38BDF8' : '#94A3B8'), fontWeight: 700 }}>
+                              {u.role || 'PARTICIPANT'}
+                            </span>
+                          </td>
                           <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                             <select
                               value={u.role || 'PARTICIPANT'}
@@ -1728,7 +1772,7 @@ export default function Admin() {
                                 const newRole = e.target.value;
                                 await updateUserRoleInFirestore(u.uid || u.id, newRole);
                               }}
-                              style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.78rem' }}
+                              style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.78rem' }}
                             >
                               <option value="PARTICIPANT">PARTICIPANT</option>
                               <option value="STAFF">STAFF</option>
@@ -1745,13 +1789,13 @@ export default function Admin() {
 
           {/* DEMAIS SEÇÕES */}
           {['vendas', 'inscricoes', 'pagina', 'certificados', 'config', 'ferramentas'].includes(activeMenu) && (
-            <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '4px', padding: '36px', textAlign: 'center', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#0F172A' }}>Módulo Ativo • FACOM TechWeek 2026</h3>
-              <p style={{ margin: '8px 0 16px', fontSize: '0.84rem', color: '#64748B' }}>Este item está integrado com a organização do evento.</p>
+            <div style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', padding: '36px', textAlign: 'center', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#F8FAFC' }}>Módulo Ativo • FACOM TechWeek 2026</h3>
+              <p style={{ margin: '8px 0 16px', fontSize: '0.84rem', color: '#94A3B8' }}>Este item está integrado com a organização do evento.</p>
               <button
                 type="button"
                 onClick={() => setActiveMenu('programacao')}
-                style={{ backgroundColor: '#0284C7', color: '#FFFFFF', border: 'none', borderRadius: '4px', padding: '8px 16px', fontSize: '0.84rem', fontWeight: 600, cursor: 'pointer' }}
+                style={{ background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', border: 'none', borderRadius: '6px', padding: '8px 16px', fontSize: '0.84rem', fontWeight: 700, cursor: 'pointer' }}
               >
                 Voltar para Programação
               </button>
@@ -1760,13 +1804,13 @@ export default function Admin() {
         </main>
       </div>
 
-      {/* 4. MODAL ADICIONAR ATIVIDADE (ESTILO EVEN3 EXATO, SCREENSHOTS 1, 2, 3, 4) */}
+      {/* 4. MODAL ADICIONAR ATIVIDADE (ESTILO EVEN3 EXATO, PALETA DARK NEON) */}
       {isActivityModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '560px', maxHeight: '92vh', backgroundColor: '#FFFFFF', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#334155', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
-            {/* Header Even3: Barra Sólida Azul com Título e 'X' */}
-            <div style={{ backgroundColor: '#0284C7', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#FFFFFF' }}>
-              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '560px', maxHeight: '92vh', backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#F8FAFC', boxShadow: '0 0 30px rgba(56, 189, 248, 0.15)' }}>
+            {/* Header Even3: Barra Sólida Azul Neon com Título e 'X' */}
+            <div style={{ background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#FFFFFF' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
                 {editingActivityId ? 'Editar atividade' : 'Adicionar atividade'}
               </h3>
               <button
@@ -1779,10 +1823,10 @@ export default function Admin() {
             </div>
 
             {/* Corpo do Formulário Even3 */}
-            <form onSubmit={handleSaveActivity} style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', backgroundColor: '#FFFFFF' }}>
+            <form onSubmit={handleSaveActivity} style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', backgroundColor: '#0F141F' }}>
               {/* Título */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, color: '#334155', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '5px' }}>
                   Título
                 </label>
                 <input
@@ -1790,20 +1834,20 @@ export default function Admin() {
                   required
                   value={activityForm.title}
                   onChange={(e) => setActivityForm(prev => ({ ...prev, title: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.86rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.86rem', boxSizing: 'border-box' }}
                 />
               </div>
 
               {/* Descrição com Assistente de Redação */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
-                  <label style={{ fontSize: '0.80rem', fontWeight: 500, color: '#334155' }}>
+                  <label style={{ fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8' }}>
                     Descrição
                   </label>
                   <button
                     type="button"
                     onClick={handleAiDescription}
-                    style={{ background: 'none', border: '1px solid #BAE6FD', borderRadius: '12px', padding: '2px 8px', color: '#0284C7', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    style={{ background: 'none', border: '1px solid rgba(56, 189, 248, 0.4)', borderRadius: '12px', padding: '2px 8px', color: '#38BDF8', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
                     <Pencil size={11} />
                     <span>Assistente de redação</span>
@@ -1813,21 +1857,21 @@ export default function Admin() {
                   rows={3}
                   value={activityForm.description}
                   onChange={(e) => setActivityForm(prev => ({ ...prev, description: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.86rem', boxSizing: 'border-box', resize: 'vertical' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.86rem', boxSizing: 'border-box', resize: 'vertical' }}
                 />
               </div>
 
               {/* Tipo e Inscrição lado a lado */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, color: '#334155', marginBottom: '5px' }}>
+                  <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '5px' }}>
                     Tipo
                   </label>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <select
                       value={activityForm.type}
                       onChange={(e) => setActivityForm(prev => ({ ...prev, type: e.target.value }))}
-                      style={{ flex: 1, padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.84rem' }}
+                      style={{ flex: 1, padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem' }}
                     >
                       {ACTIVITY_TYPES.map(t => (
                         <option key={t} value={t}>{t}</option>
@@ -1839,7 +1883,7 @@ export default function Admin() {
                         const custom = prompt('Novo tipo de atividade:');
                         if (custom) setActivityForm(prev => ({ ...prev, type: custom }));
                       }}
-                      style={{ border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', borderRadius: '4px', padding: '0 8px', fontSize: '0.78rem', color: '#334155', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      style={{ border: '1px solid #1E293B', backgroundColor: '#07090E', borderRadius: '6px', padding: '0 8px', fontSize: '0.78rem', color: '#38BDF8', cursor: 'pointer', whiteSpace: 'nowrap' }}
                     >
                       + Tipo
                     </button>
@@ -1848,13 +1892,13 @@ export default function Admin() {
 
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '5px' }}>
-                    <label style={{ fontSize: '0.80rem', fontWeight: 500, color: '#334155' }}>Inscrição</label>
+                    <label style={{ fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8' }}>Inscrição</label>
                     <Info size={12} color="#64748B" />
                   </div>
                   <select
                     value={activityForm.registrationType}
                     onChange={(e) => setActivityForm(prev => ({ ...prev, registrationType: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.84rem' }}
+                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem' }}
                   >
                     <option value="Não requer inscrição">Não requer inscrição</option>
                     <option value="Gratuita">Gratuita</option>
@@ -1865,13 +1909,13 @@ export default function Admin() {
 
               {/* Duração Even3 (Screenshot 3 & 4) */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, color: '#334155', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '5px' }}>
                   Duração
                 </label>
                 <select
                   value={activityForm.duration}
                   onChange={(e) => handleDurationChange(e.target.value)}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.84rem' }}
+                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem' }}
                 >
                   {DURATION_OPTIONS.map(opt => (
                     <option key={opt} value={opt}>{opt}</option>
@@ -1900,7 +1944,7 @@ export default function Admin() {
                             return { ...prev, scheduleRows: newRows };
                           });
                         }}
-                        style={{ padding: '6px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.82rem' }}
+                        style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.82rem' }}
                       />
                       <input
                         type="time"
@@ -1913,7 +1957,7 @@ export default function Admin() {
                             return { ...prev, scheduleRows: newRows };
                           });
                         }}
-                        style={{ padding: '6px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.82rem' }}
+                        style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.82rem' }}
                       />
                       <input
                         type="time"
@@ -1926,7 +1970,7 @@ export default function Admin() {
                             return { ...prev, scheduleRows: newRows };
                           });
                         }}
-                        style={{ padding: '6px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.82rem' }}
+                        style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.82rem' }}
                       />
                     </div>
                   ))}
@@ -1935,7 +1979,7 @@ export default function Admin() {
 
               {/* Convidados Even3 */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, color: '#334155', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '5px' }}>
                   Convidados
                 </label>
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -1952,7 +1996,7 @@ export default function Admin() {
                         speakerPhoto: found ? found.photo : ''
                       }));
                     }}
-                    style={{ flex: 1, padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#1E293B', fontSize: '0.84rem' }}
+                    style={{ flex: 1, padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem' }}
                   >
                     <option value="">- Escolha um convidado -</option>
                     {speakers.map(s => (
@@ -1965,7 +2009,7 @@ export default function Admin() {
                       setGuestForm(initialGuestForm);
                       setIsGuestModalOpen(true);
                     }}
-                    style={{ border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', borderRadius: '4px', padding: '0 10px', fontSize: '0.78rem', color: '#334155', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    style={{ border: '1px solid #1E293B', backgroundColor: '#07090E', borderRadius: '6px', padding: '0 10px', fontSize: '0.78rem', color: '#38BDF8', cursor: 'pointer', whiteSpace: 'nowrap' }}
                   >
                     + Convidado
                   </button>
@@ -1975,13 +2019,13 @@ export default function Admin() {
               {/* Materiais de Apoio Even3 */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '5px' }}>
-                  <label style={{ fontSize: '0.80rem', fontWeight: 500, color: '#334155' }}>Materiais de apoio</label>
+                  <label style={{ fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8' }}>Materiais de apoio</label>
                   <Info size={12} color="#64748B" />
                 </div>
                 <button
                   type="button"
                   onClick={() => alert('Anexe arquivos de apoio para os participantes.')}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '4px', border: 'none', backgroundColor: '#0284C7', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 500, cursor: 'pointer' }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.3)', backgroundColor: 'rgba(56, 189, 248, 0.08)', color: '#38BDF8', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer' }}
                 >
                   <UploadCloud size={14} />
                   <span>Enviar arquivos</span>
@@ -1989,11 +2033,11 @@ export default function Admin() {
               </div>
 
               {/* Expansível: Detalhes avançados Even3 */}
-              <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '10px' }}>
+              <div style={{ borderTop: '1px solid #1E293B', paddingTop: '10px' }}>
                 <button
                   type="button"
                   onClick={() => setActivityForm(prev => ({ ...prev, showExtraDetails: !prev.showExtraDetails }))}
-                  style={{ background: 'none', border: 'none', color: '#0284C7', fontSize: '0.80rem', fontWeight: 500, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '4px' }}
+                  style={{ background: 'none', border: 'none', color: '#38BDF8', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
                   <span>⊕ {activityForm.showExtraDetails ? 'Ocultar detalhes' : 'Adicione local, carga horária, limite de vagas, tags...'}</span>
                 </button>
@@ -2006,7 +2050,7 @@ export default function Admin() {
                         <select
                           value={activityForm.location}
                           onChange={(e) => setActivityForm(prev => ({ ...prev, location: e.target.value }))}
-                          style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '0.82rem' }}
+                          style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.82rem' }}
                         >
                           {locations.map(loc => (
                             <option key={loc.id} value={loc.name}>{loc.name}</option>
@@ -2021,7 +2065,7 @@ export default function Admin() {
                           placeholder="Ilimitado"
                           value={activityForm.capacity}
                           onChange={(e) => setActivityForm(prev => ({ ...prev, capacity: e.target.value }))}
-                          style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.82rem', boxSizing: 'border-box' }}
                         />
                       </div>
                     </div>
@@ -2032,7 +2076,7 @@ export default function Admin() {
                         type="text"
                         value={activityForm.tags}
                         onChange={(e) => setActivityForm(prev => ({ ...prev, tags: e.target.value }))}
-                        style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                        style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.82rem', boxSizing: 'border-box' }}
                       />
                     </div>
                   </div>
@@ -2041,7 +2085,7 @@ export default function Admin() {
 
               {/* Checkbox Ocultar */}
               <div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.80rem', color: '#64748B', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.80rem', color: '#94A3B8', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={activityForm.hidden}
@@ -2052,17 +2096,17 @@ export default function Admin() {
               </div>
 
               {/* Rodapé Even3: Cancelar e ✓ Salvar atividade */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid #E2E8F0', paddingTop: '14px', marginTop: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid #1E293B', paddingTop: '14px', marginTop: '6px' }}>
                 <button
                   type="button"
                   onClick={() => setIsActivityModalOpen(false)}
-                  style={{ padding: '6px 14px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontSize: '0.82rem', cursor: 'pointer' }}
+                  style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#94A3B8', fontSize: '0.82rem', cursor: 'pointer' }}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '6px 16px', borderRadius: '4px', border: 'none', backgroundColor: '#0284C7', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  style={{ padding: '6px 16px', borderRadius: '6px', border: 'none', background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
                   <Check size={14} />
                   <span>Salvar atividade</span>
@@ -2073,13 +2117,13 @@ export default function Admin() {
         </div>
       )}
 
-      {/* 5. MODAL ADICIONAR CONVIDADO (ESTILO EVEN3 EXATO, SCREENSHOT 5) */}
+      {/* 5. MODAL ADICIONAR CONVIDADO (ESTILO EVEN3 DARK NEON) */}
       {isGuestModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '520px', maxHeight: '92vh', backgroundColor: '#FFFFFF', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#334155', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
-            {/* Header Even3 Azul */}
-            <div style={{ backgroundColor: '#0284C7', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#FFFFFF' }}>
-              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Adicionar convidado</h3>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '520px', maxHeight: '92vh', backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#F8FAFC', boxShadow: '0 0 30px rgba(56, 189, 248, 0.15)' }}>
+            {/* Header Even3 Azul Neon */}
+            <div style={{ background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#FFFFFF' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Adicionar convidado</h3>
               <button
                 type="button"
                 onClick={() => setIsGuestModalOpen(false)}
@@ -2090,10 +2134,10 @@ export default function Admin() {
             </div>
 
             {/* Formulário Even3 Screenshot 5 */}
-            <form onSubmit={handleSaveGuest} style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', backgroundColor: '#FFFFFF' }}>
+            <form onSubmit={handleSaveGuest} style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', backgroundColor: '#0F141F' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, color: '#334155', marginBottom: '5px' }}>
+                  <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '5px' }}>
                     Nome e sobrenome
                   </label>
                   <input
@@ -2101,50 +2145,50 @@ export default function Admin() {
                     required
                     value={guestForm.name}
                     onChange={(e) => setGuestForm(prev => ({ ...prev, name: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '0.84rem', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem', boxSizing: 'border-box' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, color: '#334155', marginBottom: '5px' }}>
+                  <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '5px' }}>
                     E-mail
                   </label>
                   <input
                     type="email"
                     value={guestForm.email}
                     onChange={(e) => setGuestForm(prev => ({ ...prev, email: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '0.84rem', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem', boxSizing: 'border-box' }}
                   />
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, color: '#334155', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '5px' }}>
                   Cargo / Instituição
                 </label>
                 <input
                   type="text"
                   value={guestForm.role}
                   onChange={(e) => setGuestForm(prev => ({ ...prev, role: e.target.value, institution: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '0.84rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, color: '#334155', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '5px' }}>
                   Mini biografia
                 </label>
                 <textarea
                   rows={3}
                   value={guestForm.bio}
                   onChange={(e) => setGuestForm(prev => ({ ...prev, bio: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '0.84rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '5px' }}>
-                  <label style={{ fontSize: '0.80rem', fontWeight: 500, color: '#334155' }}>Foto</label>
+                  <label style={{ fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8' }}>Foto</label>
                   <Info size={12} color="#64748B" />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2154,19 +2198,19 @@ export default function Admin() {
                       const sample = SAMPLE_SPEAKER_PHOTOS[Math.floor(Math.random() * SAMPLE_SPEAKER_PHOTOS.length)].url;
                       setGuestForm(prev => ({ ...prev, photo: sample }));
                     }}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#334155', fontSize: '0.80rem', cursor: 'pointer' }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.3)', backgroundColor: 'rgba(56, 189, 248, 0.08)', color: '#38BDF8', fontSize: '0.80rem', cursor: 'pointer' }}
                   >
                     <Camera size={14} />
                     <span>Anexar uma foto</span>
                   </button>
                   {guestForm.photo && (
-                    <img src={guestForm.photo} alt="Convidado" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                    <img src={guestForm.photo} alt="Convidado" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #38BDF8' }} />
                   )}
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, color: '#334155', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '5px' }}>
                   Redes sociais
                 </label>
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -2175,12 +2219,12 @@ export default function Admin() {
                     placeholder="Insira o link das suas redes sociais como instagram, linkedin..."
                     value={guestForm.socialInput}
                     onChange={(e) => setGuestForm(prev => ({ ...prev, socialInput: e.target.value }))}
-                    style={{ flex: 1, padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '0.82rem' }}
+                    style={{ flex: 1, padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.82rem' }}
                   />
                   <button
                     type="button"
                     onClick={handleAddSocialLink}
-                    style={{ padding: '0 14px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#334155', fontSize: '0.80rem', cursor: 'pointer' }}
+                    style={{ padding: '0 14px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#38BDF8', fontSize: '0.80rem', cursor: 'pointer' }}
                   >
                     Adicionar
                   </button>
@@ -2188,7 +2232,7 @@ export default function Admin() {
                 {guestForm.socialLinks.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
                     {guestForm.socialLinks.map((link, idx) => (
-                      <span key={idx} style={{ fontSize: '0.72rem', backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', padding: '2px 6px', borderRadius: '3px' }}>
+                      <span key={idx} style={{ fontSize: '0.72rem', backgroundColor: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38BDF8', padding: '2px 6px', borderRadius: '3px' }}>
                         {link}
                       </span>
                     ))}
@@ -2197,7 +2241,7 @@ export default function Admin() {
               </div>
 
               <div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.80rem', color: '#64748B', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.80rem', color: '#94A3B8', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={guestForm.inviteViaEmail}
@@ -2208,13 +2252,13 @@ export default function Admin() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, color: '#334155', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '5px' }}>
                   Convite
                 </label>
                 <select
                   value={guestForm.inviteStatus}
                   onChange={(e) => setGuestForm(prev => ({ ...prev, inviteStatus: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '0.84rem' }}
+                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem' }}
                 >
                   <option value="Aceito">Aceito</option>
                   <option value="Pendente">Pendente</option>
@@ -2223,17 +2267,17 @@ export default function Admin() {
               </div>
 
               {/* Rodapé Even3: Cancelar e ✓ Salvar convidado */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid #E2E8F0', paddingTop: '14px', marginTop: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid #1E293B', paddingTop: '14px', marginTop: '6px' }}>
                 <button
                   type="button"
                   onClick={() => setIsGuestModalOpen(false)}
-                  style={{ padding: '6px 14px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontSize: '0.82rem', cursor: 'pointer' }}
+                  style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#94A3B8', fontSize: '0.82rem', cursor: 'pointer' }}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '6px 16px', borderRadius: '4px', border: 'none', backgroundColor: '#0284C7', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  style={{ padding: '6px 16px', borderRadius: '6px', border: 'none', background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
                   <Check size={14} />
                   <span>Salvar convidado</span>
@@ -2246,10 +2290,10 @@ export default function Admin() {
 
       {/* 6. MODAL LOCAL */}
       {isLocationModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '420px', backgroundColor: '#FFFFFF', borderRadius: '4px', overflow: 'hidden', color: '#334155' }}>
-            <div style={{ backgroundColor: '#0284C7', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#FFFFFF' }}>
-              <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 600 }}>Cadastrar Local</h3>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '420px', backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '8px', overflow: 'hidden', color: '#F8FAFC', boxShadow: '0 0 30px rgba(56, 189, 248, 0.15)' }}>
+            <div style={{ background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#FFFFFF' }}>
+              <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700 }}>Cadastrar Local</h3>
               <button
                 type="button"
                 onClick={() => setIsLocationModalOpen(false)}
@@ -2260,38 +2304,38 @@ export default function Admin() {
             </div>
             <form onSubmit={handleSaveLocation} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, marginBottom: '4px' }}>Nome do Local</label>
+                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '4px' }}>Nome do Local</label>
                 <input
                   type="text"
                   required
                   placeholder="Ex: Anfiteatro 5R"
                   value={locationForm.name}
                   onChange={(e) => setLocationForm(prev => ({ ...prev, name: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '0.84rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 500, marginBottom: '4px' }}>Capacidade</label>
+                <label style={{ display: 'block', fontSize: '0.80rem', fontWeight: 600, color: '#94A3B8', marginBottom: '4px' }}>Capacidade</label>
                 <input
                   type="number"
                   required
                   placeholder="120"
                   value={locationForm.capacity}
                   onChange={(e) => setLocationForm(prev => ({ ...prev, capacity: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '0.84rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#F8FAFC', fontSize: '0.84rem', boxSizing: 'border-box' }}
                 />
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
                 <button
                   type="button"
                   onClick={() => setIsLocationModalOpen(false)}
-                  style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontSize: '0.82rem' }}
+                  style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #1E293B', backgroundColor: '#07090E', color: '#94A3B8', fontSize: '0.82rem' }}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '6px 14px', borderRadius: '4px', border: 'none', backgroundColor: '#0284C7', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600 }}
+                  style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 700 }}
                 >
                   Salvar
                 </button>
@@ -2303,16 +2347,16 @@ export default function Admin() {
 
       {/* 7. MODAL QR CODE DE PRESENÇA */}
       {qrModalActivity && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#FFFFFF', borderRadius: '4px', padding: '24px', textAlign: 'center', color: '#334155', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
-            <span style={{ fontSize: '0.74rem', color: '#0284C7', fontWeight: 700, textTransform: 'uppercase' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '12px', padding: '24px', textAlign: 'center', color: '#F8FAFC', boxShadow: '0 0 35px rgba(56, 189, 248, 0.2)' }}>
+            <span style={{ fontSize: '0.74rem', color: '#38BDF8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               QR Code de Check-in
             </span>
-            <h3 style={{ margin: '6px 0 16px', fontSize: '1.1rem', fontWeight: 600, color: '#0F172A' }}>
+            <h3 style={{ margin: '6px 0 16px', fontSize: '1.1rem', fontWeight: 700, color: '#F8FAFC' }}>
               {qrModalActivity.title}
             </h3>
 
-            <div style={{ padding: '12px', border: '1px solid #E2E8F0', borderRadius: '4px', display: 'inline-block', margin: '0 auto 14px' }}>
+            <div style={{ padding: '16px', backgroundColor: '#FFFFFF', borderRadius: '8px', display: 'inline-block', margin: '0 auto 14px', boxShadow: '0 0 20px rgba(56, 189, 248, 0.3)' }}>
               <QRCodeSVG
                 value={qrModalActivity.id}
                 size={220}
@@ -2321,14 +2365,14 @@ export default function Admin() {
               />
             </div>
 
-            <p style={{ margin: '0 0 16px', fontSize: '0.80rem', color: '#64748B' }}>
-              Projete no telão para os alunos registrarem presença pelo app.
+            <p style={{ margin: '0 0 16px', fontSize: '0.80rem', color: '#94A3B8' }}>
+              Projete no telão para os participantes registrarem presença presencial pelo app.
             </p>
 
             <button
               type="button"
               onClick={() => setQrModalActivity(null)}
-              style={{ width: '100%', padding: '9px', borderRadius: '4px', border: 'none', backgroundColor: '#0284C7', color: '#FFFFFF', fontWeight: 600, fontSize: '0.86rem', cursor: 'pointer' }}
+              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: 'none', background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)', boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)', color: '#FFFFFF', fontWeight: 700, fontSize: '0.86rem', cursor: 'pointer' }}
             >
               Fechar
             </button>
