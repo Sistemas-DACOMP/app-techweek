@@ -224,9 +224,23 @@ export default function Admin() {
     }
   };
 
-  const handleQuickAdmin = () => {
-    setAdminEmail('admin@admin.com');
-    setAdminPassword('AdminPassword123!');
+  const handleQuickAdmin = async (targetEmail = 'admin@admin.com', targetPass = 'AdminPassword123!') => {
+    setAdminEmail(targetEmail);
+    setAdminPassword(targetPass);
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await loginWithEmailAndPassword(targetEmail, targetPass);
+      if (!res.success) {
+        setLoginError(res.error || 'Credenciais inválidas.');
+      } else {
+        window.location.reload();
+      }
+    } catch (err) {
+      setLoginError(err.message || 'Falha ao autenticar.');
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
   const handleAdminLogout = async () => {
@@ -478,23 +492,45 @@ export default function Admin() {
               <span>Entrar no Console Admin</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleQuickAdmin}
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                border: '1px dashed #334155',
-                borderRadius: '12px',
-                padding: '10px',
-                color: '#94A3B8',
-                fontSize: '0.74rem',
-                cursor: 'pointer',
-                textAlign: 'center',
-                marginTop: '4px'
-              }}
-            >
-              Usar credencial de teste Admin (1 clique)
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+              <button
+                type="button"
+                onClick={() => handleQuickAdmin('admin@admin.com', 'AdminPassword123!')}
+                style={{
+                  backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  borderRadius: '12px',
+                  padding: '10px',
+                  color: '#38BDF8',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textAlign: 'center'
+                }}
+              >
+                ⚡ Entrar como admin@admin.com (1 clique garantido)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAdminEmail('sam03amorim@gmail.com');
+                  setAdminPassword('');
+                }}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: '1px dashed #334155',
+                  borderRadius: '12px',
+                  padding: '8px',
+                  color: '#94A3B8',
+                  fontSize: '0.72rem',
+                  cursor: 'pointer',
+                  textAlign: 'center'
+                }}
+              >
+                Preencher com sam03amorim@gmail.com (sua conta)
+              </button>
+            </div>
           </form>
         </div>
       </div>
