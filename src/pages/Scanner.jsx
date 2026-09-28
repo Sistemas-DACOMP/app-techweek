@@ -20,6 +20,7 @@ import {
 import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
 import { DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { resolveParticipantFromQr } from '../lib/sponsorService';
+import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import WhatsAppButton from '../components/WhatsAppButton';
 import ParticipantCard from '../components/ParticipantCard';
 
@@ -97,6 +98,15 @@ export default function Scanner() {
       }
     };
   }, [scanResult]);
+
+  useEffect(() => {
+    if (scanResult || showInfoModal) {
+      lockScroll();
+      return () => {
+        unlockScroll();
+      };
+    }
+  }, [scanResult, showInfoModal]);
 
   const handleScan = async (data) => {
     setIsLoading(true);
@@ -739,7 +749,8 @@ export default function Scanner() {
             WebkitBackdropFilter: 'blur(8px)',
             display: 'flex',
             alignItems: 'flex-end',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            overflow: 'hidden'
           }}
           onClick={() => setScanResult(null)}
         >
@@ -747,196 +758,224 @@ export default function Scanner() {
             style={{
               width: '100%',
               maxWidth: '430px',
+              maxHeight: '85vh',
+              maxHeight: '85dvh',
               backgroundColor: '#0A0E17',
               borderTop: '1px solid #1E293B',
               borderTopLeftRadius: '24px',
               borderTopRightRadius: '24px',
-              padding: '16px 20px 24px',
-              paddingBottom: 'max(24px, calc(env(safe-area-inset-bottom) + 16px))',
               boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.8)',
               animation: 'slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-              position: 'relative'
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Handle do Bottom Sheet */}
+            {/* Header Fixo do Bottom Sheet: Handle e Botão Fechar */}
             <div
               style={{
-                width: '36px',
-                height: '4px',
-                backgroundColor: '#334155',
-                borderRadius: '999px',
-                margin: '0 auto 16px'
-              }}
-            />
-
-            {/* Botão Fechar X */}
-            <button
-              type="button"
-              onClick={() => setScanResult(null)}
-              aria-label="Fechar resultado"
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '18px',
-                width: '30px',
-                height: '30px',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                border: 'none',
-                color: '#94A3B8',
+                position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                cursor: 'pointer'
+                paddingTop: '12px',
+                paddingBottom: '10px',
+                flexShrink: 0
               }}
             >
-              <X size={16} />
-            </button>
-
-            {/* Status Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              {/* Handle do Bottom Sheet */}
               <div
                 style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '10px',
-                  backgroundColor: scanResult.status === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                  border: scanResult.status === 'success' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)',
+                  width: '36px',
+                  height: '4px',
+                  backgroundColor: '#334155',
+                  borderRadius: '999px'
+                }}
+              />
+
+              {/* Botão Fechar X */}
+              <button
+                type="button"
+                onClick={() => setScanResult(null)}
+                aria-label="Fechar resultado"
+                style={{
+                  position: 'absolute',
+                  top: '10px',
+                  right: '18px',
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                  border: 'none',
+                  color: '#94A3B8',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: scanResult.status === 'success' ? '#10B981' : '#F59E0B',
-                  flexShrink: 0
+                  cursor: 'pointer'
                 }}
               >
-                {scanResult.status === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-              </div>
-              <div>
-                <h3
-                  style={{
-                    fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                    fontSize: '1.05rem',
-                    fontWeight: 800,
-                    color: '#F8FAFC',
-                    margin: 0,
-                    lineHeight: 1.2
-                  }}
-                >
-                  {scanResult.title}
-                </h3>
-                <p style={{ fontSize: '0.74rem', color: '#94A3B8', margin: '2px 0 0' }}>
-                  {scanResult.message}
-                </p>
-              </div>
+                <X size={16} />
+              </button>
             </div>
 
-            {/* SE FOR PARTICIPANTE (KAN-95) */}
-            {scanResult.participant && (
-              <ParticipantCard participant={scanResult.participant} />
-            )}
-
-            {/* SE FOR ATIVIDADE */}
-            {scanResult.activity && (
-              <div
-                style={{
-                  backgroundColor: '#0F141F',
-                  border: '1px solid #1E293B',
-                  borderRadius: '16px',
-                  padding: '14px 16px',
-                  marginBottom: '16px'
-                }}
-              >
-                <div style={{ fontSize: '0.96rem', fontWeight: 800, color: '#F8FAFC', marginBottom: '4px' }}>
-                  {scanResult.activity.title}
-                </div>
-                {scanResult.activity.time && (
-                  <div style={{ fontSize: '0.76rem', color: '#94A3B8', marginBottom: '12px' }}>
-                    {scanResult.activity.time} {scanResult.activity.location ? `• ${scanResult.activity.location}` : ''}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setScanResult(null);
-                    navigate('/agenda');
-                  }}
+            {/* Conteúdo Rolável do Bottom Sheet */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                touchAction: 'pan-y',
+                overscrollBehavior: 'contain',
+                padding: '4px 20px 24px',
+                paddingBottom: 'calc(max(32px, env(safe-area-inset-bottom)) + 24px)'
+              }}
+            >
+              {/* Status Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                <div
                   style={{
-                    width: '100%',
-                    height: '40px',
+                    width: '34px',
+                    height: '34px',
                     borderRadius: '10px',
-                    backgroundColor: '#1E293B',
-                    border: '1px solid #334155',
-                    color: '#F8FAFC',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
+                    backgroundColor: scanResult.status === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                    border: scanResult.status === 'success' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '6px'
+                    color: scanResult.status === 'success' ? '#10B981' : '#F59E0B',
+                    flexShrink: 0
                   }}
                 >
-                  <span>Ver na programação</span>
-                  <ExternalLink size={14} />
-                </button>
+                  {scanResult.status === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                </div>
+                <div>
+                  <h3
+                    style={{
+                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                      fontSize: '1.05rem',
+                      fontWeight: 800,
+                      color: '#F8FAFC',
+                      margin: 0,
+                      lineHeight: 1.2
+                    }}
+                  >
+                    {scanResult.title}
+                  </h3>
+                  <p style={{ fontSize: '0.74rem', color: '#94A3B8', margin: '2px 0 0' }}>
+                    {scanResult.message}
+                  </p>
+                </div>
               </div>
-            )}
 
-            {/* Badge de Pontuação Secundária (Aparece como consequência) */}
-            {scanResult.points && (
-              <div
+              {/* SE FOR PARTICIPANTE (KAN-95) */}
+              {scanResult.participant && (
+                <ParticipantCard participant={scanResult.participant} />
+              )}
+
+              {/* SE FOR ATIVIDADE */}
+              {scanResult.activity && (
+                <div
+                  style={{
+                    backgroundColor: '#0F141F',
+                    border: '1px solid #1E293B',
+                    borderRadius: '16px',
+                    padding: '14px 16px',
+                    marginBottom: '16px'
+                  }}
+                >
+                  <div style={{ fontSize: '0.96rem', fontWeight: 800, color: '#F8FAFC', marginBottom: '4px' }}>
+                    {scanResult.activity.title}
+                  </div>
+                  {scanResult.activity.time && (
+                    <div style={{ fontSize: '0.76rem', color: '#94A3B8', marginBottom: '12px' }}>
+                      {scanResult.activity.time} {scanResult.activity.location ? `• ${scanResult.activity.location}` : ''}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScanResult(null);
+                      navigate('/agenda');
+                    }}
+                    style={{
+                      width: '100%',
+                      height: '40px',
+                      borderRadius: '10px',
+                      backgroundColor: '#1E293B',
+                      border: '1px solid #334155',
+                      color: '#F8FAFC',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>Ver na programação</span>
+                    <ExternalLink size={14} />
+                  </button>
+                </div>
+              )}
+
+              {/* Badge de Pontuação Secundária (Aparece como consequência) */}
+              {scanResult.points && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                    border: '1px solid rgba(245, 158, 11, 0.2)',
+                    marginBottom: '16px'
+                  }}
+                >
+                  <span style={{ fontSize: '0.74rem', color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Sparkles size={13} color="#F59E0B" />
+                    Participação registrada
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                      fontSize: '0.76rem',
+                      fontWeight: 800,
+                      color: '#F59E0B'
+                    }}
+                  >
+                    +{scanResult.points} pontos
+                  </span>
+                </div>
+              )}
+
+              {/* Ação de Novo Escaneamento */}
+              <button
+                type="button"
+                onClick={() => setScanResult(null)}
                 style={{
+                  width: '100%',
+                  height: '42px',
+                  borderRadius: '12px',
+                  backgroundColor: '#2563EB',
+                  border: 'none',
+                  color: '#FFFFFF',
+                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
-                  border: '1px solid rgba(245, 158, 11, 0.2)',
-                  marginBottom: '16px'
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease'
                 }}
               >
-                <span style={{ fontSize: '0.74rem', color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Sparkles size={13} color="#F59E0B" />
-                  Participação registrada
-                </span>
-                <span
-                  style={{
-                    fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                    fontSize: '0.76rem',
-                    fontWeight: 800,
-                    color: '#F59E0B'
-                  }}
-                >
-                  +{scanResult.points} pontos
-                </span>
-              </div>
-            )}
-
-            {/* Ação de Novo Escaneamento */}
-            <button
-              type="button"
-              onClick={() => setScanResult(null)}
-              style={{
-                width: '100%',
-                height: '42px',
-                borderRadius: '12px',
-                backgroundColor: '#2563EB',
-                border: 'none',
-                color: '#FFFFFF',
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontSize: '0.84rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              Escanear outro código
-            </button>
+                Escanear outro código
+              </button>
+            </div>
           </div>
         </div>
       )}
