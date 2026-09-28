@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useUser } from '../hooks/useUser';
@@ -726,15 +727,15 @@ export default function Scanner() {
       )}
 
       {/* 5. BOTTOM SHEET DE RESULTADO DA LEITURA (EMBAIXO, SEM BARRINHA DE ARRASTAR) */}
-      {scanResult && (
+      {scanResult && typeof document !== 'undefined' && createPortal(
         <div
           role="dialog"
           aria-modal="true"
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 1100,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 2000,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
             display: 'flex',
@@ -959,19 +960,20 @@ export default function Scanner() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL DE INFORMAÇÃO RÁPIDA (INFO) */}
-      {showInfoModal && (
+      {showInfoModal && typeof document !== 'undefined' && createPortal(
         <div
           role="dialog"
           aria-modal="true"
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 1100,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 2000,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
             backdropFilter: 'blur(6px)',
             display: 'flex',
             alignItems: 'center',
@@ -1040,7 +1042,8 @@ export default function Scanner() {
               Entendi
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
