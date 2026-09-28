@@ -130,3 +130,20 @@ export function isValidPhone(phone) {
   return digits.length === 10 || digits.length === 11;
 }
 
+// Normalização de usuário/perfil do GitHub (KAN-96)
+export function normalizeGithub(github) {
+  if (typeof github !== 'string') return '';
+  return github.trim()
+    .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+    .replace(/^@/, '')
+    .replace(/\/+$/, '');
+}
+
+// Validação de usuário do GitHub (KAN-96)
+// Regras oficiais do GitHub: 1 a 39 caracteres alfanuméricos ou traço (não pode iniciar ou terminar com traço)
+export function isValidGithub(github) {
+  if (typeof github !== 'string' || !github.trim()) return false;
+  const clean = normalizeGithub(github);
+  return /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/.test(clean);
+}
+
