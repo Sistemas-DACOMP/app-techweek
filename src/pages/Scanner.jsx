@@ -247,14 +247,14 @@ export default function Scanner() {
         const payload = JSON.stringify({
           username: randomDbUser.username,
           name: randomDbUser.displayName || randomDbUser.firstName || randomDbUser.username,
-          phone: randomDbUser.phone || '34998765432',
+          phone: randomDbUser.phone || '',
           course: randomDbUser.course || 'Sistemas de Informação',
           participantType: randomDbUser.participant_type || randomDbUser.participantType || 'Aluno da UFU',
           period: randomDbUser.period || 4,
           avatarUrl: randomDbUser.avatarUrl || randomDbUser.photoURL || '',
-          linkedin: randomDbUser.linkedin || 'erick-raposo',
-          instagram: randomDbUser.instagram || '@erick.raposo',
-          github: randomDbUser.github || 'erickraposo'
+          linkedin: randomDbUser.linkedin || '',
+          instagram: randomDbUser.instagram || '',
+          github: randomDbUser.github || ''
         });
         handleScan(payload);
         return;
