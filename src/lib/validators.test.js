@@ -14,6 +14,8 @@ import {
   isValidUsername,
   formatPhone,
   isValidPhone,
+  normalizeGithub,
+  isValidGithub,
 } from './validators';
 
 // REG-C1 (comportamento observado no codigo, sem card Jira dedicado):
@@ -205,5 +207,35 @@ describe('formatPhone e isValidPhone', () => {
     expect(isValidPhone('34999998888')).toBe(true);
     expect(isValidPhone('12345')).toBe(false);
     expect(isValidPhone('')).toBe(false);
+  });
+});
+
+describe('normalizeGithub e isValidGithub (KAN-96)', () => {
+  it('normaliza links completos, arrobas e espaços para o handle puro', () => {
+    expect(normalizeGithub('https://github.com/erickraposo')).toBe('erickraposo');
+    expect(normalizeGithub('http://github.com/erickraposo/')).toBe('erickraposo');
+    expect(normalizeGithub('https://www.github.com/erickraposo')).toBe('erickraposo');
+    expect(normalizeGithub('@erickraposo')).toBe('erickraposo');
+    expect(normalizeGithub('  erickraposo  ')).toBe('erickraposo');
+    expect(normalizeGithub('')).toBe('');
+    expect(normalizeGithub(null)).toBe('');
+  });
+
+  it('valida handles e links válidos do GitHub', () => {
+    expect(isValidGithub('erickraposo')).toBe(true);
+    expect(isValidGithub('@erickraposo')).toBe(true);
+    expect(isValidGithub('https://github.com/erickraposo')).toBe(true);
+    expect(isValidGithub('dev-tech-123')).toBe(true);
+    expect(isValidGithub('a')).toBe(true);
+  });
+
+  it('rejeita handles inválidos do GitHub', () => {
+    expect(isValidGithub('')).toBe(false);
+    expect(isValidGithub('   ')).toBe(false);
+    expect(isValidGithub('-invalido')).toBe(false);
+    expect(isValidGithub('invalido-')).toBe(false);
+    expect(isValidGithub('user name')).toBe(false);
+    expect(isValidGithub('user@github')).toBe(false);
+    expect(isValidGithub('a'.repeat(40))).toBe(false);
   });
 });

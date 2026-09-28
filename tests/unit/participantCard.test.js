@@ -123,5 +123,34 @@ describe('ParticipantCard (KAN-95)', () => {
       const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
       expect(html).toContain('Participante não cadastrou redes sociais públicas.');
     });
+
+    it('renderiza corretamente apenas o GitHub quando nenhuma outra rede for informada (KAN-96)', () => {
+      const participant = {
+        name: 'Dev OpenSource',
+        username: 'dev_opensource',
+        github: 'https://github.com/torvalds'
+      };
+
+      const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
+      expect(html).toContain('href="https://github.com/torvalds"');
+      expect(html).toContain('torvalds');
+      expect(html).not.toContain('Instagram');
+      expect(html).not.toContain('LinkedIn');
+      expect(html).not.toContain('Participante não cadastrou redes sociais públicas.');
+    });
+
+    it('renderiza combinação de duas redes sociais (GitHub e LinkedIn) (KAN-96)', () => {
+      const participant = {
+        name: 'Dev Fullstack',
+        username: 'dev_fullstack',
+        linkedin: 'dev-fullstack',
+        github: '@dev-fullstack'
+      };
+
+      const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
+      expect(html).toContain('href="https://linkedin.com/in/dev-fullstack"');
+      expect(html).toContain('href="https://github.com/dev-fullstack"');
+      expect(html).not.toContain('Instagram');
+    });
   });
 });

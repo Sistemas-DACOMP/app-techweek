@@ -71,7 +71,8 @@ export default function Profile() {
       symplaTicket: ticket,
       hasSymplaTicket: !!(cached?.hasSymplaTicket || ticket),
       linkedin: cached?.linkedin || '',
-      instagram: cached?.instagram || ''
+      instagram: cached?.instagram || '',
+      github: cached?.github || ''
     };
   });
   const isTicketConfirmed = !!(profile.hasSymplaTicket || profile.symplaTicket?.ticketName);
@@ -92,6 +93,7 @@ export default function Profile() {
     period: '',
     linkedin: '',
     instagram: '',
+    github: '',
     email: '',
     ticketNumber: ''
   });
@@ -143,7 +145,8 @@ export default function Profile() {
           symplaTicket: data?.symplaTicket || data?.sympla_ticket || prev.symplaTicket,
           hasSymplaTicket: !!(data?.hasSymplaTicket || data?.symplaTicket || data?.sympla_ticket || prev.hasSymplaTicket),
           linkedin: data?.linkedin || prev.linkedin,
-          instagram: data?.instagram || prev.instagram
+          instagram: data?.instagram || prev.instagram,
+          github: data?.github || prev.github
         }));
 
         // Se o ingresso do Sympla ainda não estiver vinculado, tenta auto-sincronizar em background
@@ -229,6 +232,7 @@ export default function Profile() {
       period: profile.period ? String(profile.period) : '',
       linkedin: profile.linkedin || '',
       instagram: profile.instagram || '',
+      github: profile.github || '',
       email: profile.email || '',
       ticketNumber: profile.symplaTicket?.ticketNumber || ''
     });
@@ -255,6 +259,7 @@ export default function Profile() {
     const cleanPhone = editForm.phone.trim();
     const cleanLinkedin = editForm.linkedin.trim();
     const cleanInstagram = editForm.instagram.trim();
+    const cleanGithub = editForm.github.trim();
 
     if (!cleanFirstName) {
       setEditFeedback({ type: 'error', text: 'Primeiro nome é obrigatório.' });
@@ -287,7 +292,8 @@ export default function Profile() {
         course: finalCourse,
         period: isStudent && editForm.period ? Number(editForm.period) : null,
         linkedin: cleanLinkedin,
-        instagram: cleanInstagram
+        instagram: cleanInstagram,
+        github: cleanGithub
       };
 
       // Se o ingresso ainda NÃO estava confirmado, permite persistir o novo e-mail
@@ -559,6 +565,7 @@ export default function Profile() {
 
   const linkedinUrl = formatUrl(profile.linkedin, 'https://linkedin.com/in/');
   const instagramUrl = formatUrl(profile.instagram, 'https://instagram.com/');
+  const githubUrl = formatUrl(profile.github, 'https://github.com/');
 
   const cleanFirstName = (profile.firstName || '').replace(/^@/, '');
   const cleanLastName = profile.lastName || '';
@@ -2127,6 +2134,38 @@ export default function Profile() {
                         }}
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: '0.72rem',
+                        color: '#94A3B8',
+                        marginBottom: '4px',
+                        fontFamily: "'Inter', system-ui, sans-serif"
+                      }}
+                    >
+                      GitHub (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.github}
+                      onChange={(e) => setEditForm({ ...editForm, github: e.target.value })}
+                      placeholder="github.com/usuario ou @usuario"
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#0F141F',
+                        border: '1px solid #1E293B',
+                        borderRadius: '10px',
+                        padding: '10px 12px',
+                        color: '#F8FAFC',
+                        fontFamily: "'Inter', system-ui, sans-serif",
+                        fontSize: '0.84rem',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
                   </div>
                 </section>
 

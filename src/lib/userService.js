@@ -122,6 +122,7 @@ export async function createUserProfile(uid, data) {
     period: data.period ? Number(data.period) : null,
     linkedin: data.linkedin || '',
     instagram: data.instagram || '',
+    github: data.github || '',
     avatarUrl: data.avatarUrl || null,
     hasSymplaTicket: resolved ? resolved.hasSymplaTicket : Boolean(data.hasSymplaTicket || data.symplaTicket),
     role: resolved ? resolved.role : (data.role || 'PARTICIPANT'),

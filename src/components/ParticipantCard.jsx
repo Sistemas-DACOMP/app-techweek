@@ -167,6 +167,7 @@ export default function ParticipantCard({
   const githubHandle = formatSocialHandle('github', github);
 
   const hasSocials = Boolean(linkedinLink || instagramLink || githubLink);
+  const activeSocialsCount = [linkedinLink, instagramLink, githubLink].filter(Boolean).length;
 
   return (
     <div
@@ -344,9 +345,9 @@ export default function ParticipantCard({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: linkedinLink && instagramLink ? 'repeat(2, 1fr)' : '1fr',
-              gap: '6px',
-              marginBottom: phone ? '8px' : '0'
+              gridTemplateColumns: activeSocialsCount >= 2 ? 'repeat(2, 1fr)' : '1fr',
+              gap: '6px'
+
             }}
           >
             {/* Botão Instagram */}
@@ -474,7 +475,7 @@ export default function ParticipantCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
-                  gridColumn: linkedinLink && instagramLink ? '1 / -1' : 'auto',
+                  gridColumn: activeSocialsCount === 3 ? '1 / -1' : 'auto',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
