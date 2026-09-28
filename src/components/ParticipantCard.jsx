@@ -169,395 +169,401 @@ export default function ParticipantCard({
 
   const hasSocials = Boolean(linkedinLink || instagramLink || githubLink);
 
-  return (
-    <div
-      className={`participant-card ${className}`}
-      style={{
-        backgroundColor: '#0F141F',
-        border: '1px solid #1E293B',
-        borderRadius: '20px',
-        padding: '18px 16px',
-        marginBottom: '16px',
-        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.45)',
-        ...style
-      }}
-    >
-      {/* 1. CABEÇALHO DO PERFIL: FOTO + INFORMAÇÕES */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
-        {/* Foto de Perfil (Avatar) com fallback para iniciais estilizadas */}
-        <div
-          style={{
-            position: 'relative',
-            width: '60px',
-            height: '60px',
-            borderRadius: '18px',
-            overflow: 'hidden',
-            flexShrink: 0,
-            background: 'linear-gradient(135deg, #1E3A8A, #0284C7)',
-            border: '2px solid rgba(56, 189, 248, 0.35)',
-            boxShadow: '0 4px 16px rgba(56, 189, 248, 0.25)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          {effectiveAvatar ? (
-            <img
-              src={effectiveAvatar}
-              alt={name}
-              onError={() => setImageError(true)}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                borderRadius: '16px'
-              }}
-            />
-          ) : (
-            <span
-              style={{
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontWeight: 800,
-                fontSize: '1.25rem',
-                color: '#F8FAFC',
-                letterSpacing: '-0.02em'
-              }}
-            >
-              {initials}
-            </span>
-          )}
-        </div>
-
-        {/* Nome, Username, Curso e Período */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h4
-            style={{
-              fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-              fontSize: '1.05rem',
-              fontWeight: 800,
-              color: '#F8FAFC',
-              margin: '0 0 2px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              letterSpacing: '-0.02em',
-              lineHeight: 1.2
-            }}
-          >
-            {name}
-          </h4>
-
-          {cleanUsername && (
-            <div
-              style={{
-                fontSize: '0.75rem',
-                color: '#38BDF8',
-                fontWeight: 600,
-                marginBottom: '4px',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-              }}
-            >
-              @{cleanUsername}
-            </div>
-          )}
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '0.74rem',
-              color: '#94A3B8',
-              lineHeight: 1.3
-            }}
-          >
-            <GraduationCap size={13} color="#60A5FA" style={{ flexShrink: 0 }} />
-            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {course || 'UFU'}
-              {period ? ` • ${period}º período` : ''}
-            </span>
-          </div>
-
-          {participantType && (
-            <div style={{ marginTop: '5px' }}>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '2px 8px',
-                  borderRadius: '999px',
-                  backgroundColor: 'rgba(56, 189, 248, 0.1)',
-                  border: '1px solid rgba(56, 189, 248, 0.25)',
-                  color: '#38BDF8',
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.02em'
-                }}
-              >
-                {participantType}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 2. SEÇÃO DE REDES SOCIAIS E CONTATO */}
-      <div
-        style={{
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-          paddingTop: '12px',
-          marginTop: '6px'
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '10px'
-          }}
-        >
-          <span
-            style={{
-              fontSize: '0.7rem',
-              fontWeight: 700,
-              color: '#64748B',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px'
-            }}
-          >
-            <Share2 size={12} color="#64748B" />
-            Redes de Contato
-          </span>
-
-          <span style={{ fontSize: '0.68rem', color: '#475569' }}>
-            Toque para conectar
-          </span>
-        </div>
-
-        {/* Grade de Redes Sociais */}
-        {hasSocials && (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: linkedinLink && instagramLink ? 'repeat(2, 1fr)' : '1fr',
-              gap: '8px',
-              marginBottom: phone ? '10px' : '0'
-            }}
-          >
-            {/* Botão Instagram */}
-            {instagramLink && (
-              <a
-                href={instagramLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '9px 12px',
-                  borderRadius: '12px',
-                  backgroundColor: 'rgba(225, 48, 108, 0.08)',
-                  border: '1px solid rgba(225, 48, 108, 0.25)',
-                  color: '#F43F5E',
-                  textDecoration: 'none',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  transition: 'all 0.15s ease',
-                  overflow: 'hidden'
-                }}
-              >
-                <div
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '8px',
-                    backgroundColor: 'rgba(225, 48, 108, 0.15)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#FB7185',
-                    flexShrink: 0
-                  }}
-                >
-                  <InstagramIcon size={16} color="#FB7185" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.65rem', color: '#FDA4AF', fontWeight: 500, lineHeight: 1 }}>
-                    Instagram
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '0.78rem',
-                      fontWeight: 700,
-                      color: '#FFF1F2',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      marginTop: '2px'
-                    }}
-                  >
-                    {instagramHandle ? `@${instagramHandle}` : 'Visitar'}
-                  </div>
-                </div>
-                <ExternalLink size={12} color="#FDA4AF" style={{ flexShrink: 0 }} />
-              </a>
-            )}
-
-            {/* Botão LinkedIn */}
-            {linkedinLink && (
-              <a
-                href={linkedinLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '9px 12px',
-                  borderRadius: '12px',
-                  backgroundColor: 'rgba(10, 102, 194, 0.08)',
-                  border: '1px solid rgba(10, 102, 194, 0.25)',
-                  color: '#38BDF8',
-                  textDecoration: 'none',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  transition: 'all 0.15s ease',
-                  overflow: 'hidden'
-                }}
-              >
-                <div
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '8px',
-                    backgroundColor: 'rgba(10, 102, 194, 0.18)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#0A66C2',
-                    flexShrink: 0
-                  }}
-                >
-                  <LinkedInIcon size={15} color="#38BDF8" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.65rem', color: '#7DD3FC', fontWeight: 500, lineHeight: 1 }}>
-                    LinkedIn
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '0.78rem',
-                      fontWeight: 700,
-                      color: '#F0F9FF',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      marginTop: '2px'
-                    }}
-                  >
-                    {linkedinHandle || 'Conectar'}
-                  </div>
-                </div>
-                <ExternalLink size={12} color="#7DD3FC" style={{ flexShrink: 0 }} />
-              </a>
-            )}
-
-            {/* Botão GitHub (se presente) */}
-            {githubLink && (
-              <a
-                href={githubLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  gridColumn: linkedinLink && instagramLink ? '1 / -1' : 'auto',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '9px 12px',
-                  borderRadius: '12px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#F8FAFC',
-                  textDecoration: 'none',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  transition: 'all 0.15s ease',
-                  overflow: 'hidden'
-                }}
-              >
-                <div
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '8px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#F8FAFC',
-                    flexShrink: 0
-                  }}
-                >
-                  <GitHubIcon size={15} color="#F8FAFC" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 500, lineHeight: 1 }}>
-                    GitHub
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '0.78rem',
-                      fontWeight: 700,
-                      color: '#F8FAFC',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      marginTop: '2px'
-                    }}
-                  >
-                    {githubHandle || 'Ver repositórios'}
-                  </div>
-                </div>
-                <ExternalLink size={12} color="#94A3B8" style={{ flexShrink: 0 }} />
-              </a>
-            )}
-          </div>
-        )}
-
-        {/* Botão WhatsApp Principal */}
-        {phone ? (
-          <WhatsAppButton
-            phone={phone}
-            participantName={name}
-            companyName="FACOM TechWeek"
-            customMessage={`Olá ${name}! Nos conectamos pelo scanner da FACOM TechWeek 🚀`}
-            fullWidth
-            label="Conversar no WhatsApp"
-          />
-        ) : (
-          !hasSocials && (
-            <div
-              style={{
-                padding: '10px 12px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                border: '1px dashed #334155',
-                textAlign: 'center',
-                color: '#64748B',
-                fontSize: '0.74rem'
-              }}
-            >
-              Participante não cadastrou redes sociais públicas.
-            </div>
-          )
-        )}
-      </div>
-    </div>
-  );
+  return (
+    <div
+      className={`participant-card ${className}`}
+      style={{
+        backgroundColor: '#0F141F',
+        border: '1px solid #1E293B',
+        borderRadius: '16px',
+        padding: '12px 14px',
+        marginBottom: '10px',
+        boxShadow: '0 6px 20px rgba(0, 0, 0, 0.4)',
+        ...style
+      }}
+    >
+      {/* 1. CABEÇALHO DO PERFIL: FOTO + INFORMAÇÕES */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+        {/* Foto de Perfil (Avatar) com fallback para iniciais estilizadas */}
+        <div
+          style={{
+            position: 'relative',
+            width: '50px',
+            height: '50px',
+            borderRadius: '14px',
+            overflow: 'hidden',
+            flexShrink: 0,
+            background: 'linear-gradient(135deg, #1E3A8A, #0284C7)',
+            border: '2px solid rgba(56, 189, 248, 0.35)',
+            boxShadow: '0 3px 12px rgba(56, 189, 248, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          {effectiveAvatar ? (
+            <img
+              src={effectiveAvatar}
+              alt={name}
+              onError={() => setImageError(true)}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                borderRadius: '12px'
+              }}
+            />
+          ) : (
+            <span
+              style={{
+                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                fontWeight: 800,
+                fontSize: '1.15rem',
+                color: '#F8FAFC',
+                letterSpacing: '-0.02em'
+              }}
+            >
+              {initials}
+            </span>
+          )}
+        </div>
+
+        {/* Nome, Username, Curso e Período */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h4
+            style={{
+              fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+              fontSize: '0.98rem',
+              fontWeight: 800,
+              color: '#F8FAFC',
+              margin: '0 0 1px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              letterSpacing: '-0.02em',
+              lineHeight: 1.2
+            }}
+          >
+            {name}
+          </h4>
+
+          {cleanUsername && (
+            <div
+              style={{
+                fontSize: '0.72rem',
+                color: '#38BDF8',
+                fontWeight: 600,
+                marginBottom: '2px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
+              @{cleanUsername}
+            </div>
+          )}
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              fontSize: '0.7rem',
+              color: '#94A3B8',
+              lineHeight: 1.2
+            }}
+          >
+            <GraduationCap size={12} color="#60A5FA" style={{ flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {course || 'UFU'}
+              {period ? ` • ${period}º período` : ''}
+            </span>
+          </div>
+
+          {participantType && (
+            <div style={{ marginTop: '3px' }}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  padding: '1px 6px',
+                  borderRadius: '999px',
+                  backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  color: '#38BDF8',
+                  fontSize: '0.64rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.02em'
+                }}
+              >
+                {participantType}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 2. SEÇÃO DE REDES SOCIAIS E CONTATO */}
+      <div
+        style={{
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          paddingTop: '8px',
+          marginTop: '4px'
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '6px'
+          }}
+        >
+          <span
+            style={{
+              fontSize: '0.66rem',
+              fontWeight: 700,
+              color: '#64748B',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <Share2 size={11} color="#64748B" />
+            Redes de Contato
+          </span>
+
+          <span style={{ fontSize: '0.64rem', color: '#475569' }}>
+            Toque para conectar
+          </span>
+        </div>
+
+        {/* Grade de Redes Sociais */}
+        {hasSocials && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: linkedinLink && instagramLink ? 'repeat(2, 1fr)' : '1fr',
+              gap: '6px',
+              marginBottom: phone ? '8px' : '0'
+            }}
+          >
+            {/* Botão Instagram */}
+            {instagramLink && (
+              <a
+                href={instagramLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 9px',
+                  borderRadius: '9px',
+                  backgroundColor: 'rgba(225, 48, 108, 0.08)',
+                  border: '1px solid rgba(225, 48, 108, 0.25)',
+                  color: '#F43F5E',
+                  textDecoration: 'none',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  transition: 'all 0.15s ease',
+                  overflow: 'hidden'
+                }}
+              >
+                <div
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(225, 48, 108, 0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#FB7185',
+                    flexShrink: 0
+                  }}
+                >
+                  <InstagramIcon size={13} color="#FB7185" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.58rem', color: '#FDA4AF', fontWeight: 500, lineHeight: 1 }}>
+                    Instagram
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: '#FFF1F2',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      marginTop: '1px'
+                    }}
+                  >
+                    {instagramHandle ? `@${instagramHandle}` : 'Visitar'}
+                  </div>
+                </div>
+                <ExternalLink size={10} color="#FDA4AF" style={{ flexShrink: 0 }} />
+              </a>
+            )}
+
+            {/* Botão LinkedIn */}
+            {linkedinLink && (
+              <a
+                href={linkedinLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 9px',
+                  borderRadius: '9px',
+                  backgroundColor: 'rgba(10, 102, 194, 0.08)',
+                  border: '1px solid rgba(10, 102, 194, 0.25)',
+                  color: '#38BDF8',
+                  textDecoration: 'none',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  transition: 'all 0.15s ease',
+                  overflow: 'hidden'
+                }}
+              >
+                <div
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(10, 102, 194, 0.18)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#0A66C2',
+                    flexShrink: 0
+                  }}
+                >
+                  <LinkedInIcon size={13} color="#38BDF8" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.58rem', color: '#7DD3FC', fontWeight: 500, lineHeight: 1 }}>
+                    LinkedIn
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: '#F0F9FF',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      marginTop: '1px'
+                    }}
+                  >
+                    {linkedinHandle || 'Conectar'}
+                  </div>
+                </div>
+                <ExternalLink size={10} color="#7DD3FC" style={{ flexShrink: 0 }} />
+              </a>
+            )}
+
+            {/* Botão GitHub (se presente) */}
+            {githubLink && (
+              <a
+                href={githubLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  gridColumn: linkedinLink && instagramLink ? '1 / -1' : 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 9px',
+                  borderRadius: '9px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#F8FAFC',
+                  textDecoration: 'none',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  transition: 'all 0.15s ease',
+                  overflow: 'hidden'
+                }}
+              >
+                <div
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#F8FAFC',
+                    flexShrink: 0
+                  }}
+                >
+                  <GitHubIcon size={13} color="#F8FAFC" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.58rem', color: '#94A3B8', fontWeight: 500, lineHeight: 1 }}>
+                    GitHub
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: '#F8FAFC',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      marginTop: '1px'
+                    }}
+                  >
+                    {githubHandle || 'Ver repositórios'}
+                  </div>
+                </div>
+                <ExternalLink size={10} color="#94A3B8" style={{ flexShrink: 0 }} />
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* Botão WhatsApp Principal */}
+        {phone ? (
+          <WhatsAppButton
+            phone={phone}
+            participantName={name}
+            companyName="FACOM TechWeek"
+            customMessage={`Olá ${name}! Nos conectamos pelo scanner da FACOM TechWeek 🚀`}
+            fullWidth
+            size="sm"
+            label="Conversar no WhatsApp"
+            style={{
+              height: '38px',
+              borderRadius: '10px',
+              fontSize: '0.78rem'
+            }}
+          />
+        ) : (
+          !hasSocials && (
+            <div
+              style={{
+                padding: '8px 10px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                border: '1px dashed #334155',
+                textAlign: 'center',
+                color: '#64748B',
+                fontSize: '0.7rem'
+              }}
+            >
+              Participante não cadastrou redes sociais públicas.
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
 }

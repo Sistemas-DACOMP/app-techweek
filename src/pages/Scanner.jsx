@@ -20,7 +20,6 @@ import {
 import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
 import { DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { resolveParticipantFromQr } from '../lib/sponsorService';
-import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import WhatsAppButton from '../components/WhatsAppButton';
 import ParticipantCard from '../components/ParticipantCard';
 
@@ -98,15 +97,6 @@ export default function Scanner() {
       }
     };
   }, [scanResult]);
-
-  useEffect(() => {
-    if (scanResult || showInfoModal) {
-      lockScroll();
-      return () => {
-        unlockScroll();
-      };
-    }
-  }, [scanResult, showInfoModal]);
 
   const handleScan = async (data) => {
     setIsLoading(true);
@@ -735,7 +725,7 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* 5. BOTTOM SHEET / MODAL DE RESULTADO DA LEITURA */}
+      {/* 5. BOTTOM SHEET DE RESULTADO DA LEITURA (EMBAIXO, SEM BARRINHA DE ARRASTAR) */}
       {scanResult && (
         <div
           role="dialog"
@@ -744,7 +734,7 @@ export default function Scanner() {
             position: 'fixed',
             inset: 0,
             zIndex: 1100,
-            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
             display: 'flex',
@@ -758,12 +748,13 @@ export default function Scanner() {
             style={{
               width: '100%',
               maxWidth: '430px',
-              maxHeight: '85vh',
-              maxHeight: '85dvh',
+              maxHeight: '88dvh',
               backgroundColor: '#0A0E17',
               borderTop: '1px solid #1E293B',
               borderTopLeftRadius: '24px',
               borderTopRightRadius: '24px',
+              padding: '14px 16px',
+              paddingBottom: 'max(24px, calc(env(safe-area-inset-bottom) + 16px))',
               boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.8)',
               animation: 'slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
               position: 'relative',
@@ -773,71 +764,21 @@ export default function Scanner() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header Fixo do Bottom Sheet: Handle e Botão Fechar */}
+            {/* Cabeçalho do Card: Status + Botão Fechar X (Fixo no topo, sem barrinha de arrastar) */}
             <div
               style={{
-                position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                paddingTop: '12px',
-                paddingBottom: '10px',
+                justifyContent: 'space-between',
+                marginBottom: '10px',
                 flexShrink: 0
               }}
             >
-              {/* Handle do Bottom Sheet */}
-              <div
-                style={{
-                  width: '36px',
-                  height: '4px',
-                  backgroundColor: '#334155',
-                  borderRadius: '999px'
-                }}
-              />
-
-              {/* Botão Fechar X */}
-              <button
-                type="button"
-                onClick={() => setScanResult(null)}
-                aria-label="Fechar resultado"
-                style={{
-                  position: 'absolute',
-                  top: '10px',
-                  right: '18px',
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                  border: 'none',
-                  color: '#94A3B8',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer'
-                }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Conteúdo Rolável do Bottom Sheet */}
-            <div
-              style={{
-                flex: 1,
-                overflowY: 'auto',
-                WebkitOverflowScrolling: 'touch',
-                touchAction: 'pan-y',
-                overscrollBehavior: 'contain',
-                padding: '4px 20px 24px',
-                paddingBottom: 'calc(max(32px, env(safe-area-inset-bottom)) + 24px)'
-              }}
-            >
-              {/* Status Header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
                 <div
                   style={{
-                    width: '34px',
-                    height: '34px',
+                    width: '32px',
+                    height: '32px',
                     borderRadius: '10px',
                     backgroundColor: scanResult.status === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
                     border: scanResult.status === 'success' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)',
@@ -848,27 +789,66 @@ export default function Scanner() {
                     flexShrink: 0
                   }}
                 >
-                  {scanResult.status === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                  {scanResult.status === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
                 </div>
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <h3
                     style={{
                       fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontSize: '1.05rem',
+                      fontSize: '0.96rem',
                       fontWeight: 800,
                       color: '#F8FAFC',
                       margin: 0,
-                      lineHeight: 1.2
+                      lineHeight: 1.2,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
                     }}
                   >
                     {scanResult.title}
                   </h3>
-                  <p style={{ fontSize: '0.74rem', color: '#94A3B8', margin: '2px 0 0' }}>
+                  <p style={{ fontSize: '0.72rem', color: '#94A3B8', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {scanResult.message}
                   </p>
                 </div>
               </div>
 
+              {/* Botão Fechar X */}
+              <button
+                type="button"
+                onClick={() => setScanResult(null)}
+                aria-label="Fechar resultado"
+                style={{
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  border: 'none',
+                  color: '#94A3B8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  marginLeft: '8px'
+                }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Conteúdo Central com rolagem se necessário */}
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                paddingRight: '2px',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+            >
               {/* SE FOR PARTICIPANTE (KAN-95) */}
               {scanResult.participant && (
                 <ParticipantCard participant={scanResult.participant} />
@@ -880,16 +860,16 @@ export default function Scanner() {
                   style={{
                     backgroundColor: '#0F141F',
                     border: '1px solid #1E293B',
-                    borderRadius: '16px',
-                    padding: '14px 16px',
-                    marginBottom: '16px'
+                    borderRadius: '14px',
+                    padding: '12px 14px',
+                    marginBottom: '10px'
                   }}
                 >
-                  <div style={{ fontSize: '0.96rem', fontWeight: 800, color: '#F8FAFC', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#F8FAFC', marginBottom: '4px' }}>
                     {scanResult.activity.title}
                   </div>
                   {scanResult.activity.time && (
-                    <div style={{ fontSize: '0.76rem', color: '#94A3B8', marginBottom: '12px' }}>
+                    <div style={{ fontSize: '0.74rem', color: '#94A3B8', marginBottom: '10px' }}>
                       {scanResult.activity.time} {scanResult.activity.location ? `• ${scanResult.activity.location}` : ''}
                     </div>
                   )}
@@ -901,12 +881,12 @@ export default function Scanner() {
                     }}
                     style={{
                       width: '100%',
-                      height: '40px',
+                      height: '38px',
                       borderRadius: '10px',
                       backgroundColor: '#1E293B',
                       border: '1px solid #334155',
                       color: '#F8FAFC',
-                      fontSize: '0.8rem',
+                      fontSize: '0.78rem',
                       fontWeight: 700,
                       cursor: 'pointer',
                       display: 'flex',
@@ -916,33 +896,33 @@ export default function Scanner() {
                     }}
                   >
                     <span>Ver na programação</span>
-                    <ExternalLink size={14} />
+                    <ExternalLink size={13} />
                   </button>
                 </div>
               )}
 
-              {/* Badge de Pontuação Secundária (Aparece como consequência) */}
+              {/* Badge de Pontuação Secundária */}
               {scanResult.points && (
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '8px 12px',
-                    borderRadius: '10px',
+                    padding: '6px 10px',
+                    borderRadius: '9px',
                     backgroundColor: 'rgba(245, 158, 11, 0.08)',
                     border: '1px solid rgba(245, 158, 11, 0.2)',
-                    marginBottom: '16px'
+                    marginBottom: '8px'
                   }}
                 >
-                  <span style={{ fontSize: '0.74rem', color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Sparkles size={13} color="#F59E0B" />
+                  <span style={{ fontSize: '0.7rem', color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Sparkles size={12} color="#F59E0B" />
                     Participação registrada
                   </span>
                   <span
                     style={{
                       fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontSize: '0.76rem',
+                      fontSize: '0.74rem',
                       fontWeight: 800,
                       color: '#F59E0B'
                     }}
@@ -951,20 +931,22 @@ export default function Scanner() {
                   </span>
                 </div>
               )}
+            </div>
 
-              {/* Ação de Novo Escaneamento */}
+            {/* Rodapé Fixo: Botão sempre visível na parte inferior */}
+            <div style={{ paddingTop: '8px', flexShrink: 0 }}>
               <button
                 type="button"
                 onClick={() => setScanResult(null)}
                 style={{
                   width: '100%',
-                  height: '42px',
-                  borderRadius: '12px',
+                  height: '40px',
+                  borderRadius: '11px',
                   backgroundColor: '#2563EB',
                   border: 'none',
                   color: '#FFFFFF',
                   fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                  fontSize: '0.84rem',
+                  fontSize: '0.82rem',
                   fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
