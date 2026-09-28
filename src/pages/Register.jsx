@@ -50,6 +50,7 @@ export default function Register() {
     period: '',
     linkedin: '',
     instagram: '',
+    github: '',
     termsAccepted: false
   });
   const [step, setStep] = useState(1);
@@ -246,6 +247,7 @@ export default function Register() {
         period: isStudent ? formData.period : null,
         linkedin: formData.linkedin,
         instagram: formData.instagram,
+        github: formData.github,
         avatarUrl: finalAvatarUrl,
         hasSymplaTicket: !!symplaTicketData,
         symplaTicket: symplaTicketData
@@ -719,6 +721,16 @@ export default function Register() {
                     className="login-input"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>GitHub (Opcional)</label>
+                <input 
+                  name="github" type="text" placeholder="github.com/seu-usuario ou @seu-usuario"
+                  value={formData.github} onChange={handleChange}
+                  onFocus={() => setFocusedInput('github')} onBlur={() => setFocusedInput(null)}
+                  className="login-input"
+                />
               </div>
 
               {/* Termo de Consentimento LGPD */}
