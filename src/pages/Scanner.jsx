@@ -21,7 +21,6 @@ import {
 import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
 import { DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { resolveParticipantFromQr } from '../lib/sponsorService';
-import WhatsAppButton from '../components/WhatsAppButton';
 import ParticipantCard from '../components/ParticipantCard';
 
 export default function Scanner() {

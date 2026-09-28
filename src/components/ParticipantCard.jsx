@@ -6,7 +6,6 @@ import {
   Sparkles,
   Share2
 } from 'lucide-react';
-import WhatsAppButton from './WhatsAppButton';
 
 /**
  * Ícone oficial do Instagram em SVG.
@@ -530,38 +529,21 @@ export default function ParticipantCard({
           </div>
         )}
 
-        {/* Botão WhatsApp Principal */}
-        {phone ? (
-          <WhatsAppButton
-            phone={phone}
-            participantName={name}
-            companyName="FACOM TechWeek"
-            customMessage={`Olá ${name}! Nos conectamos pelo scanner da FACOM TechWeek 🚀`}
-            fullWidth
-            size="sm"
-            label="Conversar no WhatsApp"
-            style={{
-              height: '38px',
-              borderRadius: '10px',
-              fontSize: '0.78rem'
-            }}
-          />
-        ) : (
-          !hasSocials && (
-            <div
-              style={{
-                padding: '8px 10px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                border: '1px dashed #334155',
-                textAlign: 'center',
-                color: '#64748B',
-                fontSize: '0.7rem'
-              }}
-            >
-              Participante não cadastrou redes sociais públicas.
-            </div>
-          )
+        {/* Aviso se não houver redes cadastradas */}
+        {!hasSocials && (
+          <div
+            style={{
+              padding: '8px 10px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(255, 255, 255, 0.03)',
+              border: '1px dashed #334155',
+              textAlign: 'center',
+              color: '#64748B',
+              fontSize: '0.7rem'
+            }}
+          >
+            Participante não cadastrou redes sociais públicas.
+          </div>
         )}
       </div>
     </div>

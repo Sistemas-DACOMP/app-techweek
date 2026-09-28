@@ -87,7 +87,7 @@ describe('ParticipantCard (KAN-95)', () => {
       expect(html).toContain('@lucas_silva');
     });
 
-    it('renderiza redes sociais no card (Instagram, LinkedIn, GitHub e WhatsApp)', () => {
+    it('renderiza redes sociais no card (Instagram, LinkedIn e GitHub)', () => {
       const participant = {
         name: 'Carlos Santos',
         username: 'carlossantos',
@@ -109,9 +109,9 @@ describe('ParticipantCard (KAN-95)', () => {
       expect(html).toContain('target="_blank"');
       expect(html).toContain('rel="noopener noreferrer"');
 
-      // WhatsApp e dados acadêmicos
+      // Dados acadêmicos
       expect(html).toContain('Aluno da UFU');
-      expect(html).toContain('Conversar no WhatsApp');
+      expect(html).not.toContain('Conversar no WhatsApp');
     });
 
     it('exibe aviso de ausência de redes sociais se o participante não cadastrou redes nem telefone', () => {
