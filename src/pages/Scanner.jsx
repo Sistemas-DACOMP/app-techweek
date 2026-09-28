@@ -19,7 +19,9 @@ import {
 } from 'lucide-react';
 import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
 import { DEFAULT_ACTIVITIES } from '../lib/activityService';
+import { resolveParticipantFromQr } from '../lib/sponsorService';
 import WhatsAppButton from '../components/WhatsAppButton';
+import ParticipantCard from '../components/ParticipantCard';
 
 export default function Scanner() {
   const navigate = useNavigate();
@@ -110,9 +112,9 @@ export default function Scanner() {
       const decoded = decodeURIComponent(data);
       if (decoded.startsWith('{') && decoded.endsWith('}')) {
         const parsed = JSON.parse(decoded);
-        if (parsed.username) {
+        if (parsed.username || parsed.participantUid || (parsed.uid && !parsed.lectureId)) {
           isUserQr = true;
-          usernameToValidate = parsed.username;
+          usernameToValidate = parsed.username || null;
           participantData = parsed;
         } else if (parsed.lectureId || parsed.activityId) {
           isActivityQr = true;
@@ -124,9 +126,9 @@ export default function Scanner() {
       try {
         if (data.startsWith('{') && data.endsWith('}')) {
           const parsed = JSON.parse(data);
-          if (parsed.username) {
+          if (parsed.username || parsed.participantUid || (parsed.uid && !parsed.lectureId)) {
             isUserQr = true;
-            usernameToValidate = parsed.username;
+            usernameToValidate = parsed.username || null;
             participantData = parsed;
           } else if (parsed.lectureId || parsed.activityId) {
             isActivityQr = true;
@@ -137,11 +139,23 @@ export default function Scanner() {
       } catch {}
     }
 
+    // Se não for atividade e ainda não tiver identificado participante, tenta resolver pelo helper do crachá/sympla
+    if (!isActivityQr && !isUserQr) {
+      try {
+        const resolved = await resolveParticipantFromQr(data);
+        if (resolved) {
+          isUserQr = true;
+          usernameToValidate = resolved.username || null;
+          participantData = resolved;
+        }
+      } catch {}
+    }
+
     let fetchedProfile = null;
     if (isUserQr && usernameToValidate) {
       fetchedProfile = await findUserByUsername(usernameToValidate).catch(() => null);
 
-      if (!fetchedProfile) {
+      if (!fetchedProfile && !participantData) {
         setIsLoading(false);
         setScanResult({ 
           status: 'error',
@@ -153,8 +167,26 @@ export default function Scanner() {
     }
 
     const result = await registerCodeScan(data, 5);
-    const participantName = fetchedProfile?.displayName || participantData?.name || participantData?.username || usernameToValidate || 'Participante';
-    const participantPhone = fetchedProfile?.phone || participantData?.phone || '34991234567';
+
+    // Constrói objeto enriquecido do participante para o card (KAN-95)
+    const consolidatedParticipant = isUserQr ? {
+      name: fetchedProfile?.displayName || 
+            [fetchedProfile?.firstName, fetchedProfile?.lastName].filter(Boolean).join(' ') || 
+            participantData?.name || 
+            participantData?.username || 
+            usernameToValidate || 
+            'Participante',
+      username: fetchedProfile?.username || participantData?.username || usernameToValidate || '',
+      avatarUrl: fetchedProfile?.avatarUrl || fetchedProfile?.photoURL || participantData?.avatarUrl || participantData?.photoURL || null,
+      course: fetchedProfile?.course || participantData?.course || 'Computação',
+      period: fetchedProfile?.period || participantData?.period || null,
+      participantType: fetchedProfile?.participantType || fetchedProfile?.participant_type || participantData?.participantType || 'Aluno da UFU',
+      phone: fetchedProfile?.phone || participantData?.phone || '',
+      email: fetchedProfile?.email || participantData?.email || '',
+      linkedin: fetchedProfile?.linkedin || participantData?.linkedin || '',
+      instagram: fetchedProfile?.instagram || participantData?.instagram || '',
+      github: fetchedProfile?.github || participantData?.github || ''
+    } : null;
 
     if (result && result.success) {
       if (isUserQr) {
@@ -165,13 +197,7 @@ export default function Scanner() {
           message: 'Conexão realizada com sucesso!',
           points: 5,
           challenges: result.unlockedChallenges,
-          participant: {
-            name: participantName,
-            phone: participantPhone,
-            course: fetchedProfile?.course || participantData?.course || 'Computação',
-            period: fetchedProfile?.period || participantData?.period || null,
-            username: usernameToValidate
-          }
+          participant: consolidatedParticipant
         });
       } else if (isActivityQr) {
         setScanResult({
@@ -199,11 +225,7 @@ export default function Scanner() {
         type: isUserQr ? 'participant' : 'generic',
         title: 'Código já processado',
         message: 'Você já escaneou este código anteriormente.',
-        participant: isUserQr ? {
-          name: participantName,
-          phone: participantPhone,
-          course: fetchedProfile?.course || participantData?.course || 'Computação'
-        } : null
+        participant: consolidatedParticipant
       });
     }
 
@@ -226,9 +248,13 @@ export default function Scanner() {
           username: randomDbUser.username,
           name: randomDbUser.displayName || randomDbUser.firstName || randomDbUser.username,
           phone: randomDbUser.phone || '34998765432',
-          course: randomDbUser.course,
-          participantType: randomDbUser.participant_type || randomDbUser.participantType,
-          period: randomDbUser.period
+          course: randomDbUser.course || 'Sistemas de Informação',
+          participantType: randomDbUser.participant_type || randomDbUser.participantType || 'Aluno da UFU',
+          period: randomDbUser.period || 4,
+          avatarUrl: randomDbUser.avatarUrl || randomDbUser.photoURL || '',
+          linkedin: randomDbUser.linkedin || 'erick-raposo',
+          instagram: randomDbUser.instagram || '@erick.raposo',
+          github: randomDbUser.github || 'erickraposo'
         });
         handleScan(payload);
         return;
@@ -243,7 +269,11 @@ export default function Scanner() {
       phone: '(34) 99876-5432',
       course: 'Sistemas de Informação',
       participantType: 'Aluno da UFU',
-      period: 4
+      period: 4,
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      linkedin: 'lucassilva',
+      instagram: 'lucas.tech',
+      github: 'lucassilva'
     };
     handleScan(JSON.stringify(fallbackUser));
   };
@@ -801,68 +831,9 @@ export default function Scanner() {
               </div>
             </div>
 
-            {/* SE FOR PARTICIPANTE */}
+            {/* SE FOR PARTICIPANTE (KAN-95) */}
             {scanResult.participant && (
-              <div
-                style={{
-                  backgroundColor: '#0F141F',
-                  border: '1px solid #1E293B',
-                  borderRadius: '16px',
-                  padding: '14px 16px',
-                  marginBottom: '16px'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                  {/* Avatar Squircle com iniciais */}
-                  <div
-                    style={{
-                      width: '42px',
-                      height: '42px',
-                      borderRadius: '12px',
-                      backgroundColor: '#1E293B',
-                      border: '1px solid #334155',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#38BDF8',
-                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontWeight: 800,
-                      fontSize: '0.95rem',
-                      flexShrink: 0
-                    }}
-                  >
-                    {scanResult.participant.name?.substring(0, 2).toUpperCase() || 'TW'}
-                  </div>
-
-                  <div style={{ overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        fontSize: '0.96rem',
-                        fontWeight: 800,
-                        color: '#F8FAFC',
-                        fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}
-                    >
-                      {scanResult.participant.name}
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: '#94A3B8', marginTop: '1px' }}>
-                      {scanResult.participant.course}
-                      {scanResult.participant.period ? ` • ${scanResult.participant.period}º período` : ''}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Botão de Conexão WhatsApp */}
-                <WhatsAppButton
-                  phone={scanResult.participant.phone}
-                  participantName={scanResult.participant.name}
-                  companyName="TechWeek FACOM"
-                  fullWidth
-                />
-              </div>
+              <ParticipantCard participant={scanResult.participant} />
             )}
 
             {/* SE FOR ATIVIDADE */}

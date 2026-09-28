@@ -88,12 +88,16 @@ export async function resolveParticipantFromQr(rawData) {
     return {
       participantUid: parsedJson.uid || `temp_${Date.now()}`,
       name: parsedJson.name || parsedJson.username,
+      username: parsedJson.username || '',
       course: parsedJson.course || 'Computação',
       period: parsedJson.period || null,
       phone: parsedJson.phone || '',
       email: parsedJson.email || '',
       linkedin: parsedJson.linkedin || '',
-      participantType: parsedJson.participantType || 'Estudante'
+      instagram: parsedJson.instagram || '',
+      github: parsedJson.github || '',
+      participantType: parsedJson.participantType || 'Estudante',
+      avatarUrl: parsedJson.avatarUrl || parsedJson.photoURL || null
     };
   }
 
@@ -113,6 +117,7 @@ function formatParticipant(uid, data) {
   return {
     participantUid: uid,
     name,
+    username: data.username || '',
     firstName: data.firstName || name.split(' ')[0],
     email: data.email || '',
     phone: data.phone || '',
@@ -120,6 +125,7 @@ function formatParticipant(uid, data) {
     period: data.period || null,
     linkedin: data.linkedin || '',
     instagram: data.instagram || '',
+    github: data.github || '',
     participantType: data.participantType || data.participant_type || 'Aluno',
     avatarUrl: data.avatarUrl || data.photoURL || null
   };
