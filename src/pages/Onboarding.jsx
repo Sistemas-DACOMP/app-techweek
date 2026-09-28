@@ -78,7 +78,10 @@ export default function Onboarding() {
     if (step < 4) {
       setStep(step + 1);
     } else {
-      navigate('/');
+      try {
+        localStorage.setItem('facom_onboarding_completed', 'true');
+      } catch (_e) {}
+      navigate('/', { replace: true });
     }
   };
 
@@ -203,7 +206,7 @@ export default function Onboarding() {
         
         {/* Back Button */}
         <button 
-          onClick={() => step > 0 ? setStep(step - 1) : navigate(-1)} 
+          onClick={() => step > 0 ? setStep(step - 1) : navigate('/', { replace: true })} 
           style={{ position: 'absolute', top: '16px', left: '16px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer', zIndex: 10 }}
         >
           <ArrowLeft size={20} />

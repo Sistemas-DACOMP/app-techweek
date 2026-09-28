@@ -5,6 +5,7 @@ import Mascot from '../components/Mascot';
 import { Eye, EyeOff, Loader2, KeyRound, CheckCircle2, ArrowLeft, X } from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
 import { loginWithEmailAndPassword, sendPasswordReset } from '../lib/auth';
+import { getUserProfile } from '../lib/userService';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function Login() {
@@ -31,14 +32,22 @@ export default function Login() {
     setLoading(true);
 
     const result = await loginWithEmailAndPassword(email, password);
-    setLoading(false);
 
     if (!result.success) {
+      setLoading(false);
       setError(result.error);
       return;
     }
 
-    // Sucesso
+    // Aquece o cache do perfil antes da transição de tela para eliminar qualquer atraso visual
+    try {
+      const uid = result.user?.uid || result.data?.user?.uid;
+      if (uid) {
+        await getUserProfile(uid);
+      }
+    } catch (_e) {}
+
+    setLoading(false);
     localStorage.setItem('facom_logged_in', 'true');
     navigate('/');
   };

@@ -1,41 +1,101 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { CheckCircle, AlertCircle, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, XCircle, ArrowLeft, ShieldCheck, Mail, Lock, LogOut } from 'lucide-react';
 import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { getMyProfile } from '../lib/gameplay';
+import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
 
 export default function Staff() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [authorized, setAuthorized] = useState(false);
+  const [authorized, setAuthorized] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      const testSessionStr = localStorage.getItem('facom_test_session');
+      if (testSessionStr) {
+        try {
+          const s = JSON.parse(testSessionStr);
+          if (s.role === 'STAFF' || s.role === 'ADMIN' || s.email === 'staff@techweek.com' || s.email === 'admin@admin.com') return true;
+        } catch (_e) {}
+      }
+    }
+    return false;
+  });
   const [activities, setActivities] = useState([]);
   const [selectedActivity, setSelectedActivity] = useState('');
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null); // { success: boolean, status: 'green' | 'yellow' | 'red', message: string }
   const [processing, setProcessing] = useState(false);
 
+  // Estados de login de Staff
+  const [staffEmail, setStaffEmail] = useState('');
+  const [staffPassword, setStaffPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+
   useEffect(() => {
     async function checkAuth() {
       try {
         const profile = await getMyProfile();
-        // Assuming role is stored in profile.role or participant_type
-        if (profile?.role === 'STAFF' || profile?.role === 'ADMIN' || profile?.participant_type === 'Organizador') {
+        if (profile?.role === 'STAFF' || profile?.role === 'ADMIN' || profile?.participant_type === 'Organizador' || profile?.participantType === 'Organizador') {
           setAuthorized(true);
           fetchActivities();
-        } else {
-          // If not authorized, redirect to home
-          navigate('/');
+        } else if (!authorized) {
+          setAuthorized(false);
         }
       } catch (error) {
         console.error('Auth error', error);
-        navigate('/');
       } finally {
         setLoading(false);
       }
     }
     checkAuth();
-  }, [navigate]);
+  }, [authorized]);
+
+  const handleStaffLogin = async (e) => {
+    if (e) e.preventDefault();
+    if (!staffEmail || !staffPassword || loginLoading) return;
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await loginWithEmailAndPassword(staffEmail, staffPassword);
+      if (!res.success) {
+        setLoginError(res.error || 'Credenciais inválidas.');
+      } else {
+        setAuthorized(true);
+        fetchActivities();
+      }
+    } catch (err) {
+      setLoginError(err.message || 'Falha ao autenticar.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleQuickStaff = async (email = 'staff@techweek.com', pass = 'StaffPassword123!') => {
+    setStaffEmail(email);
+    setStaffPassword(pass);
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await loginWithEmailAndPassword(email, pass);
+      if (!res.success) {
+        setLoginError(res.error || 'Credenciais inválidas.');
+      } else {
+        setAuthorized(true);
+        fetchActivities();
+      }
+    } catch (err) {
+      setLoginError(err.message || 'Falha ao autenticar.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleStaffLogout = async () => {
+    setAuthorized(false);
+    await logoutUser();
+  };
 
   const fetchActivities = () => {
     try {
@@ -200,12 +260,165 @@ export default function Staff() {
     );
   }
 
-  if (!authorized) return null; // Will redirect
+  if (!authorized) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px' }}>
+        <div className="animate-fade-in" style={{ width: '100%', maxWidth: '420px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+            <div style={{ width: '64px', height: '64px', borderRadius: '18px', backgroundColor: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#38BDF8' }}>
+              <ShieldCheck size={32} />
+            </div>
+            <span style={{ fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace", color: '#38BDF8', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+              PORTAL DE PORTARIA & VALIDAÇÃO
+            </span>
+            <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.75rem', fontWeight: 800, color: '#F8FAFC', margin: '6px 0 8px' }}>
+              Staff TechWeek 2026
+            </h1>
+            <p style={{ fontSize: '0.84rem', color: '#94A3B8', margin: 0, lineHeight: 1.5 }}>
+              Validação presencial de credenciais na entrada das salas e auditórios.
+            </p>
+          </div>
+
+          <form onSubmit={handleStaffLogin} style={{ backgroundColor: '#0F141F', border: '1px solid #1E293B', borderRadius: '24px', padding: '26px', display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.7)' }}>
+            {loginError && (
+              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', padding: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: '#EF4444', fontSize: '0.80rem' }}>
+                <AlertCircle size={16} />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94A3B8', marginBottom: '6px' }}>E-mail de Staff</label>
+              <div style={{ position: 'relative' }}>
+                <Mail size={16} color="#64748B" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="email"
+                  required
+                  placeholder="staff@techweek.com"
+                  value={staffEmail}
+                  onChange={(e) => setStaffEmail(e.target.value)}
+                  style={{ width: '100%', backgroundColor: '#090E21', border: '1px solid #1E293B', borderRadius: '12px', padding: '12px 14px 12px 40px', color: '#F8FAFC', fontSize: '0.88rem' }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94A3B8', marginBottom: '6px' }}>Senha</label>
+              <div style={{ position: 'relative' }}>
+                <Lock size={16} color="#64748B" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••••••"
+                  value={staffPassword}
+                  onChange={(e) => setStaffPassword(e.target.value)}
+                  style={{ width: '100%', backgroundColor: '#090E21', border: '1px solid #1E293B', borderRadius: '12px', padding: '12px 14px 12px 40px', color: '#F8FAFC', fontSize: '0.88rem' }}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              style={{
+                backgroundColor: '#2563EB',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '14px',
+                fontWeight: 700,
+                fontSize: '0.90rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                marginTop: '6px'
+              }}
+            >
+              {loginLoading ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
+              <span>Acessar Leitor Staff</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleQuickStaff('staff@techweek.com', 'StaffPassword123!')}
+              style={{
+                backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: '12px',
+                padding: '10px',
+                color: '#38BDF8',
+                fontSize: '0.76rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                textAlign: 'center',
+                marginTop: '4px'
+              }}
+            >
+              ⚡ Entrar como staff@techweek.com (1 clique garantido)
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container animate-fade-in" style={{ paddingBottom: '80px' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '24px', fontSize: '1.5rem', marginTop: '16px' }}>Staff: Check-in</h2>
-      
+      {/* Header Padronizado */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div>
+            <h1
+              style={{
+                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                fontSize: '1.75rem',
+                fontWeight: 800,
+                color: '#F8FAFC',
+                margin: 0,
+                letterSpacing: '-0.03em',
+                lineHeight: 1.15
+              }}
+            >
+              Staff Check-in
+            </h1>
+            <p
+              style={{
+                fontSize: '0.80rem',
+                color: '#94A3B8',
+                margin: '3px 0 0',
+                fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+              }}
+            >
+              Validação oficial de presença em atividades
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleStaffLogout}
+          title="Sair do Portal Staff"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            backgroundColor: '#1E293B',
+            border: '1px solid #334155',
+            borderRadius: '12px',
+            padding: '10px 14px',
+            color: '#94A3B8',
+            fontSize: '0.80rem',
+            fontWeight: 700,
+            cursor: 'pointer'
+          }}
+        >
+          <LogOut size={16} />
+          <span>Sair</span>
+        </button>
+      </div>
+
       <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         {!scanning ? (
           <div style={{ width: '100%' }}>

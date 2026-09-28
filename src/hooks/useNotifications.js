@@ -11,6 +11,7 @@ import {
 } from '../lib/notifications';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { onAuthChange } from '../lib/auth';
 
 export function useNotifications() {
   const [notifications, setNotifications] = useState(() => getNotifications());
@@ -49,43 +50,70 @@ export function useNotifications() {
     };
   }, [syncState]);
   useEffect(() => {
-    const announcementsRef = collection(db, 'announcements');
+    let unsubscribeAnnouncements = () => {};
 
-    const unsubscribe = onSnapshot(
-      announcementsRef,
-      (snapshot) => {
-        const list = snapshot.docs.map((document) => {
-          const data = document.data();
-
-          let timestamp = new Date().toISOString();
-
-          if (data.createdAt?.toDate) {
-            timestamp = data.createdAt.toDate().toISOString();
-          } else if (data.createdAt) {
-            timestamp = new Date(data.createdAt).toISOString();
-          }
-
-          return {
-            id: document.id,
-            title: data.title || 'Comunicado',
-            message: data.message || '',
-            type: 'system',
-            priority: data.priority || 'NORMAL',
-            timestamp,
-            read: false,
-            source: 'announcement'
-          };
-        });
-
-        list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setAnnouncements(list);
-      },
-      (error) => {
-        console.error('Erro ao carregar announcements:', error);
+    const unsubAuth = onAuthChange((currentUser) => {
+      // Limpa listener anterior
+      if (typeof unsubscribeAnnouncements === 'function') {
+        unsubscribeAnnouncements();
+        unsubscribeAnnouncements = () => {};
       }
-    );
 
-    return () => unsubscribe();
+      if (!currentUser) {
+        setAnnouncements([]);
+        return;
+      }
+
+      try {
+        const announcementsRef = collection(db, 'announcements');
+
+        unsubscribeAnnouncements = onSnapshot(
+          announcementsRef,
+          (snapshot) => {
+            const list = snapshot.docs.map((document) => {
+              const data = document.data();
+
+              let timestamp = new Date().toISOString();
+
+              if (data.createdAt?.toDate) {
+                timestamp = data.createdAt.toDate().toISOString();
+              } else if (data.createdAt) {
+                timestamp = new Date(data.createdAt).toISOString();
+              }
+
+              return {
+                id: document.id,
+                title: data.title || 'Comunicado',
+                message: data.message || '',
+                type: 'system',
+                priority: data.priority || 'NORMAL',
+                timestamp,
+                read: false,
+                source: 'announcement'
+              };
+            });
+
+            list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            setAnnouncements(list);
+          },
+          (error) => {
+            if (error?.code !== 'permission-denied') {
+              console.warn('Aviso ao sincronizar announcements:', error?.message || error);
+            }
+            setAnnouncements([]);
+          }
+        );
+      } catch (err) {
+        console.warn('Aviso ao inicializar listener de announcements:', err);
+      }
+    });
+
+    return () => {
+      unsubAuth();
+      if (typeof unsubscribeAnnouncements === 'function') {
+        unsubscribeAnnouncements();
+      }
+    };
   }, []);
 
   const markAsRead = useCallback((id) => {

@@ -30,6 +30,8 @@ if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
   } catch (err) {
     console.warn('⚠️ Erro ao conectar nos emuladores locais do Firebase:', err);
   }
+} else {
+  console.log('☁️ Conectado ao Firebase Cloud oficial:', firebaseConfig.projectId);
 }
 
 export default app;

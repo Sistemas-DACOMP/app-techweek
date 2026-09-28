@@ -10,10 +10,24 @@ import {
   formatActivityType,
   DEFAULT_ACTIVITIES
 } from './activityService';
-import * as apiModule from './api';
+import { apiRequest } from './api';
 
 vi.mock('./firebase', () => ({
-  db: { mock: 'db' }
+  db: { mock: 'db' },
+  auth: {
+    currentUser: { uid: 'test_user_id' }
+  }
+}));
+
+vi.mock('./userService', () => ({
+  getCachedUserProfile: vi.fn().mockReturnValue({
+    hasSymplaTicket: true,
+    role: 'PARTICIPANT'
+  })
+}));
+
+vi.mock('./api', () => ({
+  apiRequest: vi.fn()
 }));
 
 vi.mock('firebase/firestore', () => {
@@ -22,9 +36,13 @@ vi.mock('firebase/firestore', () => {
     query: vi.fn((coll, ...clauses) => ({ coll, clauses })),
     where: vi.fn((field, op, val) => ({ field, op, val })),
     onSnapshot: vi.fn((ref, onNext, _onError) => {
-      // Retorna uma função mock de unsubscribe
       return vi.fn();
-    })
+    }),
+    doc: vi.fn((_db, coll, id) => ({ path: `${coll}/${id}`, id })),
+    getDoc: vi.fn().mockResolvedValue({ exists: () => false, data: () => null }),
+    setDoc: vi.fn().mockResolvedValue(),
+    deleteDoc: vi.fn().mockResolvedValue(),
+    updateDoc: vi.fn().mockResolvedValue()
   };
 });
 
@@ -100,16 +118,25 @@ describe('activityService (KAN-50)', () => {
 
   describe('reserveActivity', () => {
     it('deve chamar POST /activities/:id/reserve via apiRequest', async () => {
-      const apiSpy = vi.spyOn(apiModule, 'apiRequest').mockResolvedValueOnce({
+      vi.mocked(apiRequest).mockResolvedValueOnce({
         status: 'CONFIRMED',
         position: null
       });
 
       const res = await reserveActivity('palestra_abertura');
-      expect(apiSpy).toHaveBeenCalledWith('/activities/palestra_abertura/reserve', {
+      expect(apiRequest).toHaveBeenCalledWith('/activities/palestra_abertura/reserve', {
         method: 'POST'
       });
       expect(res.status).toBe('CONFIRMED');
+    });
+
+    it('deve acionar fallback resiliente no Firestore se apiRequest falhar com Failed to fetch', async () => {
+      vi.mocked(apiRequest).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+      const res = await reserveActivity('palestra_abertura');
+      expect(res.success).toBe(true);
+      expect(res.status).toBe('CONFIRMED');
+      expect(res.bookingId).toBe('test_user_id_palestra_abertura');
     });
 
     it('deve rejeitar se activityId não for fornecido', async () => {
@@ -119,14 +146,14 @@ describe('activityService (KAN-50)', () => {
 
   describe('checkoutDoubleCheck', () => {
     it('deve chamar POST /checkin/checkout via apiRequest com token', async () => {
-      const apiSpy = vi.spyOn(apiModule, 'apiRequest').mockResolvedValueOnce({
+      vi.mocked(apiRequest).mockResolvedValueOnce({
         success: true,
         status: 'COMPLETED',
         pointsCredited: 20
       });
 
       const res = await checkoutDoubleCheck('signed_token_123');
-      expect(apiSpy).toHaveBeenCalledWith('/checkin/checkout', {
+      expect(apiRequest).toHaveBeenCalledWith('/checkin/checkout', {
         method: 'POST',
         body: JSON.stringify({ token: 'signed_token_123' })
       });
