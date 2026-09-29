@@ -42,8 +42,11 @@ export default function Sponsor() {
   const [activeParticipant, setActiveParticipant] = useState(null);
   const [capturedLeads, setCapturedLeads] = useState([]);
   const [toastMessage, setToastMessage] = useState(null);
+  const [activeCompanyId, setActiveCompanyId] = useState(
+    userProfile?.companyId || userProfile?.empresa || 'kanastra'
+  );
 
-  const sponsorName = userProfile?.companyName || userProfile?.empresa || userProfile?.displayName || 'Empresa Patrocinadora';
+  const sponsorName = userProfile?.companyName || userProfile?.empresa || (activeCompanyId ? activeCompanyId.toUpperCase() : 'Empresa Patrocinadora');
 
   // Iniciar scanner contínuo quando a página estiver com acesso e modal fechado
   useEffect(() => {
@@ -359,6 +362,33 @@ export default function Sponsor() {
         </div>
       </div>
 
+      {/* Seletor de Estande para Testes / ADMIN */}
+      {(devSponsorOverride || actualRole === 'ADMIN') && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '16px' }}>
+          <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600, whiteSpace: 'nowrap' }}>Estande Ativo:</span>
+          {['kanastra', 'bayer', 'aimirim', 'bip', 'hyperflow'].map(comp => (
+            <button
+              key={comp}
+              type="button"
+              onClick={() => setActiveCompanyId(comp)}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '8px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                border: activeCompanyId === comp ? '1px solid #38BDF8' : '1px solid #334155',
+                backgroundColor: activeCompanyId === comp ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                color: activeCompanyId === comp ? '#38BDF8' : '#94A3B8',
+                textTransform: 'capitalize'
+              }}
+            >
+              {comp}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Metric Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
         <div className="glass-panel" style={{ padding: '14px', textAlign: 'center' }}>
@@ -530,7 +560,11 @@ export default function Sponsor() {
       {activeParticipant && (
         <SponsorLeadModal
           participant={activeParticipant}
-          sponsorProfile={userProfile}
+          sponsorProfile={{
+            ...userProfile,
+            companyId: userProfile?.companyId || activeCompanyId,
+            companyName: userProfile?.companyName || userProfile?.empresa || (activeCompanyId ? activeCompanyId.toUpperCase() : sponsorName)
+          }}
           onClose={() => {
             setActiveParticipant(null);
             setTimeout(() => startScanner(), 300);

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
 import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Loader2, Trash2, QrCode, Sparkles } from 'lucide-react';
 import { getMyProfile, uploadMissionPhoto } from '../lib/gameplay';
@@ -10,11 +10,31 @@ import { validateMissionPhoto } from '../lib/validators';
 import FeedbackModal from '../components/FeedbackModal';
 import SymplaRequirementModal from '../components/SymplaRequirementModal';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
+import PassportTab from '../components/PassportTab';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function Challenges() {
   const { completedChallenges, completeChallenge, hasCompletedChallenge, hasSymplaTicket } = useUser();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const searchParams = new URLSearchParams(window?.location?.search || '');
+      return searchParams.get('tab') === 'passport' ? 'passport' : 'missions';
+    } catch {
+      return 'missions';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const searchParams = new URLSearchParams(location?.search || '');
+      const tab = searchParams.get('tab');
+      if (tab === 'passport') setActiveTab('passport');
+      else if (tab === 'missions') setActiveTab('missions');
+    } catch {}
+  }, [location?.search]);
+
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
   const [selectedAutoChallenge, setSelectedAutoChallenge] = useState(null);
   useScrollLock(!!activeManualChallenge || !!selectedAutoChallenge);
@@ -56,6 +76,8 @@ export default function Challenges() {
         const p = await getUserProfile(user.uid);
         if (p) {
           setProfile({
+            ...p,
+            uid: user.uid,
             firstName: p.firstName || p.displayName?.split(' ')[0] || p.username || fallbackName,
             avatarUrl: p.avatarUrl || p.photoURL || fallbackAvatar
           });
@@ -324,126 +346,192 @@ export default function Challenges() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {!hasSymplaTicket && (
-          <div
-            style={{
-              padding: '16px 18px',
-              borderRadius: '16px',
-              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(161, 98, 7, 0.08))',
-              border: '1px solid rgba(234, 179, 8, 0.35)',
-              color: '#fef08a',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', fontSize: '0.95rem' }}>
-              <span>⚠️</span>
-              <span>Ingresso Sympla Pendente</span>
-            </div>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.4' }}>
-              Vincule seu ingresso oficial do Sympla para desbloquear o envio de missões, fotos e acumular pontos no ranking da TechWeek.
-            </p>
-            <button
-              onClick={() => navigate('/profile')}
+      {/* Abas de Navegação: [ Missões ] | [ Passaporte ] */}
+      <div
+        style={{
+          display: 'flex',
+          backgroundColor: '#0F141F',
+          padding: '4px',
+          borderRadius: '14px',
+          border: '1px solid #1E293B',
+          marginBottom: '20px',
+          gap: '6px'
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab('missions')}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            borderRadius: '10px',
+            border: 'none',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            backgroundColor: activeTab === 'missions' ? '#2563EB' : 'transparent',
+            color: activeTab === 'missions' ? '#FFFFFF' : '#94A3B8',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px'
+          }}
+        >
+          <Sparkles size={16} />
+          <span>Missões</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('passport')}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            borderRadius: '10px',
+            border: 'none',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            background: activeTab === 'passport' ? 'linear-gradient(135deg, #D97706 0%, #B45309 100%)' : 'transparent',
+            color: activeTab === 'passport' ? '#FFFFFF' : '#94A3B8',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            boxShadow: activeTab === 'passport' ? '0 4px 12px rgba(217, 119, 6, 0.35)' : 'none'
+          }}
+        >
+          <span>🎟️</span>
+          <span>Passaporte</span>
+        </button>
+      </div>
+
+      {activeTab === 'passport' ? (
+        <PassportTab userProfile={profile} />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {!hasSymplaTicket && (
+            <div
               style={{
-                alignSelf: 'flex-start',
-                marginTop: '4px',
-                padding: '6px 14px',
-                borderRadius: '10px',
-                background: '#eab308',
-                color: '#0f172a',
-                border: 'none',
-                fontWeight: '700',
-                fontSize: '0.8rem',
-                cursor: 'pointer'
+                padding: '16px 18px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(161, 98, 7, 0.08))',
+                border: '1px solid rgba(234, 179, 8, 0.35)',
+                color: '#fef08a',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
               }}
             >
-              Vincular Ingresso no Perfil →
-            </button>
-          </div>
-        )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', fontSize: '0.95rem' }}>
+                <span>⚠️</span>
+                <span>Ingresso Sympla Pendente</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.4' }}>
+                Vincule seu ingresso oficial do Sympla para desbloquear o envio de missões, fotos e acumular pontos no ranking da TechWeek.
+              </p>
+              <button
+                onClick={() => navigate('/profile')}
+                style={{
+                  alignSelf: 'flex-start',
+                  marginTop: '4px',
+                  padding: '6px 14px',
+                  borderRadius: '10px',
+                  background: '#eab308',
+                  color: '#0f172a',
+                  border: 'none',
+                  fontWeight: '700',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Vincular Ingresso no Perfil →
+              </button>
+            </div>
+          )}
 
-        {challengesList.map((challenge, index) => {
-          const isCompleted = (hasCompletedChallenge && hasCompletedChallenge(challenge.id)) || completedChallenges.includes(challenge.id);
-          const isHighlighted = challenge.id === 'instagram_story' && !isCompleted;
-          const isSecret = challenge.isSecret && !isCompleted;
-          const IconComponent = challenge.icon || MapPin;
+          {challengesList.map((challenge, index) => {
+            const isCompleted = (hasCompletedChallenge && hasCompletedChallenge(challenge.id)) || completedChallenges.includes(challenge.id);
+            const isHighlighted = challenge.id === 'instagram_story' && !isCompleted;
+            const isSecret = challenge.isSecret && !isCompleted;
+            const IconComponent = challenge.icon || MapPin;
 
-          return (
-            <div 
-              key={challenge.id} 
-              className={`card ${isHighlighted || isSecret ? 'card-highlight' : ''}`} 
-              onClick={() => !isCompleted && handleSimulateChallenge(challenge)}
-              style={{ 
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                opacity: isCompleted ? 0.78 : 1, 
-                backgroundColor: isSecret ? 'rgba(37, 99, 235, 0.12)' : '#0F141F', 
-                borderColor: isCompleted ? 'rgba(16, 185, 129, 0.3)' : isSecret ? 'rgba(59, 130, 246, 0.35)' : '#1E293B',
-                borderRadius: '14px',
-                cursor: isCompleted ? 'default' : 'pointer'
-              }}
-            >
-              <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                <div style={{ background: isCompleted ? 'rgba(16, 185, 129, 0.15)' : isHighlighted || isSecret ? 'rgba(37, 99, 235, 0.25)' : 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '50%', color: isCompleted ? '#10b981' : isHighlighted || isSecret ? '#93C5FD' : '#3B82F6' }}>
-                  <IconComponent size={24} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '1rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px', color: 'white' }}>
-                    {challenge.name}
-                    {isCompleted && <CheckCircle size={16} color="#10b981" />}
-                  </h3>
-                  <p style={{ fontSize: '0.75rem', color: isHighlighted || isSecret ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)' }}>{challenge.description}</p>
-                  <div style={{ marginTop: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: isCompleted ? '#10b981' : isHighlighted || isSecret ? '#93C5FD' : '#3B82F6' }}>
-                    {isCompleted ? `✓ Concluída (+${challenge.points} pts)` : `+${challenge.points} pts`}
+            return (
+              <div 
+                key={challenge.id} 
+                className={`card ${isHighlighted || isSecret ? 'card-highlight' : ''}`} 
+                onClick={() => !isCompleted && handleSimulateChallenge(challenge)}
+                style={{ 
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                  opacity: isCompleted ? 0.78 : 1, 
+                  backgroundColor: isSecret ? 'rgba(37, 99, 235, 0.12)' : '#0F141F', 
+                  borderColor: isCompleted ? 'rgba(16, 185, 129, 0.3)' : isSecret ? 'rgba(59, 130, 246, 0.35)' : '#1E293B',
+                  borderRadius: '14px',
+                  cursor: isCompleted ? 'default' : 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                  <div style={{ background: isCompleted ? 'rgba(16, 185, 129, 0.15)' : isHighlighted || isSecret ? 'rgba(37, 99, 235, 0.25)' : 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '50%', color: isCompleted ? '#10b981' : isHighlighted || isSecret ? '#93C5FD' : '#3B82F6' }}>
+                    <IconComponent size={24} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px', color: 'white' }}>
+                      {challenge.name}
+                      {isCompleted && <CheckCircle size={16} color="#10b981" />}
+                    </h3>
+                    <p style={{ fontSize: '0.75rem', color: isHighlighted || isSecret ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)' }}>{challenge.description}</p>
+                    <div style={{ marginTop: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: isCompleted ? '#10b981' : isHighlighted || isSecret ? '#93C5FD' : '#3B82F6' }}>
+                      {isCompleted ? `✓ Concluída (+${challenge.points} pts)` : `+${challenge.points} pts`}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {!isCompleted ? (
-                <button
-                  style={{
-                    padding: '8px 12px',
-                    fontSize: '0.75rem',
-                    background: '#2563EB',
-                    color: 'white',
-                    border: '1px solid #3B82F6',
-                    borderRadius: '8px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap'
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSimulateChallenge(challenge);
-                  }}
-                >
-                  {challenge.isAction ? 'Começar' : challenge.type === 'auto' ? 'Escanear' : challenge.type === 'manual' ? 'Responder' : 'Check-in'}
-                </button>
-              ) : (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    color: '#10b981',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    padding: '6px 10px',
-                    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(16, 185, 129, 0.28)'
-                  }}
-                >
-                  <CheckCircle size={14} color="#10b981" />
-                  <span>Feito</span>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                {!isCompleted ? (
+                  <button
+                    style={{
+                      padding: '8px 12px',
+                      fontSize: '0.75rem',
+                      background: '#2563EB',
+                      color: 'white',
+                      border: '1px solid #3B82F6',
+                      borderRadius: '8px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSimulateChallenge(challenge);
+                    }}
+                  >
+                    {challenge.isAction ? 'Começar' : challenge.type === 'auto' ? 'Escanear' : challenge.type === 'manual' ? 'Responder' : 'Check-in'}
+                  </button>
+                ) : (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      color: '#10b981',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      padding: '6px 10px',
+                      backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(16, 185, 129, 0.28)'
+                    }}
+                  >
+                    <CheckCircle size={14} color="#10b981" />
+                    <span>Feito</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {activeManualChallenge && typeof document !== 'undefined' && createPortal(
         <div 

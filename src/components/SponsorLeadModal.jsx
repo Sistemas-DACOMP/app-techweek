@@ -51,7 +51,8 @@ export default function SponsorLeadModal({
       const response = await submitLead({
         participantUid: participant.participantUid,
         notes,
-        rating: rating > 0 ? rating : undefined
+        rating: rating > 0 ? rating : undefined,
+        companyId: sponsorProfile?.companyId || sponsorProfile?.empresa || sponsorProfile?.companyName
       });
 
       const leadInfo = response?.lead || {
