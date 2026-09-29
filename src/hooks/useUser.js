@@ -93,6 +93,12 @@ export function useUser() {
   const hasScannedCode = (code) => scannedCodes.includes(code);
   const hasCompletedChallenge = (challengeId) => {
     if (!challengeId) return false;
+    if (challengeId === 'sponsor_colecao' || challengeId === 'passport_complete') {
+      const visitedCount = Object.keys(profile?.visitedSponsors || {}).length;
+      if (profile?.goldenTicketAwarded || visitedCount >= 5) {
+        return true;
+      }
+    }
     return (
       completedChallenges.includes(challengeId) ||
       pointEvents.some(event => {

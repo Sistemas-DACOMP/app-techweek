@@ -621,7 +621,7 @@ export default function Challenges() {
                       handleSimulateChallenge(challenge);
                     }}
                   >
-                    {challenge.id === 'instagram_story' ? 'Criar Story' : challenge.isAction ? 'Começar' : (challenge.triggerMode === 'quiz' ? 'Fazer Quiz' : challenge.triggerMode === 'secret' ? 'Desvendar' : challenge.triggerMode === 'auto' || challenge.type === 'auto' ? 'Escanear' : 'Responder')}
+                    {challenge.id === 'instagram_story' ? 'Criar Story' : challenge.isAction ? 'Começar' : (challenge.triggerMode === 'quiz' ? 'Fazer Quiz' : challenge.triggerMode === 'secret' ? 'Desvendar' : challenge.triggerMode === 'auto' || challenge.type === 'auto' ? ((challenge.autoConfig?.eventType === 'passport_complete' || challenge.id?.includes('passport') || challenge.id === 'sponsor_colecao') ? 'Ver Passaporte' : 'Escanear') : 'Responder')}
                   </button>
                 ) : (
                   <div
@@ -987,10 +987,9 @@ export default function Challenges() {
                     boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
                   }}
                 >
-                  <Sparkles size={18} />
                   <span>Ver Grade de Palestras</span>
                 </button>
-              ) : (selectedAutoChallenge.autoConfig?.eventType === 'passport_complete' || selectedAutoChallenge.id?.includes('passport')) ? (
+              ) : (selectedAutoChallenge.autoConfig?.eventType === 'passport_complete' || selectedAutoChallenge.id?.includes('passport') || selectedAutoChallenge.id === 'sponsor_colecao') ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -1009,11 +1008,9 @@ export default function Challenges() {
                     borderRadius: '12px',
                     fontWeight: 700,
                     fontSize: '0.88rem',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                    cursor: 'pointer'
                   }}
                 >
-                  <Sparkles size={18} />
                   <span>Ver Passaporte de Stands</span>
                 </button>
               ) : (
