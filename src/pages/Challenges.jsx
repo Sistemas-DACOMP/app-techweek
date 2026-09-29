@@ -2,11 +2,18 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
-import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Loader2, Trash2, QrCode, Sparkles } from 'lucide-react';
+import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Loader2, Trash2, QrCode, Sparkles, Zap, HelpCircle } from 'lucide-react';
 import { getMyProfile, uploadMissionPhoto } from '../lib/gameplay';
 import { onAuthChange } from '../lib/auth';
 import { getUserProfile, getCachedUserProfile } from '../lib/userService';
 import { validateMissionPhoto } from '../lib/validators';
+import { 
+  subscribeToMissions, 
+  DEFAULT_MISSIONS, 
+  validateSecretWord, 
+  validateQuizAnswer, 
+  isFlashMissionActive 
+} from '../lib/missionService';
 import FeedbackModal from '../components/FeedbackModal';
 import SymplaRequirementModal from '../components/SymplaRequirementModal';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
@@ -90,72 +97,60 @@ export default function Challenges() {
     return () => unsubscribe();
   }, []);
 
-  const challengesList = [
-    {
-      id: 'instagram_story',
-      name: 'Post no Stories',
-      description: 'Abra a câmera oficial, tire ou envie uma foto com a moldura TechWeek e compartilhe.',
-      points: 50,
-      icon: Camera,
-      type: 'action',
-      isAction: true,
-      fields: [
-        { id: 'photo', type: 'photo', label: 'Envie a foto ou print do seu Story' }
-      ]
-    },
-    { id: 'sponsor_visit', name: 'Conheça Kanastra', description: 'Visite o stand e escaneie o QR Code oficial.', points: 15, icon: MapPin, type: 'auto' },
-    {
-      id: 'sponsor_vaga', name: 'De Olho na Vaga', description: 'Converse com alguém sobre oportunidades para estudantes.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'company', type: 'select', label: 'Qual empresa foi?', options: ['Levty', 'Kanastra', 'Sankhya', 'Neospace', 'Sebrae', 'Outra'] }
-      ]
-    },
-    {
-      id: 'sponsor_tecnologia', name: 'Descubra a Tecnologia', description: 'Pergunte qual tecnologia está transformando o trabalho da empresa.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'company', type: 'select', label: 'Qual empresa foi?', options: ['Levty', 'Kanastra', 'Sankhya', 'Neospace', 'Sebrae', 'Outra'] },
-        { id: 'response', type: 'textarea', label: 'Qual tecnologia eles usam?' }
-      ]
-    },
-    {
-      id: 'sponsor_colecao', name: 'Colecione Patrocinadores', description: 'Complete seu passaporte visitando todos os stands.', points: 50, icon: Camera, type: 'manual', fields: [
-        { id: 'photo', type: 'photo', label: 'Tire uma foto do cartão completo' }
-      ]
-    },
-    {
-      id: 'secret_password', name: 'Missão Secreta', description: 'Descubra a palavra-chave escondida no stand da Kanastra.', points: 30, icon: Lock, type: 'manual', isSecret: true, fields: [
-        { id: 'password', type: 'password', label: 'Qual a palavra-chave?' }
-      ]
-    },
-    { id: 'secret_qr', name: 'Caça ao QR Code', description: 'Encontre o QR Code escondido antes que termine.', points: 40, icon: Search, type: 'auto', isSecret: true },
+  // Inscrição em tempo real de missões dinâmicas (KAN-104)
+  const [missions, setMissions] = useState(DEFAULT_MISSIONS);
+  const [activeFlashCountdown, setActiveFlashCountdown] = useState(null);
 
-    { id: 'network_course', name: 'Outro Curso', description: 'Conecte-se com alguém de um curso diferente.', points: 15, icon: Users, type: 'auto' },
-    { id: 'network_type', name: 'Fora da UFU', description: 'Encontre alguém de outra instituição ou empresa.', points: 15, icon: Users, type: 'auto' },
-    { id: 'network_first', name: 'Primeira Conexão', description: 'Faça sua primeira conexão na TechWeek.', points: 10, icon: Users, type: 'auto' },
-    { id: 'network_period', name: 'Calouro na Área', description: 'Conecte-se com alguém do primeiro período.', points: 15, icon: Users, type: 'auto' },
-    {
-      id: 'network_career', name: 'Sua Área', description: 'Encontre alguém da área que quer seguir.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-        { id: 'prompt2', type: 'textarea', label: 'Qual foi o 1º passo dela na carreira?' }
-      ]
-    },
-    {
-      id: 'network_connect_two', name: 'Conector', description: 'Apresente duas pessoas que devem se conhecer.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da 1ª pessoa?' },
-        { id: 'prompt2', type: 'text', label: 'Qual o @/user da 2ª pessoa?' }
-      ]
-    },
-    {
-      id: 'network_past_edition', name: 'Veterano', description: 'Encontre alguém de edições passadas.', points: 15, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-        { id: 'prompt2', type: 'textarea', label: 'Qual foi a melhor experiência dela?' }
-      ]
-    },
-    {
-      id: 'network_first_edition', name: 'Novato', description: 'Encontre alguém novato e mostre o app.', points: 15, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-        { id: 'prompt2', type: 'textarea', label: 'O que você mostrou para ela?' }
-      ]
+  useEffect(() => {
+    const unsub = subscribeToMissions((list) => {
+      setMissions(list && list.length > 0 ? list : DEFAULT_MISSIONS);
+    });
+    return () => unsub();
+  }, []);
+
+  // Encontra missão relâmpago ativa
+  const activeFlashMission = missions.find(m => isFlashMissionActive(m));
+
+  useEffect(() => {
+    if (!activeFlashMission?.flashConfig?.expiresAt) {
+      setActiveFlashCountdown(null);
+      return;
     }
-  ];
+
+    const interval = setInterval(() => {
+      const exp = activeFlashMission.flashConfig.expiresAt.toDate 
+        ? activeFlashMission.flashConfig.expiresAt.toDate() 
+        : new Date(activeFlashMission.flashConfig.expiresAt);
+      const diffMs = exp.getTime() - Date.now();
+      if (diffMs <= 0) {
+        setActiveFlashCountdown('00:00');
+        clearInterval(interval);
+      } else {
+        const mins = Math.floor(diffMs / 60000);
+        const secs = Math.floor((diffMs % 60000) / 1000);
+        setActiveFlashCountdown(`${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeFlashMission]);
+
+  const getMissionIcon = (iconName) => {
+    if (typeof iconName === 'object' || typeof iconName === 'function') return iconName;
+    switch (iconName) {
+      case 'Camera': return Camera;
+      case 'MapPin': return MapPin;
+      case 'Users': return Users;
+      case 'Lock': return Lock;
+      case 'Search': return Search;
+      case 'MessageCircle': return MessageCircle;
+      case 'Zap': return Zap;
+      case 'HelpCircle': return HelpCircle;
+      case 'Sparkles':
+      default:
+        return Sparkles;
+    }
+  };
 
   const handleSimulateChallenge = async (challenge) => {
     if (!hasSymplaTicket) {
@@ -168,7 +163,13 @@ export default function Challenges() {
       return;
     }
 
-    if (challenge.type === 'manual') {
+    // Modal de preenchimento manual (formulários, quiz, segredo)
+    if (challenge.triggerMode === 'form' || 
+        challenge.triggerMode === 'secret' || 
+        challenge.triggerMode === 'quiz' || 
+        challenge.type === 'manual' || 
+        challenge.isSecret || 
+        challenge.quizConfig) {
       setActiveManualChallenge(challenge);
       setManualForm({});
       setPhotoFiles({});
@@ -176,7 +177,7 @@ export default function Challenges() {
       return;
     }
 
-    if (challenge.type === 'auto') {
+    if (challenge.type === 'auto' || challenge.triggerMode === 'auto') {
       setSelectedAutoChallenge(challenge);
       return;
     }
@@ -186,7 +187,7 @@ export default function Challenges() {
       setFeedback({
         type: 'success',
         title: 'Desafio Concluído! 🎉',
-        message: `Parabéns! Você completou "${challenge.name}" e pontuou com sucesso.`,
+        message: `Parabéns! Você completou "${challenge.title || challenge.name}" e pontuou com sucesso.`,
         points: (res && res.points) || challenge.points
       });
     } else if (res && res.alreadyCompleted) {
@@ -208,13 +209,29 @@ export default function Challenges() {
     e.preventDefault();
     if (!activeManualChallenge || isSubmitting) return;
 
-    if (activeManualChallenge.id === 'secret_password') {
-      const pass = manualForm['password'];
-      if (!pass || pass.trim().toUpperCase() !== 'OPORTUNIDADES') {
+    // Validação de palavra secreta
+    if (activeManualChallenge.triggerMode === 'secret' || activeManualChallenge.isSecret || activeManualChallenge.id === 'secret_password') {
+      const pass = manualForm['password'] || manualForm['secretWord'];
+      const expected = activeManualChallenge.secretConfig?.secretWord || 'OPORTUNIDADES';
+      if (!validateSecretWord(pass, expected)) {
         setFeedback({
           type: 'warning',
           title: 'Palavra-chave Incorreta',
           message: 'A palavra-chave inserida não está certa. Continue procurando pelos stands!'
+        });
+        return;
+      }
+    }
+
+    // Validação de quiz
+    if (activeManualChallenge.triggerMode === 'quiz' && activeManualChallenge.quizConfig) {
+      const selectedIndex = manualForm['quizAnswer'];
+      const correctIndex = activeManualChallenge.quizConfig.correctOptionIndex;
+      if (!validateQuizAnswer(selectedIndex, correctIndex)) {
+        setFeedback({
+          type: 'warning',
+          title: 'Resposta Incorreta',
+          message: 'Ops! A alternativa selecionada não está correta. Revise com o stand e tente novamente!'
         });
         return;
       }
@@ -254,13 +271,12 @@ export default function Challenges() {
       }
 
       // Respostas da missão manual vão como metadata do evento de pontos
-      // (REG-MISSION-001) em vez de apenas no estado da página
       const res = await completeChallenge(activeManualChallenge.id, activeManualChallenge.points, finalMetadata);
       if (res && (res.success || res === true)) {
         setFeedback({
           type: 'success',
           title: 'Missão Concluída! 🎉',
-          message: `Você cumpriu a missão "${activeManualChallenge.name}" com sucesso!`,
+          message: `Você cumpriu a missão "${activeManualChallenge.title || activeManualChallenge.name}" com sucesso!`,
           points: (res && res.points) || activeManualChallenge.points
         });
         setActiveManualChallenge(null);
@@ -455,11 +471,73 @@ export default function Challenges() {
             </div>
           )}
 
-          {challengesList.map((challenge, index) => {
+          {/* BANNER DE MISSÃO RELÂMPAGO AO VIVO (KAN-104) */}
+          {activeFlashMission && isFlashMissionActive(activeFlashMission) && (
+            <div style={{
+              margin: '6px 0 16px',
+              padding: '16px 18px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(180, 83, 9, 0.2) 100%)',
+              border: '1px solid #F59E0B',
+              boxShadow: '0 8px 24px rgba(245, 158, 11, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '12px', backgroundColor: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 0 16px rgba(245,158,11,0.6)' }}>
+                  <Zap size={22} color="#000000" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.66rem', fontWeight: 800, backgroundColor: '#F59E0B', color: '#000', padding: '1px 6px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      ⚡ MISSÃO RELÂMPAGO
+                    </span>
+                    {activeFlashCountdown && (
+                      <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#FDE68A', fontFamily: 'monospace' }}>
+                        ⏱️ {activeFlashCountdown}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#FFFFFF', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {activeFlashMission.title || activeFlashMission.name}
+                  </div>
+                  {activeFlashMission.flashConfig?.mascotDialogue && (
+                    <div style={{ fontSize: '0.75rem', color: '#FDE68A', marginTop: '2px', fontStyle: 'italic', lineHeight: 1.3 }}>
+                      {activeFlashMission.flashConfig.mascotDialogue}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleSimulateChallenge(activeFlashMission)}
+                style={{
+                  padding: '9px 16px',
+                  backgroundColor: '#F59E0B',
+                  color: '#000000',
+                  fontWeight: 800,
+                  fontSize: '0.80rem',
+                  borderRadius: '10px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  boxShadow: '0 4px 12px rgba(245,158,11,0.4)'
+                }}
+              >
+                PARTICIPAR
+              </button>
+            </div>
+          )}
+
+          {missions.filter(m => m.status !== 'paused').map((challenge) => {
             const isCompleted = (hasCompletedChallenge && hasCompletedChallenge(challenge.id)) || completedChallenges.includes(challenge.id);
-            const isHighlighted = challenge.id === 'instagram_story' && !isCompleted;
-            const isSecret = challenge.isSecret && !isCompleted;
-            const IconComponent = challenge.icon || MapPin;
+            const isHighlighted = (challenge.id === 'instagram_story' || challenge.isFlash) && !isCompleted;
+            const isSecret = (challenge.isSecret || challenge.triggerMode === 'secret') && !isCompleted;
+            const IconComponent = getMissionIcon(challenge.icon || MapPin);
 
             return (
               <div 
@@ -473,8 +551,8 @@ export default function Challenges() {
                   gap: '16px',
                   padding: '16px 18px',
                   opacity: isCompleted ? 0.8 : 1, 
-                  backgroundColor: isSecret ? 'rgba(37, 99, 235, 0.12)' : '#0F141F', 
-                  borderColor: isCompleted ? 'rgba(16, 185, 129, 0.3)' : isSecret ? 'rgba(59, 130, 246, 0.35)' : '#1E293B',
+                  backgroundColor: isSecret ? 'rgba(37, 99, 235, 0.12)' : (challenge.isFlash ? 'rgba(245, 158, 11, 0.08)' : '#0F141F'), 
+                  borderColor: isCompleted ? 'rgba(16, 185, 129, 0.3)' : isSecret ? 'rgba(59, 130, 246, 0.35)' : (challenge.isFlash ? 'rgba(245, 158, 11, 0.4)' : '#1E293B'),
                   borderRadius: '14px',
                   cursor: isCompleted ? 'default' : 'pointer'
                 }}
@@ -497,9 +575,16 @@ export default function Challenges() {
                     <IconComponent size={22} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <h3 style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0, lineHeight: 1.3, color: '#F8FAFC' }}>
-                      {challenge.name}
-                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <h3 style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0, lineHeight: 1.3, color: '#F8FAFC' }}>
+                        {challenge.title || challenge.name}
+                      </h3>
+                      {challenge.isFlash && (
+                        <span style={{ fontSize: '0.62rem', backgroundColor: '#78350F', color: '#FDE68A', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                          ⚡ RELÂMPAGO
+                        </span>
+                      )}
+                    </div>
                     <p style={{ fontSize: '0.76rem', color: isHighlighted || isSecret ? 'rgba(255,255,255,0.85)' : '#94A3B8', margin: '4px 0 0', lineHeight: 1.35 }}>
                       {challenge.description}
                     </p>
@@ -518,10 +603,10 @@ export default function Challenges() {
                       fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
                       fontWeight: 700,
                       letterSpacing: '0.01em',
-                      background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
-                      color: '#FFFFFF',
-                      border: '1px solid rgba(96, 165, 250, 0.45)',
-                      boxShadow: '0 2px 10px rgba(37, 99, 235, 0.35)',
+                      background: challenge.isFlash ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' : 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+                      color: challenge.isFlash ? '#000000' : '#FFFFFF',
+                      border: challenge.isFlash ? '1px solid rgba(245, 158, 11, 0.6)' : '1px solid rgba(96, 165, 250, 0.45)',
+                      boxShadow: challenge.isFlash ? '0 2px 10px rgba(245, 158, 11, 0.35)' : '0 2px 10px rgba(37, 99, 235, 0.35)',
                       borderRadius: '10px',
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
@@ -536,7 +621,7 @@ export default function Challenges() {
                       handleSimulateChallenge(challenge);
                     }}
                   >
-                    {challenge.id === 'instagram_story' ? 'Criar Story' : challenge.isAction ? 'Começar' : challenge.type === 'auto' ? 'Escanear' : challenge.type === 'manual' ? 'Responder' : 'Check-in'}
+                    {challenge.id === 'instagram_story' ? 'Criar Story' : challenge.isAction ? 'Começar' : (challenge.triggerMode === 'quiz' ? 'Fazer Quiz' : challenge.triggerMode === 'secret' ? 'Desvendar' : challenge.triggerMode === 'auto' || challenge.type === 'auto' ? 'Escanear' : 'Responder')}
                   </button>
                 ) : (
                   <div
@@ -590,7 +675,7 @@ export default function Challenges() {
             style={{ width: '100%', maxWidth: '420px', background: 'var(--card-bg)' }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.2rem', color: 'white' }}>{activeManualChallenge.name}</h3>
+              <h3 style={{ fontSize: '1.2rem', color: 'white' }}>{activeManualChallenge.title || activeManualChallenge.name}</h3>
               <button
                 type="button"
                 onClick={() => {
@@ -610,7 +695,61 @@ export default function Challenges() {
             </p>
 
             <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {activeManualChallenge.fields.map(field => (
+              {/* QUIZ DINÂMICO (KAN-104) */}
+              {activeManualChallenge.quizConfig && (
+                <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 600, color: 'white', marginBottom: '10px' }}>
+                    ❓ {activeManualChallenge.quizConfig.question}
+                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {activeManualChallenge.quizConfig.options?.map((opt, oIdx) => (
+                      <label key={oIdx} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid',
+                        borderColor: manualForm['quizAnswer'] === oIdx ? '#3B82F6' : 'rgba(255,255,255,0.1)',
+                        backgroundColor: manualForm['quizAnswer'] === oIdx ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                        cursor: 'pointer',
+                        color: 'white',
+                        fontSize: '0.82rem'
+                      }}>
+                        <input
+                          type="radio"
+                          name="quizOption"
+                          checked={manualForm['quizAnswer'] === oIdx}
+                          onChange={() => setManualForm(prev => ({ ...prev, quizAnswer: oIdx }))}
+                          required
+                        />
+                        <span>{opt}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* PALAVRA SECRETA (SE NÃO ESTIVER EM FIELDS) */}
+              {(activeManualChallenge.triggerMode === 'secret' || activeManualChallenge.isSecret) && (!activeManualChallenge.fields || activeManualChallenge.fields.length === 0) && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                    Palavra-chave Secreta
+                  </label>
+                  <input
+                    type="text"
+                    value={manualForm['secretWord'] || ''}
+                    onChange={(e) => setManualForm(prev => ({ ...prev, secretWord: e.target.value }))}
+                    className="login-input"
+                    required
+                    placeholder="Digite a palavra secreta encontrada..."
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              {/* CAMPOS DINÂMICOS */}
+              {activeManualChallenge.fields && activeManualChallenge.fields.map(field => (
                 <div key={field.id}>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                     {field.label}

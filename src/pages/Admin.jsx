@@ -36,7 +36,14 @@ import {
   FileText,
   Sliders,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Sparkles,
+  Target,
+  Zap,
+  HelpCircle,
+  Play,
+  Pause,
+  Flame
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import logoTw from '../assets/logo-tw.png';
@@ -63,6 +70,15 @@ import {
   uploadFeedMedia,
   DEFAULT_FEED_POSTS 
 } from '../lib/feedService';
+import { 
+  subscribeToMissions, 
+  createMission, 
+  updateMission, 
+  deleteMission, 
+  toggleMissionStatus, 
+  triggerFlashMission, 
+  DEFAULT_MISSIONS 
+} from '../lib/missionService';
 import { subscribeToAllUsers, updateUserRoleInFirestore } from '../lib/userService';
 import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
 import FeedbackModal from '../components/FeedbackModal';
@@ -101,6 +117,63 @@ const FEED_TEMPLATES = [
   { label: '☕ Coffee Break', text: '☕ Coffee Break liberado no Hall Central! Convidamos todos a aproveitar para recarregar as energias e fazer networking com os palestrantes.' },
   { label: '🚀 Nova Missão', text: '🚀 Nova missão liberada no app! Visite os estandes dos patrocinadores para desbloquear palavras-chave e subir no ranking.' },
   { label: '⚠️ Mudança de Sala', text: '⚠️ Informamos que a oficina prática foi transferida para o Laboratório de Informática 2 (Bloco 5R). Esperamos vocês!' }
+];
+
+const MISSION_CATEGORIES = [
+  { id: 'ALL', label: 'Todas as Categorias', color: '#9CA3AF' },
+  { id: 'sponsors', label: 'Patrocinadores', color: '#10B981' },
+  { id: 'networking', label: 'Networking', color: '#3B82F6' },
+  { id: 'social', label: 'Social & Mídia', color: '#EC4899' },
+  { id: 'activities', label: 'Palestras', color: '#8B5CF6' },
+  { id: 'flash', label: 'Relâmpago', color: '#F59E0B' },
+  { id: 'special', label: 'Especiais', color: '#F97316' }
+];
+
+const MISSION_TRIGGER_MODES = [
+  { id: 'form', label: 'Formulário & Mídia', desc: 'Respostas em texto, @ de participante ou foto de comprovante' },
+  { id: 'secret', label: 'Palavra Secreta', desc: 'Validação presencial com palavra-chave no estande' },
+  { id: 'quiz', label: 'Quiz / Pergunta', desc: 'Pergunta com opções e gabarito automático' },
+  { id: 'auto', label: 'Automático pelo App', desc: 'Concluído por ações do usuário (escanear, check-in)' }
+];
+
+const MISSION_PRESETS = [
+  {
+    title: '⚡ Encontre Teko no Evento!',
+    description: 'Ele está em algum lugar do evento! Tire uma foto com o mascote.',
+    category: 'flash',
+    points: 100,
+    icon: 'Zap',
+    triggerMode: 'form',
+    isFlash: true,
+    flashDuration: 5,
+    flashMaxWinners: 1,
+    flashMascotDialogue: '⚡ WEEKA: Encontre Teko agora pelo evento! Apenas 1 participante ganha +100 XP!',
+    fields: [{ id: 'photo', type: 'photo', label: 'Foto com Teko', required: true }]
+  },
+  {
+    title: '⚡ Corra para o Stand!',
+    description: 'Vá até o patrocinador indicado e descubra a palavra secreta.',
+    category: 'flash',
+    points: 50,
+    icon: 'Zap',
+    triggerMode: 'secret',
+    secretWord: 'OPORTUNIDADES',
+    isFlash: true,
+    flashDuration: 5,
+    flashMascotDialogue: '🚨 MISSÃO RELÂMPAGO: Corra para o stand da Kanastra, descubra a palavra secreta e garanta +50 XP!'
+  },
+  {
+    title: '⚡ Conexão Relâmpago em 5 Minutos',
+    description: 'Conheça alguém novo e faça uma conexão antes do tempo acabar!',
+    category: 'flash',
+    points: 30,
+    icon: 'Zap',
+    triggerMode: 'auto',
+    autoEventType: 'network_first',
+    isFlash: true,
+    flashDuration: 5,
+    flashMascotDialogue: '⚡ WEEKA: Conexão em 5 minutos! Conecte-se com alguém que ainda não conhece.'
+  }
 ];
 
 export default function Admin() {
@@ -227,6 +300,43 @@ export default function Admin() {
   // Form Local
   const [locationForm, setLocationForm] = useState({ name: '', capacity: 100, description: '' });
 
+  // Gestão de Missões & Desafios (KAN-104)
+  const [missionsList, setMissionsList] = useState(DEFAULT_MISSIONS);
+  const [missionCategoryFilter, setMissionCategoryFilter] = useState('ALL');
+  const [missionStatusFilter, setMissionStatusFilter] = useState('ALL');
+  const [missionSearch, setMissionSearch] = useState('');
+  const [isMissionModalOpen, setIsMissionModalOpen] = useState(false);
+  const [editingMissionId, setEditingMissionId] = useState(null);
+  const [isFlashQuickModalOpen, setIsFlashQuickModalOpen] = useState(false);
+  const [flashTargetMission, setFlashTargetMission] = useState(null);
+  const [flashQuickDuration, setFlashQuickDuration] = useState(5);
+  const [flashQuickMascotText, setFlashQuickMascotText] = useState('⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!');
+  const [isSavingMission, setIsSavingMission] = useState(false);
+
+  const initialMissionForm = {
+    title: '',
+    description: '',
+    category: 'sponsors',
+    points: 20,
+    icon: 'Sparkles',
+    triggerMode: 'form',
+    isSecret: false,
+    secretWord: '',
+    quizQuestion: '',
+    quizOptions: ['', ''],
+    quizCorrectIndex: 0,
+    autoEventType: 'sponsor_visit',
+    autoTargetId: 'Kanastra',
+    fields: [
+      { id: 'f1', label: 'Resposta / Comentário', type: 'textarea', required: true }
+    ],
+    isFlash: false,
+    flashDuration: 5,
+    flashMaxWinners: '',
+    flashMascotDialogue: '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!'
+  };
+  const [missionForm, setMissionForm] = useState(initialMissionForm);
+
   // Inscrição em tempo real de coleções
   useEffect(() => {
     if (!isAuthorized) return;
@@ -251,14 +361,171 @@ export default function Admin() {
       setFeedPosts(posts || DEFAULT_FEED_POSTS);
     });
 
+    const unsubMissions = subscribeToMissions((missions) => {
+      setMissionsList(missions && missions.length > 0 ? missions : DEFAULT_MISSIONS);
+    });
+
     return () => {
       if (typeof unsubActivities === 'function') unsubActivities();
       if (typeof unsubSpeakers === 'function') unsubSpeakers();
       if (typeof unsubLocations === 'function') unsubLocations();
       if (typeof unsubUsers === 'function') unsubUsers();
       if (typeof unsubFeed === 'function') unsubFeed();
+      if (typeof unsubMissions === 'function') unsubMissions();
     };
   }, [isAuthorized]);
+
+  const handleOpenNewMissionModal = () => {
+    setEditingMissionId(null);
+    setMissionForm(initialMissionForm);
+    setIsMissionModalOpen(true);
+  };
+
+  const handleEditMission = (mission) => {
+    setEditingMissionId(mission.id);
+    setMissionForm({
+      title: mission.title || '',
+      description: mission.description || '',
+      category: mission.category || 'sponsors',
+      points: mission.points || 20,
+      icon: mission.icon || 'Sparkles',
+      triggerMode: mission.triggerMode || (mission.type === 'auto' ? 'auto' : 'form'),
+      isSecret: !!mission.isSecret,
+      secretWord: mission.secretConfig?.secretWord || '',
+      quizQuestion: mission.quizConfig?.question || '',
+      quizOptions: mission.quizConfig?.options && mission.quizConfig.options.length > 0 ? mission.quizConfig.options : ['', ''],
+      quizCorrectIndex: mission.quizConfig?.correctOptionIndex ?? 0,
+      autoEventType: mission.autoConfig?.eventType || 'sponsor_visit',
+      autoTargetId: mission.autoConfig?.targetId || '',
+      fields: mission.fields && mission.fields.length > 0 ? mission.fields : [{ id: 'f1', label: 'Resposta', type: 'text', required: true }],
+      isFlash: !!mission.isFlash,
+      flashDuration: mission.flashConfig?.durationMinutes || 5,
+      flashMaxWinners: mission.flashConfig?.maxWinners || '',
+      flashMascotDialogue: mission.flashConfig?.mascotDialogue || '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!'
+    });
+    setIsMissionModalOpen(true);
+  };
+
+  const handleSaveMission = async (e) => {
+    e.preventDefault();
+    if (isSavingMission) return;
+    setIsSavingMission(true);
+    try {
+      const payload = {
+        title: missionForm.title,
+        description: missionForm.description,
+        category: missionForm.category,
+        points: Number(missionForm.points) || 10,
+        icon: missionForm.icon || 'Sparkles',
+        status: 'active',
+        triggerMode: missionForm.triggerMode,
+        type: missionForm.triggerMode === 'auto' ? 'auto' : 'manual'
+      };
+
+      if (missionForm.triggerMode === 'secret') {
+        payload.isSecret = true;
+        payload.secretConfig = { secretWord: missionForm.secretWord.trim().toUpperCase() };
+        payload.fields = [{ id: 'password', type: 'password', label: 'Qual a palavra-chave?', required: true }];
+      } else if (missionForm.triggerMode === 'quiz') {
+        payload.quizConfig = {
+          question: missionForm.quizQuestion,
+          options: missionForm.quizOptions.filter(opt => opt.trim() !== ''),
+          correctOptionIndex: Number(missionForm.quizCorrectIndex) || 0
+        };
+      } else if (missionForm.triggerMode === 'form') {
+        payload.fields = missionForm.fields;
+      } else if (missionForm.triggerMode === 'auto') {
+        payload.autoConfig = {
+          eventType: missionForm.autoEventType,
+          targetId: missionForm.autoTargetId
+        };
+      }
+
+      if (missionForm.isFlash) {
+        payload.isFlash = true;
+        payload.flashConfig = {
+          durationMinutes: Number(missionForm.flashDuration) || 5,
+          maxWinners: missionForm.flashMaxWinners ? Number(missionForm.flashMaxWinners) : null,
+          mascotDialogue: missionForm.flashMascotDialogue
+        };
+      } else {
+        payload.isFlash = false;
+      }
+
+      if (editingMissionId) {
+        await updateMission(editingMissionId, payload);
+        setFeedback({
+          type: 'success',
+          title: 'Missão Atualizada',
+          message: `A missão "${payload.title}" foi atualizada com sucesso.`
+        });
+      } else {
+        await createMission(payload);
+        setFeedback({
+          type: 'success',
+          title: 'Missão Cadastrada',
+          message: `A missão "${payload.title}" foi criada e já está disponível.`
+        });
+      }
+      setIsMissionModalOpen(false);
+    } catch (err) {
+      console.error('Erro ao salvar missão:', err);
+      setFeedback({
+        type: 'error',
+        title: 'Erro ao Salvar',
+        message: 'Não foi possível salvar a missão no momento. Verifique a conexão.'
+      });
+    } finally {
+      setIsSavingMission(false);
+    }
+  };
+
+  const handleToggleMission = async (mission) => {
+    try {
+      await toggleMissionStatus(mission.id, mission.status || 'active');
+      setFeedback({
+        type: 'info',
+        title: mission.status === 'active' ? 'Missão Pausada' : 'Missão Ativada',
+        message: `Status de "${mission.title}" atualizado para ${mission.status === 'active' ? 'Pausada' : 'Ativa'}.`
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteMission = async (mission) => {
+    if (!window.confirm(`Tem certeza que deseja excluir a missão "${mission.title}"?`)) return;
+    try {
+      await deleteMission(mission.id);
+      setFeedback({
+        type: 'success',
+        title: 'Missão Excluída',
+        message: `A missão "${mission.title}" foi removida.`
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleTriggerQuickFlash = async (e) => {
+    e.preventDefault();
+    if (!flashTargetMission) return;
+    try {
+      await triggerFlashMission(
+        flashTargetMission.id, 
+        Number(flashQuickDuration) || 5, 
+        flashQuickMascotText
+      );
+      setFeedback({
+        type: 'success',
+        title: '⚡ Missão Relâmpago Ativada!',
+        message: `A missão "${flashTargetMission.title}" está ao vivo com contagem de ${flashQuickDuration} minutos no app.`
+      });
+      setIsFlashQuickModalOpen(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleAdminFeedFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -959,6 +1226,36 @@ export default function Admin() {
             </div>
             <span style={{ fontSize: '0.70rem', backgroundColor: '#1E293B', color: '#94A3B8', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
               {usersList.length}
+            </span>
+          </button>
+
+          {/* Missões & Desafios (KAN-104) */}
+          <button
+            type="button"
+            onClick={() => setActiveMenu('missoes')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '9px 18px',
+              border: 'none',
+              backgroundColor: activeMenu === 'missoes' ? '#1E293B' : 'transparent',
+              borderLeft: activeMenu === 'missoes' ? '3px solid #3B82F6' : '3px solid transparent',
+              color: activeMenu === 'missoes' ? '#F9FAFB' : '#94A3B8',
+              fontWeight: activeMenu === 'missoes' ? 600 : 500,
+              fontSize: '0.84rem',
+              cursor: 'pointer',
+              textAlign: 'left',
+              width: '100%',
+              transition: 'background 0.15s, color 0.15s'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Sparkles size={16} color={activeMenu === 'missoes' ? '#3B82F6' : '#64748B'} />
+              <span>Missões & Desafios</span>
+            </div>
+            <span style={{ fontSize: '0.70rem', backgroundColor: '#1E293B', color: '#94A3B8', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+              {missionsList.length}
             </span>
           </button>
 
@@ -1779,6 +2076,317 @@ export default function Admin() {
             </div>
           )}
 
+          {/* SEÇÃO: GESTÃO DE MISSÕES & DESAFIOS (KAN-104) */}
+          {activeMenu === 'missoes' && (
+            <div style={{ maxWidth: '1120px' }}>
+              {/* Header da Seção */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+                <div>
+                  <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#F9FAFB', margin: '0 0 4px', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span>Gestão de Missões & Desafios</span>
+                    <span style={{ fontSize: '0.72rem', backgroundColor: '#1E3A8A', color: '#93C5FD', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                      KAN-104
+                    </span>
+                  </h1>
+                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#9CA3AF' }}>
+                    Crie missões com gatilhos dinâmicos, configure perguntas, segredos e dispare missões relâmpago ao vivo.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFlashTargetMission(missionsList[0] || null);
+                      setFlashQuickDuration(5);
+                      setFlashQuickMascotText('🚨 MISSÃO RELÂMPAGO: Uma nova missão foi liberada! Corra antes que o tempo termine!');
+                      setIsFlashQuickModalOpen(true);
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 14px',
+                      backgroundColor: '#78350F',
+                      border: '1px solid #B45309',
+                      borderRadius: '6px',
+                      color: '#FDE68A',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <Zap size={14} color="#FDE68A" />
+                    <span>Disparador Relâmpago</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenNewMissionModal}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 14px',
+                      backgroundColor: '#2563EB',
+                      border: 'none',
+                      borderRadius: '6px',
+                      color: '#FFFFFF',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Plus size={14} />
+                    <span>Nova Missão</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Cards de Métricas */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '16px 20px' }}>
+                  <span style={{ fontSize: '0.74rem', color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>TOTAL DE MISSÕES</span>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#F9FAFB', marginTop: '4px' }}>
+                    {missionsList.length}
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '16px 20px' }}>
+                  <span style={{ fontSize: '0.74rem', color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>MISSÕES ATIVAS</span>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#10B981', marginTop: '4px' }}>
+                    {missionsList.filter(m => m.status === 'active').length}
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '16px 20px' }}>
+                  <span style={{ fontSize: '0.74rem', color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>MISSÕES RELÂMPAGO</span>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#F59E0B', marginTop: '4px' }}>
+                    {missionsList.filter(m => m.isFlash).length}
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '16px 20px' }}>
+                  <span style={{ fontSize: '0.74rem', color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>XP TOTAL DISPONÍVEL</span>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#3B82F6', marginTop: '4px' }}>
+                    +{missionsList.reduce((acc, m) => acc + (Number(m.points) || 0), 0)} XP
+                  </div>
+                </div>
+              </div>
+
+              {/* Filtros por Categoria */}
+              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '16px' }}>
+                {MISSION_CATEGORIES.map(cat => {
+                  const isActive = missionCategoryFilter === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setMissionCategoryFilter(cat.id)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        border: '1px solid',
+                        borderColor: isActive ? cat.color : '#374151',
+                        backgroundColor: isActive ? 'rgba(59, 130, 246, 0.15)' : '#111827',
+                        color: isActive ? '#F9FAFB' : '#9CA3AF',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {cat.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Barra de Busca e Filtro de Status */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
+                  <Search size={14} color="#6B7280" style={{ position: 'absolute', left: '10px', top: '10px' }} />
+                  <input
+                    type="text"
+                    placeholder="Buscar por título, descrição ou palavra-chave..."
+                    value={missionSearch}
+                    onChange={(e) => setMissionSearch(e.target.value)}
+                    style={{ width: '100%', padding: '8px 10px 8px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <select
+                  value={missionStatusFilter}
+                  onChange={(e) => setMissionStatusFilter(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem' }}
+                >
+                  <option value="ALL">Todos os Status</option>
+                  <option value="active">Apenas Ativas</option>
+                  <option value="paused">Apenas Pausadas</option>
+                </select>
+              </div>
+
+              {/* Tabela / Grid Corporativo de Missões */}
+              <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#1E293B', borderBottom: '1px solid #334155', color: '#9CA3AF', textTransform: 'uppercase', fontSize: '0.70rem', letterSpacing: '0.04em' }}>
+                      <th style={{ padding: '12px 16px' }}>Missão</th>
+                      <th style={{ padding: '12px 16px' }}>Categoria</th>
+                      <th style={{ padding: '12px 16px' }}>Gatilho / Validação</th>
+                      <th style={{ padding: '12px 16px' }}>Pontuação</th>
+                      <th style={{ padding: '12px 16px' }}>Status</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'right' }}>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missionsList
+                      .filter(m => {
+                        if (missionCategoryFilter !== 'ALL' && m.category !== missionCategoryFilter) return false;
+                        if (missionStatusFilter !== 'ALL' && m.status !== missionStatusFilter) return false;
+                        if (missionSearch) {
+                          const q = missionSearch.toLowerCase();
+                          const titleMatch = (m.title || m.name || '').toLowerCase().includes(q);
+                          const descMatch = (m.description || '').toLowerCase().includes(q);
+                          const secretMatch = (m.secretConfig?.secretWord || '').toLowerCase().includes(q);
+                          return titleMatch || descMatch || secretMatch;
+                        }
+                        return true;
+                      })
+                      .map((m) => {
+                        const isFlash = !!m.isFlash;
+                        const triggerModeLabel = 
+                          m.triggerMode === 'secret' ? 'Palavra Secreta' :
+                          m.triggerMode === 'quiz' ? 'Quiz / Pergunta' :
+                          m.triggerMode === 'auto' ? 'Automático' : 'Formulário / Foto';
+
+                        const triggerModeBadgeColor = 
+                          m.triggerMode === 'secret' ? '#8B5CF6' :
+                          m.triggerMode === 'quiz' ? '#F59E0B' :
+                          m.triggerMode === 'auto' ? '#3B82F6' : '#10B981';
+
+                        return (
+                          <tr key={m.id} style={{ borderBottom: '1px solid #1F2937' }}>
+                            <td style={{ padding: '12px 16px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                  width: '32px',
+                                  height: '32px',
+                                  borderRadius: '8px',
+                                  backgroundColor: isFlash ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.12)',
+                                  border: isFlash ? '1px solid #F59E0B' : '1px solid rgba(59, 130, 246, 0.3)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0
+                                }}>
+                                  {isFlash ? <Zap size={16} color="#F59E0B" /> : <Sparkles size={16} color="#3B82F6" />}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 600, color: '#F9FAFB', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span>{m.title || m.name}</span>
+                                    {isFlash && (
+                                      <span style={{ fontSize: '0.65rem', backgroundColor: '#78350F', color: '#FDE68A', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                                        ⚡ RELÂMPAGO
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: '0.74rem', color: '#9CA3AF', maxWidth: '340px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {m.description}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{ fontSize: '0.72rem', color: '#D1D5DB', backgroundColor: '#1E293B', padding: '2px 8px', borderRadius: '4px', border: '1px solid #334155' }}>
+                                {m.category || 'Geral'}
+                              </span>
+                            </td>
+
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{ fontSize: '0.72rem', color: triggerModeBadgeColor, backgroundColor: 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: '4px', border: `1px solid ${triggerModeBadgeColor}44`, fontWeight: 600 }}>
+                                {triggerModeLabel}
+                              </span>
+                              {m.triggerMode === 'secret' && m.secretConfig?.secretWord && (
+                                <span style={{ display: 'block', fontSize: '0.68rem', color: '#9CA3AF', marginTop: '2px' }}>
+                                  Código: <code style={{ color: '#F472B6' }}>{m.secretConfig.secretWord}</code>
+                                </span>
+                              )}
+                            </td>
+
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{ fontWeight: 700, color: '#60A5FA', fontSize: '0.84rem' }}>
+                                +{m.points} XP
+                              </span>
+                            </td>
+
+                            <td style={{ padding: '12px 16px' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleMission(m)}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '3px 8px',
+                                  borderRadius: '4px',
+                                  border: 'none',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  backgroundColor: m.status === 'active' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                  color: m.status === 'active' ? '#34D399' : '#F87171'
+                                }}
+                              >
+                                {m.status === 'active' ? <Check size={11} /> : <X size={11} />}
+                                <span>{m.status === 'active' ? 'Ativa' : 'Pausada'}</span>
+                              </button>
+                            </td>
+
+                            <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                                <button
+                                  type="button"
+                                  title="Disparar como Missão Relâmpago"
+                                  onClick={() => {
+                                    setFlashTargetMission(m);
+                                    setFlashQuickDuration(5);
+                                    setFlashQuickMascotText(`🚨 MISSÃO RELÂMPAGO: ${m.title || m.name}! Corra antes que termine!`);
+                                    setIsFlashQuickModalOpen(true);
+                                  }}
+                                  style={{ padding: '6px', background: 'none', border: '1px solid #78350F', borderRadius: '4px', color: '#FDE68A', cursor: 'pointer' }}
+                                >
+                                  <Zap size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Editar Missão"
+                                  onClick={() => handleEditMission(m)}
+                                  style={{ padding: '6px', background: 'none', border: '1px solid #374151', borderRadius: '4px', color: '#9CA3AF', cursor: 'pointer' }}
+                                >
+                                  <Edit3 size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Excluir Missão"
+                                  onClick={() => handleDeleteMission(m)}
+                                  style={{ padding: '6px', background: 'none', border: '1px solid #374151', borderRadius: '4px', color: '#EF4444', cursor: 'pointer' }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* SEÇÃO: CONFIGURAÇÕES DO EVENTO */}
           {activeMenu === 'config' && (
             <div style={{ maxWidth: '780px' }}>
@@ -2206,6 +2814,528 @@ export default function Admin() {
             >
               Fechar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADICIONAR / EDITAR MISSÃO (KAN-104) */}
+      {isMissionModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '620px', maxHeight: '90vh', backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#F9FAFB', boxShadow: '0 12px 36px rgba(0,0,0,0.7)' }}>
+            
+            <div style={{ backgroundColor: '#1E293B', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #334155' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={18} color="#3B82F6" />
+                <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700 }}>
+                  {editingMissionId ? 'Editar Missão' : 'Cadastrar Nova Missão'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMissionModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: '2px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveMission} style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Título e Pontuação */}
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                    Título da Missão *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Conheça o Stand da Kanastra"
+                    value={missionForm.title}
+                    onChange={(e) => setMissionForm(prev => ({ ...prev, title: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.84rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                    Pontuação (XP) *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={missionForm.points}
+                    onChange={(e) => setMissionForm(prev => ({ ...prev, points: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#60A5FA', fontWeight: 700, fontSize: '0.84rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              {/* Descrição */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                  Descrição e Instruções *
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="Explique o que o participante precisa fazer para concluir..."
+                  value={missionForm.description}
+                  onChange={(e) => setMissionForm(prev => ({ ...prev, description: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.84rem', boxSizing: 'border-box', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Categoria e Ícone */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                    Categoria
+                  </label>
+                  <select
+                    value={missionForm.category}
+                    onChange={(e) => setMissionForm(prev => ({ ...prev, category: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
+                  >
+                    <option value="sponsors">Patrocinadores</option>
+                    <option value="networking">Networking</option>
+                    <option value="social">Social & Mídia</option>
+                    <option value="activities">Palestras & Trilhas</option>
+                    <option value="flash">Missão Relâmpago</option>
+                    <option value="special">Missões Especiais</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                    Ícone Representativo
+                  </label>
+                  <select
+                    value={missionForm.icon}
+                    onChange={(e) => setMissionForm(prev => ({ ...prev, icon: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
+                  >
+                    <option value="Sparkles">✨ Sparkles (Padrão)</option>
+                    <option value="Zap">⚡ Zap (Relâmpago)</option>
+                    <option value="Camera">📷 Câmera / Stories</option>
+                    <option value="MapPin">📍 Localização / Stand</option>
+                    <option value="Users">👥 Networking / Conexões</option>
+                    <option value="Lock">🔒 Palavra Secreta / Cadeado</option>
+                    <option value="MessageCircle">💬 Conversa / Depoimento</option>
+                    <option value="HelpCircle">❓ Quiz / Pergunta</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* SELETOR DE MODO DE GATILHO */}
+              <div style={{ backgroundColor: '#1A2234', border: '1px solid #2D3748', borderRadius: '8px', padding: '14px' }}>
+                <span style={{ fontSize: '0.76rem', fontWeight: 700, color: '#93C5FD', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Modo de Validação / Gatilho da Missão
+                </span>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px' }}>
+                  {MISSION_TRIGGER_MODES.map(mode => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setMissionForm(prev => ({ ...prev, triggerMode: mode.id }))}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '6px',
+                        border: '1px solid',
+                        borderColor: missionForm.triggerMode === mode.id ? '#3B82F6' : '#374151',
+                        backgroundColor: missionForm.triggerMode === mode.id ? 'rgba(59, 130, 246, 0.18)' : '#0B0F17',
+                        color: missionForm.triggerMode === mode.id ? '#FFFFFF' : '#9CA3AF',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontSize: '0.80rem'
+                      }}
+                    >
+                      <div style={{ fontWeight: 600 }}>{mode.label}</div>
+                      <div style={{ fontSize: '0.70rem', color: '#94A3B8', marginTop: '2px' }}>{mode.desc}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Sub-painel: Palavra Secreta */}
+                {missionForm.triggerMode === 'secret' && (
+                  <div style={{ backgroundColor: '#0B0F17', padding: '12px', borderRadius: '6px', border: '1px solid #374151' }}>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#D1D5DB', marginBottom: '4px' }}>
+                      Palavra-chave Secreta Obrigatória (Validação Case-Insensitive) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: OPORTUNIDADES"
+                      value={missionForm.secretWord}
+                      onChange={(e) => setMissionForm(prev => ({ ...prev, secretWord: e.target.value.toUpperCase() }))}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F472B6', fontWeight: 700, fontSize: '0.84rem', letterSpacing: '0.05em', boxSizing: 'border-box' }}
+                    />
+                    <span style={{ fontSize: '0.70rem', color: '#9CA3AF', display: 'block', marginTop: '4px' }}>
+                      O aluno precisará digitar exatamente essa palavra para desbloquear o XP.
+                    </span>
+                  </div>
+                )}
+
+                {/* Sub-painel: Quiz / Pergunta */}
+                {missionForm.triggerMode === 'quiz' && (
+                  <div style={{ backgroundColor: '#0B0F17', padding: '12px', borderRadius: '6px', border: '1px solid #374151', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#D1D5DB', marginBottom: '4px' }}>
+                        Pergunta do Quiz *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: Qual tecnologia é amplamente utilizada pela empresa?"
+                        value={missionForm.quizQuestion}
+                        onChange={(e) => setMissionForm(prev => ({ ...prev, quizQuestion: e.target.value }))}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#D1D5DB', marginBottom: '6px' }}>
+                        Alternativas (Selecione a correta) *
+                      </label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {missionForm.quizOptions.map((opt, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="radio"
+                              name="correctOption"
+                              checked={missionForm.quizCorrectIndex === idx}
+                              onChange={() => setMissionForm(prev => ({ ...prev, quizCorrectIndex: idx }))}
+                            />
+                            <input
+                              type="text"
+                              required
+                              placeholder={`Alternativa ${idx + 1}`}
+                              value={opt}
+                              onChange={(e) => {
+                                const newOpts = [...missionForm.quizOptions];
+                                newOpts[idx] = e.target.value;
+                                setMissionForm(prev => ({ ...prev, quizOptions: newOpts }));
+                              }}
+                              style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.80rem' }}
+                            />
+                            {missionForm.quizOptions.length > 2 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newOpts = missionForm.quizOptions.filter((_, i) => i !== idx);
+                                  setMissionForm(prev => ({ ...prev, quizOptions: newOpts, quizCorrectIndex: 0 }));
+                                }}
+                                style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px' }}
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {missionForm.quizOptions.length < 5 && (
+                        <button
+                          type="button"
+                          onClick={() => setMissionForm(prev => ({ ...prev, quizOptions: [...prev.quizOptions, ''] }))}
+                          style={{ marginTop: '8px', padding: '4px 8px', backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '4px', color: '#93C5FD', fontSize: '0.74rem', cursor: 'pointer' }}
+                        >
+                          + Adicionar Alternativa
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-painel: Formulário & Mídia */}
+                {missionForm.triggerMode === 'form' && (
+                  <div style={{ backgroundColor: '#0B0F17', padding: '12px', borderRadius: '6px', border: '1px solid #374151', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#D1D5DB' }}>
+                        Campos do Formulário de Conclusão ({missionForm.fields.length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newField = {
+                            id: `f_${Date.now()}`,
+                            label: 'Nova Pergunta',
+                            type: 'text',
+                            required: true
+                          };
+                          setMissionForm(prev => ({ ...prev, fields: [...prev.fields, newField] }));
+                        }}
+                        style={{ padding: '3px 8px', backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '4px', color: '#93C5FD', fontSize: '0.72rem', cursor: 'pointer' }}
+                      >
+                        + Adicionar Campo
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {missionForm.fields.map((field, fIdx) => (
+                        <div key={field.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#111827', padding: '8px', borderRadius: '6px', border: '1px solid #1F2937' }}>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Pergunta / Rótulo"
+                            value={field.label}
+                            onChange={(e) => {
+                              const newF = [...missionForm.fields];
+                              newF[fIdx].label = e.target.value;
+                              setMissionForm(prev => ({ ...prev, fields: newF }));
+                            }}
+                            style={{ flex: 2, padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
+                          />
+
+                          <select
+                            value={field.type}
+                            onChange={(e) => {
+                              const newF = [...missionForm.fields];
+                              newF[fIdx].type = e.target.value;
+                              if (e.target.value === 'select' && !newF[fIdx].options) {
+                                newF[fIdx].options = ['Opção 1', 'Opção 2'];
+                              }
+                              setMissionForm(prev => ({ ...prev, fields: newF }));
+                            }}
+                            style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
+                          >
+                            <option value="text">Texto Curto</option>
+                            <option value="textarea">Texto Longo</option>
+                            <option value="photo">Foto / Comprovante</option>
+                            <option value="select">Múltipla Escolha</option>
+                          </select>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newF = missionForm.fields.filter((_, i) => i !== fIdx);
+                              setMissionForm(prev => ({ ...prev, fields: newF }));
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '2px' }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-painel: Automático pelo App */}
+                {missionForm.triggerMode === 'auto' && (
+                  <div style={{ backgroundColor: '#0B0F17', padding: '12px', borderRadius: '6px', border: '1px solid #374151' }}>
+                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#D1D5DB', marginBottom: '4px' }}>
+                      Evento Disparador do App *
+                    </label>
+                    <select
+                      value={missionForm.autoEventType}
+                      onChange={(e) => setMissionForm(prev => ({ ...prev, autoEventType: e.target.value }))}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem' }}
+                    >
+                      <option value="sponsor_visit">Escanear Stand de Patrocinador</option>
+                      <option value="lecture_checkin">Check-in Presencial em Atividade</option>
+                      <option value="network_first">Primeira Conexão no App</option>
+                      <option value="network_course">Conectar com Aluno de Outro Curso</option>
+                      <option value="network_external">Conectar com Aluno de Outra Instituição/Empresa</option>
+                      <option value="network_freshman">Conectar com Calouro (1º Período)</option>
+                      <option value="passport_complete">Completar Passaporte de Patrocinadores</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* MODIFICADOR RELÂMPAGO */}
+              <div style={{ backgroundColor: '#1C1917', border: '1px solid #78350F', borderRadius: '8px', padding: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Zap size={16} color="#F59E0B" />
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#FDE68A' }}>
+                      Ativar como Missão Relâmpago (Flash Mission)
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={missionForm.isFlash}
+                    onChange={(e) => setMissionForm(prev => ({ ...prev, isFlash: e.target.checked }))}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                </div>
+
+                {missionForm.isFlash && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.74rem', color: '#D1D5DB', marginBottom: '4px' }}>
+                        Duração (Minutos)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={missionForm.flashDuration}
+                        onChange={(e) => setMissionForm(prev => ({ ...prev, flashDuration: e.target.value }))}
+                        style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#FDE68A', fontWeight: 700, fontSize: '0.82rem', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.74rem', color: '#D1D5DB', marginBottom: '4px' }}>
+                        Limite de Vencedores (Opcional)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Ilimitado se vazio"
+                        value={missionForm.flashMaxWinners}
+                        onChange={(e) => setMissionForm(prev => ({ ...prev, flashMaxWinners: e.target.value }))}
+                        style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#FDE68A', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label style={{ display: 'block', fontSize: '0.74rem', color: '#D1D5DB', marginBottom: '4px' }}>
+                        Frase de Chamada do Mascote (Teko / Weeka)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: WEEKA: A TechWeek inteira tem uma missão relâmpago!"
+                        value={missionForm.flashMascotDialogue}
+                        onChange={(e) => setMissionForm(prev => ({ ...prev, flashMascotDialogue: e.target.value }))}
+                        style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#FDE68A', fontSize: '0.80rem', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Botões do Rodapé */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsMissionModalOpen(false)}
+                  style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.82rem', cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingMission}
+                  style={{ padding: '8px 18px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  {isSavingMission ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  <span>{editingMissionId ? 'Salvar Alterações' : 'Criar Missão'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DISPARO RELÂMPAGO RÁPIDO (KAN-104) */}
+      {isFlashQuickModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '520px', backgroundColor: '#111827', border: '1px solid #B45309', borderRadius: '10px', overflow: 'hidden', color: '#F9FAFB', boxShadow: '0 12px 36px rgba(0,0,0,0.8)' }}>
+            
+            <div style={{ backgroundColor: '#78350F', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #92400E' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Zap size={18} color="#FDE68A" />
+                <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#FDE68A' }}>
+                  Disparo de Missão Relâmpago Ao Vivo
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFlashQuickModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: '#FDE68A', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleTriggerQuickFlash} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#9CA3AF', display: 'block', marginBottom: '8px' }}>
+                  PRESETS RÁPIDOS DO EVENTO (CLIQUE PARA APLICAR)
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {MISSION_PRESETS.map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setFlashQuickDuration(preset.flashDuration || 5);
+                        setFlashQuickMascotText(preset.flashMascotDialogue || '');
+                      }}
+                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#F9FAFB', textAlign: 'left', fontSize: '0.78rem', cursor: 'pointer' }}
+                    >
+                      <div style={{ fontWeight: 600, color: '#FDE68A' }}>{preset.title}</div>
+                      <div style={{ fontSize: '0.70rem', color: '#9CA3AF' }}>{preset.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                  Missão Alvo no App *
+                </label>
+                <select
+                  value={flashTargetMission?.id || ''}
+                  onChange={(e) => {
+                    const found = missionsList.find(m => m.id === e.target.value);
+                    setFlashTargetMission(found || null);
+                  }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
+                >
+                  {missionsList.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.title || m.name} (+{m.points} XP)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                    Duração (Minutos) *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="60"
+                    required
+                    value={flashQuickDuration}
+                    onChange={(e) => setFlashQuickDuration(e.target.value)}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#FDE68A', fontWeight: 700, fontSize: '0.84rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                    Fala do Mascote (Alerta em Tempo Real)
+                  </label>
+                  <input
+                    type="text"
+                    value={flashQuickMascotText}
+                    onChange={(e) => setFlashQuickMascotText(e.target.value)}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.80rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsFlashQuickModalOpen(false)}
+                  style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.82rem', cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: '8px 18px', borderRadius: '6px', border: 'none', backgroundColor: '#D97706', color: '#FFFFFF', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Zap size={14} />
+                  <span>LANÇAR RELÂMPAGO AGORA</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
