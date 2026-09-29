@@ -234,27 +234,22 @@ export default function Scanner() {
 
   const simulateScan = async () => {
     setIsLoading(true);
-    const rand = Math.random();
-    if (rand < 0.2) {
-      handleScan('kanastra_code');
-      return;
-    }
 
     try {
       const users = await getLeaderboardUsers(10).catch(() => []);
-      if (users && users.length > 0) {
-        const randomDbUser = users[Math.floor(Math.random() * users.length)];
+      const validUsers = (users || []).filter(u => u.username || u.displayName);
+      if (validUsers.length > 0) {
+        const randomDbUser = validUsers[Math.floor(Math.random() * validUsers.length)];
         const payload = JSON.stringify({
-          username: randomDbUser.username,
-          name: randomDbUser.displayName || randomDbUser.firstName || randomDbUser.username,
-          phone: randomDbUser.phone || '',
+          username: randomDbUser.username || 'participante_tw',
+          name: randomDbUser.displayName || randomDbUser.firstName || 'Participante FACOM',
           course: randomDbUser.course || 'Sistemas de Informação',
           participantType: randomDbUser.participant_type || randomDbUser.participantType || 'Aluno da UFU',
           period: randomDbUser.period || 4,
           avatarUrl: randomDbUser.avatarUrl || randomDbUser.photoURL || '',
-          linkedin: randomDbUser.linkedin || '',
-          instagram: randomDbUser.instagram || '',
-          github: randomDbUser.github || ''
+          linkedin: randomDbUser.linkedin || 'participante-techweek',
+          instagram: randomDbUser.instagram || '@participante.tech',
+          github: randomDbUser.github || 'participante-dev'
         });
         handleScan(payload);
         return;
@@ -266,11 +261,10 @@ export default function Scanner() {
     const fallbackUser = {
       username: 'lucas_silva',
       name: 'Lucas Silva',
-      phone: '(34) 99876-5432',
       course: 'Sistemas de Informação',
       participantType: 'Aluno da UFU',
       period: 4,
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
       linkedin: 'lucassilva',
       instagram: 'lucas.tech',
       github: 'lucassilva'
@@ -781,16 +775,16 @@ export default function Scanner() {
                     width: '32px',
                     height: '32px',
                     borderRadius: '10px',
-                    backgroundColor: scanResult.status === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                    border: scanResult.status === 'success' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)',
+                    backgroundColor: (scanResult.participant || scanResult.status === 'success') ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                    border: (scanResult.participant || scanResult.status === 'success') ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: scanResult.status === 'success' ? '#10B981' : '#F59E0B',
+                    color: (scanResult.participant || scanResult.status === 'success') ? '#10B981' : '#F59E0B',
                     flexShrink: 0
                   }}
                 >
-                  {scanResult.status === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                  {(scanResult.participant || scanResult.status === 'success') ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <h3
@@ -806,10 +800,10 @@ export default function Scanner() {
                       textOverflow: 'ellipsis'
                     }}
                   >
-                    {scanResult.participant ? 'Conexão Estabelecida' : scanResult.title}
+                    {scanResult.participant ? 'Crachá identificado' : scanResult.title}
                   </h3>
                   <p style={{ fontSize: '0.72rem', color: '#94A3B8', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {scanResult.participant ? 'Crachá virtual lido via AirDrop TechWeek' : scanResult.message}
+                    {scanResult.participant ? 'Participante da FACOM TechWeek' : scanResult.message}
                   </p>
                 </div>
               </div>
@@ -900,37 +894,6 @@ export default function Scanner() {
                     <span>Ver na programação</span>
                     <ExternalLink size={13} />
                   </button>
-                </div>
-              )}
-
-              {/* Badge de Pontuação Secundária */}
-              {scanResult.points && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '6px 10px',
-                    borderRadius: '9px',
-                    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-                    border: '1px solid rgba(245, 158, 11, 0.2)',
-                    marginBottom: '8px'
-                  }}
-                >
-                  <span style={{ fontSize: '0.7rem', color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <Sparkles size={12} color="#F59E0B" />
-                    Participação registrada
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontSize: '0.74rem',
-                      fontWeight: 800,
-                      color: '#F59E0B'
-                    }}
-                  >
-                    +{scanResult.points} pontos
-                  </span>
                 </div>
               )}
             </div>
