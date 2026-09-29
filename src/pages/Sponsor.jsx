@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
 import { resolveParticipantFromQr } from '../lib/sponsorService';
+import { stopAllMediaTracks } from '../lib/cameraUtils';
 import SponsorLeadModal from '../components/SponsorLeadModal';
 import WhatsAppButton from '../components/WhatsAppButton';
 
@@ -110,6 +111,7 @@ export default function Sponsor() {
       }
       scannerRef.current = null;
     }
+    stopAllMediaTracks();
     setIsScannerActive(false);
   };
 

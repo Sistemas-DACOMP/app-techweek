@@ -5,6 +5,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { isQrForLecture } from '../lib/qrValidation';
 import { apiRequest } from '../lib/api';
 import { useScrollLock } from '../hooks/useScrollLock';
+import { stopAllMediaTracks } from '../lib/cameraUtils';
 
 export default function LectureScanner({
   lecture,
@@ -146,6 +147,7 @@ export default function LectureScanner({
       }
       scannerStartedRef.current = false;
     }
+    stopAllMediaTracks();
   };
 
   const handleScanSuccess = async (result) => {

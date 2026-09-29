@@ -5,6 +5,7 @@ import { CheckCircle, AlertCircle, Loader2, XCircle, ArrowLeft, ShieldCheck, Mai
 import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { getMyProfile } from '../lib/gameplay';
 import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
+import { stopAllMediaTracks } from '../lib/cameraUtils';
 
 export default function Staff() {
   const navigate = useNavigate();
@@ -134,7 +135,9 @@ export default function Staff() {
       const videoElement = document.querySelector('#staff-reader video');
       if (videoElement && videoElement.srcObject) {
         videoElement.srcObject.getTracks().forEach(track => track.stop());
+        videoElement.srcObject = null;
       }
+      stopAllMediaTracks();
     };
   }, [scanning, selectedActivity]);
 

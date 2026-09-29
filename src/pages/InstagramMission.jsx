@@ -5,6 +5,7 @@ import { useUser } from '../hooks/useUser';
 import SymplaRequirementModal from '../components/SymplaRequirementModal';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
 import logoTw from '../assets/logo-tw.png';
+import { stopAllMediaTracks } from '../lib/cameraUtils';
 
 const alanSvgString = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bB" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2563eb" /><stop offset="100%" stop-color="#1e3a8a" /></linearGradient><linearGradient id="aB" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1e3a8a" stop-opacity="0.4" /><stop offset="100%" stop-color="#2563eb" stop-opacity="0" /></linearGradient><linearGradient id="eB" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e2e8f0" /><stop offset="100%" stop-color="#94a3b8" /></linearGradient><clipPath id="cB"><rect x="40" y="40" width="120" height="120" rx="16" /></clipPath></defs><g><path d="M 40 100 L 15 70 L 30 30" fill="none" stroke="#1e3a8a" stroke-width="16" stroke-linejoin="bevel" stroke-linecap="square"/><rect x="20" y="20" width="20" height="20" rx="6" fill="#2563eb"/></g><g><path d="M 160 100 L 185 130 L 170 180" fill="none" stroke="#1e3a8a" stroke-width="16" stroke-linejoin="bevel" stroke-linecap="square"/><rect x="160" y="170" width="20" height="20" rx="6" fill="#2563eb"/></g><rect x="40" y="40" width="120" height="120" rx="16" fill="url(#bB)"/><g clip-path="url(#cB)"><path d="M 40 160 L 160 40 L 160 160 Z" fill="url(#aB)"/><path d="M 40 100 L 100 40 L 160 40 L 40 160 Z" fill="rgba(255,255,255,0.08)"/></g><g><rect x="53" y="63" width="44" height="44" rx="10" fill="url(#eB)"/><rect x="63" y="73" width="24" height="24" rx="6" fill="#0f172a"/><rect x="77" y="77" width="6" height="6" rx="2" fill="#fff"/></g><g><rect x="103" y="63" width="44" height="44" rx="10" fill="url(#eB)"/><rect x="113" y="73" width="24" height="24" rx="6" fill="#0f172a"/><rect x="127" y="77" width="6" height="6" rx="2" fill="#fff"/></g></svg>`;
 
@@ -41,7 +42,9 @@ export default function InstagramMission() {
     return () => {
       if (videoRef.current && videoRef.current.srcObject) {
         videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
       }
+      stopAllMediaTracks();
     };
   }, []);
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -21,6 +21,7 @@ import {
 import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
 import { DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { resolveParticipantFromQr } from '../lib/sponsorService';
+import { stopAllMediaTracks } from '../lib/cameraUtils';
 import ParticipantCard from '../components/ParticipantCard';
 
 export default function Scanner() {
@@ -32,24 +33,64 @@ export default function Scanner() {
   const [showInfoModal, setShowInfoModal] = useState(false);
   const { registerCodeScan } = useUser();
 
+  const scannerRef = useRef(null);
+  const isStartingRef = useRef(false);
+  const isMountedRef = useRef(true);
+
   // O botão demo só fica visível em ambiente de desenvolvimento ou com ?demo=true na URL
   const isDevMode = typeof window !== 'undefined' && (
     import.meta.env.DEV || window.location.search.includes('demo=true')
   );
 
-  useEffect(() => {
-    // Não inicia a câmera se já houver um resultado ativo
-    if (scanResult) return;
+  const stopScannerCamera = async () => {
+    setIsCameraActive(false);
+    stopAllMediaTracks();
+    if (scannerRef.current) {
+      try {
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+        await scannerRef.current.clear();
+      } catch (_e) {
+        // Ignora caso já esteja parado
+      }
+      scannerRef.current = null;
+    }
+    stopAllMediaTracks();
+  };
 
-    let isMounted = true;
-    let html5QrCode = null;
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    // Se houver modal com resultado da leitura, a câmera é desligada imediatamente
+    if (scanResult) {
+      stopScannerCamera();
+      return;
+    }
 
     const startCamera = async () => {
+      if (isStartingRef.current || scannerRef.current?.isScanning) return;
+      isStartingRef.current = true;
+
       try {
         setCameraError(null);
         setIsCameraActive(false);
 
-        html5QrCode = new Html5Qrcode('techweek-camera-viewport');
+        await stopScannerCamera();
+
+        if (!isMountedRef.current) {
+          isStartingRef.current = false;
+          return;
+        }
+
+        const viewportEl = document.getElementById('techweek-camera-viewport');
+        if (!viewportEl) {
+          isStartingRef.current = false;
+          return;
+        }
+
+        const html5QrCode = new Html5Qrcode('techweek-camera-viewport');
+        scannerRef.current = html5QrCode;
 
         await html5QrCode.start(
           { facingMode: 'environment' },
@@ -59,42 +100,49 @@ export default function Scanner() {
             aspectRatio: 1
           },
           (decodedText) => {
-            if (!isMounted) return;
-            try {
-              html5QrCode.stop().catch(() => {});
-            } catch {}
+            if (!isMountedRef.current) return;
+            // Desliga o hardware da câmera imediatamente ao capturar o código
+            stopScannerCamera();
             handleScan(decodedText);
           },
-          () => {
-            // Ignorado (ruído frame-a-frame)
-          }
+          () => {}
         );
 
-        if (isMounted) {
-          setIsCameraActive(true);
+        if (!isMountedRef.current || scanResult) {
+          await stopScannerCamera();
+          return;
         }
+
+        setIsCameraActive(true);
       } catch (err) {
-        if (!isMounted) return;
+        if (!isMountedRef.current) return;
         console.warn('Erro ao inicializar câmera do scanner:', err);
         setCameraError('Permissão de câmera não concedida ou dispositivo sem câmera.');
+        stopAllMediaTracks();
+      } finally {
+        isStartingRef.current = false;
       }
     };
 
     startCamera();
 
+    // Desliga a câmera se o app for minimizado ou a aba for para segundo plano
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopScannerCamera();
+      } else if (isMountedRef.current && !scanResult) {
+        startCamera();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', stopAllMediaTracks);
+
     return () => {
-      isMounted = false;
-      if (html5QrCode) {
-        try {
-          html5QrCode.stop().catch(() => {});
-        } catch {}
-      }
-      const videoElement = document.querySelector('#techweek-camera-viewport video');
-      if (videoElement && videoElement.srcObject) {
-        try {
-          videoElement.srcObject.getTracks().forEach((track) => track.stop());
-        } catch {}
-      }
+      isMountedRef.current = false;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', stopAllMediaTracks);
+      stopScannerCamera();
     };
   }, [scanResult]);
 
