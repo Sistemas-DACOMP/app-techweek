@@ -385,7 +385,7 @@ export default function Dashboard() {
               width: 'auto', 
               maxWidth: '215px', 
               objectFit: 'contain',
-              marginTop: '5px',
+              marginTop: '14px',
               filter: 'drop-shadow(0 4px 14px rgba(0, 0, 0, 0.8))'
             }}
           />
