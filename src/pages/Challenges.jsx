@@ -414,7 +414,7 @@ export default function Challenges() {
       {activeTab === 'passport' ? (
         <PassportTab userProfile={profile} />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {!hasSymplaTicket && (
             <div
               style={{
@@ -467,42 +467,69 @@ export default function Challenges() {
                 className={`card ${isHighlighted || isSecret ? 'card-highlight' : ''}`} 
                 onClick={() => !isCompleted && handleSimulateChallenge(challenge)}
                 style={{ 
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                  opacity: isCompleted ? 0.78 : 1, 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  gap: '16px',
+                  padding: '16px 18px',
+                  opacity: isCompleted ? 0.8 : 1, 
                   backgroundColor: isSecret ? 'rgba(37, 99, 235, 0.12)' : '#0F141F', 
                   borderColor: isCompleted ? 'rgba(16, 185, 129, 0.3)' : isSecret ? 'rgba(59, 130, 246, 0.35)' : '#1E293B',
                   borderRadius: '14px',
                   cursor: isCompleted ? 'default' : 'pointer'
                 }}
               >
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                  <div style={{ background: isCompleted ? 'rgba(16, 185, 129, 0.15)' : isHighlighted || isSecret ? 'rgba(37, 99, 235, 0.25)' : 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '50%', color: isCompleted ? '#10b981' : isHighlighted || isSecret ? '#93C5FD' : '#3B82F6' }}>
-                    <IconComponent size={24} />
+                <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                  <div 
+                    style={{ 
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '12px',
+                      background: isCompleted ? 'rgba(16, 185, 129, 0.12)' : isHighlighted || isSecret ? 'rgba(37, 99, 235, 0.22)' : 'rgba(255,255,255,0.05)', 
+                      border: `1px solid ${isCompleted ? 'rgba(16, 185, 129, 0.25)' : isHighlighted || isSecret ? 'rgba(59, 130, 246, 0.35)' : 'rgba(255,255,255,0.08)'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      color: isCompleted ? '#34D399' : isHighlighted || isSecret ? '#93C5FD' : '#60A5FA' 
+                    }}
+                  >
+                    <IconComponent size={22} />
                   </div>
-                  <div>
-                    <h3 style={{ fontSize: '1rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px', color: 'white' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0, lineHeight: 1.3, color: '#F8FAFC' }}>
                       {challenge.name}
-                      {isCompleted && <CheckCircle size={16} color="#10b981" />}
                     </h3>
-                    <p style={{ fontSize: '0.75rem', color: isHighlighted || isSecret ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)' }}>{challenge.description}</p>
-                    <div style={{ marginTop: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: isCompleted ? '#10b981' : isHighlighted || isSecret ? '#93C5FD' : '#3B82F6' }}>
-                      {isCompleted ? `✓ Concluída (+${challenge.points} pts)` : `+${challenge.points} pts`}
+                    <p style={{ fontSize: '0.76rem', color: isHighlighted || isSecret ? 'rgba(255,255,255,0.85)' : '#94A3B8', margin: '4px 0 0', lineHeight: 1.35 }}>
+                      {challenge.description}
+                    </p>
+                    <div style={{ marginTop: '5px', fontSize: '0.74rem', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: isCompleted ? '#34D399' : isHighlighted || isSecret ? '#93C5FD' : '#60A5FA' }}>
+                      +{challenge.points} pts
                     </div>
                   </div>
                 </div>
 
                 {!isCompleted ? (
                   <button
+                    type="button"
                     style={{
-                      padding: '8px 12px',
-                      fontSize: '0.75rem',
-                      background: '#2563EB',
-                      color: 'white',
-                      border: '1px solid #3B82F6',
-                      borderRadius: '8px',
-                      fontWeight: 'bold',
+                      padding: '8px 16px',
+                      fontSize: '0.78rem',
+                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                      fontWeight: 700,
+                      letterSpacing: '0.01em',
+                      background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+                      color: '#FFFFFF',
+                      border: '1px solid rgba(96, 165, 250, 0.45)',
+                      boxShadow: '0 2px 10px rgba(37, 99, 235, 0.35)',
+                      borderRadius: '10px',
                       cursor: 'pointer',
-                      whiteSpace: 'nowrap'
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.15s ease'
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -514,19 +541,24 @@ export default function Challenges() {
                 ) : (
                   <div
                     style={{
-                      display: 'flex',
+                      display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '5px',
-                      color: '#10b981',
-                      fontSize: '0.75rem',
+                      gap: '6px',
+                      color: '#34D399',
+                      fontSize: '0.78rem',
+                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
                       fontWeight: 700,
-                      padding: '6px 10px',
-                      backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(16, 185, 129, 0.28)'
+                      letterSpacing: '0.02em',
+                      padding: '7px 14px',
+                      backgroundColor: 'rgba(16, 185, 129, 0.10)',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(16, 185, 129, 0.32)',
+                      boxShadow: '0 0 10px rgba(16, 185, 129, 0.12)',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0
                     }}
                   >
-                    <CheckCircle size={14} color="#10b981" />
+                    <CheckCircle size={15} color="#34D399" />
                     <span>Feito</span>
                   </div>
                 )}
