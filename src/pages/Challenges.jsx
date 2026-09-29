@@ -186,7 +186,7 @@ export default function Challenges() {
     if (res && (res.success || res === true)) {
       setFeedback({
         type: 'success',
-        title: 'Desafio Concluído! 🎉',
+        title: 'Desafio Concluído!',
         message: `Parabéns! Você completou "${challenge.title || challenge.name}" e pontuou com sucesso.`,
         points: (res && res.points) || challenge.points
       });
@@ -275,7 +275,7 @@ export default function Challenges() {
       if (res && (res.success || res === true)) {
         setFeedback({
           type: 'success',
-          title: 'Missão Concluída! 🎉',
+          title: 'Missão Concluída!',
           message: `Você cumpriu a missão "${activeManualChallenge.title || activeManualChallenge.name}" com sucesso!`,
           points: (res && res.points) || activeManualChallenge.points
         });
@@ -621,7 +621,7 @@ export default function Challenges() {
                       handleSimulateChallenge(challenge);
                     }}
                   >
-                    {challenge.id === 'instagram_story' ? 'Criar Story' : challenge.isAction ? 'Começar' : (challenge.triggerMode === 'quiz' ? 'Fazer Quiz' : challenge.triggerMode === 'secret' ? 'Desvendar' : challenge.triggerMode === 'auto' || challenge.type === 'auto' ? 'Escanear' : 'Responder')}
+                    {challenge.id === 'instagram_story' ? 'Criar Story' : challenge.isAction ? 'Começar' : (challenge.triggerMode === 'quiz' ? 'Fazer Quiz' : challenge.triggerMode === 'secret' ? 'Desvendar' : challenge.triggerMode === 'auto' || challenge.type === 'auto' ? ((challenge.autoConfig?.eventType === 'passport_complete' || challenge.id?.includes('passport') || challenge.id === 'sponsor_colecao') ? 'Ver Passaporte' : 'Escanear') : 'Responder')}
                   </button>
                 ) : (
                   <div
@@ -928,7 +928,7 @@ export default function Challenges() {
                   <QrCode size={22} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '1.1rem', color: 'white', margin: 0 }}>{selectedAutoChallenge.name}</h3>
+                  <h3 style={{ fontSize: '1.1rem', color: 'white', margin: 0 }}>{selectedAutoChallenge.title || selectedAutoChallenge.name}</h3>
                   <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#38BDF8' }}>+{selectedAutoChallenge.points} XP / Pontos</span>
                 </div>
               </div>
@@ -941,95 +941,124 @@ export default function Challenges() {
               </button>
             </div>
 
-            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.4', marginBottom: '24px' }}>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.4', marginBottom: '20px' }}>
               {selectedAutoChallenge.description}
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <button
-                type="button"
-                className="login-btn"
-                disabled={isSubmitting}
-                onClick={async () => {
-                  setIsSubmitting(true);
-                  try {
-                    const res = await completeChallenge(selectedAutoChallenge.id, selectedAutoChallenge.points);
+            {/* AVISO DE VALIDAÇÃO AUTOMÁTICA */}
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: '12px',
+              background: 'rgba(56, 189, 248, 0.08)',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+              marginBottom: '20px'
+            }}>
+              <Zap size={18} color="#38BDF8" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ fontSize: '0.80rem', color: '#E2E8F0', lineHeight: 1.4 }}>
+                <strong style={{ color: '#38BDF8', display: 'block', marginBottom: '2px' }}>Validação Automática pelo App</strong>
+                Esta missão não precisa de envio manual. O app computa seus pontos automaticamente assim que você realizar a ação correspondente no evento.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {(selectedAutoChallenge.autoConfig?.eventType === 'lecture_checkin' || selectedAutoChallenge.id?.includes('lecture')) ? (
+                <button
+                  type="button"
+                  onClick={() => {
                     setSelectedAutoChallenge(null);
-                    if (res && (res.success || res === true)) {
-                      setFeedback({
-                        type: 'success',
-                        title: 'Missão Concluída! 🎉',
-                        message: `Você cumpriu "${selectedAutoChallenge.name}" e pontuou com sucesso!`,
-                        points: (res && res.points) || selectedAutoChallenge.points
-                      });
-                    } else if (res && res.alreadyCompleted) {
-                      setFeedback({
-                        type: 'warning',
-                        title: 'Missão Já Concluída',
-                        message: 'Você já completou este desafio anteriormente!'
-                      });
-                    } else {
-                      setFeedback({
-                        type: 'error',
-                        title: 'Erro ao Pontuar',
-                        message: (res && res.error) || 'Não foi possível registrar seus pontos.'
-                      });
-                    }
-                  } finally {
-                    setIsSubmitting(false);
-                  }
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  backgroundColor: '#2563EB',
-                  border: '1px solid #3B82F6',
-                  color: 'white',
-                  height: '46px',
-                  borderRadius: '12px',
-                  fontWeight: 700,
-                  fontSize: '0.88rem',
-                  cursor: isSubmitting ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    <span>Validando pontos...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={18} />
-                    <span>Concluir Missão e Pontuar</span>
-                  </>
-                )}
-              </button>
+                    navigate('/schedule');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    backgroundColor: '#2563EB',
+                    border: '1px solid #3B82F6',
+                    color: 'white',
+                    height: '46px',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                  }}
+                >
+                  <span>Ver Grade de Palestras</span>
+                </button>
+              ) : (selectedAutoChallenge.autoConfig?.eventType === 'passport_complete' || selectedAutoChallenge.id?.includes('passport') || selectedAutoChallenge.id === 'sponsor_colecao') ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAutoChallenge(null);
+                    setActiveTab('passport');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    backgroundColor: '#2563EB',
+                    border: '1px solid #3B82F6',
+                    color: 'white',
+                    height: '46px',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span>Ver Passaporte de Stands</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAutoChallenge(null);
+                    navigate('/scanner');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    backgroundColor: '#2563EB',
+                    border: '1px solid #3B82F6',
+                    color: 'white',
+                    height: '46px',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                  }}
+                >
+                  <Camera size={18} />
+                  <span>Escanear QR Code com Câmera</span>
+                </button>
+              )}
 
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedAutoChallenge(null);
-                  navigate('/scanner');
-                }}
+                onClick={() => setSelectedAutoChallenge(null)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  color: '#E2E8F0',
-                  height: '42px',
-                  borderRadius: '12px',
-                  fontWeight: 600,
+                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  color: '#94A3B8',
+                  height: '40px',
+                  borderRadius: '10px',
                   fontSize: '0.82rem',
+                  fontWeight: 600,
                   cursor: 'pointer'
                 }}
               >
-                <Camera size={16} />
-                <span>Escanear QR Code com Câmera</span>
+                Voltar
               </button>
             </div>
           </div>

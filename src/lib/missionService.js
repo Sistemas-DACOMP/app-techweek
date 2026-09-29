@@ -86,13 +86,13 @@ export const DEFAULT_MISSIONS = [
     description: 'Complete seu passaporte visitando todos os stands.',
     category: 'sponsors',
     points: 50,
-    icon: 'Camera',
+    icon: 'QrCode',
     status: 'active',
-    type: 'manual',
-    triggerMode: 'form',
-    fields: [
-      { id: 'photo', type: 'photo', label: 'Tire uma foto do cartão completo', required: true }
-    ],
+    type: 'auto',
+    triggerMode: 'auto',
+    autoConfig: {
+      eventType: 'passport_complete'
+    },
     order: 5
   },
   {
