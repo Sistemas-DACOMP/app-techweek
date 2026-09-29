@@ -381,10 +381,11 @@ export default function Dashboard() {
             src={logoTw}
             alt="FACOM TechWeek 2026"
             style={{ 
-              height: '54px', 
+              height: '52px', 
               width: 'auto', 
               maxWidth: '215px', 
               objectFit: 'contain',
+              marginTop: '5px',
               filter: 'drop-shadow(0 4px 14px rgba(0, 0, 0, 0.8))'
             }}
           />
