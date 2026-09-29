@@ -161,14 +161,6 @@ export default function Dashboard() {
     return new Date() < eventStartDate;
   }, []);
 
-  // Contagem regressiva de dias até o evento
-  const daysUntilEvent = useMemo(() => {
-    const eventStartDate = new Date(2026, 9, 21, 8, 0, 0);
-    const diff = eventStartDate.getTime() - Date.now();
-    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-    return days > 0 ? days : 0;
-  }, []);
-
   const getCategoryAccent = (type) => {
     const t = (type || '').toLowerCase();
     if (t.includes('workshop')) return '#F59E0B';
@@ -535,18 +527,19 @@ export default function Dashboard() {
                   alignItems: 'center',
                   gap: '5px',
                   fontSize: '0.72rem',
-                  color: '#CBD5E1',
-                  fontWeight: 600,
+                  color: '#60A5FA',
+                  fontWeight: 700,
                   cursor: 'pointer',
-                  backgroundColor: '#0F141F',
-                  border: '1px solid #1E293B',
+                  backgroundColor: 'rgba(37, 99, 235, 0.12)',
+                  border: '1px solid rgba(59, 130, 246, 0.55)',
+                  boxShadow: '0 0 14px rgba(37, 99, 235, 0.35)',
                   padding: '6px 10px',
                   borderRadius: '6px',
                   clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)',
                   whiteSpace: 'nowrap'
                 }}
               >
-                <CheckCircle2 size={13} color="#94A3B8" strokeWidth={1.75} />
+                <CheckCircle2 size={13} color="#60A5FA" strokeWidth={2} />
                 <span>Crachá Ativo</span>
               </div>
             ) : (
@@ -662,23 +655,6 @@ export default function Dashboard() {
                 >
                   AQUECIMENTO TECHWEEK
                 </span>
-                {daysUntilEvent > 0 && (
-                  <span
-                    style={{
-                      padding: '2px 7px',
-                      borderRadius: '4px',
-                      backgroundColor: '#0F141F',
-                      border: '1px solid #1E293B',
-                      color: '#94A3B8',
-                      fontSize: '0.62rem',
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontWeight: 700,
-                      letterSpacing: '0.04em'
-                    }}
-                  >
-                    FALTAM {daysUntilEvent} DIAS
-                  </span>
-                )}
               </div>
 
               <button

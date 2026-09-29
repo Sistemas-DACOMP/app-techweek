@@ -126,6 +126,102 @@ export default function InstagramMission() {
     reader.readAsDataURL(file);
   };
 
+  const drawRoundRect = (ctx, x, y, width, height, radius, fill = true, stroke = false) => {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
+  };
+
+  const drawCornerBrackets = (ctx, x, y, w, h, len = 60, lw = 5, color = '#38BDF8') => {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    ctx.lineCap = 'square';
+
+    // Top Left
+    ctx.beginPath();
+    ctx.moveTo(x, y + len);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x + len, y);
+    ctx.stroke();
+
+    // Top Right
+    ctx.beginPath();
+    ctx.moveTo(x + w - len, y);
+    ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w, y + len);
+    ctx.stroke();
+
+    // Bottom Left
+    ctx.beginPath();
+    ctx.moveTo(x, y + h - len);
+    ctx.lineTo(x, y + h);
+    ctx.lineTo(x + len, y + h);
+    ctx.stroke();
+
+    // Bottom Right
+    ctx.beginPath();
+    ctx.moveTo(x + w - len, y + h);
+    ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x + w, y + h - len);
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  const drawMascotBadge = (ctx, img, cx, cy, radius, borderColor, label) => {
+    ctx.save();
+    ctx.shadowColor = borderColor;
+    ctx.shadowBlur = 18;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(9, 14, 33, 0.9)';
+    ctx.fill();
+
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius - 4, 0, Math.PI * 2);
+    ctx.clip();
+    const imgSize = radius * 1.55;
+    ctx.drawImage(img, cx - imgSize / 2, cy - imgSize / 2, imgSize, imgSize);
+    ctx.restore();
+
+    if (label) {
+      const pillW = 74;
+      const pillH = 22;
+      const pillX = cx - pillW / 2;
+      const pillY = cy + radius - 8;
+
+      ctx.save();
+      ctx.fillStyle = '#050814';
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1.5;
+      drawRoundRect(ctx, pillX, pillY, pillW, pillH, 6, true, true);
+
+      ctx.font = 'bold 11px monospace';
+      ctx.fillStyle = borderColor;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, cx, pillY + pillH / 2);
+      ctx.restore();
+    }
+  };
+
   const drawFrame = (userImg, logoImg, alanImg, adaImg) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -134,55 +230,136 @@ export default function InstagramMission() {
     canvas.height = 1920;
     const ctx = canvas.getContext('2d');
 
-    // Draw user image
+    // 1. Imagem do usuário cobrindo o canvas
     const scale = Math.max(canvas.width / userImg.width, canvas.height / userImg.height);
     const x = (canvas.width / 2) - (userImg.width / 2) * scale;
     const y = (canvas.height / 2) - (userImg.height / 2) * scale;
     ctx.drawImage(userImg, x, y, userImg.width * scale, userImg.height * scale);
 
-    // Gradients
-    const topGradient = ctx.createLinearGradient(0, 0, 0, 300);
-    topGradient.addColorStop(0, 'rgba(0,0,0,0.6)');
-    topGradient.addColorStop(1, 'rgba(0,0,0,0)');
+    // 2. Vinhetas e gradientes modernos (topo e base)
+    const topGradient = ctx.createLinearGradient(0, 0, 0, 380);
+    topGradient.addColorStop(0, 'rgba(5, 8, 20, 0.85)');
+    topGradient.addColorStop(0.5, 'rgba(5, 8, 20, 0.45)');
+    topGradient.addColorStop(1, 'rgba(5, 8, 20, 0)');
     ctx.fillStyle = topGradient;
-    ctx.fillRect(0, 0, canvas.width, 300);
+    ctx.fillRect(0, 0, canvas.width, 380);
 
-    const bottomGradient = ctx.createLinearGradient(0, canvas.height - 400, 0, canvas.height);
-    bottomGradient.addColorStop(0, 'rgba(0,0,0,0)');
-    bottomGradient.addColorStop(1, 'rgba(0,0,0,0.8)');
+    const bottomGradient = ctx.createLinearGradient(0, canvas.height - 520, 0, canvas.height);
+    bottomGradient.addColorStop(0, 'rgba(5, 8, 20, 0)');
+    bottomGradient.addColorStop(0.35, 'rgba(5, 8, 20, 0.65)');
+    bottomGradient.addColorStop(1, 'rgba(5, 8, 20, 0.95)');
     ctx.fillStyle = bottomGradient;
-    ctx.fillRect(0, canvas.height - 400, canvas.width, 400);
+    ctx.fillRect(0, canvas.height - 520, canvas.width, 520);
 
-    // Frame
-    ctx.strokeStyle = '#2563eb';
-    ctx.lineWidth = 30;
-    ctx.strokeRect(0, 0, canvas.width, canvas.height);
+    // 3. Moldura de borda cibernética com glow
+    ctx.save();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(36, 36, canvas.width - 72, canvas.height - 72);
 
-    ctx.fillStyle = '#9333ea';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(48, 48, canvas.width - 96, canvas.height - 96);
+    ctx.restore();
+
+    // 4. Cantoneiras HUD (Viewfinder)
+    drawCornerBrackets(ctx, 36, 36, canvas.width - 72, canvas.height - 72, 60, 5, '#38BDF8');
+
+    // 5. Header Tecnológico Superior
+    const headerW = 540;
+    const headerH = 50;
+    const headerX = (canvas.width - headerW) / 2;
+    const headerY = 70;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(9, 14, 33, 0.85)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+    ctx.lineWidth = 1.5;
+    drawRoundRect(ctx, headerX, headerY, headerW, headerH, 25, true, true);
+
+    // Ponto de status / REC
+    ctx.fillStyle = '#10B981';
+    ctx.shadowColor = '#10B981';
+    ctx.shadowBlur = 10;
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(300, 0);
-    ctx.lineTo(0, 300);
+    ctx.arc(headerX + 32, headerY + 25, 6, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
 
-    ctx.fillStyle = '#2563eb';
-    ctx.beginPath();
-    ctx.moveTo(canvas.width, canvas.height);
-    ctx.lineTo(canvas.width - 300, canvas.height);
-    ctx.lineTo(canvas.width, canvas.height - 300);
-    ctx.fill();
+    // Texto do Header
+    ctx.save();
+    ctx.font = 'bold 18px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#F8FAFC';
+    ctx.letterSpacing = '3px';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('FACOM TECHWEEK // 2026', canvas.width / 2 + 10, headerY + 26);
+    ctx.restore();
 
-    // Draw Logo
-    const logoWidth = 600;
+    // 6. Mascotes em Badges Holográficos Laterais
+    // Alan (canto superior esquerdo)
+    drawMascotBadge(ctx, alanImg, 115, 175, 48, '#38BDF8', 'ALAN');
+    // Ada (canto superior direito)
+    drawMascotBadge(ctx, adaImg, canvas.width - 115, 175, 48, '#C084FC', 'ADA');
+
+    // 7. Card Inferior Flutuante (Glassmorphism)
+    const cardW = 940;
+    const cardH = 260;
+    const cardX = (canvas.width - cardW) / 2;
+    const cardY = canvas.height - cardH - 80;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(37, 99, 235, 0.3)';
+    ctx.shadowBlur = 30;
+
+    ctx.fillStyle = 'rgba(9, 14, 33, 0.9)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+    ctx.lineWidth = 1.5;
+    drawRoundRect(ctx, cardX, cardY, cardW, cardH, 28, true, true);
+    ctx.restore();
+
+    // Tag superior do card
+    ctx.save();
+    ctx.font = 'bold 14px monospace';
+    ctx.fillStyle = '#94A3B8';
+    ctx.letterSpacing = '3px';
+    ctx.textAlign = 'center';
+    ctx.fillText('[ OFICIAL // PRESENÇA CONFIRMADA ]', canvas.width / 2, cardY + 42);
+    ctx.restore();
+
+    // Logo TechWeek centralizada
+    const logoWidth = 460;
     const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
-    ctx.drawImage(logoImg, (canvas.width - logoWidth) / 2, canvas.height - logoHeight - 120, logoWidth, logoHeight);
-    
-    // Draw Mascots (Moved to the top)
-    const mascotSize = 350;
-    // Alan on the top left
-    ctx.drawImage(alanImg, 50, 100, mascotSize, mascotSize);
-    // Ada on the top right
-    ctx.drawImage(adaImg, canvas.width - mascotSize - 50, 100, mascotSize, mascotSize);
+    ctx.drawImage(logoImg, (canvas.width - logoWidth) / 2, cardY + 65, logoWidth, logoHeight);
+
+    // Linha divisória sutil dentro do card
+    const divGrad = ctx.createLinearGradient(cardX + 100, 0, cardX + cardW - 100, 0);
+    divGrad.addColorStop(0, 'rgba(56, 189, 248, 0)');
+    divGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.4)');
+    divGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+    ctx.fillStyle = divGrad;
+    ctx.fillRect(cardX + 60, cardY + 185, cardW - 120, 1.5);
+
+    // Rodapé de Informações: Datas, Local e Hashtag
+    ctx.save();
+    ctx.font = 'bold 15px monospace';
+    ctx.fillStyle = '#E2E8F0';
+    ctx.textAlign = 'left';
+    ctx.fillText('21 A 26 DE OUTUBRO • UFU', cardX + 70, cardY + 225);
+
+    ctx.font = 'bold 16px monospace';
+    ctx.fillStyle = '#38BDF8';
+    ctx.textAlign = 'right';
+    ctx.fillText('#FACOMTECHWEEK', cardX + cardW - 70, cardY + 225);
+    ctx.restore();
+
+    // Barra de destaque neon na base inferior absoluta
+    const bottomBarGrad = ctx.createLinearGradient(120, 0, canvas.width - 120, 0);
+    bottomBarGrad.addColorStop(0, '#2563EB');
+    bottomBarGrad.addColorStop(0.5, '#38BDF8');
+    bottomBarGrad.addColorStop(1, '#9333EA');
+    ctx.fillStyle = bottomBarGrad;
+    ctx.fillRect(160, canvas.height - 48, canvas.width - 320, 3);
   };
 
   const shareOrDownload = async () => {

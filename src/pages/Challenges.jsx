@@ -94,10 +94,11 @@ export default function Challenges() {
     {
       id: 'instagram_story',
       name: 'Post no Stories',
-      description: 'Publique um Story marcando a TechWeek e envie a foto da publicação.',
+      description: 'Abra a câmera oficial, tire ou envie uma foto com a moldura TechWeek e compartilhe.',
       points: 50,
       icon: Camera,
-      type: 'manual',
+      type: 'action',
+      isAction: true,
       fields: [
         { id: 'photo', type: 'photo', label: 'Envie a foto ou print do seu Story' }
       ]
@@ -159,6 +160,11 @@ export default function Challenges() {
   const handleSimulateChallenge = async (challenge) => {
     if (!hasSymplaTicket) {
       setShowSymplaModal(true);
+      return;
+    }
+
+    if (challenge.id === 'instagram_story') {
+      navigate('/instagram-mission');
       return;
     }
 
@@ -503,7 +509,7 @@ export default function Challenges() {
                       handleSimulateChallenge(challenge);
                     }}
                   >
-                    {challenge.isAction ? 'Começar' : challenge.type === 'auto' ? 'Escanear' : challenge.type === 'manual' ? 'Responder' : 'Check-in'}
+                    {challenge.id === 'instagram_story' ? 'Criar Story' : challenge.isAction ? 'Começar' : challenge.type === 'auto' ? 'Escanear' : challenge.type === 'manual' ? 'Responder' : 'Check-in'}
                   </button>
                 ) : (
                   <div
