@@ -15,6 +15,8 @@ import {
   ChevronLeft, ShieldCheck, Award
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import ConfirmModal from '../components/ConfirmModal';
+import FeedbackModal from '../components/FeedbackModal';
 
 const UFU_COURSES = [
   'Sistemas de Informação',
@@ -102,6 +104,9 @@ export default function Profile() {
   const [editFeedback, setEditFeedback] = useState(null);
   const [recheckingTicket, setRecheckingTicket] = useState(false);
   const [ticketNotice, setTicketNotice] = useState('');
+  const [confirmModal, setConfirmModal] = useState(null);
+  const [feedbackModal, setFeedbackModal] = useState(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   useEffect(() => {
     async function fetchUserData(currentUser) {
@@ -526,30 +531,74 @@ export default function Profile() {
     }
   };
 
-  const handleLogout = async () => {
-    const confirmed = window.confirm('Tem certeza que deseja sair da conta?');
-    if (!confirmed) return;
-    await logoutUser();
-    navigate('/login');
+  const handleLogout = () => {
+    setConfirmModal({
+      title: 'Sair da Conta',
+      message: 'Tem certeza que deseja sair da sua conta? Você precisará fazer login novamente para acessar seus pontos e desafios.',
+      confirmLabel: 'Sair da Conta',
+      cancelLabel: 'Continuar no App',
+      variant: 'warning',
+      Icon: LogOut,
+      onConfirm: async () => {
+        setIsActionLoading(true);
+        try {
+          await logoutUser();
+          navigate('/login');
+        } finally {
+          setIsActionLoading(false);
+          setConfirmModal(null);
+        }
+      }
+    });
   };
 
-  const handleDeleteAccount = async () => {
-    const confirmed = window.confirm(
-      '⚠️ ATENÇÃO: Tem certeza que deseja apagar permanentemente seu perfil e dados de cadastro? Você será desconectado e poderá cadastrar uma nova conta do zero.'
-    );
-    if (!confirmed) return;
-
-    try {
-      const res = await deleteCurrentUserAccount();
-      if (res.success) {
-        alert('Perfil apagado com sucesso! Redirecionando para o cadastro.');
-        navigate('/register');
-      } else {
-        alert('Não foi possível excluir a conta: ' + (res.error || 'Tente sair e fazer login novamente antes de excluir.'));
+  const handleDeleteAccount = () => {
+    setConfirmModal({
+      title: 'Apagar Conta Permanentemente',
+      message: 'Esta ação não pode ser desfeita. Todos os seus pontos acumulados, carimbos do passaporte e dados cadastrais serão removidos do evento.',
+      confirmLabel: 'Sim, Apagar Minha Conta',
+      cancelLabel: 'Manter Minha Conta',
+      variant: 'danger',
+      Icon: Trash2,
+      onConfirm: async () => {
+        setIsActionLoading(true);
+        try {
+          const res = await deleteCurrentUserAccount();
+          setConfirmModal(null);
+          if (res.success) {
+            setFeedbackModal({
+              type: 'success',
+              title: 'Perfil Apagado',
+              message: 'Seus dados foram excluídos com sucesso. Redirecionando para a tela inicial...',
+              actionLabel: 'OK',
+              onClose: () => navigate('/register')
+            });
+            setTimeout(() => {
+              navigate('/register');
+            }, 2500);
+          } else {
+            setFeedbackModal({
+              type: 'error',
+              title: 'Não foi possível excluir',
+              message: res.error || 'Tente sair e fazer login novamente antes de excluir sua conta.',
+              actionLabel: 'Entendido',
+              onClose: () => setFeedbackModal(null)
+            });
+          }
+        } catch (err) {
+          setConfirmModal(null);
+          setFeedbackModal({
+            type: 'error',
+            title: 'Erro ao Excluir Conta',
+            message: err.message || 'Ocorreu um erro inesperado ao excluir sua conta.',
+            actionLabel: 'Fechar',
+            onClose: () => setFeedbackModal(null)
+          });
+        } finally {
+          setIsActionLoading(false);
+        }
       }
-    } catch (err) {
-      alert('Erro ao excluir conta: ' + err.message);
-    }
+    });
   };
 
   // Renderizado client-side (qrcode.react, KAN-47) em vez de imagem de serviço externo: funciona
@@ -2537,6 +2586,38 @@ export default function Profile() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal Nativo de Confirmação (KAN-101) */}
+      {confirmModal && (
+        <ConfirmModal
+          isOpen={true}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          variant={confirmModal.variant}
+          Icon={confirmModal.Icon}
+          isLoading={isActionLoading}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => !isActionLoading && setConfirmModal(null)}
+        />
+      )}
+
+      {/* Modal Nativo de Feedback (Sucesso / Erro) */}
+      {feedbackModal && (
+        <FeedbackModal
+          isOpen={true}
+          type={feedbackModal.type}
+          title={feedbackModal.title}
+          message={feedbackModal.message}
+          actionLabel={feedbackModal.actionLabel}
+          onClose={() => {
+            const cb = feedbackModal.onClose;
+            setFeedbackModal(null);
+            if (typeof cb === 'function') cb();
+          }}
+        />
       )}
     </div>
   );
