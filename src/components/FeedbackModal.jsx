@@ -17,32 +17,28 @@ export default function FeedbackModal({
 
   const config = {
     success: {
-      borderColor: 'rgba(34, 197, 94, 0.4)',
-      glowColor: 'rgba(34, 197, 94, 0.25)',
+      borderColor: 'rgba(34, 197, 94, 0.25)',
       iconBg: 'rgba(34, 197, 94, 0.15)',
       iconColor: '#4ade80',
-      defaultTitle: 'Missão Concluída! 🎉',
+      defaultTitle: 'Missão Concluída!',
       Icon: Award,
     },
     error: {
-      borderColor: 'rgba(239, 68, 68, 0.4)',
-      glowColor: 'rgba(239, 68, 68, 0.25)',
+      borderColor: 'rgba(239, 68, 68, 0.25)',
       iconBg: 'rgba(239, 68, 68, 0.15)',
       iconColor: '#f87171',
       defaultTitle: 'Ops! Algo deu errado',
       Icon: AlertCircle,
     },
     warning: {
-      borderColor: 'rgba(234, 179, 8, 0.4)',
-      glowColor: 'rgba(234, 179, 8, 0.25)',
+      borderColor: 'rgba(234, 179, 8, 0.25)',
       iconBg: 'rgba(234, 179, 8, 0.15)',
       iconColor: '#facc15',
       defaultTitle: 'Atenção',
       Icon: AlertTriangle,
     },
     info: {
-      borderColor: 'rgba(59, 130, 246, 0.4)',
-      glowColor: 'rgba(59, 130, 246, 0.25)',
+      borderColor: 'rgba(59, 130, 246, 0.25)',
       iconBg: 'rgba(59, 130, 246, 0.15)',
       iconColor: '#60a5fa',
       defaultTitle: 'Informação',
@@ -78,8 +74,8 @@ export default function FeedbackModal({
           WebkitBackdropFilter: 'blur(20px)',
           borderRadius: '24px',
           padding: '28px 24px',
-          border: `1px solid ${current.borderColor}`,
-          boxShadow: `0 20px 50px rgba(0, 0, 0, 0.6), 0 0 35px ${current.glowColor}`,
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -113,7 +109,7 @@ export default function FeedbackModal({
           <X size={18} />
         </button>
 
-        {/* Ícone com Glow Redondo */}
+        {/* Ícone */}
         <div
           style={{
             width: '68px',
@@ -124,8 +120,7 @@ export default function FeedbackModal({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: '20px',
-            boxShadow: `0 0 20px ${current.glowColor}`
+            marginBottom: '20px'
           }}
         >
           <ModalIcon size={34} color={current.iconColor} />
@@ -141,7 +136,7 @@ export default function FeedbackModal({
             fontFamily: "'Space Grotesk', sans-serif"
           }}
         >
-          {title || current.defaultTitle}
+          {(title || current.defaultTitle)?.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}🎉✨]/gu, '').trim()}
         </h3>
 
         {/* Badge de Pontos Ganhos (se aplicável) */}
@@ -153,14 +148,13 @@ export default function FeedbackModal({
               gap: '6px',
               padding: '6px 14px',
               borderRadius: '9999px',
-              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(234, 179, 8, 0.2))',
-              border: '1px solid rgba(245, 158, 11, 0.4)',
+              background: 'rgba(245, 158, 11, 0.15)',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
               color: '#fbbf24',
               fontWeight: '700',
               fontSize: '0.85rem',
               fontFamily: "'JetBrains Mono', monospace",
-              marginBottom: '14px',
-              boxShadow: '0 0 15px rgba(245, 158, 11, 0.2)'
+              marginBottom: '14px'
             }}
           >
             <Award size={16} />
@@ -189,17 +183,12 @@ export default function FeedbackModal({
             width: '100%',
             padding: '14px 20px',
             borderRadius: '16px',
-            background: type === 'error'
-              ? 'linear-gradient(135deg, #ef4444, #dc2626)'
-              : 'linear-gradient(135deg, #2563eb, #0ea5e9)',
+            background: type === 'error' ? '#ef4444' : '#2563eb',
             border: 'none',
             color: '#ffffff',
             fontWeight: '700',
             fontSize: '0.95rem',
             cursor: 'pointer',
-            boxShadow: type === 'error'
-              ? '0 8px 24px rgba(239, 68, 68, 0.3)'
-              : '0 8px 24px rgba(37, 99, 235, 0.3)',
             transition: 'transform 0.15s, opacity 0.15s',
             fontFamily: "'Space Grotesk', sans-serif"
           }}

@@ -260,7 +260,7 @@ export function useUser() {
 
       if (result.success) {
         addNotification({
-          title: 'Missão Concluída! 🎉',
+          title: 'Missão Concluída!',
           message: `Você ganhou +${awardedPoints} pontos por completar a missão.`,
           type: 'points',
           actionUrl: '/ranking',

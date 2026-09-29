@@ -186,7 +186,7 @@ export default function Challenges() {
     if (res && (res.success || res === true)) {
       setFeedback({
         type: 'success',
-        title: 'Desafio Concluído! 🎉',
+        title: 'Desafio Concluído!',
         message: `Parabéns! Você completou "${challenge.title || challenge.name}" e pontuou com sucesso.`,
         points: (res && res.points) || challenge.points
       });
@@ -275,7 +275,7 @@ export default function Challenges() {
       if (res && (res.success || res === true)) {
         setFeedback({
           type: 'success',
-          title: 'Missão Concluída! 🎉',
+          title: 'Missão Concluída!',
           message: `Você cumpriu a missão "${activeManualChallenge.title || activeManualChallenge.name}" com sucesso!`,
           points: (res && res.points) || activeManualChallenge.points
         });
