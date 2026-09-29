@@ -59,6 +59,44 @@ export default function Register() {
   const [rawImageForCrop, setRawImageForCrop] = useState(null);
   const [focusedInput, setFocusedInput] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const passwordInputRef = useRef(null);
+  const confirmPasswordInputRef = useRef(null);
+
+  const handleTogglePassword = () => {
+    const passEl = passwordInputRef.current;
+    const confEl = confirmPasswordInputRef.current;
+
+    const isPassActive = document.activeElement === passEl;
+    const isConfActive = document.activeElement === confEl;
+
+    const passStart = passEl ? passEl.selectionStart : null;
+    const passEnd = passEl ? passEl.selectionEnd : null;
+    const confStart = confEl ? confEl.selectionStart : null;
+    const confEnd = confEl ? confEl.selectionEnd : null;
+
+    setShowPassword((prev) => !prev);
+
+    requestAnimationFrame(() => {
+      if (isPassActive && passEl) {
+        passEl.focus();
+        if (passStart !== null && passEnd !== null) {
+          passEl.setSelectionRange(passStart, passEnd);
+        }
+      } else if (isConfActive && confEl) {
+        confEl.focus();
+        if (confStart !== null && confEnd !== null) {
+          confEl.setSelectionRange(confStart, confEnd);
+        }
+      } else {
+        if (passEl && passStart !== null && passEnd !== null) {
+          passEl.setSelectionRange(passStart, passEnd);
+        }
+        if (confEl && confStart !== null && confEnd !== null) {
+          confEl.setSelectionRange(confStart, confEnd);
+        }
+      }
+    });
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -471,6 +509,7 @@ export default function Register() {
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Senha</label>
                   <div style={{ position: 'relative' }}>
                     <input 
+                      ref={passwordInputRef}
                       name="password" type={showPassword ? "text" : "password"} placeholder="••••••••"
                       value={formData.password} onChange={handleChange}
                       onFocus={() => setFocusedInput('password')} onBlur={() => setFocusedInput(null)}
@@ -479,7 +518,7 @@ export default function Register() {
                       required
                     />
                     <button
-                      type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setShowPassword(!showPassword)}
+                      type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleTogglePassword}
                       style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -496,6 +535,7 @@ export default function Register() {
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Confirmar Senha</label>
                   <div style={{ position: 'relative' }}>
                     <input 
+                      ref={confirmPasswordInputRef}
                       name="confirmPassword" type={showPassword ? "text" : "password"} placeholder="••••••••"
                       value={formData.confirmPassword} onChange={handleChange}
                       onFocus={() => setFocusedInput('confirmPassword')} onBlur={() => setFocusedInput(null)}
