@@ -725,7 +725,7 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* 5. BOTTOM SHEET DE RESULTADO DA LEITURA (EMBAIXO, SEM BARRINHA DE ARRASTAR) */}
+      {/* 5. BOTTOM SHEET / POPUP DE RESULTADO DA LEITURA (ESTILO AIRDROP / CRACHÁ VIRTUAL) */}
       {scanResult && typeof document !== 'undefined' && createPortal(
         <div
           role="dialog"
@@ -734,13 +734,14 @@ export default function Scanner() {
             position: 'fixed',
             inset: 0,
             zIndex: 2000,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
+            backgroundColor: 'rgba(0, 0, 0, 0.82)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
             display: 'flex',
             alignItems: 'flex-end',
             justifyContent: 'center',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            padding: '0 8px'
           }}
           onClick={() => setScanResult(null)}
         >
@@ -748,15 +749,15 @@ export default function Scanner() {
             style={{
               width: '100%',
               maxWidth: '430px',
-              maxHeight: '88dvh',
-              backgroundColor: '#0A0E17',
-              borderTop: '1px solid #1E293B',
-              borderTopLeftRadius: '24px',
-              borderTopRightRadius: '24px',
-              padding: '14px 16px',
+              maxHeight: '92dvh',
+              backgroundColor: '#090D16',
+              border: '1px solid #1E293B',
+              borderTopLeftRadius: '28px',
+              borderTopRightRadius: '28px',
+              padding: '16px 18px',
               paddingBottom: 'max(24px, calc(env(safe-area-inset-bottom) + 16px))',
-              boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.8)',
-              animation: 'slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              boxShadow: '0 -16px 50px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(56, 189, 248, 0.1)',
+              animation: 'slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
               position: 'relative',
               display: 'flex',
               flexDirection: 'column',
@@ -764,13 +765,13 @@ export default function Scanner() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Cabeçalho do Card: Status + Botão Fechar X (Fixo no topo, sem barrinha de arrastar) */}
+            {/* Cabeçalho do Card: Status + Botão Fechar X */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: '10px',
+                marginBottom: '12px',
                 flexShrink: 0
               }}
             >
@@ -805,10 +806,10 @@ export default function Scanner() {
                       textOverflow: 'ellipsis'
                     }}
                   >
-                    {scanResult.title}
+                    {scanResult.participant ? 'Conexão Estabelecida' : scanResult.title}
                   </h3>
                   <p style={{ fontSize: '0.72rem', color: '#94A3B8', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {scanResult.message}
+                    {scanResult.participant ? 'Crachá virtual lido via AirDrop TechWeek' : scanResult.message}
                   </p>
                 </div>
               </div>
@@ -819,8 +820,8 @@ export default function Scanner() {
                 onClick={() => setScanResult(null)}
                 aria-label="Fechar resultado"
                 style={{
-                  width: '30px',
-                  height: '30px',
+                  width: '32px',
+                  height: '32px',
                   borderRadius: '50%',
                   backgroundColor: 'rgba(255, 255, 255, 0.08)',
                   border: 'none',
@@ -830,10 +831,11 @@ export default function Scanner() {
                   justifyContent: 'center',
                   cursor: 'pointer',
                   flexShrink: 0,
-                  marginLeft: '8px'
+                  marginLeft: '8px',
+                  transition: 'background 0.15s ease'
                 }}
               >
-                <X size={15} />
+                <X size={16} />
               </button>
             </div>
 
