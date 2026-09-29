@@ -9,13 +9,11 @@ import {
   Smartphone, 
   ArrowDown
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
 
 const STORAGE_KEY = 'tw_pwa_install_dismissed_time';
 const DISMISS_DURATION_MS = 24 * 60 * 60 * 1000; // 24 horas
 
 export default function InstallPwaCard() {
-  const { user } = useAuth();
   const [isVisible, setIsVisible] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isAppleDevice, setIsAppleDevice] = useState(false);
@@ -23,39 +21,25 @@ export default function InstallPwaCard() {
   const [modalPlatform, setModalPlatform] = useState('ios'); // 'ios' | 'android'
 
   useEffect(() => {
-    const isSpecialAccount = 
-      user?.email === 'sam03amorim@gmail.com' || 
-      (typeof localStorage !== 'undefined' && localStorage.getItem('facom_test_session')?.includes('sam03amorim@gmail.com'));
-
-    // Se for a conta do desenvolvedor/admin, limpa o bloqueio de 24h
-    if (isSpecialAccount) {
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem('tw_pwa_install_dismissed_time');
-      } catch {}
-    }
-
     // 1. Verifica se já está rodando como App instalado (Standalone)
     const isStandalone = 
       (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)')?.matches) ||
       (typeof window !== 'undefined' && window.navigator?.standalone === true) ||
       (typeof document !== 'undefined' && document.referrer?.includes('android-app://'));
 
-    if (isStandalone && !isSpecialAccount) {
+    if (isStandalone) {
       setIsVisible(false);
       return;
     }
 
-    // 2. Verifica se o usuário dispensou recentemente nas últimas 24h (ignorado para sam03amorim@gmail.com)
-    if (!isSpecialAccount) {
-      try {
-        const dismissedTime = localStorage.getItem(STORAGE_KEY);
-        if (dismissedTime && Date.now() - Number(dismissedTime) < DISMISS_DURATION_MS) {
-          setIsVisible(false);
-          return;
-        }
-      } catch {}
-    }
+    // 2. Verifica se o usuário dispensou recentemente nas últimas 24h
+    try {
+      const dismissedTime = localStorage.getItem(STORAGE_KEY);
+      if (dismissedTime && Date.now() - Number(dismissedTime) < DISMISS_DURATION_MS) {
+        setIsVisible(false);
+        return;
+      }
+    } catch {}
 
     // 3. Detecta sistema operacional
     const userAgent = typeof window !== 'undefined' ? (window.navigator?.userAgent || '') : '';
@@ -74,13 +58,13 @@ export default function InstallPwaCard() {
     // Exibe o card moderno para incentivar a instalação
     const timer = setTimeout(() => {
       setIsVisible(true);
-    }, 400);
+    }, 1200);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       clearTimeout(timer);
     };
-  }, [user]);
+  }, []);
 
   const handleDismiss = () => {
     setIsVisible(false);
@@ -191,20 +175,6 @@ export default function InstallPwaCard() {
                 }}
               >
                 Instale o App no Celular
-              </span>
-              <span
-                style={{
-                  padding: '1px 6px',
-                  borderRadius: '4px',
-                  backgroundColor: 'rgba(37, 99, 235, 0.15)',
-                  border: '1px solid rgba(37, 99, 235, 0.3)',
-                  color: '#60A5FA',
-                  fontSize: '0.60rem',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontWeight: 700
-                }}
-              >
-                1-TOQUE
               </span>
             </div>
             <p
