@@ -354,13 +354,13 @@ export default function Feed() {
                 fontWeight: 700,
                 padding: '7px 14px',
                 borderRadius: '999px',
-                backgroundColor: isActive ? '#0284C7' : '#0F141F',
-                border: isActive ? '1px solid #38BDF8' : '1px solid #1E293B',
+                backgroundColor: isActive ? '#2563EB' : '#0F141F',
+                border: isActive ? '1px solid #2563EB' : '1px solid #1E293B',
                 color: isActive ? '#FFFFFF' : '#94A3B8',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 transition: 'all 0.15s ease',
-                boxShadow: isActive ? '0 0 10px rgba(56, 189, 248, 0.3)' : 'none'
+                boxShadow: isActive ? '0 0 10px rgba(37, 99, 235, 0.3)' : 'none'
               }}
             >
               {tab.label}

@@ -194,7 +194,7 @@ export default function PassportTab({ userProfile }) {
         </h2>
 
         <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: '#94A3B8', lineHeight: 1.45 }}>
-          Visite os estandes das empresas parceiras e apresente seu crachá para ser escaneado. Cada visita garante <strong>+50 pontos</strong> no ranking!
+          Visite os estandes das empresas parceiras para ser escaneado. Cada visita garante <strong>+50 pontos</strong> no ranking e, ao escanear todas as empresas, você ainda <strong>libera uma pontuação extra</strong> (+100 pts bônus com o Bilhete Dourado)!
         </p>
 
         {/* Barra de Progresso Geral */}
@@ -225,17 +225,17 @@ export default function PassportTab({ userProfile }) {
             {isFullPassport ? (
               <span style={{ color: '#FDE047', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 <Trophy size={14} color="#FDE047" />
-                <span>Passaporte Completo! Bilhete Dourado ativo (+100 pts)</span>
+                <span>Passaporte Completo! Bilhete Dourado ativo (+100 pts bônus)</span>
               </span>
             ) : isEligibleForPrizes ? (
               <span style={{ color: '#34D399', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 <CheckCircle2 size={14} color="#34D399" />
-                <span>Elegível aos Sorteios! Complete todas para o Bilhete Dourado.</span>
+                <span>Elegível aos Sorteios! Escaneie todas para liberar a pontuação extra (+100 pts).</span>
               </span>
             ) : (
               <span style={{ color: '#94A3B8', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 <AlertCircle size={13} color="#F59E0B" />
-                <span>Obrigatório: Kanastra ({kanastraVisited ? '✓' : '0/1'}) + Bayer ({bayerVisited ? '✓' : '0/1'}) + 1 parceira.</span>
+                <span>Obrigatório: Kanastra ({kanastraVisited ? '✓' : '0/1'}) + Bayer ({bayerVisited ? '✓' : '0/1'}) + 1 parceira. Ao escanear todas, libera pontuação extra!</span>
               </span>
             )}
           </div>
@@ -337,9 +337,9 @@ export default function PassportTab({ userProfile }) {
 
               <span
                 style={{
-                  backgroundColor: 'rgba(239, 68, 68, 0.18)',
-                  color: '#F87171',
-                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                  color: '#38BDF8',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
                   padding: '4px 8px',
                   borderRadius: '10px',
                   fontSize: '0.68rem',
@@ -416,7 +416,7 @@ export default function PassportTab({ userProfile }) {
                 maxHeight: '52px',
                 maxWidth: '85%',
                 objectFit: 'contain',
-                filter: 'brightness(1.05)'
+                filter: 'brightness(0) invert(1)'
               }}
             />
           </div>
@@ -477,9 +477,9 @@ export default function PassportTab({ userProfile }) {
 
               <span
                 style={{
-                  backgroundColor: 'rgba(239, 68, 68, 0.18)',
-                  color: '#F87171',
-                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                  color: '#FBBF24',
+                  border: '1px solid rgba(245, 158, 11, 0.35)',
                   padding: '4px 8px',
                   borderRadius: '10px',
                   fontSize: '0.68rem',

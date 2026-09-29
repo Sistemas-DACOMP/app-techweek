@@ -378,7 +378,6 @@ export default function Challenges() {
             gap: '8px'
           }}
         >
-          <Sparkles size={16} />
           <span>Missões</span>
         </button>
 
