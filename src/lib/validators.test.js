@@ -10,6 +10,12 @@ import {
   normalizeEmail,
   isValidEmail,
   suggestEmailCorrection,
+  isValidName,
+  isValidUsername,
+  formatPhone,
+  isValidPhone,
+  normalizeGithub,
+  isValidGithub,
 } from './validators';
 
 // REG-C1 (comportamento observado no codigo, sem card Jira dedicado):
@@ -158,5 +164,78 @@ describe('validateMissionPhoto (REG-MISSION-002)', () => {
       valid: true,
       reason: null,
     });
+  });
+});
+
+describe('isValidName', () => {
+  it('rejeita nomes com menos de 2 caracteres', () => {
+    expect(isValidName('')).toBe(false);
+    expect(isValidName('a')).toBe(false);
+    expect(isValidName('  b  ')).toBe(false);
+  });
+
+  it('aceita nomes validos com 2 ou mais caracteres', () => {
+    expect(isValidName('Ana')).toBe(true);
+    expect(isValidName('Samuel')).toBe(true);
+  });
+});
+
+describe('isValidUsername', () => {
+  it('rejeita usernames com menos de 3 caracteres ou com caracteres invalidos', () => {
+    expect(isValidUsername('ab')).toBe(false);
+    expect(isValidUsername('user name')).toBe(false);
+    expect(isValidUsername('user#123')).toBe(false);
+  });
+
+  it('aceita usernames validos', () => {
+    expect(isValidUsername('samuel')).toBe(true);
+    expect(isValidUsername('@dev_ninja')).toBe(true);
+    expect(isValidUsername('user.123')).toBe(true);
+  });
+});
+
+describe('formatPhone e isValidPhone', () => {
+  it('formata telefone limpando letras e aplicando mascara (34) 99999-8888', () => {
+    expect(formatPhone('34999998888')).toBe('(34) 99999-8888');
+    expect(formatPhone('3499998888')).toBe('(34) 9999-8888');
+    expect(formatPhone('abc34999998888xyz')).toBe('(34) 99999-8888');
+  });
+
+  it('valida telefone apenas se tiver 10 ou 11 digitos numéricos', () => {
+    expect(isValidPhone('(34) 99999-8888')).toBe(true);
+    expect(isValidPhone('(34) 3232-1000')).toBe(true);
+    expect(isValidPhone('34999998888')).toBe(true);
+    expect(isValidPhone('12345')).toBe(false);
+    expect(isValidPhone('')).toBe(false);
+  });
+});
+
+describe('normalizeGithub e isValidGithub (KAN-96)', () => {
+  it('normaliza links completos, arrobas e espaços para o handle puro', () => {
+    expect(normalizeGithub('https://github.com/erickraposo')).toBe('erickraposo');
+    expect(normalizeGithub('http://github.com/erickraposo/')).toBe('erickraposo');
+    expect(normalizeGithub('https://www.github.com/erickraposo')).toBe('erickraposo');
+    expect(normalizeGithub('@erickraposo')).toBe('erickraposo');
+    expect(normalizeGithub('  erickraposo  ')).toBe('erickraposo');
+    expect(normalizeGithub('')).toBe('');
+    expect(normalizeGithub(null)).toBe('');
+  });
+
+  it('valida handles e links válidos do GitHub', () => {
+    expect(isValidGithub('erickraposo')).toBe(true);
+    expect(isValidGithub('@erickraposo')).toBe(true);
+    expect(isValidGithub('https://github.com/erickraposo')).toBe(true);
+    expect(isValidGithub('dev-tech-123')).toBe(true);
+    expect(isValidGithub('a')).toBe(true);
+  });
+
+  it('rejeita handles inválidos do GitHub', () => {
+    expect(isValidGithub('')).toBe(false);
+    expect(isValidGithub('   ')).toBe(false);
+    expect(isValidGithub('-invalido')).toBe(false);
+    expect(isValidGithub('invalido-')).toBe(false);
+    expect(isValidGithub('user name')).toBe(false);
+    expect(isValidGithub('user@github')).toBe(false);
+    expect(isValidGithub('a'.repeat(40))).toBe(false);
   });
 });

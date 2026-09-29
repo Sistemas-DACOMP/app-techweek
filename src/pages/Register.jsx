@@ -1,12 +1,24 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Mascot from '../components/Mascot';
 import AvatarCropperModal from '../components/AvatarCropperModal';
-import { Eye, EyeOff, Loader2, Upload, Camera, RefreshCw, Trash2, Plus, ShieldCheck } from 'lucide-react';
+import Terms from './Terms';
+import { Eye, EyeOff, Loader2, Camera, RefreshCw, Trash2, Plus, ShieldCheck, X } from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
+import { auth } from '../lib/firebase';
 import { signUpWithEmail } from '../lib/auth';
 import { createUserProfile, uploadUserAvatar } from '../lib/userService';
-import { getPasswordStrength, suggestEmailCorrection, MIN_PASSWORD_LENGTH } from '../lib/validators';
+import { 
+  getPasswordStrength, 
+  MIN_PASSWORD_LENGTH, 
+  isValidEmail, 
+  isValidName, 
+  isValidUsername, 
+  formatPhone, 
+  isValidPhone, 
+  passwordsMatch 
+} from '../lib/validators';
+import { verifySymplaTicket } from '../lib/sympla';
 
 const UFU_COURSES = [
   'Sistemas de Informação',
@@ -38,6 +50,7 @@ export default function Register() {
     period: '',
     linkedin: '',
     instagram: '',
+    github: '',
     termsAccepted: false
   });
   const [step, setStep] = useState(1);
@@ -46,15 +59,75 @@ export default function Register() {
   const [rawImageForCrop, setRawImageForCrop] = useState(null);
   const [focusedInput, setFocusedInput] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const passwordInputRef = useRef(null);
+  const confirmPasswordInputRef = useRef(null);
+
+  const handleTogglePassword = () => {
+    const passEl = passwordInputRef.current;
+    const confEl = confirmPasswordInputRef.current;
+
+    const isPassActive = document.activeElement === passEl;
+    const isConfActive = document.activeElement === confEl;
+
+    const passStart = passEl ? passEl.selectionStart : null;
+    const passEnd = passEl ? passEl.selectionEnd : null;
+    const confStart = confEl ? confEl.selectionStart : null;
+    const confEnd = confEl ? confEl.selectionEnd : null;
+
+    setShowPassword((prev) => !prev);
+
+    requestAnimationFrame(() => {
+      if (isPassActive && passEl) {
+        passEl.focus();
+        if (passStart !== null && passEnd !== null) {
+          passEl.setSelectionRange(passStart, passEnd);
+        }
+      } else if (isConfActive && confEl) {
+        confEl.focus();
+        if (confStart !== null && confEnd !== null) {
+          confEl.setSelectionRange(confStart, confEnd);
+        }
+      } else {
+        if (passEl && passStart !== null && passEnd !== null) {
+          passEl.setSelectionRange(passStart, passEnd);
+        }
+        if (confEl && confStart !== null && confEnd !== null) {
+          confEl.setSelectionRange(confStart, confEnd);
+        }
+      }
+    });
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Redireciona apenas se o usuário já abrir a tela autenticado
+    if (auth.currentUser && !loading) {
+      const hasOnboarding = localStorage.getItem('facom_onboarding_completed') === 'true';
+      navigate(hasOnboarding ? '/' : '/onboarding', { replace: true });
+    }
+  }, []);
 
   const passwordStrength = getPasswordStrength(formData.password);
 
   const handleChange = (e) => {
-    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    setFormData({ ...formData, [e.target.name]: value });
+    const { name, type, checked, value } = e.target;
+    let newVal = type === 'checkbox' ? checked : value;
+
+    // Máscara automática de telefone para evitar letras e formatar como (XX) XXXXX-XXXX
+    if (name === 'phone') {
+      newVal = formatPhone(value);
+    }
+
+    setFormData(prev => ({ ...prev, [name]: newVal }));
+
+    // Limpa o erro do campo quando o usuário edita
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
 
   const handleAvatarChange = (e) => {
@@ -72,26 +145,57 @@ export default function Register() {
     setRawImageForCrop(null);
   };
 
+  const validateStep1 = () => {
+    const errors = {};
+
+    if (!isValidName(formData.firstName)) {
+      errors.firstName = 'Nome deve ter pelo menos 2 caracteres.';
+    }
+
+    if (!isValidName(formData.lastName)) {
+      errors.lastName = 'Sobrenome deve ter pelo menos 2 caracteres.';
+    }
+
+    if (!isValidUsername(formData.username)) {
+      errors.username = 'Usuário deve ter de 3 a 20 caracteres (letras, números, . ou _).';
+    }
+
+    if (!isValidEmail(formData.email)) {
+      errors.email = 'Insira um e-mail válido com domínio (ex: usuario@exemplo.com).';
+    }
+
+    if (!isValidPhone(formData.phone)) {
+      errors.phone = 'Insira um telefone válido com DDD (10 ou 11 dígitos numéricos).';
+    }
+
+    const isStudent = formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
+    if (isStudent && formData.course === 'Outro (especificar)' && !formData.customCourse.trim()) {
+      errors.customCourse = 'Por favor, digite o nome do seu curso.';
+    }
+
+    if (!formData.password || formData.password.length < MIN_PASSWORD_LENGTH) {
+      errors.password = `A senha deve ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`;
+    }
+
+    if (!passwordsMatch(formData.password, formData.confirmPassword)) {
+      errors.confirmPassword = 'As senhas não coincidem!';
+    }
+
+    return errors;
+  };
+
   const handleNextStep = (e) => {
     e.preventDefault();
     setError(null);
 
-    const isStudent = formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
-    if (isStudent && formData.course === 'Outro (especificar)' && !formData.customCourse.trim()) {
-      setError("Por favor, digite o nome do seu curso.");
+    const step1Errors = validateStep1();
+    if (Object.keys(step1Errors).length > 0) {
+      setFieldErrors(step1Errors);
+      setError('Por favor, corrija os erros nos campos antes de prosseguir.');
       return;
     }
 
-    if (formData.password.length < MIN_PASSWORD_LENGTH) {
-      setError(`A senha deve ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`);
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setError("As senhas não coincidem!");
-      return;
-    }
-
+    setFieldErrors({});
     setStep(2);
   };
 
@@ -136,7 +240,40 @@ export default function Register() {
 
       const uid = authResult.data.user.uid;
 
-      // 2. Cria o documento de perfil no Cloud Firestore
+      // 2. Consulta automática do Sympla pelo e-mail informado (timeout resiliente de 3s)
+      let symplaTicketData = null;
+      try {
+        const symplaPromise = verifySymplaTicket({ email: formData.email });
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 3000));
+        const symplaRes = await Promise.race([symplaPromise, timeoutPromise]);
+        
+        if (symplaRes?.verified && (symplaRes.symplaTicket || symplaRes.participant)) {
+          const p = symplaRes.participant;
+          symplaTicketData = symplaRes.symplaTicket || {
+            participantId: p?.id,
+            orderId: p?.orderId,
+            ticketNumber: p?.ticketNumber,
+            ticketName: p?.ticketName,
+            qrCodeData: p?.qrCodeData || p?.ticketNumber,
+            syncedAt: new Date().toISOString()
+          };
+        }
+      } catch (symplaErr) {
+        console.warn('Aviso: Verificação preliminar do Sympla falhou, prosseguindo:', symplaErr);
+      }
+
+      // 3. Processa a foto de perfil imediatamente antes de gravar o perfil
+      let finalAvatarUrl = avatarPreview || null;
+      if (avatarFile) {
+        try {
+          finalAvatarUrl = await uploadUserAvatar(uid, avatarFile);
+        } catch (avatarErr) {
+          console.warn("Aviso: Upload para o Storage falhou, mantendo prévia local:", avatarErr);
+          // finalAvatarUrl permanece como avatarPreview (Base64) garantindo que a foto não suma
+        }
+      }
+
+      // 4. Cria o documento de perfil no Firestore e no cache local com todos os dados
       await createUserProfile(uid, {
         email: formData.email,
         firstName: formData.firstName,
@@ -148,22 +285,18 @@ export default function Register() {
         period: isStudent ? formData.period : null,
         linkedin: formData.linkedin,
         instagram: formData.instagram,
-        symplaTicket: null
+        github: formData.github,
+        avatarUrl: finalAvatarUrl,
+        hasSymplaTicket: !!symplaTicketData,
+        symplaTicket: symplaTicketData
       });
 
-      // 4. Faz o upload da foto de perfil no Firebase Storage se fornecida
-      if (avatarFile) {
-        try {
-          await uploadUserAvatar(uid, avatarFile);
-        } catch (avatarErr) {
-          console.warn("Aviso: Falha ao enviar foto durante o cadastro:", avatarErr);
-          // Não bloqueia o cadastro se o upload da foto falhar
-        }
-      }
-
+      try {
+        localStorage.removeItem('facom_onboarding_completed');
+        localStorage.setItem('facom_logged_in', 'true');
+      } catch (_e) {}
       setLoading(false);
-      localStorage.setItem('facom_logged_in', 'true');
-      navigate('/onboarding');
+      navigate('/onboarding', { replace: true });
     } catch (err) {
       console.error("Erro no cadastro:", err);
       setError(err.message || "Erro inesperado ao realizar cadastro.");
@@ -172,14 +305,17 @@ export default function Register() {
   };
 
   // Lógica de interação do mascote Alan
-  const isPasswordFocused = (focusedInput === 'password' || focusedInput === 'confirmPassword');
-  const isTypingSomething = focusedInput !== null && !isPasswordFocused;
+  const isStep2 = step === 2;
+  const isPasswordFocused = !isStep2 && (focusedInput === 'password' || focusedInput === 'confirmPassword');
+  const isTypingSomething = !isStep2 && focusedInput !== null && !isPasswordFocused;
   const currentTextLength = isTypingSomething ? (formData[focusedInput] || '').length : 0;
-  const lookOffset = isTypingSomething ? -4 + (currentTextLength * 0.5) : 0;
-  const lookOffsetY = isTypingSomething ? 6 : 0;
   
-  const isCoveringEyes = isPasswordFocused;
-  const isPeeking = isPasswordFocused && showPassword;
+  // Na Etapa 2 de cadastro, o mascote Alan destampa os olhos e olha para baixo
+  const lookOffset = isStep2 ? 0 : (isTypingSomething ? -4 + (currentTextLength * 0.5) : 0);
+  const lookOffsetY = isStep2 ? 8 : (isTypingSomething ? 6 : 0);
+  
+  const isCoveringEyes = !isStep2 && isPasswordFocused;
+  const isPeeking = !isStep2 && isPasswordFocused && showPassword;
 
   return (
     <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 16px 40px 16px' }}>
@@ -219,8 +355,15 @@ export default function Register() {
                     name="firstName" type="text" placeholder="Nome"
                     value={formData.firstName} onChange={handleChange}
                     onFocus={() => setFocusedInput('firstName')} onBlur={() => setFocusedInput(null)}
-                    className="login-input" required
+                    className="login-input" 
+                    style={fieldErrors.firstName ? { borderColor: '#ef4444' } : {}}
+                    required
                   />
+                  {fieldErrors.firstName && (
+                    <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
+                      {fieldErrors.firstName}
+                    </div>
+                  )}
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Sobrenome</label>
@@ -228,8 +371,15 @@ export default function Register() {
                     name="lastName" type="text" placeholder="Sobrenome"
                     value={formData.lastName} onChange={handleChange}
                     onFocus={() => setFocusedInput('lastName')} onBlur={() => setFocusedInput(null)}
-                    className="login-input" required
+                    className="login-input" 
+                    style={fieldErrors.lastName ? { borderColor: '#ef4444' } : {}}
+                    required
                   />
+                  {fieldErrors.lastName && (
+                    <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
+                      {fieldErrors.lastName}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -239,8 +389,15 @@ export default function Register() {
                   name="username" type="text" placeholder="Ex: devninja"
                   value={formData.username} onChange={handleChange}
                   onFocus={() => setFocusedInput('username')} onBlur={() => setFocusedInput(null)}
-                  className="login-input" required
+                  className="login-input" 
+                  style={fieldErrors.username ? { borderColor: '#ef4444' } : {}}
+                  required
                 />
+                {fieldErrors.username && (
+                  <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
+                    {fieldErrors.username}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -298,8 +455,15 @@ export default function Register() {
                         name="customCourse" type="text" placeholder="Digite o nome completo do seu curso..."
                         value={formData.customCourse} onChange={handleChange}
                         onFocus={() => setFocusedInput('customCourse')} onBlur={() => setFocusedInput(null)}
-                        className="login-input" required
+                        className="login-input" 
+                        style={fieldErrors.customCourse ? { borderColor: '#ef4444' } : {}}
+                        required
                       />
+                      {fieldErrors.customCourse && (
+                        <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
+                          {fieldErrors.customCourse}
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
@@ -312,18 +476,32 @@ export default function Register() {
                   value={formData.email} onChange={handleChange}
                   onFocus={() => setFocusedInput('email')} 
                   onBlur={() => setFocusedInput(null)}
-                  className="login-input" required
+                  className="login-input" 
+                  style={fieldErrors.email ? { borderColor: '#ef4444' } : {}}
+                  required
                 />
+                {fieldErrors.email && (
+                  <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
+                    {fieldErrors.email}
+                  </div>
+                )}
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>WhatsApp / Telefone</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>WhatsApp / Telefone (apenas números)</label>
                 <input 
                   name="phone" type="tel" placeholder="(34) 99999-9999"
                   value={formData.phone} onChange={handleChange}
                   onFocus={() => setFocusedInput('phone')} onBlur={() => setFocusedInput(null)}
-                  className="login-input" required
+                  className="login-input" 
+                  style={fieldErrors.phone ? { borderColor: '#ef4444' } : {}}
+                  required
                 />
+                {fieldErrors.phone && (
+                  <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
+                    {fieldErrors.phone}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '12px' }}>
@@ -331,30 +509,46 @@ export default function Register() {
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Senha</label>
                   <div style={{ position: 'relative' }}>
                     <input 
+                      ref={passwordInputRef}
                       name="password" type={showPassword ? "text" : "password"} placeholder="••••••••"
                       value={formData.password} onChange={handleChange}
                       onFocus={() => setFocusedInput('password')} onBlur={() => setFocusedInput(null)}
-                      className="login-input" style={{ paddingRight: '40px' }} required
+                      className="login-input" 
+                      style={fieldErrors.password ? { paddingRight: '40px', borderColor: '#ef4444' } : { paddingRight: '40px' }} 
+                      required
                     />
                     <button
-                      type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setShowPassword(!showPassword)}
+                      type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleTogglePassword}
                       style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
+                  {fieldErrors.password && (
+                    <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
+                      {fieldErrors.password}
+                    </div>
+                  )}
                 </div>
                 
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Confirmar Senha</label>
                   <div style={{ position: 'relative' }}>
                     <input 
+                      ref={confirmPasswordInputRef}
                       name="confirmPassword" type={showPassword ? "text" : "password"} placeholder="••••••••"
                       value={formData.confirmPassword} onChange={handleChange}
                       onFocus={() => setFocusedInput('confirmPassword')} onBlur={() => setFocusedInput(null)}
-                      className="login-input" style={{ paddingRight: '40px' }} required
+                      className="login-input" 
+                      style={fieldErrors.confirmPassword ? { paddingRight: '40px', borderColor: '#ef4444' } : { paddingRight: '40px' }} 
+                      required
                     />
                   </div>
+                  {fieldErrors.confirmPassword && (
+                    <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
+                      {fieldErrors.confirmPassword}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -569,6 +763,16 @@ export default function Register() {
                 </div>
               </div>
 
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>GitHub (Opcional)</label>
+                <input 
+                  name="github" type="text" placeholder="github.com/seu-usuario ou @seu-usuario"
+                  value={formData.github} onChange={handleChange}
+                  onFocus={() => setFocusedInput('github')} onBlur={() => setFocusedInput(null)}
+                  className="login-input"
+                />
+              </div>
+
               {/* Termo de Consentimento LGPD */}
               <div 
                 style={{ 
@@ -592,7 +796,23 @@ export default function Register() {
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 'bold', color: 'white', marginBottom: '2px' }}>
                     <ShieldCheck size={14} color="#10b981" /> Termo de Privacidade (LGPD)
                   </span>
-                  Concordo com a coleta dos meus dados para identificação, emissão de crachá, networking e gamificação durante a FACOM Tech Week.
+                  Concordo com a coleta dos meus dados conforme os{' '}
+                  <button 
+                    type="button" 
+                    onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }} 
+                    style={{ background: 'none', border: 'none', color: '#00d2ff', textDecoration: 'underline', padding: 0, font: 'inherit', cursor: 'pointer', fontWeight: '500' }}
+                  >
+                    Termos de Uso
+                  </button>{' '}
+                  e a{' '}
+                  <button 
+                    type="button" 
+                    onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }} 
+                    style={{ background: 'none', border: 'none', color: '#10b981', textDecoration: 'underline', padding: 0, font: 'inherit', cursor: 'pointer', fontWeight: '500' }}
+                  >
+                    Política de Privacidade (LGPD)
+                  </button>{' '}
+                  da FACOM Tech Week.
                 </label>
               </div>
             </>
@@ -638,6 +858,49 @@ export default function Register() {
           onCropComplete={handleCropComplete}
           onClose={() => setRawImageForCrop(null)}
         />
+      )}
+
+      {/* Modal Interativo de Termos de Uso e LGPD */}
+      {showTermsModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(8px)',
+            overflowY: 'auto',
+            padding: '20px 16px',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'flex-start'
+          }}
+        >
+          <div style={{ position: 'relative', width: '100%', maxWidth: '880px' }}>
+            <button
+              onClick={() => setShowTermsModal(false)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                zIndex: 10,
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: 'white',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <X size={20} />
+            </button>
+            <Terms isModal={true} onClose={() => setShowTermsModal(false)} />
+          </div>
+        </div>
       )}
     </div>
   );

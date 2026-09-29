@@ -108,7 +108,13 @@ export async function requireSymplaTicket(req: Request, res: Response, next: Nex
     const userSnap = await db.collection('users').doc(req.user.uid).get();
     const userData = userSnap.data();
 
-    if (!userSnap.exists || !userData?.hasSymplaTicket) {
+    const hasTicket = Boolean(
+      userData?.hasSymplaTicket || 
+      userData?.symplaTicket || 
+      userData?.sympla_ticket
+    );
+
+    if (!userSnap.exists || !hasTicket) {
       res.status(403).json({
         error: 'SYMPLA_TICKET_REQUIRED',
         message: 'É necessário possuir um ingresso oficial do Sympla vinculado à conta para realizar esta ação.'

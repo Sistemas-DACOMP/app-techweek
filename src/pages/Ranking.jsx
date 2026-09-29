@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Crown, Medal, Award, User as UserIcon, Ticket } from 'lucide-react';
-import { subscribeToLeaderboardUsers, getLeaderboardUsers, getUserProfile } from '../lib/userService';
+import { Trophy, Crown, Medal, Award, User as UserIcon, Ticket, ArrowLeft } from 'lucide-react';
+import { subscribeToLeaderboardUsers, getLeaderboardUsers, getUserProfile, getCachedUserProfile } from '../lib/userService';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
 
 export default function Ranking() {
   const navigate = useNavigate();
-  const { hasSymplaTicket } = useUser();
+  const { hasSymplaTicket, points: hookPoints, profile: hookProfile } = useUser();
   const [ranking, setRanking] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [myProfileData, setMyProfileData] = useState(null);
+  const [myProfileData, setMyProfileData] = useState(() => getCachedUserProfile());
   const { user: authUser } = useAuth();
   const myUserId = authUser?.uid;
 
@@ -59,8 +59,20 @@ export default function Ranking() {
     };
   }, [myUserId]);
 
-  const top3 = ranking.slice(0, 3);
-  const restOfRanking = ranking.slice(3);
+  // Escuta atualizações de pontuação local em tempo real
+  useEffect(() => {
+    const handlePointsUpdated = () => {
+      setMyProfileData(getCachedUserProfile(myUserId));
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('facom_points_updated', handlePointsUpdated);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('facom_points_updated', handlePointsUpdated);
+      }
+    };
+  }, [myUserId]);
 
   // Informações para a barra fixa no rodapé do usuário logado
   const isTicketVerified = Boolean(
@@ -70,11 +82,56 @@ export default function Ranking() {
     myProfileData?.sympla_ticket ||
     myProfileData?.role === 'ADMIN'
   );
-  const myRankingEntry = ranking.find((u) => u.id === myUserId);
-  const myRank = myRankingEntry ? myRankingEntry.rank : null;
-  const myPoints = myRankingEntry
-    ? myRankingEntry.points
-    : (myProfileData?.pontuacaoTotal ?? myProfileData?.totalPoints ?? 0);
+
+  // Pontuação oficial em tempo real do usuário autenticado (incluindo eventos locais e remotos)
+  const effectivePoints = Math.max(
+    Number(hookPoints || 0),
+    Number(myProfileData?.pontuacaoTotal ?? myProfileData?.totalPoints ?? 0),
+    Number(myProfileData?.total_points ?? 0)
+  );
+
+  // Combina os dados do ranking remoto com a pontuação ao vivo do participante logado
+  const displayedRanking = useMemo(() => {
+    let list = [...ranking];
+
+    if (myUserId) {
+      const existingIdx = list.findIndex((u) => u.id === myUserId);
+      const myUsername = hookProfile?.username || myProfileData?.username || myProfileData?.firstName || authUser?.displayName || 'Você';
+      const myAvatar = hookProfile?.avatarUrl || hookProfile?.avatar_url || myProfileData?.avatarUrl || authUser?.photoURL || null;
+
+      if (existingIdx >= 0) {
+        list[existingIdx] = {
+          ...list[existingIdx],
+          points: Math.max(list[existingIdx].points || 0, effectivePoints),
+          avatar_url: list[existingIdx].avatar_url || myAvatar,
+          username: list[existingIdx].username || myUsername
+        };
+      } else {
+        list.push({
+          id: myUserId,
+          username: myUsername,
+          first_name: hookProfile?.firstName || myProfileData?.firstName || 'Você',
+          last_name: hookProfile?.lastName || myProfileData?.lastName || '',
+          avatar_url: myAvatar,
+          points: effectivePoints,
+          mascot: hookProfile?.mascot || myProfileData?.mascot || 'blue',
+          course: hookProfile?.course || myProfileData?.course || '',
+          createdAt: myProfileData?.createdAt || null
+        });
+      }
+    }
+
+    // Ordena de forma decrescente pela pontuação
+    list.sort((a, b) => (b.points || 0) - (a.points || 0));
+    return list.map((item, idx) => ({ ...item, rank: idx + 1 }));
+  }, [ranking, myUserId, effectivePoints, hookProfile, myProfileData, authUser]);
+
+  const top3 = displayedRanking.slice(0, 3);
+  const restOfRanking = displayedRanking.slice(3);
+
+  const myRankingEntry = displayedRanking.find((u) => u.id === myUserId);
+  const myRank = myRankingEntry ? myRankingEntry.rank : 1;
+  const myPoints = effectivePoints;
   const rawMyName = myRankingEntry?.username || myProfileData?.username || myProfileData?.firstName || 'Você';
   const myDisplayName = rawMyName.startsWith('@') ? rawMyName : `@${rawMyName}`;
   const myAvatar = myRankingEntry?.avatar_url || myProfileData?.avatarUrl || authUser?.photoURL || null;
@@ -243,22 +300,57 @@ export default function Ranking() {
   return (
     <>
       <div className="page-container animate-fade-in" style={{ paddingBottom: '170px' }}>
-        {/* Cabeçalho */}
-        <div style={{ textAlign: 'center', marginTop: '8px', marginBottom: '20px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <Trophy size={24} style={{ color: '#fbbf24' }} />
-            <h2 style={{ fontSize: '1.5rem', fontWeight: '800', margin: 0 }}>Ranking Geral</h2>
+        {/* Cabeçalho Padronizado */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
+          <div>
+            <h1
+              style={{
+                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                fontSize: '1.75rem',
+                fontWeight: 800,
+                color: '#F8FAFC',
+                margin: 0,
+                letterSpacing: '-0.03em',
+                lineHeight: 1.15
+              }}
+            >
+              Ranking
+            </h1>
+            <p
+              style={{
+                color: '#94A3B8',
+                fontSize: '0.80rem',
+                fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+                margin: '3px 0 0'
+              }}
+            >
+              Top 50 competidores da FACOM TechWeek
+            </p>
           </div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>
-            Top 50 competidores da FACOM Tech Week
-          </p>
+
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '12px',
+              backgroundColor: '#0F141F',
+              border: '1px solid #1E293B',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#F59E0B',
+              flexShrink: 0
+            }}
+          >
+            <Trophy size={18} />
+          </div>
         </div>
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-secondary)' }}>
             <div style={{ fontSize: '0.9rem', marginBottom: '8px' }}>Carregando classificação em tempo real...</div>
           </div>
-        ) : ranking.length === 0 ? (
+        ) : displayedRanking.length === 0 ? (
           <div className="glass-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>
             Nenhum participante pontuou ainda. Seja o primeiro participando das atividades!
           </div>
@@ -312,14 +404,13 @@ export default function Ranking() {
             {/* Lista elegante para as demais posições (4 a 50) */}
             {restOfRanking.length > 0 && (
               <div
-                className="glass-panel"
                 style={{
                   padding: '12px',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '8px',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  backgroundColor: '#0F141F',
+                  border: '1px solid #1E293B',
                   borderRadius: '16px'
                 }}
               >
@@ -338,8 +429,8 @@ export default function Ranking() {
                         justifyContent: 'space-between',
                         padding: '10px 12px',
                         borderRadius: '10px',
-                        background: isMe ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.02)',
-                        border: isMe ? '1px solid var(--primary)' : '1px solid rgba(255, 255, 255, 0.04)',
+                        background: isMe ? 'rgba(37, 99, 235, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                        border: isMe ? '1px solid #2563EB' : '1px solid rgba(255, 255, 255, 0.04)',
                         transition: 'background 0.2s ease'
                       }}
                     >
@@ -350,7 +441,8 @@ export default function Ranking() {
                             width: '28px',
                             fontWeight: '700',
                             fontSize: '0.85rem',
-                            color: 'var(--text-secondary)',
+                            fontFamily: "'JetBrains Mono', monospace",
+                            color: isMe ? '#38BDF8' : '#94A3B8',
                             textAlign: 'center'
                           }}
                         >

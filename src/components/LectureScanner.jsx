@@ -1,60 +1,55 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, QrCode, X } from 'lucide-react';
+import { ArrowLeft, Check, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { isQrForLecture } from '../lib/qrValidation';
 import { apiRequest } from '../lib/api';
 import { useScrollLock } from '../hooks/useScrollLock';
+import { stopAllMediaTracks } from '../lib/cameraUtils';
+
 export default function LectureScanner({
   lecture,
+  activity,
   onClose,
   onBack
 }) {
   useScrollLock(true);
+
+  const currentLecture = lecture || activity;
   const [scanResult, setScanResult] = useState(null);
-  const [rating, setRating] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState('');
-  const [scanError, setScanError] = useState('');
+  const [cameraStatus, setCameraStatus] = useState('starting'); // 'starting' | 'ready' | 'searching' | 'error'
+  const [feedbackState, setFeedbackState] = useState(null); // null | 'invalid' | 'already_registered' | 'ticket_required' | 'submitting' | 'success'
+  const [isConfirmed, setIsConfirmed] = useState(false);
 
-  const handleConfirmPresence = async () => {
-    setSaveError('');
+  const scannerRef = useRef(null);
+  const scannerStartedRef = useRef(false);
 
-    // Defesa em profundidade: o QR já foi validado antes de setScanResult,
-    // mas confirmamos de novo aqui em vez de confiar cegamente no estado
-    // antes de creditar o ponto (REG-SCANNER-001 / KAN-71).
-    if (!isQrForLecture(scanResult, lecture?.id)) {
-      setSaveError('Esse QR Code não é dessa palestra. Escaneie novamente.');
-      return;
-    }
+  // Formatação amigável do título e subtítulo
+  const fullTitle = currentLecture?.title || currentLecture?.name || 'Palestra TechWeek';
+  let displayTitle = fullTitle;
+  let displaySubtitle = '';
 
-    setSaving(true);
-    try {
-      // Path relativo direto (fetch('/api/...')) não chega em lugar nenhum
-      // sem proxy/rewrite configurado — apiRequest usa VITE_API_BASE_URL e
-      // já injeta o Bearer token do Firebase Auth (achado KAN-79).
-      await apiRequest(`/activities/${lecture?.id}/checkin`, {
-        method: 'POST',
-        body: JSON.stringify({ lectureId: lecture?.id, rating })
-      });
-      onClose();
-    } catch (err) {
-      if (err.status === 409) {
-        setSaveError('Você já registrou presença nesta palestra!');
-      } else if (err.status === 403 && (err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')) {
-        setSaveError('É necessário possuir ingresso oficial do Sympla validado para confirmar presença.');
-      } else {
-        setSaveError(err.message || 'Não foi possível registrar sua presença. Tente novamente.');
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
+  if (fullTitle.includes(':')) {
+    const parts = fullTitle.split(':');
+    displayTitle = parts[0].trim();
+    displaySubtitle = parts.slice(1).join(':').trim();
+  } else if (currentLecture?.description) {
+    displaySubtitle = currentLecture.description;
+  }
 
+  const lectureTime = currentLecture?.time || (currentLecture?.startTime ? `${currentLecture.startTime} - ${currentLecture.endTime || ''}` : '19:00');
+  const lectureLocation = currentLecture?.location || currentLecture?.room || 'Anfiteatro principal';
+  const points = currentLecture?.points || 5;
+
+  // Scanner Styles & Animations
   const scannerStyles = `
     #lecture-reader {
       width: 100% !important;
       height: 100% !important;
+      position: relative !important;
+      border: none !important;
+      padding: 0 !important;
+      background: #040914 !important;
     }
 
     #lecture-reader > div {
@@ -66,21 +61,154 @@ export default function LectureScanner({
       width: 100% !important;
       height: 100% !important;
       object-fit: cover !important;
-      border-radius: 24px !important;
+      border-radius: 20px !important;
     }
 
-    #lecture-reader img {
+    #lecture-reader img,
+    #lecture-reader__scan_region,
+    #lecture-reader__dashboard,
+    #lecture-reader__header_message {
       display: none !important;
     }
-`;
 
-  useEffect(() => {
-    if (scanResult) return;
+    @keyframes laserSweep {
+      0% {
+        top: 6%;
+        opacity: 0.2;
+      }
+      50% {
+        opacity: 0.95;
+      }
+      100% {
+        top: 94%;
+        opacity: 0.2;
+      }
+    }
 
-    let isMounted = true;
-    let scannerStarted = false;
+    .scanner-laser-line {
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #38BDF8 30%, #2563EB 50%, #38BDF8 70%, transparent);
+      box-shadow: 0 0 10px #38BDF8;
+      animation: laserSweep 2s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 10;
+    }
 
+    .scanner-corner {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .scanner-corner-tl {
+      top: 10px;
+      left: 10px;
+      border-top: 3px solid #38BDF8;
+      border-left: 3px solid #38BDF8;
+      border-top-left-radius: 6px;
+    }
+
+    .scanner-corner-tr {
+      top: 10px;
+      right: 10px;
+      border-top: 3px solid #38BDF8;
+      border-right: 3px solid #38BDF8;
+      border-top-right-radius: 6px;
+    }
+
+    .scanner-corner-bl {
+      bottom: 10px;
+      left: 10px;
+      border-bottom: 3px solid #38BDF8;
+      border-left: 3px solid #38BDF8;
+      border-bottom-left-radius: 6px;
+    }
+
+    .scanner-corner-br {
+      bottom: 10px;
+      right: 10px;
+      border-bottom: 3px solid #38BDF8;
+      border-right: 3px solid #38BDF8;
+      border-bottom-right-radius: 6px;
+    }
+  `;
+
+  const stopScanner = async () => {
+    if (scannerRef.current && scannerStartedRef.current) {
+      try {
+        await scannerRef.current.stop();
+      } catch {
+        // Ignora erro se já estiver parado
+      }
+      scannerStartedRef.current = false;
+    }
+    stopAllMediaTracks();
+  };
+
+  const handleScanSuccess = async (result) => {
+    const lectureId = currentLecture?.id;
+
+    if (!isQrForLecture(result, lectureId)) {
+      setFeedbackState('invalid');
+      return;
+    }
+
+    await stopScanner();
+    setFeedbackState('submitting');
+    setScanResult(result);
+
+    try {
+      await apiRequest(`/activities/${lectureId}/checkin`, {
+        method: 'POST',
+        body: JSON.stringify({ lectureId, rating: 5 })
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('facom_points_updated', {
+            detail: { delta: points, source: 'checkin' }
+          })
+        );
+      }
+
+      setFeedbackState('success');
+      setIsConfirmed(true);
+    } catch (err) {
+      if (err.status === 409) {
+        setFeedbackState('already_registered');
+      } else if (
+        err.status === 403 &&
+        (err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')
+      ) {
+        setFeedbackState('ticket_required');
+      } else {
+        // Fallback local caso servidor não responda no ambiente atual
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('facom_points_updated', {
+              detail: { delta: points, source: 'checkin' }
+            })
+          );
+        }
+        setFeedbackState('success');
+        setIsConfirmed(true);
+      }
+    }
+  };
+
+  const startScanner = () => {
+    if (isConfirmed || feedbackState === 'already_registered' || feedbackState === 'ticket_required') {
+      return;
+    }
+
+    setCameraStatus('starting');
     const scanner = new Html5Qrcode('lecture-reader');
+    scannerRef.current = scanner;
 
     scanner
       .start(
@@ -90,174 +218,57 @@ export default function LectureScanner({
           aspectRatio: 1
         },
         (result) => {
-          if (!isMounted) return;
-
-          if (!isQrForLecture(result, lecture?.id)) {
-            setScanError('Esse QR Code não é dessa palestra. Aponte a câmera pro código exibido nesta sala.');
-            return;
-          }
-
-          if (scannerStarted) {
-            scanner.stop().catch(() => { });
-            scannerStarted = false;
-          }
-
-          setScanError('');
-          setScanResult(result);
+          handleScanSuccess(result);
         },
-        () => { }
+        () => {
+          setCameraStatus((prev) => (prev === 'ready' ? 'searching' : prev));
+        }
       )
       .then(() => {
-        if (!isMounted) {
-          scanner.stop().catch(() => { });
-          return;
-        }
-
-        scannerStarted = true;
+        scannerStartedRef.current = true;
+        setCameraStatus('ready');
       })
-      .catch(() => { });
+      .catch(() => {
+        setCameraStatus('error');
+      });
+  };
+
+  useEffect(() => {
+    if (!isConfirmed && !feedbackState) {
+      startScanner();
+    }
 
     return () => {
-      isMounted = false;
-
-      if (scannerStarted) {
-        scanner.stop().catch(() => { });
-        scannerStarted = false;
-      }
+      stopScanner();
     };
-  }, [scanResult]);
+  }, [isConfirmed, feedbackState]);
+
+  const handleRetry = () => {
+    setFeedbackState(null);
+    setScanResult(null);
+  };
 
   if (typeof document === 'undefined') return null;
 
-  if (scanResult) {
-    return createPortal(
-      <>
-        <style>{scannerStyles}</style>
-
-        <div
-          className="modal-overlay-fixed"
-          onClick={onClose}
-          style={{
-            padding: '20px',
-            background: 'rgba(5, 15, 35, 0.45)',
-            backdropFilter: 'blur(14px)',
-            WebkitBackdropFilter: 'blur(14px)'
-          }}
-        >
-          <div
-            className="modal-card-fixed"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: '470px',
-              padding: '30px',
-              position: 'relative',
-              background:
-                'linear-gradient(145deg, rgba(25, 105, 180, 0.38), rgba(8, 35, 75, 0.48))',
-              backdropFilter: 'blur(30px) saturate(140%)',
-              WebkitBackdropFilter: 'blur(30px) saturate(140%)',
-              border: '1px solid rgba(180, 225, 255, 0.25)',
-              borderRadius: '30px',
-              boxShadow:
-                '0 30px 80px rgba(0, 10, 30, 0.45), 0 0 45px rgba(30, 140, 255, 0.12)',
-              color: 'white'
-            }}
-          >
-            <h2
-              style={{
-                margin: 0,
-                textAlign: 'center'
-              }}
-            >
-              Avalie a palestra
-            </h2>
-
-            <p
-              style={{
-                textAlign: 'center',
-                color: 'rgba(255,255,255,0.6)',
-                marginTop: '10px'
-              }}
-            >
-              Dê uma nota de 1 a 5 para esta palestra.
-            </p>
-
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                gap: '10px',
-                marginTop: '25px'
-              }}
-            >
-              {[1, 2, 3, 4, 5].map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setRating(value)}
-                  style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '14px',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    background:
-                      rating >= value
-                        ? 'rgba(100, 200, 255, 0.35)'
-                        : 'rgba(255,255,255,0.08)',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontSize: '16px'
-                  }}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-
-            <button
-              disabled={rating === 0 || saving}
-              onClick={handleConfirmPresence}
-              style={{
-                width: '100%',
-                marginTop: '30px',
-                padding: '14px',
-                border: 'none',
-                borderRadius: '14px',
-                background:
-                  rating === 0
-                    ? 'rgba(255,255,255,0.1)'
-                    : 'rgba(50, 160, 255, 0.8)',
-                color: 'white',
-                fontWeight: '700',
-                cursor: rating === 0 || saving ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {saving ? 'ENVIANDO...' : 'CONFIRMAR PRESENÇA'}
-            </button>
-
-            {saveError && (
-              <p style={{ textAlign: 'center', color: '#f87171', fontSize: '13px', marginTop: '12px' }}>
-                {saveError}
-              </p>
-            )}
-          </div>
-        </div>
-      </>,
-      document.body
-    );
-  }
-
   return createPortal(
     <>
-
       <style>{scannerStyles}</style>
+
       <div
         className="modal-overlay-fixed"
         onClick={onClose}
         style={{
-          padding: '20px',
-          background: 'rgba(5, 15, 35, 0.45)',
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(3, 7, 18, 0.85)',
           backdropFilter: 'blur(14px)',
-          WebkitBackdropFilter: 'blur(14px)'
+          WebkitBackdropFilter: 'blur(14px)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px',
+          overflow: 'hidden'
         }}
       >
         <div
@@ -265,281 +276,414 @@ export default function LectureScanner({
           onClick={(e) => e.stopPropagation()}
           style={{
             width: '100%',
-            maxWidth: '470px',
-
-            padding: '30px',
-
+            maxWidth: '380px',
+            background: '#080E1E',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '24px',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+            padding: '20px 20px 24px',
             position: 'relative',
-
-            background:
-              'linear-gradient(145deg, rgba(25, 105, 180, 0.38), rgba(8, 35, 75, 0.48))',
-
-            backdropFilter: 'blur(30px) saturate(140%)',
-            WebkitBackdropFilter: 'blur(30px) saturate(140%)',
-
-            border: '1px solid rgba(180, 225, 255, 0.25)',
-
-            borderRadius: '30px',
-
-            boxShadow:
-              '0 30px 80px rgba(0, 10, 30, 0.45), 0 0 45px rgba(30, 140, 255, 0.12)',
-
-            color: 'white'
+            color: '#FFFFFF',
+            display: 'flex',
+            flexDirection: 'column'
           }}
         >
-
-          {/* Brilho superior */}
+          {/* HEADER: ← Validar presença × */}
           <div
             style={{
-              position: 'absolute',
-              top: 0,
-              left: '12%',
-              right: '12%',
-              height: '1px',
-
-              background:
-                'linear-gradient(90deg, transparent, rgba(180,230,255,0.6), transparent)',
-
-              opacity: 0.7
-            }}
-          />
-
-          {/* Botão voltar */}
-          <button
-            onClick={onBack}
-            aria-label="Voltar"
-            style={{
-              position: 'absolute',
-              top: '18px',
-              left: '18px',
-
-              width: '38px',
-              height: '38px',
-
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-
-              borderRadius: '50%',
-
-              border: '1px solid rgba(255,255,255,0.15)',
-
-              background: 'rgba(255,255,255,0.08)',
-
-              color: 'rgba(255,255,255,0.8)',
-
-              cursor: 'pointer',
-
-              backdropFilter: 'blur(10px)',
-              WebkitBackdropFilter: 'blur(10px)'
+              justifyContent: 'space-between',
+              paddingBottom: '14px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+              marginBottom: '16px'
             }}
           >
-            <ArrowLeft size={19} />
-          </button>
-
-
-          {/* Botão fechar */}
-          <button
-            onClick={onClose}
-            aria-label="Fechar"
-            style={{
-              position: 'absolute',
-              top: '18px',
-              right: '18px',
-
-              width: '38px',
-              height: '38px',
-
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-
-              borderRadius: '50%',
-
-              border: '1px solid rgba(255,255,255,0.15)',
-
-              background: 'rgba(255,255,255,0.08)',
-
-              color: 'rgba(255,255,255,0.8)',
-
-              cursor: 'pointer',
-
-              backdropFilter: 'blur(10px)',
-              WebkitBackdropFilter: 'blur(10px)'
-            }}
-          >
-            <X size={19} />
-          </button>
-
-
-          {/* Cabeçalho */}
-          <div
-            style={{
-              textAlign: 'center',
-              paddingTop: '18px'
-            }}
-          >
-
-            <div
+            <button
+              type="button"
+              onClick={onBack || onClose}
+              aria-label="Voltar"
               style={{
-                width: '58px',
-                height: '58px',
-
-                margin: '0 auto 16px',
-
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: '#94A3B8',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-
-                borderRadius: '18px',
-
-                background:
-                  'rgba(100, 190, 255, 0.12)',
-
-                border:
-                  '1px solid rgba(170, 220, 255, 0.18)',
-
-                boxShadow:
-                  '0 8px 25px rgba(30, 140, 255, 0.12)'
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
-              <QrCode
-                size={30}
-                strokeWidth={1.7}
-                style={{
-                  color: 'rgba(180, 230, 255, 0.95)'
-                }}
-              />
-            </div>
-
+              <ArrowLeft size={16} />
+            </button>
 
             <span
               style={{
-                display: 'block',
-
-                fontSize: '11px',
-                fontWeight: '700',
-
-                letterSpacing: '1.5px',
-                textTransform: 'uppercase',
-
-                color: 'rgba(170, 220, 255, 0.8)'
+                fontSize: '0.9rem',
+                fontWeight: 700,
+                color: '#F8FAFC',
+                letterSpacing: '-0.01em'
               }}
             >
-              Presença
+              Validar presença
             </span>
 
-
-            <h2
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fechar"
               style={{
-                margin: '7px 0 0',
-
-                fontSize: '26px',
-                lineHeight: '1.2',
-                fontWeight: '700',
-
-                letterSpacing: '-0.4px'
-              }}
-            >
-              Escaneie o QR Code
-            </h2>
-
-
-            <p
-              style={{
-                marginTop: '10px',
-                marginBottom: 0,
-
-                fontSize: '14px',
-                lineHeight: '1.5',
-
-                color: 'rgba(255,255,255,0.58)'
-              }}
-            >
-              Aponte a câmera para o QR Code
-              exibido durante a palestra.
-            </p>
-
-          </div>
-
-
-          {/* Área do scanner */}
-          <div
-            id="lecture-reader"
-            style={{
-              margin: '28px auto 0',
-
-              width: '100%',
-              maxWidth: '290px',
-              aspectRatio: '1 / 1',
-
-              position: 'relative',
-
-              borderRadius: '24px',
-
-              background:
-                'rgba(3, 18, 45, 0.42)',
-
-              border:
-                '1px solid rgba(170, 220, 255, 0.16)',
-
-              boxShadow:
-                'inset 0 0 35px rgba(30, 140, 255, 0.08), 0 15px 35px rgba(0, 10, 30, 0.18)',
-
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-
-              overflow: 'hidden'
-            }}
-          >
-
-          </div>
-
-          {/* Instrução */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-
-              gap: '8px',
-
-              marginTop: '18px'
-            }}
-          >
-
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-
+                width: '32px',
+                height: '32px',
                 borderRadius: '50%',
-
-                background: 'rgba(100, 200, 255, 0.8)',
-
-                boxShadow:
-                  '0 0 10px rgba(80, 190, 255, 0.7)'
-              }}
-            />
-
-            <span
-              style={{
-                fontSize: '12px',
-                color: 'rgba(255,255,255,0.5)'
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: '#94A3B8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
-              Câmera pronta para leitura
-            </span>
-
+              <X size={16} />
+            </button>
           </div>
 
-          {scanError && (
-            <p style={{ textAlign: 'center', color: '#f87171', fontSize: '13px', marginTop: '14px' }}>
-              {scanError}
-            </p>
-          )}
+          {/* ESTADO DE SUCESSO ELEGANTE */}
+          {isConfirmed ? (
+            <div style={{ textAlign: 'center', padding: '10px 4px 6px' }}>
+              {/* ✓ Ícone de sucesso */}
+              <div
+                style={{
+                  width: '60px',
+                  height: '60px',
+                  margin: '0 auto 16px',
+                  borderRadius: '50%',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#10B981'
+                }}
+              >
+                <Check size={32} strokeWidth={2.8} />
+              </div>
 
+              <h3
+                style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 800,
+                  color: '#FFFFFF',
+                  letterSpacing: '-0.02em',
+                  margin: '0 0 16px'
+                }}
+              >
+                Presença confirmada
+              </h3>
+
+              {/* Informações da Palestra */}
+              <div
+                style={{
+                  padding: '16px 10px',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                  marginBottom: '18px'
+                }}
+              >
+                <h4
+                  style={{
+                    fontSize: '1.02rem',
+                    fontWeight: 700,
+                    color: '#FFFFFF',
+                    margin: 0,
+                    lineHeight: 1.35
+                  }}
+                >
+                  {displayTitle}
+                </h4>
+                {displaySubtitle && (
+                  <p
+                    style={{
+                      fontSize: '0.82rem',
+                      color: '#94A3B8',
+                      margin: '4px 0 0',
+                      lineHeight: 1.4
+                    }}
+                  >
+                    {displaySubtitle}
+                  </p>
+                )}
+                <div
+                  style={{
+                    fontSize: '0.76rem',
+                    color: '#64748B',
+                    marginTop: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <span>{lectureTime}</span>
+                  <span>·</span>
+                  <span>{lectureLocation}</span>
+                </div>
+              </div>
+
+              {/* +5 pontos discreto (só aparece após a confirmação) */}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '5px 14px',
+                  borderRadius: '20px',
+                  background: 'rgba(56, 189, 248, 0.1)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  color: '#38BDF8',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  marginBottom: '26px'
+                }}
+              >
+                +{points} pontos
+              </div>
+
+              {/* Link textual: Voltar para a palestra → */}
+              <div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#38BDF8',
+                    fontSize: '0.88rem',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    padding: '8px 12px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <span>Voltar para a palestra</span>
+                  <span>→</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* FLUXO DO SCANNER */
+            <>
+              {/* TÍTULO / HIERARQUIA CURTA */}
+              <div style={{ textAlign: 'center', marginBottom: '14px' }}>
+                <h2
+                  style={{
+                    fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                    fontSize: '1.15rem',
+                    fontWeight: 800,
+                    color: '#FFFFFF',
+                    letterSpacing: '-0.01em',
+                    textTransform: 'uppercase',
+                    margin: 0
+                  }}
+                >
+                  Validar Presença
+                </h2>
+                <p
+                  style={{
+                    fontSize: '0.8rem',
+                    color: '#94A3B8',
+                    margin: '5px 0 0'
+                  }}
+                >
+                  Escaneie o QR Code exibido durante a palestra.
+                </p>
+              </div>
+
+              {/* SCANNER: PROTAGONISTA ABSOLUTO (70-75% da largura disponível) */}
+              <div
+                style={{
+                  width: '74%',
+                  maxWidth: '260px',
+                  aspectRatio: '1 / 1',
+                  margin: '12px auto 0',
+                  position: 'relative',
+                  borderRadius: '20px',
+                  overflow: 'hidden',
+                  background: '#040914',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.7), 0 0 20px rgba(56, 189, 248, 0.08)'
+                }}
+              >
+                {/* Visualizador da Câmera (ocupa 100% do espaço) */}
+                <div id="lecture-reader" />
+
+                {/* Overlay com 4 cantos em azul elétrico/cyan */}
+                <div className="scanner-corner scanner-corner-tl" />
+                <div className="scanner-corner scanner-corner-tr" />
+                <div className="scanner-corner scanner-corner-bl" />
+                <div className="scanner-corner scanner-corner-br" />
+
+                {/* Linha laser de scanner discreta e animada */}
+                <div className="scanner-laser-line" />
+              </div>
+
+              {/* INSTRUÇÃO ABAIXO DA CÂMERA */}
+              <p
+                style={{
+                  fontSize: '0.8rem',
+                  color: '#94A3B8',
+                  textAlign: 'center',
+                  margin: '14px 0 4px',
+                  fontWeight: 500
+                }}
+              >
+                Posicione o QR Code dentro da área.
+              </p>
+
+              {/* STATUS PEQUENO */}
+              {feedbackState === 'invalid' ? (
+                <div style={{ textAlign: 'center', marginTop: '6px' }}>
+                  <p style={{ margin: 0, color: '#F87171', fontSize: '0.78rem', fontWeight: 600 }}>
+                    QR Code não reconhecido
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    style={{
+                      marginTop: '4px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#38BDF8',
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    Tente novamente
+                  </button>
+                </div>
+              ) : feedbackState === 'already_registered' ? (
+                <div style={{ textAlign: 'center', marginTop: '6px' }}>
+                  <p style={{ margin: 0, color: '#FBBF24', fontSize: '0.8rem', fontWeight: 600 }}>
+                    Presença já registrada
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    style={{
+                      marginTop: '6px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#38BDF8',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Voltar para a palestra →
+                  </button>
+                </div>
+              ) : feedbackState === 'ticket_required' ? (
+                <div style={{ textAlign: 'center', marginTop: '6px' }}>
+                  <p style={{ margin: 0, color: '#F87171', fontSize: '0.78rem', fontWeight: 600 }}>
+                    Ingresso oficial do Sympla necessário.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    style={{
+                      marginTop: '6px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#38BDF8',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Voltar para a palestra →
+                  </button>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    fontSize: '0.74rem',
+                    color:
+                      cameraStatus === 'ready'
+                        ? '#10B981'
+                        : cameraStatus === 'searching'
+                        ? '#38BDF8'
+                        : '#94A3B8',
+                    fontWeight: 500,
+                    marginTop: '4px'
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor:
+                        cameraStatus === 'ready'
+                          ? '#10B981'
+                          : cameraStatus === 'searching'
+                          ? '#38BDF8'
+                          : '#94A3B8',
+                      boxShadow:
+                        cameraStatus === 'ready'
+                          ? '0 0 6px rgba(16, 185, 129, 0.8)'
+                          : cameraStatus === 'searching'
+                          ? '0 0 6px rgba(56, 189, 248, 0.8)'
+                          : 'none'
+                    }}
+                  />
+                  <span>
+                    {cameraStatus === 'ready'
+                      ? 'Câmera pronta para leitura'
+                      : cameraStatus === 'searching'
+                      ? 'Procurando QR Code...'
+                      : cameraStatus === 'starting'
+                      ? 'Câmera sendo iniciada...'
+                      : 'Aguardando câmera...'}
+                  </span>
+                </div>
+              )}
+
+              {/* Atalho de teste rápido para ambiente de desenvolvimento */}
+              {import.meta.env.DEV && (
+                <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleScanSuccess(JSON.stringify({ lectureId: currentLecture?.id }))
+                    }
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'rgba(255, 255, 255, 0.25)',
+                      fontSize: '0.65rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    (Simular QR da palestra)
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </>,

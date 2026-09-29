@@ -4,6 +4,7 @@ import { QrCode, X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { checkoutDoubleCheck } from '../lib/activityService';
 import { useScrollLock } from '../hooks/useScrollLock';
+import { stopAllMediaTracks } from '../lib/cameraUtils';
 
 export default function ActivityCheckoutScannerModal({
   activity,
@@ -87,6 +88,7 @@ export default function ActivityCheckoutScannerModal({
         scanner.stop().catch(() => {});
         scannerStarted = false;
       }
+      stopAllMediaTracks();
     };
   }, [scanResult, successData]);
 
@@ -107,7 +109,7 @@ export default function ActivityCheckoutScannerModal({
         className="modal-card-fixed"
         onClick={(e) => e.stopPropagation()}
         style={{
-          fontFamily: "'Montserrat', sans-serif",
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
           width: '100%',
           maxWidth: '460px',
           padding: '28px 24px',

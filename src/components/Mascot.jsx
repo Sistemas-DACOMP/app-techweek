@@ -1,7 +1,7 @@
 import React from 'react';
 import './Mascot.css';
 
-export default function Mascot({ color = 'blue', className = '', isCoveringEyes = false, isPeeking = false, isWaving = false, lookOffset = 0, lookOffsetY = 0 }) {
+export default function Mascot({ color = 'blue', className = '', style = {}, isCoveringEyes = false, isPeeking = false, isWaving = false, lookOffset = 0, lookOffsetY = 0 }) {
   // ... existing gradient code ...
   const getGradient = () => {
     if (color === 'purple') {
@@ -16,7 +16,7 @@ export default function Mascot({ color = 'blue', className = '', isCoveringEyes 
   const cappedOffsetY = Math.min(Math.max(lookOffsetY, -8), 8);
 
   return (
-    <div className={`mascot-container ${className}`}>
+    <div className={`mascot-container ${className}`} style={style}>
       <svg
         viewBox="0 0 200 200"
         xmlns="http://www.w3.org/2000/svg"

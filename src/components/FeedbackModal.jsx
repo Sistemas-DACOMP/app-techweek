@@ -135,10 +135,10 @@ export default function FeedbackModal({
         <h3
           style={{
             fontSize: '1.25rem',
-            fontWeight: '700',
+            fontWeight: '800',
             color: '#ffffff',
             marginBottom: points ? '8px' : '12px',
-            fontFamily: 'Montserrat, sans-serif'
+            fontFamily: "'Space Grotesk', sans-serif"
           }}
         >
           {title || current.defaultTitle}
@@ -158,6 +158,7 @@ export default function FeedbackModal({
               color: '#fbbf24',
               fontWeight: '700',
               fontSize: '0.85rem',
+              fontFamily: "'JetBrains Mono', monospace",
               marginBottom: '14px',
               boxShadow: '0 0 15px rgba(245, 158, 11, 0.2)'
             }}
@@ -174,7 +175,7 @@ export default function FeedbackModal({
             color: '#cbd5e1',
             lineHeight: '1.5',
             marginBottom: '24px',
-            fontFamily: 'Montserrat, sans-serif'
+            fontFamily: "'Inter', sans-serif"
           }}
         >
           {message}
@@ -200,7 +201,7 @@ export default function FeedbackModal({
               ? '0 8px 24px rgba(239, 68, 68, 0.3)'
               : '0 8px 24px rgba(37, 99, 235, 0.3)',
             transition: 'transform 0.15s, opacity 0.15s',
-            fontFamily: 'Montserrat, sans-serif'
+            fontFamily: "'Space Grotesk', sans-serif"
           }}
         >
           {actionLabel}

@@ -1,8 +1,9 @@
-import { HashRouter, Routes, Route, NavLink, useLocation, Navigate, useNavigate } from 'react-router-dom';
-import { Home, QrCode, ScanLine, Trophy, User } from 'lucide-react';
+import { HashRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Dashboard from './pages/Dashboard';
+import Feed from './pages/Feed';
+import Agenda from './pages/Agenda';
 import Scanner from './pages/Scanner';
 import Profile from './pages/Profile';
 import Challenges from './pages/Challenges';
@@ -11,17 +12,41 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Onboarding from './pages/Onboarding';
 import Staff from './pages/Staff';
+import Admin from './pages/Admin';
 import InstagramMission from './pages/InstagramMission';
 import Sponsor from './pages/Sponsor';
+import Terms from './pages/Terms';
+import BottomNavigation from './components/BottomNavigation';
 import logoTw from './assets/logo-tw.png';
+import { getAppSubdomain } from './lib/subdomain';
+import { stopAllMediaTracks } from './lib/cameraUtils';
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding';
+  const isPortalPage = location.pathname === '/admin' || location.pathname === '/staff';
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding' || location.pathname === '/termos';
 
   const [isSplashVisible, setIsSplashVisible] = useState(true);
+
+  // Detecção de subdomínio: admin.* ou staff.*
+  useEffect(() => {
+    const sub = getAppSubdomain();
+    if (sub === 'admin' && location.pathname !== '/admin') {
+      navigate('/admin', { replace: true });
+    } else if (sub === 'staff' && location.pathname !== '/staff') {
+      navigate('/staff', { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
+  // Garante que a câmera nunca fique em uso quando o usuário estiver fora da tela do scanner
+  useEffect(() => {
+    const allowedCameraRoutes = ['/scanner', '/sponsor', '/staff', '/instagram-mission'];
+    if (!allowedCameraRoutes.includes(location.pathname)) {
+      stopAllMediaTracks();
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -32,13 +57,14 @@ function AppContent() {
 
   useEffect(() => {
     if (!isSplashVisible && !authLoading) {
-      if (!user && !isAuthPage) {
+      if (!user && !isAuthPage && !isPortalPage) {
         navigate('/login', { replace: true });
-      } else if (user && (location.pathname === '/login' || location.pathname === '/cadastro')) {
-        navigate('/', { replace: true });
+      } else if (user && location.pathname === '/login') {
+        const hasOnboarding = localStorage.getItem('facom_onboarding_completed') === 'true';
+        navigate(hasOnboarding ? '/' : '/onboarding', { replace: true });
       }
     }
-  }, [user, authLoading, isSplashVisible, isAuthPage, navigate, location.pathname]);
+  }, [user, authLoading, isSplashVisible, isAuthPage, isPortalPage, navigate, location.pathname]);
 
   if (isSplashVisible || authLoading) {
     return (
@@ -76,13 +102,16 @@ function AppContent() {
   }
 
   return (
-    <div className="app-wrapper">
+    <div className={isPortalPage ? "portal-wrapper" : "app-wrapper"}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/cadastro" element={<Register />} />
         <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/termos" element={<Terms />} />
         
         <Route path="/" element={<Dashboard />} />
+        <Route path="/feed" element={<Feed />} />
+        <Route path="/agenda" element={<Agenda />} />
         <Route path="/scanner" element={<Scanner />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/challenges" element={<Challenges />} />
@@ -90,30 +119,11 @@ function AppContent() {
         <Route path="/instagram-mission" element={<InstagramMission />} />
         <Route path="/sponsor" element={<Sponsor />} />
         <Route path="/staff" element={<Staff />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       
-      {!isAuthPage && (
-        <div className="bottom-nav-container">
-          <nav className="bottom-nav">
-            <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <Home size={22} />
-            </NavLink>
-            <NavLink to="/ranking" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <Trophy size={22} />
-            </NavLink>
-            <NavLink to="/scanner" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <ScanLine size={24} />
-            </NavLink>
-            <NavLink to="/challenges" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <QrCode size={22} />
-            </NavLink>
-            <NavLink to="/profile" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <User size={22} />
-            </NavLink>
-          </nav>
-        </div>
-      )}
+      {!isAuthPage && !isPortalPage && <BottomNavigation />}
     </div>
   );
 }
