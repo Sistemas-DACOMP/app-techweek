@@ -241,15 +241,15 @@ export default function Scanner() {
       if (validUsers.length > 0) {
         const randomDbUser = validUsers[Math.floor(Math.random() * validUsers.length)];
         const payload = JSON.stringify({
-          username: randomDbUser.username || 'participante_tw',
-          name: randomDbUser.displayName || randomDbUser.firstName || 'Participante FACOM',
-          course: randomDbUser.course || 'Sistemas de Informação',
-          participantType: randomDbUser.participant_type || randomDbUser.participantType || 'Aluno da UFU',
-          period: randomDbUser.period || 4,
+          username: randomDbUser.username || '',
+          name: randomDbUser.displayName || [randomDbUser.firstName, randomDbUser.lastName].filter(Boolean).join(' ') || randomDbUser.username || 'Participante',
+          course: randomDbUser.course || '',
+          participantType: randomDbUser.participant_type || randomDbUser.participantType || 'Participante',
+          period: randomDbUser.period || null,
           avatarUrl: randomDbUser.avatarUrl || randomDbUser.photoURL || '',
-          linkedin: randomDbUser.linkedin || 'participante-techweek',
-          instagram: randomDbUser.instagram || '@participante.tech',
-          github: randomDbUser.github || 'participante-dev'
+          linkedin: randomDbUser.linkedin || '',
+          instagram: randomDbUser.instagram || '',
+          github: randomDbUser.github || ''
         });
         handleScan(payload);
         return;
@@ -264,10 +264,10 @@ export default function Scanner() {
       course: 'Sistemas de Informação',
       participantType: 'Aluno da UFU',
       period: 4,
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
-      linkedin: 'lucassilva',
-      instagram: 'lucas.tech',
-      github: 'lucassilva'
+      avatarUrl: '',
+      linkedin: '',
+      instagram: '',
+      github: ''
     };
     handleScan(JSON.stringify(fallbackUser));
   };
@@ -759,79 +759,110 @@ export default function Scanner() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Cabeçalho do Card: Status + Botão Fechar X */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '12px',
-                flexShrink: 0
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                <div
+            {/* Botão Fechar Flutuante para Crachá ou Cabeçalho para outras leituras */}
+            {scanResult.participant ? (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  marginBottom: '6px',
+                  flexShrink: 0
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setScanResult(null)}
+                  aria-label="Fechar resultado"
                   style={{
                     width: '32px',
                     height: '32px',
-                    borderRadius: '10px',
-                    backgroundColor: (scanResult.participant || scanResult.status === 'success') ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                    border: (scanResult.participant || scanResult.status === 'success') ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    border: 'none',
+                    color: '#94A3B8',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: (scanResult.participant || scanResult.status === 'success') ? '#10B981' : '#F59E0B',
-                    flexShrink: 0
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease'
                   }}
                 >
-                  {(scanResult.participant || scanResult.status === 'success') ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <h3
-                    style={{
-                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontSize: '0.96rem',
-                      fontWeight: 800,
-                      color: '#F8FAFC',
-                      margin: 0,
-                      lineHeight: 1.2,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}
-                  >
-                    {scanResult.participant ? 'Crachá identificado' : scanResult.title}
-                  </h3>
-                  <p style={{ fontSize: '0.72rem', color: '#94A3B8', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {scanResult.participant ? 'Participante da FACOM TechWeek' : scanResult.message}
-                  </p>
-                </div>
+                  <X size={16} />
+                </button>
               </div>
-
-              {/* Botão Fechar X */}
-              <button
-                type="button"
-                onClick={() => setScanResult(null)}
-                aria-label="Fechar resultado"
+            ) : (
+              <div
                 style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
-                  color: '#94A3B8',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  marginLeft: '8px',
-                  transition: 'background 0.15s ease'
+                  justifyContent: 'space-between',
+                  marginBottom: '12px',
+                  flexShrink: 0
                 }}
               >
-                <X size={16} />
-              </button>
-            </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '10px',
+                      backgroundColor: scanResult.status === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                      border: scanResult.status === 'success' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: scanResult.status === 'success' ? '#10B981' : '#F59E0B',
+                      flexShrink: 0
+                    }}
+                  >
+                    {scanResult.status === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <h3
+                      style={{
+                        fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                        fontSize: '0.96rem',
+                        fontWeight: 800,
+                        color: '#F8FAFC',
+                        margin: 0,
+                        lineHeight: 1.2,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}
+                    >
+                      {scanResult.title}
+                    </h3>
+                    <p style={{ fontSize: '0.72rem', color: '#94A3B8', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {scanResult.message}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setScanResult(null)}
+                  aria-label="Fechar resultado"
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    border: 'none',
+                    color: '#94A3B8',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    marginLeft: '8px',
+                    transition: 'background 0.15s ease'
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
 
             {/* Conteúdo Central com rolagem se necessário */}
             <div

@@ -616,16 +616,17 @@ export default function ParticipantCard({
         ) : (
           <div
             style={{
-              padding: '12px 14px',
-              borderRadius: '10px',
+              padding: '16px 14px',
+              borderRadius: '12px',
               backgroundColor: 'rgba(255, 255, 255, 0.03)',
-              border: '1px dashed #334155',
+              border: '1px dashed rgba(255, 255, 255, 0.12)',
               textAlign: 'center',
-              color: '#64748B',
-              fontSize: '0.74rem'
+              color: '#94A3B8',
+              fontSize: '0.80rem',
+              lineHeight: 1.4
             }}
           >
-            Participante não cadastrou redes sociais públicas.
+            O usuário não cadastrou redes sociais.
           </div>
         )}
       </div>

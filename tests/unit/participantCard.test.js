@@ -121,7 +121,7 @@ describe('ParticipantCard (KAN-95)', () => {
       };
 
       const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
-      expect(html).toContain('Participante não cadastrou redes sociais públicas.');
+      expect(html).toContain('O usuário não cadastrou redes sociais.');
     });
 
     it('renderiza corretamente apenas o GitHub quando nenhuma outra rede for informada (KAN-96)', () => {
@@ -136,7 +136,7 @@ describe('ParticipantCard (KAN-95)', () => {
       expect(html).toContain('torvalds');
       expect(html).not.toContain('Instagram');
       expect(html).not.toContain('LinkedIn');
-      expect(html).not.toContain('Participante não cadastrou redes sociais públicas.');
+      expect(html).not.toContain('O usuário não cadastrou redes sociais.');
     });
 
     it('renderiza combinação de duas redes sociais (GitHub e LinkedIn) (KAN-96)', () => {
