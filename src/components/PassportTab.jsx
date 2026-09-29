@@ -1,15 +1,12 @@
 import { useState, useEffect } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import { 
   CheckCircle2, 
   Sparkles, 
-  QrCode, 
   Trophy, 
   Star, 
   ShieldCheck, 
   Clock, 
   ExternalLink, 
-  X,
   Award,
   AlertCircle
 } from 'lucide-react';
@@ -102,7 +99,6 @@ export const SPONSORS_CONFIG = {
 
 export default function PassportTab({ userProfile }) {
   const [liveProfile, setLiveProfile] = useState(userProfile || {});
-  const [showQrModal, setShowQrModal] = useState(false);
 
   // Escuta atualizações do Firestore em tempo real para carimbo instantâneo quando o patrocinador escanear
   useEffect(() => {
@@ -144,14 +140,6 @@ export default function PassportTab({ userProfile }) {
 
   const progressPercent = (totalVisited / 5) * 100;
 
-  const qrPayload = JSON.stringify({
-    uid: auth?.currentUser?.uid || liveProfile?.uid || '',
-    name: liveProfile?.displayName || liveProfile?.name || 'Participante',
-    username: liveProfile?.username || '',
-    ticketNumber: liveProfile?.ticketId || liveProfile?.symplaTicket?.ticketNumber || '',
-    course: liveProfile?.course || 'Computação'
-  });
-
   const formatVisitDate = (visitedAt) => {
     if (!visitedAt) return 'Visitado';
     try {
@@ -190,49 +178,6 @@ export default function PassportTab({ userProfile }) {
             pointerEvents: 'none'
           }}
         />
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: 'rgba(168, 85, 247, 0.15)',
-              border: '1px solid rgba(168, 85, 247, 0.35)',
-              padding: '4px 12px',
-              borderRadius: '20px',
-              fontSize: '0.72rem',
-              fontWeight: 800,
-              color: '#C084FC',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase'
-            }}
-          >
-            <Sparkles size={13} />
-            <span>Passaporte Oficial TechWeek</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowQrModal(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              padding: '6px 12px',
-              borderRadius: '12px',
-              color: '#FFFFFF',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer'
-            }}
-          >
-            <QrCode size={14} color="#38BDF8" />
-            <span>Meu QR Code</span>
-          </button>
-        </div>
 
         <h2
           style={{
@@ -351,7 +296,7 @@ export default function PassportTab({ userProfile }) {
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', padding: '0 4px' }}>
           <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            💎 Categoria Diamante (Destaque Principal)
+            💎 Categoria Diamante
           </span>
           <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94A3B8' }}>
             +50 Pontos
@@ -480,7 +425,7 @@ export default function PassportTab({ userProfile }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.76rem' }}>
             <span style={{ color: '#94A3B8' }}>{SPONSORS_CONFIG.kanastra.badgeDescription}</span>
             <span style={{ color: kanastraVisited ? '#34D399' : '#64748B', fontWeight: 600 }}>
-              {kanastraVisited ? formatVisitDate(visitedSponsors.kanastra?.visitedAt) : 'Apresente seu QR Code no estande'}
+              {kanastraVisited ? formatVisitDate(visitedSponsors.kanastra?.visitedAt) : 'Visita pendente no estande'}
             </span>
           </div>
         </div>
@@ -617,7 +562,7 @@ export default function PassportTab({ userProfile }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.74rem' }}>
             <span style={{ color: '#94A3B8' }}>{SPONSORS_CONFIG.bayer.badgeDescription}</span>
             <span style={{ color: bayerVisited ? '#34D399' : '#64748B', fontWeight: 600 }}>
-              {bayerVisited ? formatVisitDate(visitedSponsors.bayer?.visitedAt) : 'Apresente seu QR Code no estande'}
+              {bayerVisited ? formatVisitDate(visitedSponsors.bayer?.visitedAt) : 'Visita pendente no estande'}
             </span>
           </div>
         </div>
@@ -748,124 +693,6 @@ export default function PassportTab({ userProfile }) {
         </div>
       </div>
 
-      {/* ============================================================ */}
-      {/* 6. MODAL QUICK CRITÉRIO / QR CODE PARA APRESENTAR NO ESTANDE  */}
-      {/* ============================================================ */}
-      {showQrModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 10000,
-            backgroundColor: 'rgba(5, 8, 20, 0.88)',
-            backdropFilter: 'blur(10px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px'
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowQrModal(false);
-          }}
-        >
-          <div
-            className="glass-panel"
-            style={{
-              width: '100%',
-              maxWidth: '380px',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B',
-              borderRadius: '24px',
-              padding: '24px',
-              textAlign: 'center',
-              position: 'relative'
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setShowQrModal(false)}
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: 'none',
-                borderRadius: '50%',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#94A3B8',
-                cursor: 'pointer'
-              }}
-            >
-              <X size={18} />
-            </button>
-
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                color: '#38BDF8',
-                padding: '4px 12px',
-                borderRadius: '20px',
-                fontSize: '0.72rem',
-                fontWeight: 700,
-                marginBottom: '14px'
-              }}
-            >
-              <QrCode size={14} />
-              <span>Apresente no Estande</span>
-            </div>
-
-            <h3
-              style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontSize: '1.25rem',
-                fontWeight: 800,
-                color: '#FFFFFF',
-                margin: '0 0 6px'
-              }}
-            >
-              {liveProfile?.displayName || liveProfile?.name || 'Seu Crachá Digital'}
-            </h3>
-
-            <p style={{ margin: '0 0 20px', fontSize: '0.80rem', color: '#94A3B8' }}>
-              Mostre este código para o representante da empresa escanear e carimbar seu passaporte.
-            </p>
-
-            <div
-              style={{
-                backgroundColor: '#FFFFFF',
-                padding: '16px',
-                borderRadius: '16px',
-                display: 'inline-block',
-                boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)',
-                marginBottom: '20px'
-              }}
-            >
-              <QRCodeSVG
-                value={qrPayload}
-                size={210}
-                level="M"
-                includeMargin={false}
-              />
-            </div>
-
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => setShowQrModal(false)}
-              style={{ width: '100%' }}
-            >
-              Entendido
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

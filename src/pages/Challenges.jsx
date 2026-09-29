@@ -394,16 +394,14 @@ export default function Challenges() {
             fontWeight: 700,
             cursor: 'pointer',
             transition: 'all 0.2s ease',
-            background: activeTab === 'passport' ? 'linear-gradient(135deg, #D97706 0%, #B45309 100%)' : 'transparent',
+            backgroundColor: activeTab === 'passport' ? '#2563EB' : 'transparent',
             color: activeTab === 'passport' ? '#FFFFFF' : '#94A3B8',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '8px',
-            boxShadow: activeTab === 'passport' ? '0 4px 12px rgba(217, 119, 6, 0.35)' : 'none'
+            gap: '8px'
           }}
         >
-          <span>🎟️</span>
           <span>Passaporte</span>
         </button>
       </div>
