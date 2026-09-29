@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, AlertCircle, Trash2, X, Loader2 } from 'lucide-react';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 /**
  * Modal nativo de confirmação de ações de risco / navegação crítica.
- * Substitui window.confirm e window.alert por uma experiência fluida no PWA.
+ * Suporta confirmação digitada (ex: digite "EXCLUIR") para prevenir ações acidentais.
  */
 export default function ConfirmModal({
   isOpen,
@@ -17,8 +17,16 @@ export default function ConfirmModal({
   Icon,
   onConfirm,
   onCancel,
-  isLoading = false
+  isLoading = false,
+  requireConfirmationText = '',
+  confirmationPrompt = ''
 }) {
+  const [typedConfirmation, setTypedConfirmation] = useState('');
+
+  useEffect(() => {
+    setTypedConfirmation('');
+  }, [isOpen]);
+
   useScrollLock(isOpen);
   if (!isOpen) return null;
 
@@ -48,6 +56,11 @@ export default function ConfirmModal({
 
   const current = config[variant] || config.danger;
   const ModalIcon = Icon || current.defaultIcon;
+
+  const isConfirmationValid = !requireConfirmationText || 
+    typedConfirmation.trim().toUpperCase() === requireConfirmationText.trim().toUpperCase();
+
+  const isConfirmDisabled = isLoading || !isConfirmationValid;
 
   const content = (
     <div
@@ -145,19 +158,70 @@ export default function ConfirmModal({
             fontSize: '0.9rem',
             color: '#94a3b8',
             lineHeight: 1.55,
-            marginBottom: '24px',
+            marginBottom: requireConfirmationText ? '16px' : '24px',
             fontFamily: "'Inter', sans-serif"
           }}
         >
           {message}
         </p>
 
+        {/* Confirmação Escrita Obrigatória */}
+        {requireConfirmationText && (
+          <div style={{ width: '100%', marginBottom: '22px', textAlign: 'left' }}>
+            <label
+              htmlFor="confirm-input-text"
+              style={{
+                display: 'block',
+                fontSize: '0.8rem',
+                color: '#cbd5e1',
+                marginBottom: '8px',
+                lineHeight: 1.45,
+                fontFamily: "'Inter', sans-serif"
+              }}
+            >
+              {confirmationPrompt || (
+                <span>
+                  Para prosseguir, digite <strong style={{ color: '#f87171', fontFamily: "'JetBrains Mono', monospace" }}>{requireConfirmationText}</strong> no campo abaixo:
+                </span>
+              )}
+            </label>
+            <input
+              id="confirm-input-text"
+              type="text"
+              value={typedConfirmation}
+              onChange={(e) => setTypedConfirmation(e.target.value)}
+              placeholder={`Digite "${requireConfirmationText}"`}
+              disabled={isLoading}
+              autoComplete="off"
+              autoFocus
+              style={{
+                width: '100%',
+                height: '46px',
+                padding: '0 14px',
+                backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                border: isConfirmationValid && typedConfirmation.trim()
+                  ? '1px solid rgba(16, 185, 129, 0.8)'
+                  : '1px solid rgba(239, 68, 68, 0.45)',
+                borderRadius: '12px',
+                color: '#ffffff',
+                fontSize: '0.95rem',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontWeight: 600,
+                textAlign: 'center',
+                letterSpacing: '0.06em',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+        )}
+
         {/* Ações (Confirmar / Cancelar) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
           <button
             onClick={onConfirm}
             type="button"
-            disabled={isLoading}
+            disabled={isConfirmDisabled}
             style={{
               width: '100%',
               minHeight: '46px',
@@ -168,13 +232,13 @@ export default function ConfirmModal({
               color: '#ffffff',
               fontWeight: 700,
               fontSize: '0.92rem',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
+              cursor: isConfirmDisabled ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              transition: 'opacity 0.15s',
-              opacity: isLoading ? 0.7 : 1,
+              transition: 'opacity 0.15s, background-color 0.15s',
+              opacity: isConfirmDisabled ? 0.45 : 1,
               fontFamily: "'Space Grotesk', sans-serif"
             }}
           >

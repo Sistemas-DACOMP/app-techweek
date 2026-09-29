@@ -560,6 +560,8 @@ export default function Profile() {
       cancelLabel: 'Manter Minha Conta',
       variant: 'danger',
       Icon: Trash2,
+      requireConfirmationText: 'EXCLUIR',
+      confirmationPrompt: 'Para confirmar a exclusão definitiva da sua conta, digite EXCLUIR abaixo:',
       onConfirm: async () => {
         setIsActionLoading(true);
         try {
@@ -2599,6 +2601,8 @@ export default function Profile() {
           variant={confirmModal.variant}
           Icon={confirmModal.Icon}
           isLoading={isActionLoading}
+          requireConfirmationText={confirmModal.requireConfirmationText}
+          confirmationPrompt={confirmModal.confirmationPrompt}
           onConfirm={confirmModal.onConfirm}
           onCancel={() => !isActionLoading && setConfirmModal(null)}
         />

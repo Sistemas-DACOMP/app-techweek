@@ -85,4 +85,43 @@ describe('ConfirmModal Component (KAN-101)', () => {
     expect(html).toContain('Processando...');
     expect(html).toContain('disabled=""');
   });
+
+  it('renderiza campo de confirmação escrita e desabilita botão inicialmente quando requireConfirmationText é fornecido', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ConfirmModal, {
+        isOpen: true,
+        title: 'Apagar Conta Permanentemente',
+        message: 'Esta ação não pode ser desfeita.',
+        variant: 'danger',
+        confirmLabel: 'Sim, Apagar Minha Conta',
+        requireConfirmationText: 'EXCLUIR',
+        confirmationPrompt: 'Para confirmar, digite EXCLUIR abaixo:',
+        onConfirm: () => {},
+        onCancel: () => {}
+      })
+    );
+
+    expect(html).toContain('Para confirmar, digite EXCLUIR abaixo:');
+    expect(html).toContain('placeholder="Digite &quot;EXCLUIR&quot;"');
+    expect(html).toContain('id="confirm-input-text"');
+    // Botão de confirmação deve começar desabilitado
+    expect(html).toContain('disabled=""');
+  });
+
+  it('não renderiza campo de input quando requireConfirmationText não é informado', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ConfirmModal, {
+        isOpen: true,
+        title: 'Sair da Conta',
+        message: 'Deseja realmente sair?',
+        variant: 'warning',
+        confirmLabel: 'Sair da Conta',
+        onConfirm: () => {},
+        onCancel: () => {}
+      })
+    );
+
+    expect(html).not.toContain('confirm-input-text');
+    expect(html).not.toContain('placeholder="Digite');
+  });
 });
