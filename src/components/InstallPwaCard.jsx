@@ -9,11 +9,13 @@ import {
   Smartphone, 
   ArrowDown
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
-const STORAGE_KEY = 'tw_pwa_install_dismissed_time';
+const STORAGE_KEY = 'tw_pwa_v3_dismissed_time';
 const DISMISS_DURATION_MS = 24 * 60 * 60 * 1000; // 24 horas
 
 export default function InstallPwaCard() {
+  const { user } = useAuth();
   const [isVisible, setIsVisible] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isAppleDevice, setIsAppleDevice] = useState(false);
@@ -21,25 +23,43 @@ export default function InstallPwaCard() {
   const [modalPlatform, setModalPlatform] = useState('ios'); // 'ios' | 'android'
 
   useEffect(() => {
+    // Limpa a chave legada antiga para garantir que a nova versão seja carregada
+    try {
+      localStorage.removeItem('tw_pwa_install_dismissed_time');
+    } catch {}
+
+    const isSpecialAccount = 
+      user?.email === 'sam03amorim@gmail.com' || 
+      (typeof localStorage !== 'undefined' && localStorage.getItem('facom_test_session')?.includes('sam03amorim@gmail.com'));
+
+    // Conta de desenvolvimento / admin: limpa bloqueios e força exibição
+    if (isSpecialAccount) {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+    }
+
     // 1. Verifica se já está rodando como App instalado (Standalone)
     const isStandalone = 
       (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)')?.matches) ||
       (typeof window !== 'undefined' && window.navigator?.standalone === true) ||
       (typeof document !== 'undefined' && document.referrer?.includes('android-app://'));
 
-    if (isStandalone) {
+    if (isStandalone && !isSpecialAccount) {
       setIsVisible(false);
       return;
     }
 
-    // 2. Verifica se o usuário dispensou recentemente nas últimas 24h
-    try {
-      const dismissedTime = localStorage.getItem(STORAGE_KEY);
-      if (dismissedTime && Date.now() - Number(dismissedTime) < DISMISS_DURATION_MS) {
-        setIsVisible(false);
-        return;
-      }
-    } catch {}
+    // 2. Verifica se o usuário dispensou recentemente nas últimas 24h (ignorado para sam03amorim@gmail.com)
+    if (!isSpecialAccount) {
+      try {
+        const dismissedTime = localStorage.getItem(STORAGE_KEY);
+        if (dismissedTime && Date.now() - Number(dismissedTime) < DISMISS_DURATION_MS) {
+          setIsVisible(false);
+          return;
+        }
+      } catch {}
+    }
 
     // 3. Detecta sistema operacional
     const userAgent = typeof window !== 'undefined' ? (window.navigator?.userAgent || '') : '';
@@ -55,16 +75,16 @@ export default function InstallPwaCard() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // Exibe o card moderno para incentivar a instalação
+    // Exibe o card para incentivar a instalação
     const timer = setTimeout(() => {
       setIsVisible(true);
-    }, 1200);
+    }, isSpecialAccount ? 100 : 800);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       clearTimeout(timer);
     };
-  }, []);
+  }, [user]);
 
   const handleDismiss = () => {
     setIsVisible(false);
@@ -333,8 +353,8 @@ export default function InstallPwaCard() {
                 }}
               >
                 {modalPlatform === 'ios'
-                  ? 'Siga os 2 passos rápidos abaixo no Safari:'
-                  : 'Siga os 2 passos no menu do seu navegador:'}
+                  ? 'Siga os passos rápidos abaixo no Safari:'
+                  : 'Siga os passos no menu do seu navegador:'}
               </p>
             </div>
 
@@ -377,7 +397,7 @@ export default function InstallPwaCard() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0, fontSize: '0.80rem', color: '#E2E8F0', lineHeight: 1.35 }}>
                       <span style={{ fontWeight: 700, color: '#38BDF8' }}>1. </span>
-                      Toque no botão de <strong>Compartilhar</strong> na barra inferior do Safari.
+                      No Safari, selecione o ícone de <strong>Compartilhar</strong> na barra inferior.
                     </div>
                   </div>
 
@@ -441,7 +461,7 @@ export default function InstallPwaCard() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0, fontSize: '0.80rem', color: '#E2E8F0', lineHeight: 1.35 }}>
                       <span style={{ fontWeight: 700, color: '#34D399' }}>3. </span>
-                      Toque em <strong>Adicionar</strong> no canto superior direito.
+                      Confirme em <strong>Adicionar</strong> no canto superior direito.
                     </div>
                   </div>
 
@@ -491,7 +511,7 @@ export default function InstallPwaCard() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0, fontSize: '0.80rem', color: '#E2E8F0', lineHeight: 1.35 }}>
                       <span style={{ fontWeight: 700, color: '#38BDF8' }}>1. </span>
-                      Toque no menu de três pontos <strong>(⋮)</strong> no topo do Chrome.
+                      Abra o menu de opções <strong>(⋮)</strong> no topo do navegador.
                     </div>
                   </div>
 
@@ -548,7 +568,7 @@ export default function InstallPwaCard() {
                 boxShadow: '0 4px 16px rgba(37, 99, 235, 0.35)'
               }}
             >
-              Entendi, obrigado!
+              Entendi, fechar
             </button>
           </div>
         </div>,
