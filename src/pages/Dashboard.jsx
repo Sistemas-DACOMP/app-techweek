@@ -372,7 +372,7 @@ export default function Dashboard() {
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-end',
             fontSize: '0.62rem',
             fontFamily: "'JetBrains Mono', monospace",
             color: '#64748B',
@@ -382,13 +382,6 @@ export default function Dashboard() {
             marginBottom: '14px'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#94A3B8', fontWeight: 800 }}>+</span>
-            <span>UFU // FACOM</span>
-            <span style={{ opacity: 0.35 }}>|</span>
-            <span>18°55'S 48°15'W</span>
-          </div>
-
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <NotificationBell />
             <button
