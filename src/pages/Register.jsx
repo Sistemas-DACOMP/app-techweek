@@ -3,11 +3,24 @@ import { useNavigate, Link } from 'react-router-dom';
 import Mascot from '../components/Mascot';
 import AvatarCropperModal from '../components/AvatarCropperModal';
 import Terms from './Terms';
-import { Eye, EyeOff, Loader2, Camera, RefreshCw, Trash2, Plus, ShieldCheck, X } from 'lucide-react';
+import { 
+  Eye, 
+  EyeOff, 
+  Loader2, 
+  Camera, 
+  RefreshCw, 
+  Trash2, 
+  Plus, 
+  ShieldCheck, 
+  X,
+  CheckCircle2,
+  AlertCircle,
+  User
+} from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
 import { auth } from '../lib/firebase';
 import { signUpWithEmail } from '../lib/auth';
-import { createUserProfile, uploadUserAvatar } from '../lib/userService';
+import { createUserProfile, uploadUserAvatar, findUserByUsername } from '../lib/userService';
 import { 
   getPasswordStrength, 
   MIN_PASSWORD_LENGTH, 
@@ -101,6 +114,11 @@ export default function Register() {
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [usernameCheck, setUsernameCheck] = useState({
+    status: 'idle', // 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
+    existingUser: null,
+    message: ''
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -110,6 +128,67 @@ export default function Register() {
       navigate(hasOnboarding ? '/' : '/onboarding', { replace: true });
     }
   }, []);
+
+  // Verificação em tempo real de unicidade de username (chave única) com debounce
+  useEffect(() => {
+    const rawUsername = formData.username ? formData.username.trim() : '';
+    const cleanUsername = rawUsername.replace(/^@/, '').toLowerCase();
+
+    if (!cleanUsername) {
+      setUsernameCheck({ status: 'idle', existingUser: null, message: '' });
+      return;
+    }
+
+    if (!isValidUsername(cleanUsername)) {
+      setUsernameCheck({
+        status: 'invalid',
+        existingUser: null,
+        message: 'Usuário deve ter de 3 a 20 caracteres (letras, números, . ou _).'
+      });
+      return;
+    }
+
+    setUsernameCheck({ status: 'checking', existingUser: null, message: 'Verificando...' });
+
+    const timer = setTimeout(async () => {
+      try {
+        const existing = await findUserByUsername(cleanUsername);
+        if (existing) {
+          const displayName = existing.displayName || [existing.firstName, existing.lastName].filter(Boolean).join(' ') || existing.name || existing.username || 'Outro participante';
+          const avatar = existing.avatarUrl || existing.photoURL || null;
+          setUsernameCheck({
+            status: 'taken',
+            existingUser: {
+              name: displayName,
+              avatarUrl: avatar,
+              username: cleanUsername,
+              course: existing.course || existing.participantType || ''
+            },
+            message: `O @${cleanUsername} já está cadastrado para outro participante.`
+          });
+          setFieldErrors(prev => ({
+            ...prev,
+            username: `O @${cleanUsername} já está em uso.`
+          }));
+        } else {
+          setUsernameCheck({
+            status: 'available',
+            existingUser: null,
+            message: `@${cleanUsername} está disponível!`
+          });
+          setFieldErrors(prev => {
+            const updated = { ...prev };
+            delete updated.username;
+            return updated;
+          });
+        }
+      } catch (_e) {
+        setUsernameCheck({ status: 'idle', existingUser: null, message: '' });
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [formData.username]);
 
   const passwordStrength = getPasswordStrength(formData.password);
 
@@ -184,7 +263,7 @@ export default function Register() {
     return errors;
   };
 
-  const handleNextStep = (e) => {
+  const handleNextStep = async (e) => {
     e.preventDefault();
     setError(null);
 
@@ -194,6 +273,39 @@ export default function Register() {
       setError('Por favor, corrija os erros nos campos antes de prosseguir.');
       return;
     }
+
+    if (usernameCheck.status === 'taken') {
+      setError(`O nome de usuário '@${formData.username}' já está em uso por outro participante.`);
+      return;
+    }
+
+    // Validação ativa no banco antes de prosseguir para etapa 2
+    setLoading(true);
+    try {
+      const cleanUsername = formData.username.trim().replace(/^@/, '').toLowerCase();
+      const existing = await findUserByUsername(cleanUsername);
+      if (existing) {
+        const displayName = existing.displayName || [existing.firstName, existing.lastName].filter(Boolean).join(' ') || existing.name || existing.username;
+        setUsernameCheck({
+          status: 'taken',
+          existingUser: {
+            name: displayName,
+            avatarUrl: existing.avatarUrl || existing.photoURL || null,
+            username: cleanUsername,
+            course: existing.course || existing.participantType || ''
+          },
+          message: `O @${cleanUsername} já está cadastrado para outro participante.`
+        });
+        setFieldErrors(prev => ({
+          ...prev,
+          username: `O @${cleanUsername} já está em uso.`
+        }));
+        setError(`O nome de usuário '@${cleanUsername}' já está cadastrado para outro participante. Escolha outro.`);
+        setLoading(false);
+        return;
+      }
+    } catch (_e) {}
+    setLoading(false);
 
     setFieldErrors({});
     setStep(2);
@@ -213,6 +325,14 @@ export default function Register() {
       return;
     }
 
+    const cleanUsername = formData.username ? formData.username.trim().replace(/^@/, '').toLowerCase() : '';
+
+    // Bloqueia caso o username esteja ocupado
+    if (usernameCheck.status === 'taken') {
+      setError(`O nome de usuário '@${cleanUsername}' já está em uso.`);
+      return;
+    }
+
     const isStudent = formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
     const finalCourse = isStudent 
       ? (formData.course === 'Outro (especificar)' ? formData.customCourse.trim() : formData.course)
@@ -221,6 +341,14 @@ export default function Register() {
     setLoading(true);
 
     try {
+      // 0. Valida unicidade de username final
+      const existing = await findUserByUsername(cleanUsername).catch(() => null);
+      if (existing) {
+        setError(`O nome de usuário '@${cleanUsername}' já foi registrado por outro participante. Por favor, escolha outro.`);
+        setLoading(false);
+        return;
+      }
+
       // 1. Cria a conta no Firebase Auth
       const authResult = await signUpWithEmail({
         email: formData.email,
@@ -228,7 +356,7 @@ export default function Register() {
         metadata: {
           first_name: formData.firstName,
           last_name: formData.lastName,
-          username: formData.username
+          username: cleanUsername
         }
       });
 
@@ -384,16 +512,112 @@ export default function Register() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Nome de Usuário (@handle)</label>
-                <input 
-                  name="username" type="text" placeholder="Ex: devninja"
-                  value={formData.username} onChange={handleChange}
-                  onFocus={() => setFocusedInput('username')} onBlur={() => setFocusedInput(null)}
-                  className="login-input" 
-                  style={fieldErrors.username ? { borderColor: '#ef4444' } : {}}
-                  required
-                />
-                {fieldErrors.username && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', marginLeft: '4px' }}>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Nome de Usuário (@handle)</label>
+                  {usernameCheck.status === 'checking' && (
+                    <span style={{ fontSize: '0.70rem', color: '#38BDF8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Loader2 size={12} className="animate-spin" />
+                      Verificando...
+                    </span>
+                  )}
+                  {usernameCheck.status === 'available' && (
+                    <span style={{ fontSize: '0.70rem', color: '#4ADE80', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                      <CheckCircle2 size={12} />
+                      Disponível
+                    </span>
+                  )}
+                  {usernameCheck.status === 'taken' && (
+                    <span style={{ fontSize: '0.70rem', color: '#F87171', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                      <AlertCircle size={12} />
+                      Já em uso
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ position: 'relative' }}>
+                  <input 
+                    name="username" type="text" placeholder="Ex: devninja"
+                    value={formData.username} onChange={handleChange}
+                    onFocus={() => setFocusedInput('username')} onBlur={() => setFocusedInput(null)}
+                    className="login-input" 
+                    style={{
+                      borderColor: (usernameCheck.status === 'taken' || fieldErrors.username)
+                        ? '#ef4444' 
+                        : (usernameCheck.status === 'available' ? '#22c55e' : undefined),
+                      paddingRight: '38px',
+                      width: '100%'
+                    }}
+                    required
+                  />
+                  <div
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      pointerEvents: 'none'
+                    }}
+                  >
+                    {usernameCheck.status === 'checking' && <Loader2 size={16} className="animate-spin" color="#38BDF8" />}
+                    {usernameCheck.status === 'available' && <CheckCircle2 size={16} color="#22c55e" />}
+                    {usernameCheck.status === 'taken' && <AlertCircle size={16} color="#ef4444" />}
+                  </div>
+                </div>
+
+                {/* Card de Alerta visual mostrando o usuário que já tem este @ */}
+                {usernameCheck.status === 'taken' && (
+                  <div
+                    className="animate-fade-in"
+                    style={{
+                      marginTop: '8px',
+                      padding: '10px 14px',
+                      borderRadius: '12px',
+                      backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(239, 68, 68, 0.18)',
+                        border: '1px solid rgba(239, 68, 68, 0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#F87171',
+                        flexShrink: 0,
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {usernameCheck.existingUser?.avatarUrl ? (
+                        <img 
+                          src={usernameCheck.existingUser.avatarUrl} 
+                          alt="" 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        />
+                      ) : (
+                        <User size={18} />
+                      )}
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#FCA5A5', lineHeight: 1.2 }}>
+                        @{usernameCheck.existingUser?.username || formData.username} já existe!
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: '#CBD5E1', marginTop: '2px', lineHeight: 1.3 }}>
+                        Pertence a <strong>{usernameCheck.existingUser?.name || 'outro participante'}</strong>. Escolha outro nome de usuário.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {fieldErrors.username && usernameCheck.status !== 'taken' && (
                   <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
                     {fieldErrors.username}
                   </div>

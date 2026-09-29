@@ -135,6 +135,20 @@ export async function createUserProfile(uid, data) {
     updatedAt: now
   };
 
+  // Validação de unicidade de username (chave única)
+  if (profileData.username) {
+    try {
+      const existing = await findUserByUsername(profileData.username);
+      if (existing && (existing.id || existing.uid) && (existing.id !== uid && existing.uid !== uid)) {
+        throw new Error(`O nome de usuário '@${profileData.username}' já está em uso por outro participante.`);
+      }
+    } catch (checkErr) {
+      if (checkErr.message && checkErr.message.includes('já está em uso')) {
+        throw checkErr;
+      }
+    }
+  }
+
   // Mantém Firebase Auth sincronizado com o displayName e photoURL
   const calculatedDisplayName = [profileData.firstName, profileData.lastName].filter(Boolean).join(' ').trim() || profileData.username || '';
   if (auth.currentUser) {
@@ -513,12 +527,48 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
  */
 export async function findUserByUsername(username) {
   if (!username) return null;
-  const cleanUsername = username.trim().toLowerCase();
-  const usersRef = collection(db, 'users');
-  const q = query(usersRef, where('username', '==', cleanUsername), limit(1));
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  return { id: snap.docs[0].id, ...snap.docs[0].data() };
+  const cleanUsername = username.trim().toLowerCase().replace(/^@/, '');
+  
+  // 1. Tenta buscar no Firestore
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('username', '==', cleanUsername), limit(1));
+    const snap = await getDocs(q);
+    if (snap && !snap.empty) {
+      return { id: snap.docs[0].id, uid: snap.docs[0].id, ...snap.docs[0].data() };
+    }
+  } catch (_err) {}
+
+  // 2. Fallback para cache local / localStorage
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const keys = new Set();
+      try {
+        Object.keys(localStorage).forEach(k => keys.add(k));
+      } catch (_e) {}
+      if (typeof localStorage.length === 'number') {
+        for (let i = 0; i < localStorage.length; i++) {
+          if (typeof localStorage.key === 'function') {
+            const k = localStorage.key(i);
+            if (k) keys.add(k);
+          }
+        }
+      }
+
+      for (const key of keys) {
+        if (key && key.startsWith('facom_profile_')) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const item = JSON.parse(raw);
+            if (item?.username && item.username.trim().toLowerCase().replace(/^@/, '') === cleanUsername) {
+              return item;
+            }
+          }
+        }
+      }
+    } catch (_e) {}
+  }
+  return null;
 }
 
 /**
