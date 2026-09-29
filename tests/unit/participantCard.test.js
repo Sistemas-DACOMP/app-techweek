@@ -81,7 +81,8 @@ describe('ParticipantCard (KAN-95)', () => {
       };
 
       const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
-      expect(html).not.toContain('<img');
+      expect(html).not.toContain('alt="Lucas Silva"');
+      expect(html).toContain('alt="FACOM TechWeek"');
       expect(html).toContain('LS');
       expect(html).toContain('Lucas Silva');
       expect(html).toContain('@lucas_silva');

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import logoTw from '../assets/logo-tw.png';
 import { 
   GraduationCap, 
   ExternalLink, 
@@ -213,39 +214,15 @@ export default function ParticipantCard({
           padding: '0 4px'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div
-            style={{
-              width: '24px',
-              height: '24px',
-              borderRadius: '7px',
-              background: 'linear-gradient(135deg, #2563EB, #7E22CE)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 900,
-              fontSize: '0.66rem',
-              color: '#FFFFFF',
-              boxShadow: '0 2px 8px rgba(37, 99, 235, 0.35)'
-            }}
-          >
-            TW
-          </div>
-          <span
-            style={{
-              fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-              fontSize: '0.80rem',
-              fontWeight: 800,
-              color: '#F8FAFC',
-              letterSpacing: '-0.02em',
-              background: 'linear-gradient(135deg, #F8FAFC 0%, #94A3B8 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
-            }}
-          >
-            TECHWEEK 2026
-          </span>
-        </div>
+        <img
+          src={logoTw}
+          alt="FACOM TechWeek"
+          style={{
+            height: '24px',
+            width: 'auto',
+            objectFit: 'contain'
+          }}
+        />
 
         <span
           style={{
