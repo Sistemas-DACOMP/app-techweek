@@ -123,7 +123,7 @@ export class SymplaService {
     let page = 1;
     let hasMore = true;
 
-    while (hasMore && page <= 10) { // Limita a 10 páginas para segurança
+    while (hasMore && page <= 50) { // Limita a 50 páginas para eventos maiores
       const result = await this.getParticipants(page, 100, eventId);
       const match = result.data.find(p => p.email?.trim().toLowerCase() === normalizedEmail);
       if (match) {
