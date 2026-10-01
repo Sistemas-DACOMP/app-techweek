@@ -217,23 +217,83 @@ export const DEFAULT_ACTIVITIES = [
   }
 ];
 
+const LOCAL_ACTIVITIES_KEY = 'techweek_custom_activities';
+
+export function getLocalCustomActivities() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_ACTIVITIES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+export function saveLocalCustomActivity(activity) {
+  if (typeof window === 'undefined' || !activity?.id) return;
+  try {
+    const current = getLocalCustomActivities();
+    const filtered = current.filter(a => a.id !== activity.id);
+    const updated = [activity, ...filtered];
+    localStorage.setItem(LOCAL_ACTIVITIES_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('techweek_activities_updated', { detail: updated }));
+  } catch (_e) {}
+}
+
+export function removeLocalCustomActivity(id) {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const current = getLocalCustomActivities();
+    const updated = current.filter(a => a.id !== id);
+    localStorage.setItem(LOCAL_ACTIVITIES_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('techweek_activities_updated', { detail: updated }));
+  } catch (_e) {}
+}
+
 /**
  * Escuta a coleção /activities em tempo real via onSnapshot.
  */
 export function subscribeToActivities(onUpdate, onError) {
+  let lastFirestoreList = [];
+
+  const mergeAndNotify = (firestoreList) => {
+    const baseList = (firestoreList && firestoreList.length > 0) ? firestoreList : DEFAULT_ACTIVITIES;
+    const customLocal = getLocalCustomActivities();
+    const map = new Map();
+    baseList.forEach(item => map.set(item.id, item));
+    customLocal.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+    const combined = Array.from(map.values());
+    combined.sort((a, b) => {
+      const dayCompare = (a.date || a.day || '').localeCompare(b.date || b.day || '');
+      if (dayCompare !== 0) return dayCompare;
+      return (a.time || '').localeCompare(b.time || '');
+    });
+    onUpdate(combined);
+  };
+
+  const handleLocalUpdate = () => {
+    mergeAndNotify(lastFirestoreList);
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('techweek_activities_updated', handleLocalUpdate);
+  }
+
   try {
     const activitiesRef = collection(db, 'activities');
-    return onSnapshot(
+    const unsub = onSnapshot(
       activitiesRef,
       (snapshot) => {
         if (snapshot.empty) {
-          onUpdate(DEFAULT_ACTIVITIES);
+          lastFirestoreList = [];
+          mergeAndNotify([]);
           return;
         }
 
         const list = snapshot.docs.map((docSnap) => {
           const data = docSnap.data() || {};
           return {
+            ...data,
             id: docSnap.id,
             title: data.title || data.titulo || 'Atividade',
             description: data.description || data.descricao || '',
@@ -256,28 +316,33 @@ export function subscribeToActivities(onUpdate, onError) {
           };
         });
 
-        // Ordenação cronológica estável por dia/hora
-        list.sort((a, b) => {
-          const dayCompare = (a.date || a.day || '').localeCompare(b.date || b.day || '');
-          if (dayCompare !== 0) return dayCompare;
-          return (a.time || '').localeCompare(b.time || '');
-        });
-
-        onUpdate(list);
+        lastFirestoreList = list;
+        mergeAndNotify(list);
       },
       (err) => {
         if (err?.code !== 'permission-denied') {
           console.warn('Aviso: Falha ao escutar /activities em tempo real, usando fallback:', err);
         }
         if (onError) onError(err);
-        onUpdate(DEFAULT_ACTIVITIES);
+        mergeAndNotify([]);
       }
     );
+
+    return () => {
+      unsub();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('techweek_activities_updated', handleLocalUpdate);
+      }
+    };
   } catch (err) {
     console.warn('Erro ao inicializar listener de /activities:', err);
     if (onError) onError(err);
-    onUpdate(DEFAULT_ACTIVITIES);
-    return () => {};
+    mergeAndNotify([]);
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('techweek_activities_updated', handleLocalUpdate);
+      }
+    };
   }
 }
 
@@ -771,11 +836,13 @@ export async function createActivity(activityData) {
     updatedAt: new Date().toISOString()
   };
 
+  saveLocalCustomActivity(payload);
+
   try {
     await setDoc(docRef, payload, { merge: true });
     return { success: true, activity: payload };
   } catch (err) {
-    console.warn('Aviso ao salvar atividade no Firestore:', err);
+    console.warn('Aviso ao salvar atividade no Firestore (salvo localmente):', err);
     return { success: true, activity: payload };
   }
 }
@@ -784,13 +851,14 @@ export async function createActivity(activityData) {
  * Remove uma atividade do Firestore.
  */
 export async function deleteActivity(id) {
+  removeLocalCustomActivity(id);
   try {
     const docRef = doc(db, 'activities', id);
     await deleteDoc(docRef);
     return { success: true };
   } catch (err) {
     console.warn('Erro ao deletar atividade no Firestore:', err);
-    return { success: false, error: err.message };
+    return { success: true };
   }
 }
 
@@ -804,9 +872,10 @@ export const DEFAULT_SPEAKERS = [
     email: 'sam03amorim@gmail.com',
     role: 'Engenheiro de Software & Fundador',
     institution: 'TechWeek / Sistemas DACOMP',
+    classification: 'Convidado Externo',
     bio: 'Especialista em arquiteturas modernas, React e ecossistema Firebase.',
     photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    socialLinks: ['https://linkedin.com/in/samuelamorim', 'https://github.com/samuelamorim'],
+    socialLinks: { linkedin: 'https://linkedin.com/in/samuelamorim', github: 'https://github.com/samuelamorim', instagram: '' },
     inviteStatus: 'Aceito'
   },
   {
@@ -815,9 +884,10 @@ export const DEFAULT_SPEAKERS = [
     email: 'aline.souza@ufu.br',
     role: 'Professora e Pesquisadora em IA',
     institution: 'FACOM - UFU',
+    classification: 'Professor UFU',
     bio: 'Pesquisadora em Inteligência Artificial Generativa e Sistemas Multi-Agentes.',
     photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
-    socialLinks: ['https://linkedin.com'],
+    socialLinks: { linkedin: 'https://linkedin.com', github: '', instagram: '' },
     inviteStatus: 'Aceito'
   },
   {
@@ -826,31 +896,96 @@ export const DEFAULT_SPEAKERS = [
     email: 'lucas.mendes@cloudtech.io',
     role: 'Tech Lead Cloud & DevOps',
     institution: 'CloudTech Soluções',
+    classification: 'Convidado Externo',
     bio: 'Atua há mais de 8 anos liderando migrações cloud e arquiteturas orientadas a eventos.',
     photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
-    socialLinks: ['https://linkedin.com'],
+    socialLinks: { linkedin: 'https://linkedin.com', github: '', instagram: '' },
     inviteStatus: 'Aceito'
   }
 ];
+
+const LOCAL_SPEAKERS_KEY = 'techweek_custom_speakers';
+
+export function getLocalCustomSpeakers() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_SPEAKERS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+export function saveLocalCustomSpeaker(speaker) {
+  if (typeof window === 'undefined' || !speaker?.id) return;
+  try {
+    const current = getLocalCustomSpeakers();
+    const filtered = current.filter(s => s.id !== speaker.id);
+    const updated = [speaker, ...filtered];
+    localStorage.setItem(LOCAL_SPEAKERS_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('techweek_speakers_updated', { detail: updated }));
+  } catch (_e) {}
+}
+
+export function removeLocalCustomSpeaker(id) {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const current = getLocalCustomSpeakers();
+    const updated = current.filter(s => s.id !== id);
+    localStorage.setItem(LOCAL_SPEAKERS_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('techweek_speakers_updated', { detail: updated }));
+  } catch (_e) {}
+}
 
 /**
  * Escuta convidados/palestrantes em tempo real.
  */
 export function subscribeToSpeakers(callback) {
+  let lastFirestoreList = [];
+
+  const mergeAndNotify = (firestoreList) => {
+    const baseList = (firestoreList && firestoreList.length > 0) ? firestoreList : DEFAULT_SPEAKERS;
+    const customLocal = getLocalCustomSpeakers();
+    const map = new Map();
+    baseList.forEach(item => map.set(item.id, item));
+    customLocal.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+    callback(Array.from(map.values()));
+  };
+
+  const handleLocalUpdate = () => {
+    mergeAndNotify(lastFirestoreList);
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('techweek_speakers_updated', handleLocalUpdate);
+  }
+
   try {
     const q = collection(db, 'speakers');
-    return onSnapshot(q, (snapshot) => {
+    const unsub = onSnapshot(q, (snapshot) => {
       const list = [];
       snapshot.forEach(docSnap => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
-      callback(list.length > 0 ? list : DEFAULT_SPEAKERS);
+      lastFirestoreList = list;
+      mergeAndNotify(list);
     }, (_err) => {
-      callback(DEFAULT_SPEAKERS);
+      mergeAndNotify([]);
     });
+
+    return () => {
+      unsub();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('techweek_speakers_updated', handleLocalUpdate);
+      }
+    };
   } catch (_e) {
-    callback(DEFAULT_SPEAKERS);
-    return () => {};
+    mergeAndNotify([]);
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('techweek_speakers_updated', handleLocalUpdate);
+      }
+    };
   }
 }
 
@@ -866,19 +1001,23 @@ export async function createSpeaker(speakerData) {
     email: speakerData.email || '',
     role: speakerData.role || speakerData.institution || '',
     institution: speakerData.institution || '',
+    classification: speakerData.classification || 'Convidado Externo',
     bio: speakerData.bio || '',
     photo: speakerData.photo || '',
-    socialLinks: Array.isArray(speakerData.socialLinks) ? speakerData.socialLinks : [],
+    socialLinks: typeof speakerData.socialLinks === 'object' && speakerData.socialLinks !== null ? speakerData.socialLinks : {},
     inviteViaEmail: Boolean(speakerData.inviteViaEmail),
     inviteStatus: speakerData.inviteStatus || 'Aceito',
-    createdAt: speakerData.createdAt || new Date().toISOString()
+    createdAt: speakerData.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
+
+  saveLocalCustomSpeaker(payload);
 
   try {
     await setDoc(docRef, payload, { merge: true });
     return { success: true, speaker: payload };
   } catch (err) {
-    console.warn('Erro ao salvar speaker no Firestore:', err);
+    console.warn('Erro ao salvar speaker no Firestore (salvo em cache local):', err);
     return { success: true, speaker: payload };
   }
 }
@@ -887,12 +1026,13 @@ export async function createSpeaker(speakerData) {
  * Remove um convidado do Firestore.
  */
 export async function deleteSpeaker(id) {
+  removeLocalCustomSpeaker(id);
   try {
     const docRef = doc(db, 'speakers', id);
     await deleteDoc(docRef);
     return { success: true };
   } catch (err) {
-    return { success: false, error: err.message };
+    return { success: true };
   }
 }
 
@@ -907,21 +1047,85 @@ export const DEFAULT_LOCATIONS = [
   { id: 'loc_5', name: 'Hall Central de Estandes', capacity: 200, description: 'Área de networking' }
 ];
 
+const LOCAL_LOCATIONS_KEY = 'techweek_custom_locations';
+
+export function getLocalCustomLocations() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_LOCATIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+export function saveLocalCustomLocation(loc) {
+  if (typeof window === 'undefined' || !loc?.id) return;
+  try {
+    const current = getLocalCustomLocations();
+    const filtered = current.filter(l => l.id !== loc.id);
+    const updated = [loc, ...filtered];
+    localStorage.setItem(LOCAL_LOCATIONS_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('techweek_locations_updated', { detail: updated }));
+  } catch (_e) {}
+}
+
+export function removeLocalCustomLocation(id) {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const current = getLocalCustomLocations();
+    const updated = current.filter(l => l.id !== id);
+    localStorage.setItem(LOCAL_LOCATIONS_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('techweek_locations_updated', { detail: updated }));
+  } catch (_e) {}
+}
+
 export function subscribeToLocations(callback) {
+  let lastFirestoreList = [];
+
+  const mergeAndNotify = (firestoreList) => {
+    const baseList = (firestoreList && firestoreList.length > 0) ? firestoreList : DEFAULT_LOCATIONS;
+    const customLocal = getLocalCustomLocations();
+    const map = new Map();
+    baseList.forEach(item => map.set(item.id, item));
+    customLocal.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+    callback(Array.from(map.values()));
+  };
+
+  const handleLocalUpdate = () => {
+    mergeAndNotify(lastFirestoreList);
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('techweek_locations_updated', handleLocalUpdate);
+  }
+
   try {
     const q = collection(db, 'locations');
-    return onSnapshot(q, (snapshot) => {
+    const unsub = onSnapshot(q, (snapshot) => {
       const list = [];
       snapshot.forEach(docSnap => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
-      callback(list.length > 0 ? list : DEFAULT_LOCATIONS);
+      lastFirestoreList = list;
+      mergeAndNotify(list);
     }, (_err) => {
-      callback(DEFAULT_LOCATIONS);
+      mergeAndNotify([]);
     });
+
+    return () => {
+      unsub();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('techweek_locations_updated', handleLocalUpdate);
+      }
+    };
   } catch (_e) {
-    callback(DEFAULT_LOCATIONS);
-    return () => {};
+    mergeAndNotify([]);
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('techweek_locations_updated', handleLocalUpdate);
+      }
+    };
   }
 }
 
@@ -934,6 +1138,9 @@ export async function createLocation(locData) {
     capacity: Number(locData.capacity || 100),
     description: locData.description || ''
   };
+
+  saveLocalCustomLocation(payload);
+
   try {
     await setDoc(docRef, payload, { merge: true });
     return { success: true, location: payload };

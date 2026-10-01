@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard,
   Users,
@@ -43,8 +43,37 @@ import {
   HelpCircle,
   Play,
   Pause,
-  Flame
+  Flame,
+  Tv,
+  Maximize2,
+  Minimize2,
+  Radio,
+  Layers,
+  Award
 } from 'lucide-react';
+
+const LinkedinIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+    <rect x="2" y="9" width="4" height="12" />
+    <circle cx="4" cy="4" r="2" />
+  </svg>
+);
+
+const GithubIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
+    <path d="M9 18c-4.51 2-5-2-7-2" />
+  </svg>
+);
+
+const InstagramIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+  </svg>
+);
 import { QRCodeSVG } from 'qrcode.react';
 import logoTw from '../assets/logo-tw.png';
 import { useUser } from '../hooks/useUser';
@@ -96,13 +125,22 @@ const DURATION_OPTIONS = [
 
 const ACTIVITY_TYPES = [
   'Palestra',
-  'Curso',
-  'Workshop',
   'Minicurso',
+  'Workshop',
+  'Ativação de Marca',
+  'Submissão de Palestra',
+  'Evento Satélite',
   'Mesa Redonda',
   'Hackathon',
   'Painel',
   'Outro'
+];
+
+const SPEAKER_CLASSIFICATIONS = [
+  { id: 'Convidado Externo', label: 'Convidado Externo', color: '#00D2FF', bg: 'rgba(0, 210, 255, 0.12)', border: 'rgba(0, 210, 255, 0.35)' },
+  { id: 'Professor UFU', label: 'Professor UFU', color: '#A855F7', bg: 'rgba(168, 85, 247, 0.12)', border: 'rgba(168, 85, 247, 0.35)' },
+  { id: 'Aluno Pesquisador', label: 'Aluno Pesquisador', color: '#10B981', bg: 'rgba(16, 185, 129, 0.12)', border: 'rgba(16, 185, 129, 0.35)' },
+  { id: 'Patrocinador', label: 'Patrocinador', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.35)' }
 ];
 
 const SAMPLE_SPEAKER_PHOTOS = [
@@ -250,6 +288,8 @@ export default function Admin() {
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('ALL');
 
+  const location = useLocation();
+
   // Modais corporativos
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
@@ -257,17 +297,32 @@ export default function Admin() {
   const [qrModalActivity, setQrModalActivity] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [editingActivityId, setEditingActivityId] = useState(null);
+  const [editingSpeakerId, setEditingSpeakerId] = useState(null);
+  const [speakerSearch, setSpeakerSearch] = useState('');
+  const [speakerClassificationFilter, setSpeakerClassificationFilter] = useState('ALL');
+
+  // Estados do Modo Projeção de Telão (Projector Mode)
+  const [projectorActivity, setProjectorActivity] = useState(null);
+  const [projectorCountdown, setProjectorCountdown] = useState(30);
+  const [projectorToken, setProjectorToken] = useState(() => Math.random().toString(36).substring(2, 9));
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Form Atividade
   const initialActivityForm = {
     title: '',
     description: '',
     type: 'Palestra',
+    isMultiSession: false,
     registrationType: 'Não requer inscrição',
-    duration: 'A definir',
+    requiresRegistration: false,
+    hasCapacityLimit: true,
+    capacity: 100,
+    points: 50,
+    duration: 'Um dia',
     scheduleRows: [
-      { date: '2026-10-21', startTime: '14:00', endTime: '15:30' }
+      { date: '2026-10-21', startTime: '14:00', endTime: '15:30', location: 'Anfiteatro FACOM' }
     ],
+    selectedSpeakerIds: [],
     speakerId: '',
     speakerName: '',
     speakerRole: '',
@@ -275,23 +330,26 @@ export default function Admin() {
     materials: [],
     showExtraDetails: false,
     location: 'Anfiteatro FACOM',
-    capacity: 100,
     tags: 'Computação, Tecnologia, Geral',
     hidden: false,
     value: 'Grátis'
   };
   const [activityForm, setActivityForm] = useState(initialActivityForm);
 
-  // Form Convidado
+  // Form Convidado / Palestrante
   const initialGuestForm = {
     name: '',
     email: '',
     role: '',
     institution: '',
+    classification: 'Convidado Externo',
     bio: '',
     photo: '',
-    socialLinks: [],
-    socialInput: '',
+    socialLinks: {
+      linkedin: '',
+      github: '',
+      instagram: ''
+    },
     inviteViaEmail: false,
     inviteStatus: 'Aceito'
   };
@@ -374,6 +432,49 @@ export default function Admin() {
       if (typeof unsubMissions === 'function') unsubMissions();
     };
   }, [isAuthorized]);
+
+  // Leitura de parâmetros de busca na URL (?tab=speakers ou ?tab=activities)
+  useEffect(() => {
+    if (!location.search) return;
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    if (tabParam === 'speakers' || tabParam === 'convidados') {
+      setActiveMenu('programacao');
+      setProgTab('convidados');
+    } else if (tabParam === 'activities' || tabParam === 'atividades') {
+      setActiveMenu('programacao');
+      setProgTab('atividades');
+    } else if (tabParam === 'locations' || tabParam === 'locais') {
+      setActiveMenu('programacao');
+      setProgTab('locais');
+    }
+  }, [location.search]);
+
+  // Efeito do Contador e Rotação de Token do Modo Telão
+  useEffect(() => {
+    if (!projectorActivity) return;
+    const interval = setInterval(() => {
+      setProjectorCountdown((prev) => {
+        if (prev <= 1) {
+          setProjectorToken(Math.random().toString(36).substring(2, 9));
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [projectorActivity]);
+
+  // QR Code payload estável que só muda quando o token de segurança rotaciona (a cada 30s)
+  const projectorQrValue = useMemo(() => {
+    if (!projectorActivity) return '';
+    return JSON.stringify({
+      lectureId: projectorActivity.id,
+      activityId: projectorActivity.id,
+      title: projectorActivity.title,
+      sessionToken: projectorToken
+    });
+  }, [projectorActivity, projectorToken]);
 
   const handleOpenNewMissionModal = () => {
     setEditingMissionId(null);
@@ -738,7 +839,7 @@ export default function Admin() {
     }
   };
 
-  // Salvar Atividade
+  // Salvar Atividade (KAN-59)
   const handleSaveActivity = async (e) => {
     e.preventDefault();
     if (!activityForm.title) {
@@ -746,27 +847,51 @@ export default function Admin() {
       return;
     }
 
-    const firstSchedule = activityForm.scheduleRows[0] || { date: '2026-10-21', startTime: '14:00', endTime: '15:30' };
+    const firstSchedule = activityForm.scheduleRows[0] || { date: '2026-10-21', startTime: '14:00', endTime: '15:30', location: 'Anfiteatro FACOM' };
     const dayFormatted = firstSchedule.date ? firstSchedule.date.split('-').reverse().slice(0, 2).join('/') : '21/10';
+
+    // Resolver palestrantes vinculados
+    const selectedSpeakersList = (activityForm.selectedSpeakerIds || []).map(id => {
+      const spk = speakers.find(s => s.id === id);
+      return spk ? { id: spk.id, name: spk.name, role: spk.role || spk.institution || '', photo: spk.photo || '', classification: spk.classification || '' } : null;
+    }).filter(Boolean);
+
+    const primarySpeaker = selectedSpeakersList[0] || null;
+    const speakerNamesJoined = selectedSpeakersList.map(s => s.name).join(', ') || activityForm.speakerName || 'Comissão Organizadora FACOM';
+
+    const maxCap = activityForm.hasCapacityLimit ? Number(activityForm.capacity || 100) : 9999;
 
     const payload = {
       id: editingActivityId || `act_${Date.now()}`,
       title: activityForm.title,
       description: activityForm.description,
       type: activityForm.type.toLowerCase(),
-      registrationType: activityForm.registrationType,
+      isMultiSession: Boolean(activityForm.isMultiSession),
+      registrationType: activityForm.requiresRegistration ? 'Gratuita' : 'Não requer inscrição',
+      requiresRegistration: Boolean(activityForm.requiresRegistration),
+      hasCapacityLimit: Boolean(activityForm.hasCapacityLimit),
+      vagas_totais: maxCap,
+      maxCapacity: maxCap,
+      points: Number(activityForm.points || 50),
       duration: activityForm.duration,
-      schedule: activityForm.scheduleRows,
+      schedule: activityForm.scheduleRows.map(r => ({
+        date: r.date || '2026-10-21',
+        day: r.date ? r.date.split('-').reverse().slice(0, 2).join('/') : '21/10',
+        startTime: r.startTime || '14:00',
+        endTime: r.endTime || '15:30',
+        location: r.location || activityForm.location || 'Anfiteatro FACOM'
+      })),
       day: dayFormatted,
       date: firstSchedule.date,
       time: firstSchedule.startTime,
       endTime: firstSchedule.endTime,
-      speaker: activityForm.speakerName || 'Comissão Organizadora FACOM',
-      speakerRole: activityForm.speakerRole || '',
-      speakerPhoto: activityForm.speakerPhoto || '',
-      speakerId: activityForm.speakerId || '',
-      location: activityForm.location || 'Anfiteatro FACOM',
-      vagas_totais: Number(activityForm.capacity) || 100,
+      speaker: speakerNamesJoined,
+      speakerRole: primarySpeaker?.role || activityForm.speakerRole || '',
+      speakerPhoto: primarySpeaker?.photo || activityForm.speakerPhoto || '',
+      speakerId: primarySpeaker?.id || activityForm.speakerId || '',
+      speakers: selectedSpeakersList,
+      speakerIds: activityForm.selectedSpeakerIds || [],
+      location: firstSchedule.location || activityForm.location || 'Anfiteatro FACOM',
       tags: activityForm.tags,
       hidden: activityForm.hidden,
       value: activityForm.value || 'Grátis'
@@ -774,6 +899,10 @@ export default function Admin() {
 
     try {
       await createActivity(payload);
+      setActivities(prev => {
+        const filtered = prev.filter(a => a.id !== payload.id);
+        return [payload, ...filtered];
+      });
       setIsActivityModalOpen(false);
       setEditingActivityId(null);
       setActivityForm(initialActivityForm);
@@ -790,16 +919,35 @@ export default function Admin() {
   const handleOpenEditActivity = (act) => {
     setEditingActivityId(act.id);
     const rows = act.schedule && act.schedule.length > 0 
-      ? act.schedule 
-      : [{ date: act.date || '2026-10-21', startTime: act.time || '14:00', endTime: act.endTime || '15:30' }];
+      ? act.schedule.map(s => ({
+          date: s.date || act.date || '2026-10-21',
+          startTime: s.startTime || s.time || act.time || '14:00',
+          endTime: s.endTime || act.endTime || '15:30',
+          location: s.location || act.location || 'Anfiteatro FACOM'
+        }))
+      : [{ date: act.date || '2026-10-21', startTime: act.time || '14:00', endTime: act.endTime || '15:30', location: act.location || 'Anfiteatro FACOM' }];
+
+    let speakerIds = Array.isArray(act.speakerIds) ? act.speakerIds : [];
+    if (speakerIds.length === 0 && Array.isArray(act.speakers) && act.speakers.length > 0) {
+      speakerIds = act.speakers.map(s => s.id).filter(Boolean);
+    }
+    if (speakerIds.length === 0 && act.speakerId) {
+      speakerIds = [act.speakerId];
+    }
 
     setActivityForm({
       title: act.title || '',
       description: act.description || '',
       type: act.type ? (act.type.charAt(0).toUpperCase() + act.type.slice(1)) : 'Palestra',
+      isMultiSession: Boolean(act.isMultiSession || rows.length > 1),
       registrationType: act.registrationType || 'Não requer inscrição',
-      duration: act.duration || 'Um dia',
+      requiresRegistration: act.requiresRegistration !== undefined ? Boolean(act.requiresRegistration) : (act.registrationType !== 'Não requer inscrição'),
+      hasCapacityLimit: act.hasCapacityLimit !== undefined ? Boolean(act.hasCapacityLimit) : (Number(act.vagas_totais) < 900),
+      capacity: act.vagas_totais || act.maxCapacity || 100,
+      points: Number(act.points || 50),
+      duration: act.duration || (rows.length > 1 ? `${rows.length} dias` : 'Um dia'),
       scheduleRows: rows,
+      selectedSpeakerIds: speakerIds,
       speakerId: act.speakerId || '',
       speakerName: act.speaker || '',
       speakerRole: act.speakerRole || '',
@@ -807,7 +955,6 @@ export default function Admin() {
       materials: act.materials || [],
       showExtraDetails: true,
       location: act.location || 'Anfiteatro FACOM',
-      capacity: act.vagas_totais || 100,
       tags: Array.isArray(act.tags) ? act.tags.join(', ') : (act.tags || 'Computação, Tecnologia, Geral'),
       hidden: Boolean(act.hidden),
       value: act.value || 'Grátis'
@@ -824,32 +971,69 @@ export default function Admin() {
     }
   };
 
-  // Salvar Convidado
+  // Abrir Modal de Edição de Palestrante
+  const handleOpenEditGuest = (spk) => {
+    setEditingSpeakerId(spk.id);
+    let socialObj = { linkedin: '', github: '', instagram: '' };
+    if (typeof spk.socialLinks === 'object' && spk.socialLinks !== null && !Array.isArray(spk.socialLinks)) {
+      socialObj = { ...socialObj, ...spk.socialLinks };
+    } else if (Array.isArray(spk.socialLinks)) {
+      socialObj.linkedin = spk.socialLinks[0] || '';
+      socialObj.github = spk.socialLinks[1] || '';
+      socialObj.instagram = spk.socialLinks[2] || '';
+    }
+
+    setGuestForm({
+      name: spk.name || '',
+      email: spk.email || '',
+      role: spk.role || '',
+      institution: spk.institution || spk.role || '',
+      classification: spk.classification || 'Convidado Externo',
+      bio: spk.bio || '',
+      photo: spk.photo || '',
+      socialLinks: socialObj,
+      inviteViaEmail: Boolean(spk.inviteViaEmail),
+      inviteStatus: spk.inviteStatus || 'Aceito'
+    });
+    setIsGuestModalOpen(true);
+  };
+
+  // Salvar Convidado / Palestrante
   const handleSaveGuest = async (e) => {
     e.preventDefault();
     if (!guestForm.name) {
-      alert('Informe o nome do convidado.');
+      alert('Informe o nome do palestrante.');
       return;
     }
 
+    const speakerPayload = {
+      id: editingSpeakerId || `spk_${Date.now()}`,
+      name: guestForm.name,
+      email: guestForm.email,
+      role: guestForm.role,
+      institution: guestForm.institution || guestForm.role,
+      classification: guestForm.classification || 'Convidado Externo',
+      bio: guestForm.bio,
+      photo: guestForm.photo || SAMPLE_SPEAKER_PHOTOS[0].url,
+      socialLinks: guestForm.socialLinks,
+      inviteViaEmail: guestForm.inviteViaEmail,
+      inviteStatus: guestForm.inviteStatus
+    };
+
     try {
-      await createSpeaker({
-        name: guestForm.name,
-        email: guestForm.email,
-        role: guestForm.role,
-        institution: guestForm.institution || guestForm.role,
-        bio: guestForm.bio,
-        photo: guestForm.photo || SAMPLE_SPEAKER_PHOTOS[0].url,
-        socialLinks: guestForm.socialLinks,
-        inviteStatus: guestForm.inviteStatus
+      await createSpeaker(speakerPayload);
+      setSpeakers(prev => {
+        const filtered = prev.filter(s => s.id !== speakerPayload.id);
+        return [speakerPayload, ...filtered];
       });
 
       setIsGuestModalOpen(false);
+      setEditingSpeakerId(null);
       setGuestForm(initialGuestForm);
       setFeedback({
         type: 'success',
-        title: 'Convidado cadastrado',
-        message: `${guestForm.name} foi adicionado à lista de palestrantes.`
+        title: editingSpeakerId ? 'Palestrante atualizado' : 'Palestrante cadastrado',
+        message: `${guestForm.name} foi salvo na lista de palestrantes.`
       });
     } catch (err) {
       alert('Erro ao salvar convidado: ' + err.message);
@@ -860,6 +1044,7 @@ export default function Admin() {
     if (!window.confirm(`Excluir palestrante "${name}"?`)) return;
     try {
       await deleteSpeaker(id);
+      setSpeakers(prev => prev.filter(s => s.id !== id));
     } catch (err) {
       alert('Erro ao excluir palestrante: ' + err.message);
     }
@@ -878,8 +1063,15 @@ export default function Admin() {
   const handleSaveLocation = async (e) => {
     e.preventDefault();
     if (!locationForm.name.trim()) return;
+    const locPayload = {
+      id: `loc_${Date.now()}`,
+      name: locationForm.name.trim(),
+      capacity: Number(locationForm.capacity || 100),
+      description: locationForm.description || ''
+    };
     try {
-      await createLocation(locationForm);
+      await createLocation(locPayload);
+      setLocations(prev => [locPayload, ...prev.filter(l => l.id !== locPayload.id)]);
       setIsLocationModalOpen(false);
       setLocationForm({ name: '', capacity: 100, description: '' });
       setFeedback({
@@ -902,6 +1094,17 @@ export default function Admin() {
       return matchText && matchType;
     });
   }, [activities, activitySearch, activityFilter]);
+
+  // Filtros de Palestrantes & Convidados
+  const filteredSpeakers = useMemo(() => {
+    return (speakers || []).filter((spk) => {
+      const matchText = (spk.name || '').toLowerCase().includes((speakerSearch || '').toLowerCase()) ||
+                        (spk.institution || '').toLowerCase().includes((speakerSearch || '').toLowerCase()) ||
+                        (spk.role || '').toLowerCase().includes((speakerSearch || '').toLowerCase());
+      const matchClass = speakerClassificationFilter === 'ALL' || spk.classification === speakerClassificationFilter;
+      return matchText && matchClass;
+    });
+  }, [speakers, speakerSearch, speakerClassificationFilter]);
 
   // Se não autorizado, tela de login corporativo
   if (!isAuthorized) {
@@ -1599,20 +1802,19 @@ export default function Admin() {
                         style={{ padding: '7px 12px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem' }}
                       >
                         <option value="ALL">Todos os tipos</option>
-                        <option value="palestra">Palestra</option>
-                        <option value="curso">Curso</option>
-                        <option value="workshop">Workshop</option>
-                        <option value="minicurso">Minicurso</option>
+                        {ACTIVITY_TYPES.map(type => (
+                          <option key={type} value={type.toLowerCase()}>{type}</option>
+                        ))}
                       </select>
 
                       <div style={{ position: 'relative' }}>
                         <Search size={14} color="#6B7280" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                         <input
                           type="text"
-                          placeholder="Buscar atividade..."
+                          placeholder="Buscar atividade ou palestrante..."
                           value={activitySearch}
                           onChange={(e) => setActivitySearch(e.target.value)}
-                          style={{ padding: '7px 10px 7px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem', width: '220px' }}
+                          style={{ padding: '7px 10px 7px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem', width: '240px' }}
                         />
                       </div>
                     </div>
@@ -1625,15 +1827,16 @@ export default function Admin() {
                         <tr style={{ backgroundColor: '#0F172A', borderBottom: '1px solid #1F2937' }}>
                           <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>TIPO</th>
                           <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>TÍTULO & CRONOGRAMA</th>
+                          <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>PALESTRANTE(S)</th>
                           <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>LOCAL</th>
-                          <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>VAGAS</th>
+                          <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>LOTAÇÃO & PONTOS</th>
                           <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem', textAlign: 'right' }}>AÇÕES</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredActivities.length === 0 ? (
                           <tr>
-                            <td colSpan={5} style={{ padding: '36px', textAlign: 'center', color: '#6B7280' }}>
+                            <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: '#6B7280' }}>
                               Nenhuma atividade encontrada com os filtros aplicados.
                             </td>
                           </tr>
@@ -1642,14 +1845,21 @@ export default function Admin() {
                             const formattedType = (act.type || 'Palestra').charAt(0).toUpperCase() + (act.type || 'Palestra').slice(1);
                             const schedules = act.schedule && act.schedule.length > 0 
                               ? act.schedule 
-                              : [{ date: act.date || '2026-10-21', time: `${act.time || '14:00'}-${act.endTime || '15:30'}` }];
+                              : [{ date: act.date || '2026-10-21', startTime: act.time || '14:00', endTime: act.endTime || '15:30', location: act.location || 'Anfiteatro FACOM' }];
+
+                            const spkName = act.speaker || (Array.isArray(act.speakers) && act.speakers.length > 0 ? act.speakers.map(s => s.name).join(', ') : 'Comissão FACOM');
 
                             return (
                               <tr key={act.id} style={{ borderBottom: '1px solid #1F2937' }}>
                                 <td style={{ padding: '12px 16px' }}>
-                                  <span style={{ fontSize: '0.72rem', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', backgroundColor: '#1E293B', color: '#93C5FD' }}>
+                                  <span style={{ fontSize: '0.72rem', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', backgroundColor: '#1E293B', color: '#93C5FD', display: 'inline-block' }}>
                                     {formattedType}
                                   </span>
+                                  {act.isMultiSession && (
+                                    <span style={{ display: 'block', marginTop: '4px', fontSize: '0.66rem', color: '#A855F7', fontWeight: 600 }}>
+                                      Múltiplos Dias
+                                    </span>
+                                  )}
                                 </td>
                                 <td style={{ padding: '12px 16px' }}>
                                   <div onClick={() => handleOpenEditActivity(act)} style={{ color: '#F9FAFB', fontWeight: 600, fontSize: '0.84rem', cursor: 'pointer', marginBottom: '2px' }}>
@@ -1657,17 +1867,31 @@ export default function Admin() {
                                   </div>
                                   {schedules.map((sch, idx) => (
                                     <div key={idx} style={{ fontSize: '0.74rem', color: '#9CA3AF' }}>
-                                      {sch.date.includes('-') 
+                                      {sch.date && sch.date.includes('-') 
                                         ? `${sch.date.split('-')[2]}/${sch.date.split('-')[1]}/${sch.date.split('-')[0]} • ${sch.startTime || sch.time || ''}${sch.endTime ? ` às ${sch.endTime}` : ''}`
-                                        : `${sch.date} • ${sch.time || ''}`}
+                                        : `${sch.date || '21/10'} • ${sch.startTime || sch.time || ''}`}
                                     </div>
                                   ))}
                                 </td>
                                 <td style={{ padding: '12px 16px', color: '#D1D5DB' }}>
-                                  {act.location || 'Anfiteatro FACOM'}
+                                  <div style={{ fontSize: '0.80rem', fontWeight: 500 }}>{spkName}</div>
                                 </td>
-                                <td style={{ padding: '12px 16px', color: '#9CA3AF' }}>
-                                  {act.registrationType === 'Não requer inscrição' ? 'Sem limite' : `${act.vagas_totais || 100} vagas`}
+                                <td style={{ padding: '12px 16px', color: '#D1D5DB' }}>
+                                  {schedules.length > 1 ? (
+                                    <span style={{ fontSize: '0.76rem', color: '#9CA3AF' }}>
+                                      {schedules.map(s => s.location || act.location || 'Anfiteatro FACOM').filter((v, i, a) => a.indexOf(v) === i).join(' / ')}
+                                    </span>
+                                  ) : (
+                                    act.location || 'Anfiteatro FACOM'
+                                  )}
+                                </td>
+                                <td style={{ padding: '12px 16px' }}>
+                                  <div style={{ fontSize: '0.76rem', color: '#9CA3AF' }}>
+                                    {!act.hasCapacityLimit || Number(act.vagas_totais) >= 900 ? 'Sem limite' : `${act.vagas_totais || 100} vagas`}
+                                  </div>
+                                  <span style={{ fontSize: '0.70rem', fontWeight: 700, color: '#10B981', display: 'inline-block', marginTop: '2px' }}>
+                                    +{act.points || 50} pts
+                                  </span>
                                 </td>
                                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
@@ -1678,6 +1902,14 @@ export default function Admin() {
                                       style={{ padding: '6px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', cursor: 'pointer' }}
                                     >
                                       <QrCode size={13} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setProjectorActivity(act)}
+                                      title="Modo Projeção / Telão"
+                                      style={{ padding: '6px', borderRadius: '6px', border: '1px solid #1D4ED8', backgroundColor: 'rgba(37, 99, 235, 0.2)', color: '#60A5FA', cursor: 'pointer' }}
+                                    >
+                                      <Tv size={13} />
                                     </button>
                                     <button
                                       type="button"
@@ -1707,49 +1939,122 @@ export default function Admin() {
                 </div>
               )}
 
-              {/* Subaba: Convidados */}
+              {/* Subaba: Convidados & Palestrantes */}
               {progTab === 'convidados' && (
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                    <span style={{ fontSize: '0.86rem', fontWeight: 600, color: '#D1D5DB' }}>Palestrantes Registrados</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <select
+                        value={speakerClassificationFilter}
+                        onChange={(e) => setSpeakerClassificationFilter(e.target.value)}
+                        style={{ padding: '7px 12px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem' }}
+                      >
+                        <option value="ALL">Todas as classificações</option>
+                        {SPEAKER_CLASSIFICATIONS.map(cls => (
+                          <option key={cls.id} value={cls.id}>{cls.label}</option>
+                        ))}
+                      </select>
+
+                      <div style={{ position: 'relative' }}>
+                        <Search size={14} color="#6B7280" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                        <input
+                          type="text"
+                          placeholder="Buscar palestrante..."
+                          value={speakerSearch}
+                          onChange={(e) => setSpeakerSearch(e.target.value)}
+                          style={{ padding: '7px 10px 7px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem', width: '220px' }}
+                        />
+                      </div>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={() => { setGuestForm(initialGuestForm); setIsGuestModalOpen(true); }}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 12px', backgroundColor: '#2563EB', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer' }}
+                      onClick={() => { setEditingSpeakerId(null); setGuestForm(initialGuestForm); setIsGuestModalOpen(true); }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', backgroundColor: '#2563EB', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer' }}
                     >
                       <Plus size={14} />
-                      <span>Novo Convidado</span>
+                      <span>Novo Palestrante</span>
                     </button>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
-                    {speakers.map((spk) => (
-                      <div key={spk.id} style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '14px', display: 'flex', gap: '12px' }}>
-                        <img
-                          src={spk.photo || SAMPLE_SPEAKER_PHOTOS[0].url}
-                          alt={spk.name}
-                          style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #374151' }}
-                        />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#F9FAFB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{spk.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteSpeaker(spk.id, spk.name)}
-                              style={{ background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', padding: '2px' }}
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: '14px' }}>
+                    {filteredSpeakers.map((spk) => {
+                      const classObj = SPEAKER_CLASSIFICATIONS.find(c => c.id === spk.classification) || SPEAKER_CLASSIFICATIONS[0];
+                      const social = typeof spk.socialLinks === 'object' && spk.socialLinks !== null && !Array.isArray(spk.socialLinks)
+                        ? spk.socialLinks
+                        : { linkedin: Array.isArray(spk.socialLinks) ? spk.socialLinks[0] : '', github: Array.isArray(spk.socialLinks) ? spk.socialLinks[1] : '', instagram: Array.isArray(spk.socialLinks) ? spk.socialLinks[2] : '' };
+
+                      return (
+                        <div key={spk.id} style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '10px' }}>
+                              <img
+                                src={spk.photo || SAMPLE_SPEAKER_PHOTOS[0].url}
+                                alt={spk.name}
+                                style={{ width: '52px', height: '52px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #374151' }}
+                              />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <span style={{ fontSize: '0.90rem', fontWeight: 700, color: '#F9FAFB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{spk.name}</span>
+                                </div>
+                                <span style={{ fontSize: '0.76rem', color: '#9CA3AF', display: 'block', marginTop: '2px' }}>
+                                  {spk.role || spk.institution}
+                                </span>
+                                <div style={{ marginTop: '6px' }}>
+                                  <span style={{ fontSize: '0.68rem', fontWeight: 600, padding: '2px 7px', borderRadius: '4px', backgroundColor: classObj.bg, color: classObj.color, border: `1px solid ${classObj.border}` }}>
+                                    {classObj.label}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {spk.bio && (
+                              <p style={{ margin: '0 0 10px', fontSize: '0.76rem', color: '#9CA3AF', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                {spk.bio}
+                              </p>
+                            )}
                           </div>
-                          <span style={{ fontSize: '0.74rem', color: '#9CA3AF', display: 'block', marginTop: '2px' }}>
-                            {spk.role || spk.institution}
-                          </span>
-                          <span style={{ fontSize: '0.70rem', color: '#10B981', marginTop: '6px', display: 'inline-block', fontWeight: 600 }}>
-                            ● Confirmado
-                          </span>
+
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1F2937', paddingTop: '10px' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              {social.linkedin && (
+                                <a href={social.linkedin} target="_blank" rel="noreferrer" style={{ color: '#00D2FF' }}>
+                                  <LinkedinIcon size={15} />
+                                </a>
+                              )}
+                              {social.github && (
+                                <a href={social.github} target="_blank" rel="noreferrer" style={{ color: '#D1D5DB' }}>
+                                  <GithubIcon size={15} />
+                                </a>
+                              )}
+                              {social.instagram && (
+                                <a href={social.instagram} target="_blank" rel="noreferrer" style={{ color: '#E1306C' }}>
+                                  <InstagramIcon size={15} />
+                                </a>
+                              )}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditGuest(spk)}
+                                style={{ padding: '5px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                <Edit3 size={12} />
+                                <span>Editar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSpeaker(spk.id, spk.name)}
+                                style={{ padding: '5px 8px', borderRadius: '4px', border: '1px solid #7F1D1D', backgroundColor: '#1F2937', color: '#EF4444', fontSize: '0.74rem', cursor: 'pointer' }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -2435,8 +2740,8 @@ export default function Admin() {
 
       {/* MODAL: ADICIONAR / EDITAR ATIVIDADE */}
       {isActivityModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '560px', maxHeight: '90vh', backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#F9FAFB', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6)' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '620px', maxHeight: '90vh', backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#F9FAFB', boxShadow: '0 12px 40px rgba(0, 0, 0, 0.7)' }}>
             
             <div style={{ backgroundColor: '#1E293B', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #334155' }}>
               <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700 }}>
@@ -2451,14 +2756,15 @@ export default function Admin() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveActivity} style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleSaveActivity} style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                  Título da Atividade
+                  Título da Atividade *
                 </label>
                 <input
                   type="text"
                   required
+                  placeholder="Ex: Minicurso de Arquitetura Serverless na AWS"
                   value={activityForm.title}
                   onChange={(e) => setActivityForm(prev => ({ ...prev, title: e.target.value }))}
                   style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.84rem', boxSizing: 'border-box' }}
@@ -2467,10 +2773,11 @@ export default function Admin() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                  Descrição
+                  Descrição / Resumo
                 </label>
                 <textarea
                   rows={3}
+                  placeholder="Descreva o conteúdo e objetivos da atividade..."
                   value={activityForm.description}
                   onChange={(e) => setActivityForm(prev => ({ ...prev, description: e.target.value }))}
                   style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.84rem', boxSizing: 'border-box', resize: 'vertical' }}
@@ -2485,7 +2792,7 @@ export default function Admin() {
                   <select
                     value={activityForm.type}
                     onChange={(e) => setActivityForm(prev => ({ ...prev, type: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
                   >
                     {ACTIVITY_TYPES.map(t => (
                       <option key={t} value={t}>{t}</option>
@@ -2494,139 +2801,246 @@ export default function Admin() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Inscrição</label>
-                  <select
-                    value={activityForm.registrationType}
-                    onChange={(e) => setActivityForm(prev => ({ ...prev, registrationType: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
-                  >
-                    <option value="Não requer inscrição">Não requer inscrição</option>
-                    <option value="Gratuita">Gratuita</option>
-                    <option value="Paga">Paga</option>
-                  </select>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                    Vínculo de Palestrantes (Multi-select)
+                  </label>
+                  <div style={{ maxHeight: '100px', overflowY: 'auto', backgroundColor: '#0B0F17', border: '1px solid #374151', borderRadius: '6px', padding: '6px 10px' }}>
+                    {speakers.map(s => {
+                      const isSelected = (activityForm.selectedSpeakerIds || []).includes(s.id);
+                      return (
+                        <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', fontSize: '0.78rem', cursor: 'pointer', color: isSelected ? '#38BDF8' : '#D1D5DB' }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setActivityForm(prev => {
+                                const current = prev.selectedSpeakerIds || [];
+                                const updated = checked ? [...current, s.id] : current.filter(id => id !== s.id);
+                                return { ...prev, selectedSpeakerIds: updated };
+                              });
+                            }}
+                          />
+                          <span>{s.name} ({s.institution || s.role})</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                  Duração
-                </label>
-                <select
-                  value={activityForm.duration}
-                  onChange={(e) => handleDurationChange(e.target.value)}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
-                >
-                  {DURATION_OPTIONS.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
+              {/* Agenda Flexível: Sessão Única vs Múltiplos Dias/Horários */}
+              <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#F9FAFB' }}>
+                    Agenda & Horários
+                  </label>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <label style={{ fontSize: '0.76rem', color: '#D1D5DB', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="sessionMode"
+                        checked={!activityForm.isMultiSession}
+                        onChange={() => setActivityForm(prev => ({
+                          ...prev,
+                          isMultiSession: false,
+                          scheduleRows: [prev.scheduleRows[0] || { date: '2026-10-21', startTime: '14:00', endTime: '15:30', location: prev.location || 'Anfiteatro FACOM' }]
+                        }))}
+                      />
+                      <span>Sessão Única</span>
+                    </label>
+                    <label style={{ fontSize: '0.76rem', color: '#D1D5DB', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="sessionMode"
+                        checked={activityForm.isMultiSession}
+                        onChange={() => setActivityForm(prev => ({
+                          ...prev,
+                          isMultiSession: true,
+                          scheduleRows: prev.scheduleRows.length > 1 ? prev.scheduleRows : [
+                            prev.scheduleRows[0] || { date: '2026-10-21', startTime: '14:00', endTime: '15:30', location: 'Anfiteatro FACOM' },
+                            { date: '2026-10-22', startTime: '14:00', endTime: '15:30', location: 'Sala 5R' }
+                          ]
+                        }))}
+                      />
+                      <span>Múltiplas Sessões / Dias</span>
+                    </label>
+                  </div>
+                </div>
+
+                {activityForm.scheduleRows.map((row, idx) => (
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1.5fr auto', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
+                    <input
+                      type="date"
+                      value={row.date}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setActivityForm(prev => {
+                          const newRows = [...prev.scheduleRows];
+                          newRows[idx].date = val;
+                          return { ...prev, scheduleRows: newRows };
+                        });
+                      }}
+                      style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
+                    />
+                    <input
+                      type="time"
+                      value={row.startTime}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setActivityForm(prev => {
+                          const newRows = [...prev.scheduleRows];
+                          newRows[idx].startTime = val;
+                          return { ...prev, scheduleRows: newRows };
+                        });
+                      }}
+                      style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
+                    />
+                    <input
+                      type="time"
+                      value={row.endTime}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setActivityForm(prev => {
+                          const newRows = [...prev.scheduleRows];
+                          newRows[idx].endTime = val;
+                          return { ...prev, scheduleRows: newRows };
+                        });
+                      }}
+                      style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
+                    />
+                    <select
+                      value={row.location || activityForm.location || 'Anfiteatro FACOM'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setActivityForm(prev => {
+                          const newRows = [...prev.scheduleRows];
+                          newRows[idx].location = val;
+                          return { ...prev, scheduleRows: newRows, location: idx === 0 ? val : prev.location };
+                        });
+                      }}
+                      style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
+                    >
+                      {locations.map(loc => (
+                        <option key={loc.id} value={loc.name}>{loc.name}</option>
+                      ))}
+                    </select>
+
+                    {activityForm.isMultiSession && activityForm.scheduleRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActivityForm(prev => ({
+                            ...prev,
+                            scheduleRows: prev.scheduleRows.filter((_, i) => i !== idx)
+                          }));
+                        }}
+                        style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px' }}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                {activityForm.isMultiSession && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivityForm(prev => ({
+                        ...prev,
+                        scheduleRows: [
+                          ...prev.scheduleRows,
+                          { date: '2026-10-23', startTime: '14:00', endTime: '15:30', location: 'Anfiteatro FACOM' }
+                        ]
+                      }));
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#38BDF8', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer', padding: 0, marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Plus size={12} />
+                    <span>Adicionar Novo Dia / Horário</span>
+                  </button>
+                )}
               </div>
 
-              {activityForm.duration !== 'A definir' && (
-                <div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '8px', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '0.74rem', color: '#9CA3AF' }}>Data</span>
-                    <span style={{ fontSize: '0.74rem', color: '#9CA3AF' }}>Início</span>
-                    <span style={{ fontSize: '0.74rem', color: '#9CA3AF' }}>Término</span>
-                  </div>
-                  {activityForm.scheduleRows.map((row, idx) => (
-                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '8px', marginBottom: '6px' }}>
+              {/* Controle de Acesso & Gamificação */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#F9FAFB', display: 'block', marginBottom: '8px' }}>
+                    Acesso & Lotação
+                  </span>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.76rem', color: '#D1D5DB', marginBottom: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={activityForm.requiresRegistration}
+                      onChange={(e) => setActivityForm(prev => ({ ...prev, requiresRegistration: e.target.checked }))}
+                    />
+                    <span>Requer inscrição prévia no app</span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.76rem', color: '#D1D5DB', marginBottom: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={activityForm.hasCapacityLimit}
+                      onChange={(e) => setActivityForm(prev => ({ ...prev, hasCapacityLimit: e.target.checked }))}
+                    />
+                    <span>Possui limite de vagas</span>
+                  </label>
+
+                  {activityForm.hasCapacityLimit && (
+                    <div>
+                      <span style={{ fontSize: '0.72rem', color: '#9CA3AF' }}>Capacidade máxima:</span>
                       <input
-                        type="date"
-                        value={row.date}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setActivityForm(prev => {
-                            const newRows = [...prev.scheduleRows];
-                            newRows[idx].date = val;
-                            return { ...prev, scheduleRows: newRows };
-                          });
-                        }}
-                        style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.80rem' }}
-                      />
-                      <input
-                        type="time"
-                        value={row.startTime}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setActivityForm(prev => {
-                            const newRows = [...prev.scheduleRows];
-                            newRows[idx].startTime = val;
-                            return { ...prev, scheduleRows: newRows };
-                          });
-                        }}
-                        style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.80rem' }}
-                      />
-                      <input
-                        type="time"
-                        value={row.endTime}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setActivityForm(prev => {
-                            const newRows = [...prev.scheduleRows];
-                            newRows[idx].endTime = val;
-                            return { ...prev, scheduleRows: newRows };
-                          });
-                        }}
-                        style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.80rem' }}
+                        type="number"
+                        min="1"
+                        value={activityForm.capacity}
+                        onChange={(e) => setActivityForm(prev => ({ ...prev, capacity: e.target.value }))}
+                        style={{ width: '100%', padding: '5px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.80rem', marginTop: '4px', boxSizing: 'border-box' }}
                       />
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                  Palestrante / Convidado Responsável
-                </label>
-                <select
-                  value={activityForm.speakerId}
-                  onChange={(e) => {
-                    const spkId = e.target.value;
-                    const found = speakers.find(s => s.id === spkId);
-                    setActivityForm(prev => ({
-                      ...prev,
-                      speakerId: spkId,
-                      speakerName: found ? found.name : '',
-                      speakerRole: found ? (found.role || found.institution) : '',
-                      speakerPhoto: found ? found.photo : ''
-                    }));
-                  }}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
-                >
-                  <option value="">- Selecione um palestrante -</option>
-                  {speakers.map(s => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.institution || s.role})</option>
-                  ))}
-                </select>
-              </div>
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#F9FAFB', display: 'block', marginBottom: '8px' }}>
+                    Gamificação (Pontos de Presença)
+                  </span>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#9CA3AF', marginBottom: '4px' }}>Local de Realização</label>
-                  <select
-                    value={activityForm.location}
-                    onChange={(e) => setActivityForm(prev => ({ ...prev, location: e.target.value }))}
-                    style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.80rem' }}
-                  >
-                    {locations.map(loc => (
-                      <option key={loc.id} value={loc.name}>{loc.name}</option>
+                  <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                    {[25, 50, 100, 150].map(pts => (
+                      <button
+                        key={pts}
+                        type="button"
+                        onClick={() => setActivityForm(prev => ({ ...prev, points: pts }))}
+                        style={{
+                          flex: 1,
+                          padding: '4px 0',
+                          borderRadius: '4px',
+                          border: Number(activityForm.points) === pts ? '1px solid #10B981' : '1px solid #374151',
+                          backgroundColor: Number(activityForm.points) === pts ? 'rgba(16, 185, 129, 0.15)' : '#111827',
+                          color: Number(activityForm.points) === pts ? '#34D399' : '#9CA3AF',
+                          fontSize: '0.74rem',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        +{pts}
+                      </button>
                     ))}
-                  </select>
-                </div>
+                  </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#9CA3AF', marginBottom: '4px' }}>Capacidade (Vagas)</label>
                   <input
                     type="number"
-                    value={activityForm.capacity}
-                    onChange={(e) => setActivityForm(prev => ({ ...prev, capacity: e.target.value }))}
-                    style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.80rem', boxSizing: 'border-box' }}
+                    value={activityForm.points}
+                    onChange={(e) => setActivityForm(prev => ({ ...prev, points: e.target.value }))}
+                    placeholder="Pontos customizados"
+                    style={{ width: '100%', padding: '5px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.80rem', boxSizing: 'border-box' }}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #1F2937', paddingTop: '14px', marginTop: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #1F2937', paddingTop: '14px' }}>
                 <button
                   type="button"
                   onClick={() => setIsActivityModalOpen(false)}
@@ -2649,10 +3063,12 @@ export default function Admin() {
 
       {/* MODAL: CONVIDADO / PALESTRANTE */}
       {isGuestModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '480px', backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#F9FAFB' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '520px', backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#F9FAFB' }}>
             <div style={{ backgroundColor: '#1E293B', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #334155' }}>
-              <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700 }}>Cadastrar Convidado / Palestrante</h3>
+              <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700 }}>
+                {editingSpeakerId ? 'Editar Palestrante' : 'Cadastrar Convidado / Palestrante'}
+              </h3>
               <button
                 type="button"
                 onClick={() => setIsGuestModalOpen(false)}
@@ -2662,13 +3078,14 @@ export default function Admin() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveGuest} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <form onSubmit={handleSaveGuest} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Nome Completo</label>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Nome Completo *</label>
                   <input
                     type="text"
                     required
+                    placeholder="Ex: Dra. Maria Santos"
                     value={guestForm.name}
                     onChange={(e) => setGuestForm(prev => ({ ...prev, name: e.target.value }))}
                     style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
@@ -2678,6 +3095,7 @@ export default function Admin() {
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>E-mail</label>
                   <input
                     type="email"
+                    placeholder="maria@ufu.br"
                     value={guestForm.email}
                     onChange={(e) => setGuestForm(prev => ({ ...prev, email: e.target.value }))}
                     style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
@@ -2685,43 +3103,262 @@ export default function Admin() {
                 </div>
               </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Classificação do Palestrante</label>
+                  <select
+                    value={guestForm.classification}
+                    onChange={(e) => setGuestForm(prev => ({ ...prev, classification: e.target.value }))}
+                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
+                  >
+                    {SPEAKER_CLASSIFICATIONS.map(cls => (
+                      <option key={cls.id} value={cls.id}>{cls.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Cargo / Função</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Professora Associada"
+                    value={guestForm.role}
+                    onChange={(e) => setGuestForm(prev => ({ ...prev, role: e.target.value }))}
+                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Cargo / Instituição</label>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Empresa / Instituição</label>
                 <input
                   type="text"
-                  placeholder="Ex: Lead Software Engineer @ Google"
-                  value={guestForm.role}
-                  onChange={(e) => setGuestForm(prev => ({ ...prev, role: e.target.value, institution: e.target.value }))}
+                  placeholder="Ex: FACOM / UFU"
+                  value={guestForm.institution}
+                  onChange={(e) => setGuestForm(prev => ({ ...prev, institution: e.target.value }))}
                   style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
                 />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Foto / Avatar URL</label>
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={guestForm.photo}
+                  onChange={(e) => setGuestForm(prev => ({ ...prev, photo: e.target.value }))}
+                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box', marginBottom: '6px' }}
+                />
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {SAMPLE_SPEAKER_PHOTOS.map((pic, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setGuestForm(prev => ({ ...prev, photo: pic.url }))}
+                      style={{ padding: '3px 6px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#9CA3AF', fontSize: '0.70rem', cursor: 'pointer' }}
+                    >
+                      {pic.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Redes Sociais */}
+              <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#F9FAFB', display: 'block', marginBottom: '8px' }}>
+                  Redes Sociais
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <LinkedinIcon size={14} color="#00D2FF" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="url"
+                      placeholder="LinkedIn URL..."
+                      value={guestForm.socialLinks.linkedin || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setGuestForm(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, linkedin: val } }));
+                      }}
+                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <GithubIcon size={14} color="#D1D5DB" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="url"
+                      placeholder="GitHub URL..."
+                      value={guestForm.socialLinks.github || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setGuestForm(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, github: val } }));
+                      }}
+                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <InstagramIcon size={14} color="#E1306C" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="url"
+                      placeholder="Instagram URL..."
+                      value={guestForm.socialLinks.instagram || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setGuestForm(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, instagram: val } }));
+                      }}
+                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Mini Biografia</label>
                 <textarea
                   rows={2}
+                  placeholder="Breve resumo da trajetória ou especialidades..."
                   value={guestForm.bio}
                   onChange={(e) => setGuestForm(prev => ({ ...prev, bio: e.target.value }))}
                   style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
                 />
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #1F2937', paddingTop: '12px', marginTop: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #1F2937', paddingTop: '12px' }}>
                 <button
                   type="button"
                   onClick={() => setIsGuestModalOpen(false)}
-                  style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.80rem', cursor: 'pointer' }}
+                  style={{ padding: '7px 14px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.80rem', cursor: 'pointer' }}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '7px 16px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
-                  Salvar
+                  <Check size={14} />
+                  <span>Salvar Palestrante</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* OVERLAY: MODO PROJEÇÃO DE TELÃO (PROJECTOR MODE) */}
+      {projectorActivity && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: '#050811', zIndex: 9999, display: 'flex', flexDirection: 'column', color: '#FFFFFF', padding: '32px 48px', fontFamily: "'Inter', sans-serif" }}>
+          {/* Header do Telão */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1E293B', paddingBottom: '20px', marginBottom: '32px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <img src={logoTw} alt="FACOM TechWeek" style={{ height: '48px', objectFit: 'contain' }} />
+              <div>
+                <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  FACOM TECHWEEK 2026 • PROJEÇÃO OFICIAL
+                </span>
+                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#F9FAFB' }}>
+                  Presença & Check-in no Telão
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                    setIsFullscreen(true);
+                  } else {
+                    document.exitFullscreen().catch(() => {});
+                    setIsFullscreen(false);
+                  }
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#1E293B', color: '#F9FAFB', fontWeight: 700, fontSize: '0.90rem', cursor: 'pointer' }}
+              >
+                {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                <span>{isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setProjectorActivity(null)}
+                style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid #991B1B', backgroundColor: '#7F1D1D', color: '#FFFFFF', fontWeight: 700, fontSize: '0.90rem', cursor: 'pointer' }}
+              >
+                Fechar Projeção
+              </button>
+            </div>
+          </div>
+
+          {/* Conteúdo Principal do Telão */}
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '48px', alignItems: 'center' }}>
+            {/* Informações da Atividade */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div>
+                <span style={{ fontSize: '1.0rem', fontWeight: 700, color: '#A855F7', padding: '6px 14px', borderRadius: '20px', backgroundColor: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', display: 'inline-block', marginBottom: '16px' }}>
+                  {(projectorActivity.type || 'Palestra').toUpperCase()}
+                </span>
+                <h1 style={{ fontSize: '2.8rem', fontWeight: 900, lineHeight: '1.15', color: '#FFFFFF', margin: 0, letterSpacing: '-0.02em' }}>
+                  {projectorActivity.title}
+                </h1>
+              </div>
+
+              {/* Informações dos Palestrantes */}
+              <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '16px', padding: '24px' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: '12px' }}>
+                  PALESTRANTE(S) / CONVIDADO(S)
+                </span>
+                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#38BDF8' }}>
+                  {projectorActivity.speaker || (Array.isArray(projectorActivity.speakers) && projectorActivity.speakers.length > 0 ? projectorActivity.speakers.map(s => s.name).join(', ') : 'Comissão FACOM')}
+                </div>
+                {projectorActivity.speakerRole && (
+                  <div style={{ fontSize: '1.05rem', color: '#D1D5DB', marginTop: '4px' }}>
+                    {projectorActivity.speakerRole}
+                  </div>
+                )}
+              </div>
+
+              {/* Local & Pontuação */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '16px', padding: '20px' }}>
+                  <span style={{ fontSize: '0.80rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase' }}>LOCAL / SALA</span>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#F9FAFB', marginTop: '4px' }}>
+                    {projectorActivity.location || 'Anfiteatro FACOM'}
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', border: '2px solid #10B981', borderRadius: '16px', padding: '20px' }}>
+                  <span style={{ fontSize: '0.80rem', fontWeight: 800, color: '#34D399', textTransform: 'uppercase' }}>PONTOS DE PRESENÇA</span>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#34D399', marginTop: '2px' }}>
+                    +{projectorActivity.points || 50} PTS
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* QR Code de Projeção em Tela Cheia */}
+            <div style={{ backgroundColor: '#0F172A', border: '2px solid #2563EB', borderRadius: '24px', padding: '36px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 50px rgba(37, 99, 235, 0.25)' }}>
+              <div style={{ backgroundColor: '#FFFFFF', padding: '20px', borderRadius: '16px', boxShadow: '0 8px 30px rgba(0,0,0,0.5)' }}>
+                <QRCodeSVG
+                  value={projectorQrValue}
+                  size={320}
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+
+              <div style={{ marginTop: '24px', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#F9FAFB', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <Radio size={20} color="#38BDF8" className="animate-pulse" />
+                  <span>Abra a Câmera do App e Escaneie</span>
+                </div>
+                <div style={{ fontSize: '0.90rem', color: '#9CA3AF' }}>
+                  Código rotativo de segurança atualiza em <strong style={{ color: '#38BDF8' }}>{projectorCountdown}s</strong>
+                </div>
+
+                {/* Barra de Progresso */}
+                <div style={{ width: '280px', height: '6px', backgroundColor: '#1E293B', borderRadius: '3px', marginTop: '14px', overflow: 'hidden', margin: '14px auto 0' }}>
+                  <div style={{ width: `${(projectorCountdown / 30) * 100}%`, height: '100%', backgroundColor: '#2563EB', transition: 'width 1s linear' }} />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
