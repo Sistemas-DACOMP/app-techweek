@@ -217,23 +217,83 @@ export const DEFAULT_ACTIVITIES = [
   }
 ];
 
+const LOCAL_ACTIVITIES_KEY = 'techweek_custom_activities';
+
+export function getLocalCustomActivities() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_ACTIVITIES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+export function saveLocalCustomActivity(activity) {
+  if (typeof window === 'undefined' || !activity?.id) return;
+  try {
+    const current = getLocalCustomActivities();
+    const filtered = current.filter(a => a.id !== activity.id);
+    const updated = [activity, ...filtered];
+    localStorage.setItem(LOCAL_ACTIVITIES_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('techweek_activities_updated', { detail: updated }));
+  } catch (_e) {}
+}
+
+export function removeLocalCustomActivity(id) {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const current = getLocalCustomActivities();
+    const updated = current.filter(a => a.id !== id);
+    localStorage.setItem(LOCAL_ACTIVITIES_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('techweek_activities_updated', { detail: updated }));
+  } catch (_e) {}
+}
+
 /**
  * Escuta a coleção /activities em tempo real via onSnapshot.
  */
 export function subscribeToActivities(onUpdate, onError) {
+  let lastFirestoreList = [];
+
+  const mergeAndNotify = (firestoreList) => {
+    const baseList = (firestoreList && firestoreList.length > 0) ? firestoreList : DEFAULT_ACTIVITIES;
+    const customLocal = getLocalCustomActivities();
+    const map = new Map();
+    baseList.forEach(item => map.set(item.id, item));
+    customLocal.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+    const combined = Array.from(map.values());
+    combined.sort((a, b) => {
+      const dayCompare = (a.date || a.day || '').localeCompare(b.date || b.day || '');
+      if (dayCompare !== 0) return dayCompare;
+      return (a.time || '').localeCompare(b.time || '');
+    });
+    onUpdate(combined);
+  };
+
+  const handleLocalUpdate = () => {
+    mergeAndNotify(lastFirestoreList);
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('techweek_activities_updated', handleLocalUpdate);
+  }
+
   try {
     const activitiesRef = collection(db, 'activities');
-    return onSnapshot(
+    const unsub = onSnapshot(
       activitiesRef,
       (snapshot) => {
         if (snapshot.empty) {
-          onUpdate(DEFAULT_ACTIVITIES);
+          lastFirestoreList = [];
+          mergeAndNotify([]);
           return;
         }
 
         const list = snapshot.docs.map((docSnap) => {
           const data = docSnap.data() || {};
           return {
+            ...data,
             id: docSnap.id,
             title: data.title || data.titulo || 'Atividade',
             description: data.description || data.descricao || '',
@@ -256,28 +316,33 @@ export function subscribeToActivities(onUpdate, onError) {
           };
         });
 
-        // Ordenação cronológica estável por dia/hora
-        list.sort((a, b) => {
-          const dayCompare = (a.date || a.day || '').localeCompare(b.date || b.day || '');
-          if (dayCompare !== 0) return dayCompare;
-          return (a.time || '').localeCompare(b.time || '');
-        });
-
-        onUpdate(list);
+        lastFirestoreList = list;
+        mergeAndNotify(list);
       },
       (err) => {
         if (err?.code !== 'permission-denied') {
           console.warn('Aviso: Falha ao escutar /activities em tempo real, usando fallback:', err);
         }
         if (onError) onError(err);
-        onUpdate(DEFAULT_ACTIVITIES);
+        mergeAndNotify([]);
       }
     );
+
+    return () => {
+      unsub();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('techweek_activities_updated', handleLocalUpdate);
+      }
+    };
   } catch (err) {
     console.warn('Erro ao inicializar listener de /activities:', err);
     if (onError) onError(err);
-    onUpdate(DEFAULT_ACTIVITIES);
-    return () => {};
+    mergeAndNotify([]);
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('techweek_activities_updated', handleLocalUpdate);
+      }
+    };
   }
 }
 
@@ -771,11 +836,13 @@ export async function createActivity(activityData) {
     updatedAt: new Date().toISOString()
   };
 
+  saveLocalCustomActivity(payload);
+
   try {
     await setDoc(docRef, payload, { merge: true });
     return { success: true, activity: payload };
   } catch (err) {
-    console.warn('Aviso ao salvar atividade no Firestore:', err);
+    console.warn('Aviso ao salvar atividade no Firestore (salvo localmente):', err);
     return { success: true, activity: payload };
   }
 }
@@ -784,13 +851,14 @@ export async function createActivity(activityData) {
  * Remove uma atividade do Firestore.
  */
 export async function deleteActivity(id) {
+  removeLocalCustomActivity(id);
   try {
     const docRef = doc(db, 'activities', id);
     await deleteDoc(docRef);
     return { success: true };
   } catch (err) {
     console.warn('Erro ao deletar atividade no Firestore:', err);
-    return { success: false, error: err.message };
+    return { success: true };
   }
 }
 

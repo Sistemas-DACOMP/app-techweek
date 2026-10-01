@@ -899,6 +899,10 @@ export default function Admin() {
 
     try {
       await createActivity(payload);
+      setActivities(prev => {
+        const filtered = prev.filter(a => a.id !== payload.id);
+        return [payload, ...filtered];
+      });
       setIsActivityModalOpen(false);
       setEditingActivityId(null);
       setActivityForm(initialActivityForm);
