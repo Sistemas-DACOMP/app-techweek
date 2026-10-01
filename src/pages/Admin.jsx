@@ -1006,19 +1006,25 @@ export default function Admin() {
       return;
     }
 
+    const speakerPayload = {
+      id: editingSpeakerId || `spk_${Date.now()}`,
+      name: guestForm.name,
+      email: guestForm.email,
+      role: guestForm.role,
+      institution: guestForm.institution || guestForm.role,
+      classification: guestForm.classification || 'Convidado Externo',
+      bio: guestForm.bio,
+      photo: guestForm.photo || SAMPLE_SPEAKER_PHOTOS[0].url,
+      socialLinks: guestForm.socialLinks,
+      inviteViaEmail: guestForm.inviteViaEmail,
+      inviteStatus: guestForm.inviteStatus
+    };
+
     try {
-      await createSpeaker({
-        id: editingSpeakerId || undefined,
-        name: guestForm.name,
-        email: guestForm.email,
-        role: guestForm.role,
-        institution: guestForm.institution || guestForm.role,
-        classification: guestForm.classification || 'Convidado Externo',
-        bio: guestForm.bio,
-        photo: guestForm.photo || SAMPLE_SPEAKER_PHOTOS[0].url,
-        socialLinks: guestForm.socialLinks,
-        inviteViaEmail: guestForm.inviteViaEmail,
-        inviteStatus: guestForm.inviteStatus
+      await createSpeaker(speakerPayload);
+      setSpeakers(prev => {
+        const filtered = prev.filter(s => s.id !== speakerPayload.id);
+        return [speakerPayload, ...filtered];
       });
 
       setIsGuestModalOpen(false);
@@ -1038,6 +1044,7 @@ export default function Admin() {
     if (!window.confirm(`Excluir palestrante "${name}"?`)) return;
     try {
       await deleteSpeaker(id);
+      setSpeakers(prev => prev.filter(s => s.id !== id));
     } catch (err) {
       alert('Erro ao excluir palestrante: ' + err.message);
     }
@@ -1056,8 +1063,15 @@ export default function Admin() {
   const handleSaveLocation = async (e) => {
     e.preventDefault();
     if (!locationForm.name.trim()) return;
+    const locPayload = {
+      id: `loc_${Date.now()}`,
+      name: locationForm.name.trim(),
+      capacity: Number(locationForm.capacity || 100),
+      description: locationForm.description || ''
+    };
     try {
-      await createLocation(locationForm);
+      await createLocation(locPayload);
+      setLocations(prev => [locPayload, ...prev.filter(l => l.id !== locPayload.id)]);
       setIsLocationModalOpen(false);
       setLocationForm({ name: '', capacity: 100, description: '' });
       setFeedback({
