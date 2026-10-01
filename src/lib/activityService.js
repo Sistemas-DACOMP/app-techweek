@@ -804,9 +804,10 @@ export const DEFAULT_SPEAKERS = [
     email: 'sam03amorim@gmail.com',
     role: 'Engenheiro de Software & Fundador',
     institution: 'TechWeek / Sistemas DACOMP',
+    classification: 'Convidado Externo',
     bio: 'Especialista em arquiteturas modernas, React e ecossistema Firebase.',
     photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    socialLinks: ['https://linkedin.com/in/samuelamorim', 'https://github.com/samuelamorim'],
+    socialLinks: { linkedin: 'https://linkedin.com/in/samuelamorim', github: 'https://github.com/samuelamorim', instagram: '' },
     inviteStatus: 'Aceito'
   },
   {
@@ -815,9 +816,10 @@ export const DEFAULT_SPEAKERS = [
     email: 'aline.souza@ufu.br',
     role: 'Professora e Pesquisadora em IA',
     institution: 'FACOM - UFU',
+    classification: 'Professor UFU',
     bio: 'Pesquisadora em Inteligência Artificial Generativa e Sistemas Multi-Agentes.',
     photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
-    socialLinks: ['https://linkedin.com'],
+    socialLinks: { linkedin: 'https://linkedin.com', github: '', instagram: '' },
     inviteStatus: 'Aceito'
   },
   {
@@ -826,9 +828,10 @@ export const DEFAULT_SPEAKERS = [
     email: 'lucas.mendes@cloudtech.io',
     role: 'Tech Lead Cloud & DevOps',
     institution: 'CloudTech Soluções',
+    classification: 'Convidado Externo',
     bio: 'Atua há mais de 8 anos liderando migrações cloud e arquiteturas orientadas a eventos.',
     photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
-    socialLinks: ['https://linkedin.com'],
+    socialLinks: { linkedin: 'https://linkedin.com', github: '', instagram: '' },
     inviteStatus: 'Aceito'
   }
 ];

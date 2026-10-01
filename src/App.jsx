@@ -120,9 +120,6 @@ function AppContent() {
         <Route path="/sponsor" element={<Sponsor />} />
         <Route path="/staff" element={<Staff />} />
         <Route path="/admin" element={<Admin />} />
-        <Route path="/speakers" element={<Navigate to="/admin?tab=speakers" replace />} />
-        <Route path="/activities" element={<Navigate to="/admin?tab=activities" replace />} />
-        <Route path="/locations" element={<Navigate to="/admin?tab=locations" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       

@@ -1066,6 +1066,17 @@ export default function Admin() {
     });
   }, [activities, activitySearch, activityFilter]);
 
+  // Filtros de Palestrantes & Convidados
+  const filteredSpeakers = useMemo(() => {
+    return (speakers || []).filter((spk) => {
+      const matchText = (spk.name || '').toLowerCase().includes((speakerSearch || '').toLowerCase()) ||
+                        (spk.institution || '').toLowerCase().includes((speakerSearch || '').toLowerCase()) ||
+                        (spk.role || '').toLowerCase().includes((speakerSearch || '').toLowerCase());
+      const matchClass = speakerClassificationFilter === 'ALL' || spk.classification === speakerClassificationFilter;
+      return matchText && matchClass;
+    });
+  }, [speakers, speakerSearch, speakerClassificationFilter]);
+
   // Se não autorizado, tela de login corporativo
   if (!isAuthorized) {
     return (
