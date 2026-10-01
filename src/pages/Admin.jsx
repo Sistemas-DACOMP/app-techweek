@@ -465,6 +465,17 @@ export default function Admin() {
     return () => clearInterval(interval);
   }, [projectorActivity]);
 
+  // QR Code payload estável que só muda quando o token de segurança rotaciona (a cada 30s)
+  const projectorQrValue = useMemo(() => {
+    if (!projectorActivity) return '';
+    return JSON.stringify({
+      lectureId: projectorActivity.id,
+      activityId: projectorActivity.id,
+      title: projectorActivity.title,
+      sessionToken: projectorToken
+    });
+  }, [projectorActivity, projectorToken]);
+
   const handleOpenNewMissionModal = () => {
     setEditingMissionId(null);
     setMissionForm(initialMissionForm);
@@ -3308,13 +3319,7 @@ export default function Admin() {
             <div style={{ backgroundColor: '#0F172A', border: '2px solid #2563EB', borderRadius: '24px', padding: '36px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 50px rgba(37, 99, 235, 0.25)' }}>
               <div style={{ backgroundColor: '#FFFFFF', padding: '20px', borderRadius: '16px', boxShadow: '0 8px 30px rgba(0,0,0,0.5)' }}>
                 <QRCodeSVG
-                  value={JSON.stringify({
-                    lectureId: projectorActivity.id,
-                    activityId: projectorActivity.id,
-                    title: projectorActivity.title,
-                    sessionToken: projectorToken,
-                    timestamp: Date.now()
-                  })}
+                  value={projectorQrValue}
                   size={320}
                   level="H"
                   includeMargin={true}
