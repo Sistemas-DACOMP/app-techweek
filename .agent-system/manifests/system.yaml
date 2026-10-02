@@ -106,6 +106,7 @@ agents:
   - devops     # added 2026-09-22 — CI/CD pipeline, build script and release-flow specialist
   - adr
   - ponytail   # see agents/ponytail.md — installed for real 2026-09-20, portable: true
+  - frontend   # added 2026-10-02 — visual/Design System/accessibility/UX specialist, cuts across pwa/admin like security/qa cut across backend/pwa/admin
 
 connectors:
   - id: maestri
