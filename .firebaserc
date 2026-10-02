@@ -1,8 +1,6 @@
 {
   "projects": {
-    "default": "facom-techweek-prod",
-    "prod": "facom-techweek-prod",
-    "homolog": "facom-techweek-layerx"
+    "default": "facom-techweek-layerx",
+    "prod": "facom-techweek-layerx"
   }
 }
-
