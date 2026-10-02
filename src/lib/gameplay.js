@@ -83,7 +83,7 @@ export async function uploadAvatar(file) {
 
 async function isStorageAvailable() {
   if (typeof window === 'undefined') return true;
-  if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+  if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 500);
