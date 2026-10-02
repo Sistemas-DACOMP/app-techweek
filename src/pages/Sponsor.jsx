@@ -18,8 +18,14 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
 import { resolveParticipantFromQr } from '../lib/sponsorService';
+import { stopAllMediaTracks } from '../lib/cameraUtils';
 import SponsorLeadModal from '../components/SponsorLeadModal';
 import WhatsAppButton from '../components/WhatsAppButton';
+
+// Atalhos de simulação só existem fora de produção (mesmo padrão do Scanner.jsx).
+const isDevMode = typeof window !== 'undefined' && (
+  import.meta.env.DEV || window.location.search.includes('demo=true')
+);
 
 export default function Sponsor() {
   const navigate = useNavigate();
@@ -42,8 +48,11 @@ export default function Sponsor() {
   const [activeParticipant, setActiveParticipant] = useState(null);
   const [capturedLeads, setCapturedLeads] = useState([]);
   const [toastMessage, setToastMessage] = useState(null);
+  const [activeCompanyId, setActiveCompanyId] = useState(
+    userProfile?.companyId || userProfile?.empresa || 'kanastra'
+  );
 
-  const sponsorName = userProfile?.companyName || userProfile?.empresa || userProfile?.displayName || 'Empresa Patrocinadora';
+  const sponsorName = userProfile?.companyName || userProfile?.empresa || (activeCompanyId ? activeCompanyId.toUpperCase() : 'Empresa Patrocinadora');
 
   // Iniciar scanner contínuo quando a página estiver com acesso e modal fechado
   useEffect(() => {
@@ -107,6 +116,7 @@ export default function Sponsor() {
       }
       scannerRef.current = null;
     }
+    stopAllMediaTracks();
     setIsScannerActive(false);
   };
 
@@ -229,27 +239,29 @@ export default function Sponsor() {
           </button>
 
           {/* Atalho para facilitar demonstração e testes locais */}
-          <button
-            type="button"
-            onClick={() => setDevSponsorOverride(true)}
-            style={{
-              background: 'rgba(56, 189, 248, 0.1)',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
-              borderRadius: '14px',
-              padding: '10px',
-              color: '#38BDF8',
-              fontSize: '12px',
-              fontWeight: '700',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px'
-            }}
-          >
-            <Sparkles size={14} />
-            <span>Simular Permissão de Patrocinador (Teste)</span>
-          </button>
+          {isDevMode && (
+            <button
+              type="button"
+              onClick={() => setDevSponsorOverride(true)}
+              style={{
+                background: 'rgba(56, 189, 248, 0.1)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: '14px',
+                padding: '10px',
+                color: '#38BDF8',
+                fontSize: '12px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}
+            >
+              <Sparkles size={14} />
+              <span>Simular Permissão de Patrocinador (Teste)</span>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -359,6 +371,33 @@ export default function Sponsor() {
         </div>
       </div>
 
+      {/* Seletor de Estande para Testes / ADMIN */}
+      {(devSponsorOverride || actualRole === 'ADMIN') && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '16px' }}>
+          <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600, whiteSpace: 'nowrap' }}>Estande Ativo:</span>
+          {['kanastra', 'bayer', 'aimirim', 'bip', 'hyperflow'].map(comp => (
+            <button
+              key={comp}
+              type="button"
+              onClick={() => setActiveCompanyId(comp)}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '8px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                border: activeCompanyId === comp ? '1px solid #38BDF8' : '1px solid #334155',
+                backgroundColor: activeCompanyId === comp ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                color: activeCompanyId === comp ? '#38BDF8' : '#94A3B8',
+                textTransform: 'capitalize'
+              }}
+            >
+              {comp}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Metric Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
         <div className="glass-panel" style={{ padding: '14px', textAlign: 'center' }}>
@@ -422,48 +461,50 @@ export default function Sponsor() {
         )}
 
         {/* Botão de Teste e Simulação */}
-        <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-            OU SIMULE A BIPAGEM (TESTE LOCAL):
-          </div>
+        {isDevMode && (
+          <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+              OU SIMULE A BIPAGEM (TESTE LOCAL):
+            </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => simulateBadgeScan('app')}
-              disabled={isResolving}
-              style={{ flex: 1, padding: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-            >
-              <Sparkles size={14} />
-              <span>Crachá App</span>
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => simulateBadgeScan('app')}
+                disabled={isResolving}
+                style={{ flex: 1, padding: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                <Sparkles size={14} />
+                <span>Crachá App</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => simulateBadgeScan('sympla')}
-              disabled={isResolving}
-              style={{
-                flex: 1,
-                padding: '10px',
-                fontSize: '12px',
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                borderRadius: '14px',
-                color: '#ffffff',
-                fontWeight: '700',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px'
-              }}
-            >
-              <QrCode size={14} />
-              <span>Crachá Sympla</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => simulateBadgeScan('sympla')}
+                disabled={isResolving}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  fontSize: '12px',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '14px',
+                  color: '#ffffff',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <QrCode size={14} />
+                <span>Crachá Sympla</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Lista de Leads Recentes no Estande */}
@@ -530,7 +571,11 @@ export default function Sponsor() {
       {activeParticipant && (
         <SponsorLeadModal
           participant={activeParticipant}
-          sponsorProfile={userProfile}
+          sponsorProfile={{
+            ...userProfile,
+            companyId: userProfile?.companyId || activeCompanyId,
+            companyName: userProfile?.companyName || userProfile?.empresa || (activeCompanyId ? activeCompanyId.toUpperCase() : sponsorName)
+          }}
           onClose={() => {
             setActiveParticipant(null);
             setTimeout(() => startScanner(), 300);

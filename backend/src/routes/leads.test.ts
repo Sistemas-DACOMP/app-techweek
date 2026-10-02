@@ -266,19 +266,98 @@ describe('POST /api/leads handler (KAN-55)', () => {
     );
   });
 
-  it('retorna 500 INTERNAL_ERROR caso a transação falhe de forma inesperada', async () => {
-    const req = makeReq({ participantUid: 'part-1' });
+  it('identifica empresa parceira e registra no passaporte do participante', async () => {
+    const req = makeReq(
+      { participantUid: 'part-1', companyId: 'kanastra' },
+      { uid: 'sponsor-kanastra', role: 'SPONSOR', email: 'contato@kanastra.com.br' }
+    );
     const res = makeRes();
 
-    (db.runTransaction as any).mockRejectedValue(new Error('Falha no Firestore'));
+    const mockTx = {
+      get: vi.fn((ref: { path: string }) => {
+        if (ref.path === 'users/part-1') {
+          return Promise.resolve({
+            exists: true,
+            data: () => ({ name: 'Maria Aluna', visitedSponsors: {} })
+          });
+        }
+        return Promise.resolve({ exists: false, data: () => ({}) });
+      }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
 
     await leadsHandler(req, res);
 
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({
-      error: 'INTERNAL_ERROR',
-      message: 'Não foi possível registrar o contato no momento.'
-    });
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(mockTx.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        visitedSponsors: expect.objectContaining({
+          kanastra: expect.objectContaining({ sponsorUid: 'sponsor-kanastra' })
+        })
+      })
+    );
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        lead: expect.objectContaining({ companyId: 'kanastra' })
+      })
+    );
+  });
+
+  it('libera o Bilhete Dourado (+100 pts) quando todas as 5 empresas forem visitadas', async () => {
+    const req = makeReq(
+      { participantUid: 'part-1', companyId: 'hyperflow' },
+      { uid: 'sponsor-hf', role: 'SPONSOR', email: 'lead@hyperflow.com' }
+    );
+    const res = makeRes();
+
+    const mockTx = {
+      get: vi.fn((ref: { path: string }) => {
+        if (ref.path === 'users/part-1') {
+          return Promise.resolve({
+            exists: true,
+            data: () => ({
+              name: 'Aluno Completo',
+              visitedSponsors: {
+                kanastra: { visitedAt: '2026-09-28' },
+                bayer: { visitedAt: '2026-09-28' },
+                aimirim: { visitedAt: '2026-09-28' },
+                bip: { visitedAt: '2026-09-28' }
+              },
+              goldenTicketAwarded: false
+            })
+          });
+        }
+        return Promise.resolve({ exists: false, data: () => ({}) });
+      }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
+
+    await leadsHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(mockTx.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        goldenTicketAwarded: true
+      })
+    );
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        lead: expect.objectContaining({
+          goldenTicketAwarded: true,
+          pointsAwarded: 150 // 50 lead + 100 bilhete dourado
+        })
+      })
+    );
   });
 });
 

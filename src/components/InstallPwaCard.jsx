@@ -1,44 +1,70 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
-  Share, 
   Download, 
+  Share, 
   PlusSquare, 
-  X
+  CheckCircle2, 
+  X, 
+  Smartphone, 
+  ArrowDown
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
-const STORAGE_KEY = 'tw_pwa_install_dismissed_time';
+const STORAGE_KEY = 'tw_pwa_v3_dismissed_time';
 const DISMISS_DURATION_MS = 24 * 60 * 60 * 1000; // 24 horas
 
 export default function InstallPwaCard() {
+  const { user } = useAuth();
   const [isVisible, setIsVisible] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [activeTab, setActiveTab] = useState('ios'); // 'ios' | 'android'
+  const [isAppleDevice, setIsAppleDevice] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalPlatform, setModalPlatform] = useState('ios'); // 'ios' | 'android'
 
   useEffect(() => {
+    // Limpa a chave legada antiga para garantir que a nova versão seja carregada
+    try {
+      localStorage.removeItem('tw_pwa_install_dismissed_time');
+    } catch {}
+
+    const isSpecialAccount = 
+      user?.email === 'sam03amorim@gmail.com' || 
+      (typeof localStorage !== 'undefined' && localStorage.getItem('facom_test_session')?.includes('sam03amorim@gmail.com'));
+
+    // Conta de desenvolvimento / admin: limpa bloqueios e força exibição
+    if (isSpecialAccount) {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+    }
+
     // 1. Verifica se já está rodando como App instalado (Standalone)
     const isStandalone = 
-      (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches) ||
+      (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)')?.matches) ||
       (typeof window !== 'undefined' && window.navigator?.standalone === true) ||
-      (typeof document !== 'undefined' && document.referrer.includes('android-app://'));
+      (typeof document !== 'undefined' && document.referrer?.includes('android-app://'));
 
-    if (isStandalone) {
+    if (isStandalone && !isSpecialAccount) {
       setIsVisible(false);
       return;
     }
 
-    // 2. Verifica se o usuário dispensou recentemente nas últimas 24h
-    try {
-      const dismissedTime = localStorage.getItem(STORAGE_KEY);
-      if (dismissedTime && Date.now() - Number(dismissedTime) < DISMISS_DURATION_MS) {
-        setIsVisible(false);
-        return;
-      }
-    } catch {}
+    // 2. Verifica se o usuário dispensou recentemente nas últimas 24h (ignorado para sam03amorim@gmail.com)
+    if (!isSpecialAccount) {
+      try {
+        const dismissedTime = localStorage.getItem(STORAGE_KEY);
+        if (dismissedTime && Date.now() - Number(dismissedTime) < DISMISS_DURATION_MS) {
+          setIsVisible(false);
+          return;
+        }
+      } catch {}
+    }
 
-    // 3. Detecta sistema operacional padrão
+    // 3. Detecta sistema operacional
     const userAgent = typeof window !== 'undefined' ? (window.navigator?.userAgent || '') : '';
-    const isAppleDevice = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
-    setActiveTab(isAppleDevice ? 'ios' : 'android');
+    const isApple = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+    setIsAppleDevice(isApple);
 
     // 4. Captura evento nativo do Chrome/Android
     const handleBeforeInstallPrompt = (e) => {
@@ -49,304 +75,505 @@ export default function InstallPwaCard() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // Se o prompt não disparou após 1.5s, exibe o card educativo
+    // Exibe o card para incentivar a instalação
     const timer = setTimeout(() => {
       setIsVisible(true);
-    }, 1500);
+    }, isSpecialAccount ? 100 : 800);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       clearTimeout(timer);
     };
-  }, []);
+  }, [user]);
 
   const handleDismiss = () => {
     setIsVisible(false);
+    setShowModal(false);
     try {
       localStorage.setItem(STORAGE_KEY, Date.now().toString());
     } catch {}
   };
 
-  const handleNativeInstall = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setIsVisible(false);
+  const handleInstallClick = async () => {
+    // Se temos o prompt nativo do Android/Chrome: disparo com 1 clique direto!
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      try {
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          setIsVisible(false);
+        }
+      } catch {}
+      setDeferredPrompt(null);
+      return;
     }
-    setDeferredPrompt(null);
+
+    // Se estiver no iOS / Safari: abre modal ilustrado direcionando para o botão Compartilhar
+    if (isAppleDevice) {
+      setModalPlatform('ios');
+      setShowModal(true);
+      return;
+    }
+
+    // Caso Android/Desktop sem prompt nativo em memória: abre modal orientando os 2 passos
+    setModalPlatform('android');
+    setShowModal(true);
   };
 
   if (!isVisible) return null;
 
   return (
-    <section
-      aria-label="Instalar aplicativo"
-      style={{
-        marginBottom: '20px',
-        position: 'relative',
-        backgroundColor: '#0F141F',
-        border: '1px solid #1E293B',
-        borderRadius: '16px',
-        clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)',
-        overflow: 'hidden',
-        padding: '16px'
-      }}
-    >
-      {/* Botão Fechar / Dispensar */}
-      <button
-        type="button"
-        onClick={handleDismiss}
-        aria-label="Fechar aviso de instalação"
+    <>
+      <section
+        aria-label="Instalar aplicativo"
         style={{
-          position: 'absolute',
-          top: '12px',
-          right: '12px',
-          background: 'transparent',
+          marginBottom: '20px',
+          position: 'relative',
+          backgroundColor: '#0F141F',
           border: '1px solid #1E293B',
-          borderRadius: '8px',
-          width: '26px',
-          height: '26px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#94A3B8',
-          cursor: 'pointer',
-          zIndex: 2
+          borderRadius: '16px',
+          clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)',
+          overflow: 'hidden',
+          padding: '16px',
+          boxShadow: '0 8px 24px -6px rgba(0, 0, 0, 0.5)'
         }}
       >
-        <X size={14} strokeWidth={1.75} />
-      </button>
-
-      {/* Cabeçalho do Card */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px', paddingRight: '28px' }}>
-        <div
+        {/* Botão Fechar / Dispensar */}
+        <button
+          type="button"
+          onClick={handleDismiss}
+          aria-label="Fechar aviso de instalação"
           style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '10px',
-            backgroundColor: '#1E293B',
-            border: '1px solid #334155',
-            overflow: 'hidden',
-            flexShrink: 0,
+            position: 'absolute',
+            top: '12px',
+            right: '12px',
+            background: 'transparent',
+            border: '1px solid #1E293B',
+            borderRadius: '8px',
+            width: '26px',
+            height: '26px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            color: '#64748B',
+            cursor: 'pointer',
+            zIndex: 2,
+            transition: 'color 0.15s ease'
           }}
         >
-          <img src="/favicon.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        </div>
+          <X size={14} strokeWidth={1.75} />
+        </button>
 
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-            <span
-              style={{
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontSize: '0.88rem',
-                fontWeight: 700,
-                color: '#F8FAFC'
-              }}
-            >
-              Instalar o App no Celular
-            </span>
-            <span
-              style={{
-                padding: '2px 6px',
-                borderRadius: '4px',
-                backgroundColor: '#1E293B',
-                color: '#94A3B8',
-                fontSize: '0.60rem',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontWeight: 700
-              }}
-            >
-              Web App
-            </span>
-          </div>
-          <p
+        {/* Linha Principal: Ícone + Título + Botão de Instalação Direta */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px', paddingRight: '28px' }}>
+          <div
             style={{
-              margin: 0,
-              fontSize: '0.74rem',
-              color: '#94A3B8',
-              lineHeight: 1.35,
-              fontFamily: "'Inter', sans-serif"
+              width: '44px',
+              height: '44px',
+              borderRadius: '12px',
+              backgroundColor: '#1E293B',
+              border: '1px solid #334155',
+              overflow: 'hidden',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.18)'
             }}
           >
-            Adicione à tela de início para abrir como app nativo, rápido e sem barras do navegador.
-          </p>
-        </div>
-      </div>
+            <img src="/favicon.png" alt="FACOM TechWeek" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
 
-      {/* Se tiver prompt nativo do Chrome/Android */}
-      {deferredPrompt ? (
-        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+              <span
+                style={{
+                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                  fontSize: '0.90rem',
+                  fontWeight: 700,
+                  color: '#F8FAFC'
+                }}
+              >
+                Instale o App no Celular
+              </span>
+            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '0.74rem',
+                color: '#94A3B8',
+                lineHeight: 1.35,
+                fontFamily: "'Inter', sans-serif"
+              }}
+            >
+              Acesso rápido com tela cheia, sem barras do navegador.
+            </p>
+          </div>
+        </div>
+
+        {/* Botão de Ação Direta */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
             type="button"
-            onClick={handleNativeInstall}
+            onClick={handleInstallClick}
             style={{
               flex: 1,
-              backgroundColor: '#2563EB',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '9px 14px',
+              background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+              border: '1px solid rgba(59, 130, 246, 0.5)',
+              borderRadius: '10px',
+              padding: '10px 16px',
               color: '#FFFFFF',
               fontFamily: "'Space Grotesk', sans-serif",
-              fontSize: '0.76rem',
+              fontSize: '0.80rem',
               fontWeight: 700,
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '6px',
-              cursor: 'pointer'
+              gap: '8px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 16px rgba(37, 99, 235, 0.35)',
+              transition: 'transform 0.1s ease, filter 0.15s ease'
             }}
           >
-            <Download size={14} strokeWidth={1.75} />
-            <span>Instalar Aplicativo Agora</span>
+            <Download size={15} strokeWidth={2.2} />
+            <span>Instalar Aplicativo</span>
           </button>
 
           <button
             type="button"
             onClick={handleDismiss}
             style={{
-              backgroundColor: 'transparent',
+              background: 'transparent',
               border: '1px solid #1E293B',
-              borderRadius: '8px',
-              padding: '9px 12px',
-              color: '#94A3B8',
+              borderRadius: '10px',
+              padding: '10px 14px',
+              color: '#64748B',
+              fontFamily: "'Inter', sans-serif",
               fontSize: '0.74rem',
               fontWeight: 500,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
             }}
           >
             Agora não
           </button>
         </div>
-      ) : (
-        <div>
-          {/* Alternador Neutro Safari (iOS) vs Chrome (Android) */}
+      </section>
+
+      {/* MODAL ILUSTRADO DE INSTALAÇÃO (SAFARI / IOS OU ANDROID MANUAL) */}
+      {showModal && typeof document !== 'undefined' && createPortal(
+        <div
+          onClick={() => setShowModal(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            backgroundColor: 'rgba(5, 10, 24, 0.78)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
-              display: 'flex',
-              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              width: '100%',
+              maxWidth: '380px',
+              backgroundColor: '#0B1120',
               border: '1px solid #1E293B',
-              borderRadius: '8px',
-              padding: '2px',
-              gap: '4px',
-              marginBottom: '10px'
+              borderRadius: '20px',
+              padding: '24px 20px 20px',
+              boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.8), 0 0 24px rgba(37, 99, 235, 0.15)',
+              position: 'relative'
             }}
           >
+            {/* Fechar Modal */}
             <button
               type="button"
-              onClick={() => setActiveTab('ios')}
+              onClick={() => setShowModal(false)}
+              aria-label="Fechar guia"
               style={{
-                flex: 1,
-                border: activeTab === 'ios' ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid transparent',
-                background: activeTab === 'ios' ? '#1E293B' : 'transparent',
-                color: activeTab === 'ios' ? '#F8FAFC' : '#64748B',
-                borderRadius: '6px',
-                padding: '6px 8px',
-                fontSize: '0.70rem',
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: '#1E293B',
+                border: '1px solid #334155',
+                borderRadius: '50%',
+                width: '28px',
+                height: '28px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#94A3B8',
+                cursor: 'pointer'
               }}
             >
-              No iPhone / Safari
+              <X size={15} strokeWidth={2} />
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('android')}
+            {/* Cabeçalho do Modal */}
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div
+                style={{
+                  width: '52px',
+                  height: '52px',
+                  borderRadius: '14px',
+                  backgroundColor: 'rgba(37, 99, 235, 0.15)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '12px',
+                  color: '#60A5FA'
+                }}
+              >
+                <Smartphone size={26} strokeWidth={1.8} />
+              </div>
+              <h3
+                style={{
+                  margin: '0 0 6px',
+                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  color: '#F8FAFC'
+                }}
+              >
+                {modalPlatform === 'ios' ? 'Instalar no iPhone' : 'Instalar no Android'}
+              </h3>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '0.78rem',
+                  color: '#94A3B8',
+                  lineHeight: 1.4,
+                  fontFamily: "'Inter', sans-serif"
+                }}
+              >
+                {modalPlatform === 'ios'
+                  ? 'Siga os passos rápidos abaixo no Safari:'
+                  : 'Siga os passos no menu do seu navegador:'}
+              </p>
+            </div>
+
+            {/* Passos Ilustrados */}
+            <div
               style={{
-                flex: 1,
-                border: activeTab === 'android' ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid transparent',
-                background: activeTab === 'android' ? '#1E293B' : 'transparent',
-                color: activeTab === 'android' ? '#F8FAFC' : '#64748B',
-                borderRadius: '6px',
-                padding: '6px 8px',
-                fontSize: '0.70rem',
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                marginBottom: '22px'
               }}
             >
-              No Android / Chrome
-            </button>
-          </div>
+              {modalPlatform === 'ios' ? (
+                <>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                      border: '1px solid #1E293B',
+                      borderRadius: '12px',
+                      padding: '12px 14px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        backgroundColor: '#1E293B',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: '#38BDF8'
+                      }}
+                    >
+                      <Share size={18} strokeWidth={2} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: '0.80rem', color: '#E2E8F0', lineHeight: 1.35 }}>
+                      <span style={{ fontWeight: 700, color: '#38BDF8' }}>1. </span>
+                      No Safari, selecione o ícone de <strong>Compartilhar</strong> na barra inferior.
+                    </div>
+                  </div>
 
-          {/* Passo a Passo Didático Monocromático */}
-          <div
-            style={{
-              backgroundColor: 'rgba(5, 8, 17, 0.5)',
-              border: '1px solid #1E293B',
-              borderRadius: '10px',
-              padding: '10px 12px',
-              fontSize: '0.72rem',
-              color: '#94A3B8',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '6px',
-              fontFamily: "'Inter', sans-serif"
-            }}
-          >
-            {activeTab === 'ios' ? (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ color: '#CBD5E1', fontWeight: 700 }}>1.</span>
-                  <span>Toque no botão de Compartilhar</span>
-                  <Share size={13} color="#94A3B8" strokeWidth={1.75} />
-                  <span>na barra inferior do Safari</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ color: '#CBD5E1', fontWeight: 700 }}>2.</span>
-                  <span>Role para baixo e selecione Adicionar à Tela de Início</span>
-                  <PlusSquare size={13} color="#94A3B8" strokeWidth={1.75} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ color: '#CBD5E1', fontWeight: 700 }}>3.</span>
-                  <span>Confirme em Adicionar no canto superior direito</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ color: '#CBD5E1', fontWeight: 700 }}>1.</span>
-                  <span>Toque no menu de três pontos no topo do Chrome</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ color: '#CBD5E1', fontWeight: 700 }}>2.</span>
-                  <span>Selecione Instalar aplicativo ou Adicionar à tela inicial</span>
-                  <Download size={13} color="#94A3B8" strokeWidth={1.75} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ color: '#CBD5E1', fontWeight: 700 }}>3.</span>
-                  <span>Confirme a instalação para abrir direto dos seus aplicativos</span>
-                </div>
-              </>
-            )}
-          </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                      border: '1px solid #1E293B',
+                      borderRadius: '12px',
+                      padding: '12px 14px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        backgroundColor: '#1E293B',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: '#60A5FA'
+                      }}
+                    >
+                      <PlusSquare size={18} strokeWidth={2} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: '0.80rem', color: '#E2E8F0', lineHeight: 1.35 }}>
+                      <span style={{ fontWeight: 700, color: '#60A5FA' }}>2. </span>
+                      Role para baixo e selecione <strong>Adicionar à Tela de Início</strong>.
+                    </div>
+                  </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                      border: '1px solid #1E293B',
+                      borderRadius: '12px',
+                      padding: '12px 14px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        backgroundColor: '#1E293B',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: '#34D399'
+                      }}
+                    >
+                      <CheckCircle2 size={18} strokeWidth={2} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: '0.80rem', color: '#E2E8F0', lineHeight: 1.35 }}>
+                      <span style={{ fontWeight: 700, color: '#34D399' }}>3. </span>
+                      Confirme em <strong>Adicionar</strong> no canto superior direito.
+                    </div>
+                  </div>
+
+                  {/* Indicador sutil para a barra inferior do Safari */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      fontSize: '0.72rem',
+                      color: '#64748B',
+                      marginTop: '4px'
+                    }}
+                  >
+                    <ArrowDown size={13} strokeWidth={2} />
+                    <span>O botão de compartilhar fica na barra inferior do Safari</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                      border: '1px solid #1E293B',
+                      borderRadius: '12px',
+                      padding: '12px 14px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        backgroundColor: '#1E293B',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: '#38BDF8'
+                      }}
+                    >
+                      <Smartphone size={18} strokeWidth={2} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: '0.80rem', color: '#E2E8F0', lineHeight: 1.35 }}>
+                      <span style={{ fontWeight: 700, color: '#38BDF8' }}>1. </span>
+                      Abra o menu de opções <strong>(⋮)</strong> no topo do navegador.
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                      border: '1px solid #1E293B',
+                      borderRadius: '12px',
+                      padding: '12px 14px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        backgroundColor: '#1E293B',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: '#34D399'
+                      }}
+                    >
+                      <Download size={18} strokeWidth={2} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: '0.80rem', color: '#E2E8F0', lineHeight: 1.35 }}>
+                      <span style={{ fontWeight: 700, color: '#34D399' }}>2. </span>
+                      Selecione <strong>Instalar aplicativo</strong> ou <strong>Adicionar à tela inicial</strong>.
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Botão de Fechamento do Modal */}
             <button
               type="button"
-              onClick={handleDismiss}
+              onClick={() => setShowModal(false)}
               style={{
-                background: 'transparent',
+                width: '100%',
+                background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
                 border: 'none',
-                color: '#64748B',
-                fontSize: '0.70rem',
-                fontWeight: 500,
+                borderRadius: '12px',
+                padding: '12px',
+                color: '#FFFFFF',
+                fontFamily: "'Space Grotesk', sans-serif",
+                fontSize: '0.86rem',
+                fontWeight: 700,
                 cursor: 'pointer',
-                padding: '4px 8px'
+                boxShadow: '0 4px 16px rgba(37, 99, 235, 0.35)'
               }}
             >
-              Dispensar por 24h
+              Entendi, fechar
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </section>
+    </>
   );
 }

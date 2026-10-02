@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
 import Mascot from '../components/Mascot';
@@ -15,6 +15,27 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null); // 'email', 'password', or null
   const [showPassword, setShowPassword] = useState(false);
+  const passwordInputRef = useRef(null);
+
+  const handleTogglePassword = () => {
+    const input = passwordInputRef.current;
+    const isInputActive = document.activeElement === input;
+    const start = input ? input.selectionStart : null;
+    const end = input ? input.selectionEnd : null;
+
+    setShowPassword((prev) => !prev);
+
+    requestAnimationFrame(() => {
+      if (input) {
+        if (isInputActive) {
+          input.focus();
+        }
+        if (start !== null && end !== null) {
+          input.setSelectionRange(start, end);
+        }
+      }
+    });
+  };
 
   // Estados para o modal de Recuperação de Senha
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -153,6 +174,7 @@ export default function Login() {
             </label>
             <div style={{ position: 'relative' }}>
               <input 
+                ref={passwordInputRef}
                 type={showPassword ? "text" : "password"} 
                 placeholder="••••••••••••"
                 value={password}
@@ -166,7 +188,7 @@ export default function Login() {
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={handleTogglePassword}
                 style={{
                   position: 'absolute',
                   right: '16px',

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { stopAllMediaTracks } from './cameraUtils';
+import { stopAllMediaTracks, registerMediaStream } from './cameraUtils';
 
 describe('stopAllMediaTracks', () => {
   it('funciona com seguranca quando o DOM nao esta disponivel ou nao ha midia ativa', () => {
@@ -31,5 +31,16 @@ describe('stopAllMediaTracks', () => {
       stopAllMediaTracks();
     }
   });
-});
 
+  it('interrompe streams registradas manualmente via registerMediaStream', () => {
+    const mockTrack = { stop: vi.fn() };
+    const mockStream = {
+      getTracks: vi.fn(() => [mockTrack])
+    };
+
+    registerMediaStream(mockStream);
+    stopAllMediaTracks();
+
+    expect(mockTrack.stop).toHaveBeenCalled();
+  });
+});

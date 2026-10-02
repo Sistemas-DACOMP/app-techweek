@@ -94,12 +94,27 @@ export function buildWhatsAppPayload(phoneRaw: any, participantName: string) {
   };
 }
 
+export type SponsorCompanyId = 'kanastra' | 'bayer' | 'aimirim' | 'bip' | 'hyperflow';
+
+export const PASSPORT_COMPANIES: SponsorCompanyId[] = ['kanastra', 'bayer', 'aimirim', 'bip', 'hyperflow'];
+
+export function resolveCompanyId(raw?: string | null): SponsorCompanyId | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const clean = raw.toLowerCase().trim();
+  if (clean.includes('kanastra')) return 'kanastra';
+  if (clean.includes('bayer')) return 'bayer';
+  if (clean.includes('aimirim')) return 'aimirim';
+  if (clean.includes('bip')) return 'bip';
+  if (clean.includes('hyperflow')) return 'hyperflow';
+  return null;
+}
+
 /**
  * Handler do endpoint POST /api/leads
  * Extraído para facilitar testes unitários isolados.
  */
 export async function leadsHandler(req: Request, res: Response): Promise<void> {
-  const { participantUid, notes, rating } = req.body ?? {};
+  const { participantUid, notes, rating, companyId: providedCompanyId } = req.body ?? {};
   const sponsorUid = req.user!.uid;
 
   if (typeof participantUid !== 'string' || !participantUid || !isValidFirestoreId(participantUid)) {
@@ -133,12 +148,14 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
   const userRef = db.collection('users').doc(participantUid);
   const leadRef = db.collection('leads').doc(sponsorUid).collection('contacts').doc(participantUid);
   const pointEventRef = db.collection('pointEvents').doc(`${participantUid}_sponsor_lead_${sponsorUid}`);
+  const sponsorRef = db.collection('users').doc(sponsorUid);
 
   try {
     const result = await db.runTransaction(async (tx) => {
-      const [userSnap, pointEventSnap] = await Promise.all([
+      const [userSnap, pointEventSnap, sponsorSnap] = await Promise.all([
         tx.get(userRef),
-        tx.get(pointEventRef)
+        tx.get(pointEventRef),
+        tx.get(sponsorRef).catch(() => ({ exists: false, data: () => ({}) }))
       ]);
 
       if (!userSnap.exists) {
@@ -175,18 +192,64 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
 
       const faixaEtaria = calculateAgeGroup(birthDateRaw);
       const now = admin.firestore.FieldValue.serverTimestamp();
-
       const alreadyAwarded = pointEventSnap.exists;
-      const pointsAwarded = alreadyAwarded ? 0 : 50;
 
-      // Incremento atômico de +50 pontos na primeira visita a este patrocinador
+      // Resolução da empresa patrocinadora para o Passaporte
+      const sponsorData = (typeof sponsorSnap?.data === 'function' ? (sponsorSnap.data() || {}) : {}) as Record<string, any>;
+      const companyCandidate = 
+        providedCompanyId ||
+        sponsorData.companyId ||
+        sponsorData.company ||
+        sponsorData.empresa ||
+        sponsorData.companyName ||
+        req.user?.email ||
+        '';
+      const companyId = resolveCompanyId(companyCandidate);
+
+      const existingVisited = userData.visitedSponsors || {};
+      const updatedVisited = { ...existingVisited };
+      if (companyId && !updatedVisited[companyId]) {
+        updatedVisited[companyId] = {
+          visitedAt: new Date().toISOString(),
+          sponsorUid,
+          sponsorEmail: req.user?.email || null
+        };
+      }
+
+      // Checa se completou todas as 5 empresas do passaporte (Bilhete Dourado)
+      const allPassportVisited = PASSPORT_COMPANIES.every(c => !!updatedVisited[c]);
+      const isNewGoldenTicket = allPassportVisited && !userData.goldenTicketAwarded;
+
+      let pointsToIncrement = 0;
       if (!alreadyAwarded) {
-        tx.update(userRef, {
-          totalPoints: admin.firestore.FieldValue.increment(50),
-          pontuacaoTotal: admin.firestore.FieldValue.increment(50),
-          updatedAt: now
-        });
+        pointsToIncrement += 50;
+      }
+      if (isNewGoldenTicket) {
+        pointsToIncrement += 100;
+      }
 
+      const userUpdates: Record<string, any> = {};
+
+      if (companyId && (!existingVisited[companyId] || !existingVisited[companyId]?.visitedAt)) {
+        userUpdates.visitedSponsors = updatedVisited;
+      }
+
+      if (isNewGoldenTicket) {
+        userUpdates.goldenTicketAwarded = true;
+        userUpdates.goldenTicketAwardedAt = now;
+      }
+
+      if (pointsToIncrement > 0) {
+        userUpdates.totalPoints = admin.firestore.FieldValue.increment(pointsToIncrement);
+        userUpdates.pontuacaoTotal = admin.firestore.FieldValue.increment(pointsToIncrement);
+      }
+
+      if (Object.keys(userUpdates).length > 0) {
+        userUpdates.updatedAt = now;
+        tx.update(userRef, userUpdates);
+      }
+
+      if (!alreadyAwarded) {
         tx.set(pointEventRef, {
           userId: participantUid,
           eventType: 'sponsor_lead',
@@ -194,7 +257,22 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
           points: 50,
           metadata: {
             sponsorUid,
-            sponsorEmail: req.user?.email || null
+            sponsorEmail: req.user?.email || null,
+            companyId: companyId || null
+          },
+          createdAt: now
+        });
+      }
+
+      if (isNewGoldenTicket) {
+        const goldenTicketPointEventRef = db.collection('pointEvents').doc(`${participantUid}_passport_golden_ticket`);
+        tx.set(goldenTicketPointEventRef, {
+          userId: participantUid,
+          eventType: 'passport_golden_ticket',
+          referenceId: 'golden_ticket',
+          points: 100,
+          metadata: {
+            companies: PASSPORT_COMPANIES
           },
           createdAt: now
         });
@@ -231,6 +309,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
           lead: {
             participantUid,
             sponsorUid,
+            companyId,
             name,
             email,
             phone,
@@ -241,7 +320,8 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
             faixaEtaria,
             notes: leadContactData.notes,
             rating: leadContactData.rating,
-            pointsAwarded
+            pointsAwarded: pointsToIncrement,
+            goldenTicketAwarded: isNewGoldenTicket || !!userData.goldenTicketAwarded
           },
           whatsapp
         }

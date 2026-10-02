@@ -11,6 +11,11 @@ import { doc, deleteDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { normalizeEmail } from './validators';
 
+// Fallback de contas de teste só existe fora de produção (mesmo padrão do botão demo do Scanner.jsx).
+const isDevMode = typeof window !== 'undefined' && (
+  import.meta.env.DEV || window.location.search.includes('demo=true')
+);
+
 export const AUTH_MESSAGES = {
   invalid_credentials: 'E-mail ou senha incorretos. Verifique seus dados e tente novamente.',
   user_not_found: 'Nenhuma conta encontrada com este e-mail.',
@@ -88,10 +93,11 @@ export async function loginWithEmailAndPassword(email, password) {
   } catch (err) {
     console.warn('[auth] Erro no signIn normal:', err.code, err.message);
 
-    const isTestAccountWithValidPass = 
-      (cleanEmail === 'admin@admin.com' && password === 'AdminPassword123!') || 
-      (cleanEmail === 'staff@techweek.com' && password === 'StaffPassword123!') || 
-      (cleanEmail === 'aluno@ufu.br' && password === 'AlunoPassword123!');
+    const isTestAccountWithValidPass = isDevMode && (
+      (cleanEmail === 'admin@admin.com' && password === 'AdminPassword123!') ||
+      (cleanEmail === 'staff@techweek.com' && password === 'StaffPassword123!') ||
+      (cleanEmail === 'aluno@ufu.br' && password === 'AlunoPassword123!')
+    );
 
     // 2. Se for conta de teste com a senha padrão e o usuário não existir no Firebase Auth, provisiona automaticamente!
     if (isTestAccountWithValidPass && (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential')) {

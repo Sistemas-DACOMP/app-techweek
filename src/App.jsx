@@ -19,6 +19,7 @@ import Terms from './pages/Terms';
 import BottomNavigation from './components/BottomNavigation';
 import logoTw from './assets/logo-tw.png';
 import { getAppSubdomain } from './lib/subdomain';
+import { stopAllMediaTracks } from './lib/cameraUtils';
 
 function AppContent() {
   const location = useLocation();
@@ -38,6 +39,14 @@ function AppContent() {
       navigate('/staff', { replace: true });
     }
   }, [location.pathname, navigate]);
+
+  // Garante que a câmera nunca fique em uso quando o usuário estiver fora da tela do scanner
+  useEffect(() => {
+    const allowedCameraRoutes = ['/scanner', '/sponsor', '/staff', '/instagram-mission'];
+    if (!allowedCameraRoutes.includes(location.pathname)) {
+      stopAllMediaTracks();
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

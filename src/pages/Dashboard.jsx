@@ -161,14 +161,6 @@ export default function Dashboard() {
     return new Date() < eventStartDate;
   }, []);
 
-  // Contagem regressiva de dias até o evento
-  const daysUntilEvent = useMemo(() => {
-    const eventStartDate = new Date(2026, 9, 21, 8, 0, 0);
-    const diff = eventStartDate.getTime() - Date.now();
-    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-    return days > 0 ? days : 0;
-  }, []);
-
   const getCategoryAccent = (type) => {
     const t = (type || '').toLowerCase();
     if (t.includes('workshop')) return '#F59E0B';
@@ -375,108 +367,96 @@ export default function Dashboard() {
           marginBottom: '20px'
         }}
       >
-        {/* Barra Técnica Superior */}
+        {/* Topo do Crachá: Logotipo Oficial Ampliado + Ações e Datas */}
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'space-between',
-            fontSize: '0.62rem',
-            fontFamily: "'JetBrains Mono', monospace",
-            color: '#64748B',
-            letterSpacing: '0.08em',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-            paddingBottom: '10px',
-            marginBottom: '14px'
+            gap: '12px',
+            marginBottom: '16px'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#94A3B8', fontWeight: 800 }}>+</span>
-            <span>UFU // FACOM</span>
-            <span style={{ opacity: 0.35 }}>|</span>
-            <span>18°55'S 48°15'W</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <NotificationBell />
-            <button
-              type="button"
-              onClick={() => navigate('/profile')}
-              aria-label="Abrir Perfil"
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                backgroundColor: '#1E293B',
-                border: '1px solid #334155',
-                color: '#94A3B8',
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontSize: '0.72rem',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                overflow: 'hidden',
-                padding: 0
-              }}
-            >
-              {userProfile?.avatarUrl ? (
-                <img src={userProfile.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <span>{userInitials}</span>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Linha Central: Logotipo Oficial + Datas Oficiais */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '14px' }}>
           <img
             src={logoTw}
             alt="FACOM TechWeek 2026"
             style={{ 
-              height: '42px', 
+              height: '52px', 
               width: 'auto', 
-              maxWidth: '185px', 
+              maxWidth: '215px', 
               objectFit: 'contain',
+              marginTop: '14px',
               filter: 'drop-shadow(0 4px 14px rgba(0, 0, 0, 0.8))'
             }}
           />
 
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B',
-              borderRadius: '8px',
-              padding: '6px 10px'
-            }}
-          >
-            <span
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <NotificationBell />
+              <button
+                type="button"
+                onClick={() => navigate('/profile')}
+                aria-label="Abrir Perfil"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  backgroundColor: '#1E293B',
+                  border: '1px solid #334155',
+                  color: '#94A3B8',
+                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  overflow: 'hidden',
+                  padding: 0
+                }}
+              >
+                {userProfile?.avatarUrl ? (
+                  <img src={userProfile.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span>{userInitials}</span>
+                )}
+              </button>
+            </div>
+
+            <div
               style={{
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                color: '#F8FAFC',
-                letterSpacing: '0.02em'
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#0F141F',
+                border: '1px solid #1E293B',
+                borderRadius: '8px',
+                padding: '4px 9px'
               }}
             >
-              21 — 26 OUT
-            </span>
-            <span style={{ color: '#475569' }}>•</span>
-            <span
-              style={{
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontSize: '0.74rem',
-                color: '#94A3B8',
-                fontWeight: 700
-              }}
-            >
-              2026
-            </span>
+              <span
+                style={{
+                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  color: '#F8FAFC',
+                  letterSpacing: '0.02em'
+                }}
+              >
+                21 — 26 OUT
+              </span>
+              <span style={{ color: '#475569' }}>•</span>
+              <span
+                style={{
+                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                  fontSize: '0.72rem',
+                  color: '#94A3B8',
+                  fontWeight: 700
+                }}
+              >
+                2026
+              </span>
+            </div>
           </div>
         </div>
 
@@ -535,18 +515,19 @@ export default function Dashboard() {
                   alignItems: 'center',
                   gap: '5px',
                   fontSize: '0.72rem',
-                  color: '#CBD5E1',
-                  fontWeight: 600,
+                  color: '#60A5FA',
+                  fontWeight: 700,
                   cursor: 'pointer',
-                  backgroundColor: '#0F141F',
-                  border: '1px solid #1E293B',
+                  backgroundColor: 'rgba(37, 99, 235, 0.12)',
+                  border: '1px solid rgba(59, 130, 246, 0.55)',
+                  boxShadow: '0 0 14px rgba(37, 99, 235, 0.35)',
                   padding: '6px 10px',
                   borderRadius: '6px',
                   clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)',
                   whiteSpace: 'nowrap'
                 }}
               >
-                <CheckCircle2 size={13} color="#94A3B8" strokeWidth={1.75} />
+                <CheckCircle2 size={13} color="#60A5FA" strokeWidth={2} />
                 <span>Crachá Ativo</span>
               </div>
             ) : (
@@ -662,23 +643,6 @@ export default function Dashboard() {
                 >
                   AQUECIMENTO TECHWEEK
                 </span>
-                {daysUntilEvent > 0 && (
-                  <span
-                    style={{
-                      padding: '2px 7px',
-                      borderRadius: '4px',
-                      backgroundColor: '#0F141F',
-                      border: '1px solid #1E293B',
-                      color: '#94A3B8',
-                      fontSize: '0.62rem',
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontWeight: 700,
-                      letterSpacing: '0.04em'
-                    }}
-                  >
-                    FALTAM {daysUntilEvent} DIAS
-                  </span>
-                )}
               </div>
 
               <button

@@ -98,6 +98,40 @@ export function getCachedUserProfile(uid) {
 }
 
 /**
+ * Verifica disponibilidade de um username na coleção /users.
+ * Retorna { available: boolean, existingUser: object | null }
+ */
+export async function checkUsernameAvailability(rawUsername) {
+  if (!rawUsername || typeof rawUsername !== 'string') {
+    return { available: false, existingUser: null };
+  }
+  const clean = rawUsername.trim().replace(/^@/, '').toLowerCase();
+  if (clean.length < 3 || clean.length > 20 || !/^[a-zA-Z0-9._]+$/.test(clean)) {
+    return { available: false, existingUser: null };
+  }
+
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('username', '==', clean), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const docData = snap.docs[0].data();
+      return {
+        available: false,
+        existingUser: {
+          name: docData.displayName || [docData.firstName, docData.lastName].filter(Boolean).join(' ') || clean,
+          avatarUrl: docData.avatarUrl || docData.photoURL || null
+        }
+      };
+    }
+    return { available: true, existingUser: null };
+  } catch (_e) {
+    // Se offline ou teste com mock
+    return { available: true, existingUser: null };
+  }
+}
+
+/**
  * Cria ou inicializa o perfil do usuário na coleção /users/{uid} do Firestore.
  */
 export async function createUserProfile(uid, data) {
@@ -122,6 +156,7 @@ export async function createUserProfile(uid, data) {
     period: data.period ? Number(data.period) : null,
     linkedin: data.linkedin || '',
     instagram: data.instagram || '',
+    github: data.github || '',
     avatarUrl: data.avatarUrl || null,
     hasSymplaTicket: resolved ? resolved.hasSymplaTicket : Boolean(data.hasSymplaTicket || data.symplaTicket),
     role: resolved ? resolved.role : (data.role || 'PARTICIPANT'),

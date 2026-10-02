@@ -1,20 +1,47 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
-import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Loader2, Trash2, QrCode, Sparkles } from 'lucide-react';
+import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Loader2, Trash2, QrCode, Sparkles, Zap, HelpCircle } from 'lucide-react';
 import { getMyProfile, uploadMissionPhoto } from '../lib/gameplay';
 import { onAuthChange } from '../lib/auth';
 import { getUserProfile, getCachedUserProfile } from '../lib/userService';
 import { validateMissionPhoto } from '../lib/validators';
+import { 
+  subscribeToMissions, 
+  DEFAULT_MISSIONS, 
+  validateSecretWord, 
+  validateQuizAnswer, 
+  isFlashMissionActive 
+} from '../lib/missionService';
 import FeedbackModal from '../components/FeedbackModal';
 import SymplaRequirementModal from '../components/SymplaRequirementModal';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
+import PassportTab from '../components/PassportTab';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 export default function Challenges() {
   const { completedChallenges, completeChallenge, hasCompletedChallenge, hasSymplaTicket } = useUser();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const searchParams = new URLSearchParams(window?.location?.search || '');
+      return searchParams.get('tab') === 'passport' ? 'passport' : 'missions';
+    } catch {
+      return 'missions';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const searchParams = new URLSearchParams(location?.search || '');
+      const tab = searchParams.get('tab');
+      if (tab === 'passport') setActiveTab('passport');
+      else if (tab === 'missions') setActiveTab('missions');
+    } catch {}
+  }, [location?.search]);
+
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
   const [selectedAutoChallenge, setSelectedAutoChallenge] = useState(null);
   useScrollLock(!!activeManualChallenge || !!selectedAutoChallenge);
@@ -56,6 +83,8 @@ export default function Challenges() {
         const p = await getUserProfile(user.uid);
         if (p) {
           setProfile({
+            ...p,
+            uid: user.uid,
             firstName: p.firstName || p.displayName?.split(' ')[0] || p.username || fallbackName,
             avatarUrl: p.avatarUrl || p.photoURL || fallbackAvatar
           });
@@ -68,71 +97,60 @@ export default function Challenges() {
     return () => unsubscribe();
   }, []);
 
-  const challengesList = [
-    {
-      id: 'instagram_story',
-      name: 'Post no Stories',
-      description: 'Publique um Story marcando a TechWeek e envie a foto da publicação.',
-      points: 50,
-      icon: Camera,
-      type: 'manual',
-      fields: [
-        { id: 'photo', type: 'photo', label: 'Envie a foto ou print do seu Story' }
-      ]
-    },
-    { id: 'sponsor_visit', name: 'Conheça Kanastra', description: 'Visite o stand e escaneie o QR Code oficial.', points: 15, icon: MapPin, type: 'auto' },
-    {
-      id: 'sponsor_vaga', name: 'De Olho na Vaga', description: 'Converse com alguém sobre oportunidades para estudantes.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'company', type: 'select', label: 'Qual empresa foi?', options: ['Levty', 'Kanastra', 'Sankhya', 'Neospace', 'Sebrae', 'Outra'] }
-      ]
-    },
-    {
-      id: 'sponsor_tecnologia', name: 'Descubra a Tecnologia', description: 'Pergunte qual tecnologia está transformando o trabalho da empresa.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'company', type: 'select', label: 'Qual empresa foi?', options: ['Levty', 'Kanastra', 'Sankhya', 'Neospace', 'Sebrae', 'Outra'] },
-        { id: 'response', type: 'textarea', label: 'Qual tecnologia eles usam?' }
-      ]
-    },
-    {
-      id: 'sponsor_colecao', name: 'Colecione Patrocinadores', description: 'Complete seu passaporte visitando todos os stands.', points: 50, icon: Camera, type: 'manual', fields: [
-        { id: 'photo', type: 'photo', label: 'Tire uma foto do cartão completo' }
-      ]
-    },
-    {
-      id: 'secret_password', name: 'Missão Secreta', description: 'Descubra a palavra-chave escondida no stand da Kanastra.', points: 30, icon: Lock, type: 'manual', isSecret: true, fields: [
-        { id: 'password', type: 'password', label: 'Qual a palavra-chave?' }
-      ]
-    },
-    { id: 'secret_qr', name: 'Caça ao QR Code', description: 'Encontre o QR Code escondido antes que termine.', points: 40, icon: Search, type: 'auto', isSecret: true },
+  // Inscrição em tempo real de missões dinâmicas (KAN-104)
+  const [missions, setMissions] = useState(DEFAULT_MISSIONS);
+  const [activeFlashCountdown, setActiveFlashCountdown] = useState(null);
 
-    { id: 'network_course', name: 'Outro Curso', description: 'Conecte-se com alguém de um curso diferente.', points: 15, icon: Users, type: 'auto' },
-    { id: 'network_type', name: 'Fora da UFU', description: 'Encontre alguém de outra instituição ou empresa.', points: 15, icon: Users, type: 'auto' },
-    { id: 'network_first', name: 'Primeira Conexão', description: 'Faça sua primeira conexão na TechWeek.', points: 10, icon: Users, type: 'auto' },
-    { id: 'network_period', name: 'Calouro na Área', description: 'Conecte-se com alguém do primeiro período.', points: 15, icon: Users, type: 'auto' },
-    {
-      id: 'network_career', name: 'Sua Área', description: 'Encontre alguém da área que quer seguir.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-        { id: 'prompt2', type: 'textarea', label: 'Qual foi o 1º passo dela na carreira?' }
-      ]
-    },
-    {
-      id: 'network_connect_two', name: 'Conector', description: 'Apresente duas pessoas que devem se conhecer.', points: 20, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da 1ª pessoa?' },
-        { id: 'prompt2', type: 'text', label: 'Qual o @/user da 2ª pessoa?' }
-      ]
-    },
-    {
-      id: 'network_past_edition', name: 'Veterano', description: 'Encontre alguém de edições passadas.', points: 15, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-        { id: 'prompt2', type: 'textarea', label: 'Qual foi a melhor experiência dela?' }
-      ]
-    },
-    {
-      id: 'network_first_edition', name: 'Novato', description: 'Encontre alguém novato e mostre o app.', points: 15, icon: MessageCircle, type: 'manual', fields: [
-        { id: 'prompt1', type: 'text', label: 'Qual o @/user da pessoa?' },
-        { id: 'prompt2', type: 'textarea', label: 'O que você mostrou para ela?' }
-      ]
+  useEffect(() => {
+    const unsub = subscribeToMissions((list) => {
+      setMissions(list && list.length > 0 ? list : DEFAULT_MISSIONS);
+    });
+    return () => unsub();
+  }, []);
+
+  // Encontra missão relâmpago ativa
+  const activeFlashMission = missions.find(m => isFlashMissionActive(m));
+
+  useEffect(() => {
+    if (!activeFlashMission?.flashConfig?.expiresAt) {
+      setActiveFlashCountdown(null);
+      return;
     }
-  ];
+
+    const interval = setInterval(() => {
+      const exp = activeFlashMission.flashConfig.expiresAt.toDate 
+        ? activeFlashMission.flashConfig.expiresAt.toDate() 
+        : new Date(activeFlashMission.flashConfig.expiresAt);
+      const diffMs = exp.getTime() - Date.now();
+      if (diffMs <= 0) {
+        setActiveFlashCountdown('00:00');
+        clearInterval(interval);
+      } else {
+        const mins = Math.floor(diffMs / 60000);
+        const secs = Math.floor((diffMs % 60000) / 1000);
+        setActiveFlashCountdown(`${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeFlashMission]);
+
+  const getMissionIcon = (iconName) => {
+    if (typeof iconName === 'object' || typeof iconName === 'function') return iconName;
+    switch (iconName) {
+      case 'Camera': return Camera;
+      case 'MapPin': return MapPin;
+      case 'Users': return Users;
+      case 'Lock': return Lock;
+      case 'Search': return Search;
+      case 'MessageCircle': return MessageCircle;
+      case 'Zap': return Zap;
+      case 'HelpCircle': return HelpCircle;
+      case 'Sparkles':
+      default:
+        return Sparkles;
+    }
+  };
 
   const handleSimulateChallenge = async (challenge) => {
     if (!hasSymplaTicket) {
@@ -140,7 +158,18 @@ export default function Challenges() {
       return;
     }
 
-    if (challenge.type === 'manual') {
+    if (challenge.id === 'instagram_story') {
+      navigate('/instagram-mission');
+      return;
+    }
+
+    // Modal de preenchimento manual (formulários, quiz, segredo)
+    if (challenge.triggerMode === 'form' || 
+        challenge.triggerMode === 'secret' || 
+        challenge.triggerMode === 'quiz' || 
+        challenge.type === 'manual' || 
+        challenge.isSecret || 
+        challenge.quizConfig) {
       setActiveManualChallenge(challenge);
       setManualForm({});
       setPhotoFiles({});
@@ -148,7 +177,7 @@ export default function Challenges() {
       return;
     }
 
-    if (challenge.type === 'auto') {
+    if (challenge.type === 'auto' || challenge.triggerMode === 'auto') {
       setSelectedAutoChallenge(challenge);
       return;
     }
@@ -157,8 +186,8 @@ export default function Challenges() {
     if (res && (res.success || res === true)) {
       setFeedback({
         type: 'success',
-        title: 'Desafio Concluído! 🎉',
-        message: `Parabéns! Você completou "${challenge.name}" e pontuou com sucesso.`,
+        title: 'Desafio Concluído!',
+        message: `Parabéns! Você completou "${challenge.title || challenge.name}" e pontuou com sucesso.`,
         points: (res && res.points) || challenge.points
       });
     } else if (res && res.alreadyCompleted) {
@@ -180,13 +209,29 @@ export default function Challenges() {
     e.preventDefault();
     if (!activeManualChallenge || isSubmitting) return;
 
-    if (activeManualChallenge.id === 'secret_password') {
-      const pass = manualForm['password'];
-      if (!pass || pass.trim().toUpperCase() !== 'OPORTUNIDADES') {
+    // Validação de palavra secreta
+    if (activeManualChallenge.triggerMode === 'secret' || activeManualChallenge.isSecret || activeManualChallenge.id === 'secret_password') {
+      const pass = manualForm['password'] || manualForm['secretWord'];
+      const expected = activeManualChallenge.secretConfig?.secretWord || 'OPORTUNIDADES';
+      if (!validateSecretWord(pass, expected)) {
         setFeedback({
           type: 'warning',
           title: 'Palavra-chave Incorreta',
           message: 'A palavra-chave inserida não está certa. Continue procurando pelos stands!'
+        });
+        return;
+      }
+    }
+
+    // Validação de quiz
+    if (activeManualChallenge.triggerMode === 'quiz' && activeManualChallenge.quizConfig) {
+      const selectedIndex = manualForm['quizAnswer'];
+      const correctIndex = activeManualChallenge.quizConfig.correctOptionIndex;
+      if (!validateQuizAnswer(selectedIndex, correctIndex)) {
+        setFeedback({
+          type: 'warning',
+          title: 'Resposta Incorreta',
+          message: 'Ops! A alternativa selecionada não está correta. Revise com o stand e tente novamente!'
         });
         return;
       }
@@ -226,13 +271,12 @@ export default function Challenges() {
       }
 
       // Respostas da missão manual vão como metadata do evento de pontos
-      // (REG-MISSION-001) em vez de apenas no estado da página
       const res = await completeChallenge(activeManualChallenge.id, activeManualChallenge.points, finalMetadata);
       if (res && (res.success || res === true)) {
         setFeedback({
           type: 'success',
-          title: 'Missão Concluída! 🎉',
-          message: `Você cumpriu a missão "${activeManualChallenge.name}" com sucesso!`,
+          title: 'Missão Concluída!',
+          message: `Você cumpriu a missão "${activeManualChallenge.title || activeManualChallenge.name}" com sucesso!`,
           points: (res && res.points) || activeManualChallenge.points
         });
         setActiveManualChallenge(null);
@@ -324,126 +368,290 @@ export default function Challenges() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {!hasSymplaTicket && (
-          <div
-            style={{
+      {/* Abas de Navegação: [ Missões ] | [ Passaporte ] */}
+      <div
+        style={{
+          display: 'flex',
+          backgroundColor: '#0F141F',
+          padding: '4px',
+          borderRadius: '14px',
+          border: '1px solid #1E293B',
+          marginBottom: '20px',
+          gap: '6px'
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab('missions')}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            borderRadius: '10px',
+            border: 'none',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            backgroundColor: activeTab === 'missions' ? '#2563EB' : 'transparent',
+            color: activeTab === 'missions' ? '#FFFFFF' : '#94A3B8',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px'
+          }}
+        >
+          <span>Missões</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('passport')}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            borderRadius: '10px',
+            border: 'none',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            backgroundColor: activeTab === 'passport' ? '#2563EB' : 'transparent',
+            color: activeTab === 'passport' ? '#FFFFFF' : '#94A3B8',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px'
+          }}
+        >
+          <span>Passaporte</span>
+        </button>
+      </div>
+
+      {activeTab === 'passport' ? (
+        <PassportTab userProfile={profile} />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {!hasSymplaTicket && (
+            <div
+              style={{
+                padding: '16px 18px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(161, 98, 7, 0.08))',
+                border: '1px solid rgba(234, 179, 8, 0.35)',
+                color: '#fef08a',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', fontSize: '0.95rem' }}>
+                <span>⚠️</span>
+                <span>Ingresso Sympla Pendente</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.4' }}>
+                Vincule seu ingresso oficial do Sympla para desbloquear o envio de missões, fotos e acumular pontos no ranking da TechWeek.
+              </p>
+              <button
+                onClick={() => navigate('/profile')}
+                style={{
+                  alignSelf: 'flex-start',
+                  marginTop: '4px',
+                  padding: '6px 14px',
+                  borderRadius: '10px',
+                  background: '#eab308',
+                  color: '#0f172a',
+                  border: 'none',
+                  fontWeight: '700',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Vincular Ingresso no Perfil →
+              </button>
+            </div>
+          )}
+
+          {/* BANNER DE MISSÃO RELÂMPAGO AO VIVO (KAN-104) */}
+          {activeFlashMission && isFlashMissionActive(activeFlashMission) && (
+            <div style={{
+              margin: '6px 0 16px',
               padding: '16px 18px',
               borderRadius: '16px',
-              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(161, 98, 7, 0.08))',
-              border: '1px solid rgba(234, 179, 8, 0.35)',
-              color: '#fef08a',
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(180, 83, 9, 0.2) 100%)',
+              border: '1px solid #F59E0B',
+              boxShadow: '0 8px 24px rgba(245, 158, 11, 0.25)',
               display: 'flex',
-              flexDirection: 'column',
-              gap: '8px'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', fontSize: '0.95rem' }}>
-              <span>⚠️</span>
-              <span>Ingresso Sympla Pendente</span>
-            </div>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.4' }}>
-              Vincule seu ingresso oficial do Sympla para desbloquear o envio de missões, fotos e acumular pontos no ranking da TechWeek.
-            </p>
-            <button
-              onClick={() => navigate('/profile')}
-              style={{
-                alignSelf: 'flex-start',
-                marginTop: '4px',
-                padding: '6px 14px',
-                borderRadius: '10px',
-                background: '#eab308',
-                color: '#0f172a',
-                border: 'none',
-                fontWeight: '700',
-                fontSize: '0.8rem',
-                cursor: 'pointer'
-              }}
-            >
-              Vincular Ingresso no Perfil →
-            </button>
-          </div>
-        )}
-
-        {challengesList.map((challenge, index) => {
-          const isCompleted = (hasCompletedChallenge && hasCompletedChallenge(challenge.id)) || completedChallenges.includes(challenge.id);
-          const isHighlighted = challenge.id === 'instagram_story' && !isCompleted;
-          const isSecret = challenge.isSecret && !isCompleted;
-          const IconComponent = challenge.icon || MapPin;
-
-          return (
-            <div 
-              key={challenge.id} 
-              className={`card ${isHighlighted || isSecret ? 'card-highlight' : ''}`} 
-              onClick={() => !isCompleted && handleSimulateChallenge(challenge)}
-              style={{ 
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                opacity: isCompleted ? 0.78 : 1, 
-                backgroundColor: isSecret ? 'rgba(37, 99, 235, 0.12)' : '#0F141F', 
-                borderColor: isCompleted ? 'rgba(16, 185, 129, 0.3)' : isSecret ? 'rgba(59, 130, 246, 0.35)' : '#1E293B',
-                borderRadius: '14px',
-                cursor: isCompleted ? 'default' : 'pointer'
-              }}
-            >
-              <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                <div style={{ background: isCompleted ? 'rgba(16, 185, 129, 0.15)' : isHighlighted || isSecret ? 'rgba(37, 99, 235, 0.25)' : 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '50%', color: isCompleted ? '#10b981' : isHighlighted || isSecret ? '#93C5FD' : '#3B82F6' }}>
-                  <IconComponent size={24} />
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '12px', backgroundColor: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 0 16px rgba(245,158,11,0.6)' }}>
+                  <Zap size={22} color="#000000" />
                 </div>
-                <div>
-                  <h3 style={{ fontSize: '1rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px', color: 'white' }}>
-                    {challenge.name}
-                    {isCompleted && <CheckCircle size={16} color="#10b981" />}
-                  </h3>
-                  <p style={{ fontSize: '0.75rem', color: isHighlighted || isSecret ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)' }}>{challenge.description}</p>
-                  <div style={{ marginTop: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: isCompleted ? '#10b981' : isHighlighted || isSecret ? '#93C5FD' : '#3B82F6' }}>
-                    {isCompleted ? `✓ Concluída (+${challenge.points} pts)` : `+${challenge.points} pts`}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.66rem', fontWeight: 800, backgroundColor: '#F59E0B', color: '#000', padding: '1px 6px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      ⚡ MISSÃO RELÂMPAGO
+                    </span>
+                    {activeFlashCountdown && (
+                      <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#FDE68A', fontFamily: 'monospace' }}>
+                        ⏱️ {activeFlashCountdown}
+                      </span>
+                    )}
                   </div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#FFFFFF', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {activeFlashMission.title || activeFlashMission.name}
+                  </div>
+                  {activeFlashMission.flashConfig?.mascotDialogue && (
+                    <div style={{ fontSize: '0.75rem', color: '#FDE68A', marginTop: '2px', fontStyle: 'italic', lineHeight: 1.3 }}>
+                      {activeFlashMission.flashConfig.mascotDialogue}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {!isCompleted ? (
-                <button
-                  style={{
-                    padding: '8px 12px',
-                    fontSize: '0.75rem',
-                    background: '#2563EB',
-                    color: 'white',
-                    border: '1px solid #3B82F6',
-                    borderRadius: '8px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap'
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSimulateChallenge(challenge);
-                  }}
-                >
-                  {challenge.isAction ? 'Começar' : challenge.type === 'auto' ? 'Escanear' : challenge.type === 'manual' ? 'Responder' : 'Check-in'}
-                </button>
-              ) : (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    color: '#10b981',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    padding: '6px 10px',
-                    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(16, 185, 129, 0.28)'
-                  }}
-                >
-                  <CheckCircle size={14} color="#10b981" />
-                  <span>Feito</span>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => handleSimulateChallenge(activeFlashMission)}
+                style={{
+                  padding: '9px 16px',
+                  backgroundColor: '#F59E0B',
+                  color: '#000000',
+                  fontWeight: 800,
+                  fontSize: '0.80rem',
+                  borderRadius: '10px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  boxShadow: '0 4px 12px rgba(245,158,11,0.4)'
+                }}
+              >
+                PARTICIPAR
+              </button>
             </div>
-          );
-        })}
-      </div>
+          )}
+
+          {missions.filter(m => m.status !== 'paused').map((challenge) => {
+            const isCompleted = (hasCompletedChallenge && hasCompletedChallenge(challenge.id)) || completedChallenges.includes(challenge.id);
+            const isHighlighted = (challenge.id === 'instagram_story' || challenge.isFlash) && !isCompleted;
+            const isSecret = (challenge.isSecret || challenge.triggerMode === 'secret') && !isCompleted;
+            const IconComponent = getMissionIcon(challenge.icon || MapPin);
+
+            return (
+              <div 
+                key={challenge.id} 
+                className={`card ${isHighlighted || isSecret ? 'card-highlight' : ''}`} 
+                onClick={() => !isCompleted && handleSimulateChallenge(challenge)}
+                style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  gap: '16px',
+                  padding: '16px 18px',
+                  opacity: isCompleted ? 0.8 : 1, 
+                  backgroundColor: isSecret ? 'rgba(37, 99, 235, 0.12)' : (challenge.isFlash ? 'rgba(245, 158, 11, 0.08)' : '#0F141F'), 
+                  borderColor: isCompleted ? 'rgba(16, 185, 129, 0.3)' : isSecret ? 'rgba(59, 130, 246, 0.35)' : (challenge.isFlash ? 'rgba(245, 158, 11, 0.4)' : '#1E293B'),
+                  borderRadius: '14px',
+                  cursor: isCompleted ? 'default' : 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                  <div 
+                    style={{ 
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '12px',
+                      background: isCompleted ? 'rgba(16, 185, 129, 0.12)' : isHighlighted || isSecret ? 'rgba(37, 99, 235, 0.22)' : 'rgba(255,255,255,0.05)', 
+                      border: `1px solid ${isCompleted ? 'rgba(16, 185, 129, 0.25)' : isHighlighted || isSecret ? 'rgba(59, 130, 246, 0.35)' : 'rgba(255,255,255,0.08)'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      color: isCompleted ? '#34D399' : isHighlighted || isSecret ? '#93C5FD' : '#60A5FA' 
+                    }}
+                  >
+                    <IconComponent size={22} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <h3 style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0, lineHeight: 1.3, color: '#F8FAFC' }}>
+                        {challenge.title || challenge.name}
+                      </h3>
+                      {challenge.isFlash && (
+                        <span style={{ fontSize: '0.62rem', backgroundColor: '#78350F', color: '#FDE68A', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                          ⚡ RELÂMPAGO
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: '0.76rem', color: isHighlighted || isSecret ? 'rgba(255,255,255,0.85)' : '#94A3B8', margin: '4px 0 0', lineHeight: 1.35 }}>
+                      {challenge.description}
+                    </p>
+                    <div style={{ marginTop: '5px', fontSize: '0.74rem', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: isCompleted ? '#34D399' : isHighlighted || isSecret ? '#93C5FD' : '#60A5FA' }}>
+                      +{challenge.points} pts
+                    </div>
+                  </div>
+                </div>
+
+                {!isCompleted ? (
+                  <button
+                    type="button"
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '0.78rem',
+                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                      fontWeight: 700,
+                      letterSpacing: '0.01em',
+                      background: challenge.isFlash ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' : 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+                      color: challenge.isFlash ? '#000000' : '#FFFFFF',
+                      border: challenge.isFlash ? '1px solid rgba(245, 158, 11, 0.6)' : '1px solid rgba(96, 165, 250, 0.45)',
+                      boxShadow: challenge.isFlash ? '0 2px 10px rgba(245, 158, 11, 0.35)' : '0 2px 10px rgba(37, 99, 235, 0.35)',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSimulateChallenge(challenge);
+                    }}
+                  >
+                    {challenge.id === 'instagram_story' ? 'Criar Story' : challenge.isAction ? 'Começar' : (challenge.triggerMode === 'quiz' ? 'Fazer Quiz' : challenge.triggerMode === 'secret' ? 'Desvendar' : challenge.triggerMode === 'auto' || challenge.type === 'auto' ? ((challenge.autoConfig?.eventType === 'passport_complete' || challenge.id?.includes('passport') || challenge.id === 'sponsor_colecao') ? 'Ver Passaporte' : 'Escanear') : 'Responder')}
+                  </button>
+                ) : (
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      color: '#34D399',
+                      fontSize: '0.78rem',
+                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                      fontWeight: 700,
+                      letterSpacing: '0.02em',
+                      padding: '7px 14px',
+                      backgroundColor: 'rgba(16, 185, 129, 0.10)',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(16, 185, 129, 0.32)',
+                      boxShadow: '0 0 10px rgba(16, 185, 129, 0.12)',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0
+                    }}
+                  >
+                    <CheckCircle size={15} color="#34D399" />
+                    <span>Feito</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {activeManualChallenge && typeof document !== 'undefined' && createPortal(
         <div 
@@ -467,7 +675,7 @@ export default function Challenges() {
             style={{ width: '100%', maxWidth: '420px', background: 'var(--card-bg)' }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.2rem', color: 'white' }}>{activeManualChallenge.name}</h3>
+              <h3 style={{ fontSize: '1.2rem', color: 'white' }}>{activeManualChallenge.title || activeManualChallenge.name}</h3>
               <button
                 type="button"
                 onClick={() => {
@@ -487,7 +695,61 @@ export default function Challenges() {
             </p>
 
             <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {activeManualChallenge.fields.map(field => (
+              {/* QUIZ DINÂMICO (KAN-104) */}
+              {activeManualChallenge.quizConfig && (
+                <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 600, color: 'white', marginBottom: '10px' }}>
+                    ❓ {activeManualChallenge.quizConfig.question}
+                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {activeManualChallenge.quizConfig.options?.map((opt, oIdx) => (
+                      <label key={oIdx} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid',
+                        borderColor: manualForm['quizAnswer'] === oIdx ? '#3B82F6' : 'rgba(255,255,255,0.1)',
+                        backgroundColor: manualForm['quizAnswer'] === oIdx ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                        cursor: 'pointer',
+                        color: 'white',
+                        fontSize: '0.82rem'
+                      }}>
+                        <input
+                          type="radio"
+                          name="quizOption"
+                          checked={manualForm['quizAnswer'] === oIdx}
+                          onChange={() => setManualForm(prev => ({ ...prev, quizAnswer: oIdx }))}
+                          required
+                        />
+                        <span>{opt}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* PALAVRA SECRETA (SE NÃO ESTIVER EM FIELDS) */}
+              {(activeManualChallenge.triggerMode === 'secret' || activeManualChallenge.isSecret) && (!activeManualChallenge.fields || activeManualChallenge.fields.length === 0) && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                    Palavra-chave Secreta
+                  </label>
+                  <input
+                    type="text"
+                    value={manualForm['secretWord'] || ''}
+                    onChange={(e) => setManualForm(prev => ({ ...prev, secretWord: e.target.value }))}
+                    className="login-input"
+                    required
+                    placeholder="Digite a palavra secreta encontrada..."
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              {/* CAMPOS DINÂMICOS */}
+              {activeManualChallenge.fields && activeManualChallenge.fields.map(field => (
                 <div key={field.id}>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                     {field.label}
@@ -666,7 +928,7 @@ export default function Challenges() {
                   <QrCode size={22} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '1.1rem', color: 'white', margin: 0 }}>{selectedAutoChallenge.name}</h3>
+                  <h3 style={{ fontSize: '1.1rem', color: 'white', margin: 0 }}>{selectedAutoChallenge.title || selectedAutoChallenge.name}</h3>
                   <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#38BDF8' }}>+{selectedAutoChallenge.points} XP / Pontos</span>
                 </div>
               </div>
@@ -679,95 +941,124 @@ export default function Challenges() {
               </button>
             </div>
 
-            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.4', marginBottom: '24px' }}>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.4', marginBottom: '20px' }}>
               {selectedAutoChallenge.description}
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <button
-                type="button"
-                className="login-btn"
-                disabled={isSubmitting}
-                onClick={async () => {
-                  setIsSubmitting(true);
-                  try {
-                    const res = await completeChallenge(selectedAutoChallenge.id, selectedAutoChallenge.points);
+            {/* AVISO DE VALIDAÇÃO AUTOMÁTICA */}
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: '12px',
+              background: 'rgba(56, 189, 248, 0.08)',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+              marginBottom: '20px'
+            }}>
+              <Zap size={18} color="#38BDF8" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ fontSize: '0.80rem', color: '#E2E8F0', lineHeight: 1.4 }}>
+                <strong style={{ color: '#38BDF8', display: 'block', marginBottom: '2px' }}>Validação Automática pelo App</strong>
+                Esta missão não precisa de envio manual. O app computa seus pontos automaticamente assim que você realizar a ação correspondente no evento.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {(selectedAutoChallenge.autoConfig?.eventType === 'lecture_checkin' || selectedAutoChallenge.id?.includes('lecture')) ? (
+                <button
+                  type="button"
+                  onClick={() => {
                     setSelectedAutoChallenge(null);
-                    if (res && (res.success || res === true)) {
-                      setFeedback({
-                        type: 'success',
-                        title: 'Missão Concluída! 🎉',
-                        message: `Você cumpriu "${selectedAutoChallenge.name}" e pontuou com sucesso!`,
-                        points: (res && res.points) || selectedAutoChallenge.points
-                      });
-                    } else if (res && res.alreadyCompleted) {
-                      setFeedback({
-                        type: 'warning',
-                        title: 'Missão Já Concluída',
-                        message: 'Você já completou este desafio anteriormente!'
-                      });
-                    } else {
-                      setFeedback({
-                        type: 'error',
-                        title: 'Erro ao Pontuar',
-                        message: (res && res.error) || 'Não foi possível registrar seus pontos.'
-                      });
-                    }
-                  } finally {
-                    setIsSubmitting(false);
-                  }
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  backgroundColor: '#2563EB',
-                  border: '1px solid #3B82F6',
-                  color: 'white',
-                  height: '46px',
-                  borderRadius: '12px',
-                  fontWeight: 700,
-                  fontSize: '0.88rem',
-                  cursor: isSubmitting ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    <span>Validando pontos...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={18} />
-                    <span>Concluir Missão e Pontuar</span>
-                  </>
-                )}
-              </button>
+                    navigate('/schedule');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    backgroundColor: '#2563EB',
+                    border: '1px solid #3B82F6',
+                    color: 'white',
+                    height: '46px',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                  }}
+                >
+                  <span>Ver Grade de Palestras</span>
+                </button>
+              ) : (selectedAutoChallenge.autoConfig?.eventType === 'passport_complete' || selectedAutoChallenge.id?.includes('passport') || selectedAutoChallenge.id === 'sponsor_colecao') ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAutoChallenge(null);
+                    setActiveTab('passport');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    backgroundColor: '#2563EB',
+                    border: '1px solid #3B82F6',
+                    color: 'white',
+                    height: '46px',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span>Ver Passaporte de Stands</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAutoChallenge(null);
+                    navigate('/scanner');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    backgroundColor: '#2563EB',
+                    border: '1px solid #3B82F6',
+                    color: 'white',
+                    height: '46px',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                  }}
+                >
+                  <Camera size={18} />
+                  <span>Escanear QR Code com Câmera</span>
+                </button>
+              )}
 
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedAutoChallenge(null);
-                  navigate('/scanner');
-                }}
+                onClick={() => setSelectedAutoChallenge(null)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  color: '#E2E8F0',
-                  height: '42px',
-                  borderRadius: '12px',
-                  fontWeight: 600,
+                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  color: '#94A3B8',
+                  height: '40px',
+                  borderRadius: '10px',
                   fontSize: '0.82rem',
+                  fontWeight: 600,
                   cursor: 'pointer'
                 }}
               >
-                <Camera size={16} />
-                <span>Escanear QR Code com Câmera</span>
+                Voltar
               </button>
             </div>
           </div>

@@ -44,3 +44,5 @@ claude-context/
 *.njsproj
 *.sln
 *.sw?
+.vercel
+.env*

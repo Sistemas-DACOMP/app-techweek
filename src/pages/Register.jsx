@@ -50,14 +50,54 @@ export default function Register() {
     period: '',
     linkedin: '',
     instagram: '',
+    github: '',
     termsAccepted: false
   });
   const [step, setStep] = useState(1);
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [rawImageForCrop, setRawImageForCrop] = useState(null);
+  const [isAvatarHovered, setIsAvatarHovered] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const passwordInputRef = useRef(null);
+  const confirmPasswordInputRef = useRef(null);
+
+  const handleTogglePassword = () => {
+    const passEl = passwordInputRef.current;
+    const confEl = confirmPasswordInputRef.current;
+
+    const isPassActive = document.activeElement === passEl;
+    const isConfActive = document.activeElement === confEl;
+
+    const passStart = passEl ? passEl.selectionStart : null;
+    const passEnd = passEl ? passEl.selectionEnd : null;
+    const confStart = confEl ? confEl.selectionStart : null;
+    const confEnd = confEl ? confEl.selectionEnd : null;
+
+    setShowPassword((prev) => !prev);
+
+    requestAnimationFrame(() => {
+      if (isPassActive && passEl) {
+        passEl.focus();
+        if (passStart !== null && passEnd !== null) {
+          passEl.setSelectionRange(passStart, passEnd);
+        }
+      } else if (isConfActive && confEl) {
+        confEl.focus();
+        if (confStart !== null && confEnd !== null) {
+          confEl.setSelectionRange(confStart, confEnd);
+        }
+      } else {
+        if (passEl && passStart !== null && passEnd !== null) {
+          passEl.setSelectionRange(passStart, passEnd);
+        }
+        if (confEl && confStart !== null && confEnd !== null) {
+          confEl.setSelectionRange(confStart, confEnd);
+        }
+      }
+    });
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -246,6 +286,7 @@ export default function Register() {
         period: isStudent ? formData.period : null,
         linkedin: formData.linkedin,
         instagram: formData.instagram,
+        github: formData.github,
         avatarUrl: finalAvatarUrl,
         hasSymplaTicket: !!symplaTicketData,
         symplaTicket: symplaTicketData
@@ -469,6 +510,7 @@ export default function Register() {
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Senha</label>
                   <div style={{ position: 'relative' }}>
                     <input 
+                      ref={passwordInputRef}
                       name="password" type={showPassword ? "text" : "password"} placeholder="••••••••"
                       value={formData.password} onChange={handleChange}
                       onFocus={() => setFocusedInput('password')} onBlur={() => setFocusedInput(null)}
@@ -477,7 +519,7 @@ export default function Register() {
                       required
                     />
                     <button
-                      type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setShowPassword(!showPassword)}
+                      type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleTogglePassword}
                       style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -494,6 +536,7 @@ export default function Register() {
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Confirmar Senha</label>
                   <div style={{ position: 'relative' }}>
                     <input 
+                      ref={confirmPasswordInputRef}
                       name="confirmPassword" type={showPassword ? "text" : "password"} placeholder="••••••••"
                       value={formData.confirmPassword} onChange={handleChange}
                       onFocus={() => setFocusedInput('confirmPassword')} onBlur={() => setFocusedInput(null)}
@@ -547,76 +590,91 @@ export default function Register() {
                 <div 
                   onClick={() => fileInputRef.current?.click()}
                   title="Clique para escolher ou trocar sua foto"
+                  onMouseEnter={() => setIsAvatarHovered(true)}
+                  onMouseLeave={() => setIsAvatarHovered(false)}
                   style={{
+                    position: 'relative',
                     width: '124px',
                     height: '124px',
-                    borderRadius: '50%',
-                    border: '3px solid rgba(0, 210, 255, 0.4)',
-                    boxShadow: avatarPreview 
-                      ? '0 0 20px rgba(0, 210, 255, 0.25)' 
-                      : '0 0 10px rgba(255, 255, 255, 0.05)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
                     marginBottom: '12px',
-                    background: avatarPreview ? '#09090b' : 'rgba(255, 255, 255, 0.04)',
-                    position: 'relative',
                     cursor: 'pointer',
-                    transition: 'transform 0.2s ease, border-color 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.03)';
-                    e.currentTarget.style.borderColor = '#00d2ff';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)';
-                    e.currentTarget.style.borderColor = 'rgba(0, 210, 255, 0.4)';
+                    transition: 'transform 0.2s ease',
+                    transform: isAvatarHovered ? 'scale(1.03)' : 'scale(1)'
                   }}
                 >
-                  {avatarPreview ? (
-                    <>
-                      <img src={avatarPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      <div 
-                        style={{
-                          position: 'absolute',
-                          bottom: '4px',
-                          right: '4px',
-                          background: 'rgba(0, 0, 0, 0.7)',
-                          color: '#00d2ff',
-                          borderRadius: '50%',
-                          padding: '6px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          border: '1px solid rgba(0, 210, 255, 0.4)'
-                        }}
-                      >
-                        <Camera size={14} />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div 
-                        style={{
-                          width: '44px',
-                          height: '44px',
-                          borderRadius: '50%',
-                          background: 'rgba(0, 210, 255, 0.1)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginBottom: '6px',
-                          color: '#00d2ff'
-                        }}
-                      >
-                        <Camera size={24} />
-                      </div>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: '500' }}>
-                        Toque para foto
-                      </span>
-                    </>
+                  {/* Moldura circular com overflow: hidden para cortar apenas a imagem de perfil */}
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: '50%',
+                      border: `3px solid ${isAvatarHovered ? '#00d2ff' : 'rgba(0, 210, 255, 0.4)'}`,
+                      boxShadow: avatarPreview 
+                        ? '0 0 20px rgba(0, 210, 255, 0.25)' 
+                        : '0 0 10px rgba(255, 255, 255, 0.05)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                      background: avatarPreview ? '#09090b' : 'rgba(255, 255, 255, 0.04)',
+                      transition: 'border-color 0.2s ease'
+                    }}
+                  >
+                    {avatarPreview ? (
+                      <img
+                        src={avatarPreview}
+                        alt="Preview"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <>
+                        <div 
+                          style={{
+                            width: '44px',
+                            height: '44px',
+                            borderRadius: '50%',
+                            background: 'rgba(0, 210, 255, 0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginBottom: '6px',
+                            color: '#00d2ff'
+                          }}
+                        >
+                          <Camera size={24} />
+                        </div>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: '500' }}>
+                          Toque para foto
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Ícone flutuante da câmera posicionado fora do overflow: hidden (KAN-103) */}
+                  {avatarPreview && (
+                    <div 
+                      style={{
+                        position: 'absolute',
+                        bottom: '2px',
+                        right: '2px',
+                        width: '32px',
+                        height: '32px',
+                        background: '#090d16',
+                        color: '#00d2ff',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: `2px solid ${isAvatarHovered ? '#00d2ff' : 'rgba(0, 210, 255, 0.6)'}`,
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.6), 0 0 10px rgba(0, 210, 255, 0.3)',
+                        pointerEvents: 'none',
+                        zIndex: 2,
+                        transition: 'border-color 0.2s ease'
+                      }}
+                    >
+                      <Camera size={15} strokeWidth={2.2} />
+                    </div>
                   )}
                 </div>
 
@@ -719,6 +777,16 @@ export default function Register() {
                     className="login-input"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>GitHub (Opcional)</label>
+                <input 
+                  name="github" type="text" placeholder="github.com/seu-usuario ou @seu-usuario"
+                  value={formData.github} onChange={handleChange}
+                  onFocus={() => setFocusedInput('github')} onBlur={() => setFocusedInput(null)}
+                  className="login-input"
+                />
               </div>
 
               {/* Termo de Consentimento LGPD */}

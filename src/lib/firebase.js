@@ -20,8 +20,9 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// Conecta automaticamente aos emuladores locais se a flag USE_EMULATORS estiver ativa ou no modo DEV explícito
-if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+// Emuladores só em `vite dev` com a flag ligada. Em build de produção/homolog, DEV é false e o
+// bundler remove o bloco, mesmo que a flag vaze de um .env.local no build.
+if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
   try {
     connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
     connectFirestoreEmulator(db, '127.0.0.1', 8080);

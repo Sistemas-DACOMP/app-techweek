@@ -5,6 +5,13 @@ import { CheckCircle, AlertCircle, Loader2, XCircle, ArrowLeft, ShieldCheck, Mai
 import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { getMyProfile } from '../lib/gameplay';
 import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
+import { auth } from '../lib/firebase';
+import { stopAllMediaTracks } from '../lib/cameraUtils';
+
+// Atalho de login de teste e fallback simulado só existem fora de produção (mesmo padrão do Scanner.jsx).
+const isDevMode = typeof window !== 'undefined' && (
+  import.meta.env.DEV || window.location.search.includes('demo=true')
+);
 
 export default function Staff() {
   const navigate = useNavigate();
@@ -134,7 +141,9 @@ export default function Staff() {
       const videoElement = document.querySelector('#staff-reader video');
       if (videoElement && videoElement.srcObject) {
         videoElement.srcObject.getTracks().forEach(track => track.stop());
+        videoElement.srcObject = null;
       }
+      stopAllMediaTracks();
     };
   }, [scanning, selectedActivity]);
 
@@ -165,15 +174,15 @@ export default function Staff() {
     }
 
     try {
-      // Mocking the call since we can't test backend locally if it's not setup correctly
       // Chamada para `POST /api/checkin/entrance` enviando `{ participantUid, activityId }`.
-      
+      const headers = { 'Content-Type': 'application/json' };
+      if (auth.currentUser) {
+        headers['Authorization'] = `Bearer ${await auth.currentUser.getIdToken()}`;
+      }
+
       const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/checkin/entrance`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        },
+        headers,
         body: JSON.stringify({ participantUid, activityId: selectedActivity })
       });
 
@@ -197,17 +206,22 @@ export default function Staff() {
         playSound('success');
       }
     } catch (err) {
-      // For local testing without backend
-      console.warn("Backend call failed, simulating response for test", err);
-      const rand = Math.random();
-      if (rand > 0.6) {
-        setScanResult({ status: 'green', message: '[TESTE] Entrada confirmada com sucesso.' });
-        playSound('success');
-      } else if (rand > 0.3) {
-        setScanResult({ status: 'yellow', message: '[TESTE] Aluno no inscrito previamente.' });
-        playSound('warn');
+      if (isDevMode) {
+        // Simulação só em dev/demo, para testar a UI sem backend local rodando.
+        console.warn("Backend call failed, simulating response for test", err);
+        const rand = Math.random();
+        if (rand > 0.6) {
+          setScanResult({ status: 'green', message: '[TESTE] Entrada confirmada com sucesso.' });
+          playSound('success');
+        } else if (rand > 0.3) {
+          setScanResult({ status: 'yellow', message: '[TESTE] Aluno no inscrito previamente.' });
+          playSound('warn');
+        } else {
+          setScanResult({ status: 'red', message: '[TESTE] Entrada duplicada.' });
+          playSound('error');
+        }
       } else {
-        setScanResult({ status: 'red', message: '[TESTE] Entrada duplicada.' });
+        setScanResult({ status: 'red', message: 'Falha de conexão ao registrar check-in.' });
         playSound('error');
       }
     } finally {
@@ -340,24 +354,26 @@ export default function Staff() {
               <span>Acessar Leitor Staff</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => handleQuickStaff('staff@techweek.com', 'StaffPassword123!')}
-              style={{
-                backgroundColor: 'rgba(56, 189, 248, 0.08)',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                borderRadius: '12px',
-                padding: '10px',
-                color: '#38BDF8',
-                fontSize: '0.76rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                textAlign: 'center',
-                marginTop: '4px'
-              }}
-            >
-              ⚡ Entrar como staff@techweek.com (1 clique garantido)
-            </button>
+            {isDevMode && (
+              <button
+                type="button"
+                onClick={() => handleQuickStaff('staff@techweek.com', 'StaffPassword123!')}
+                style={{
+                  backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  borderRadius: '12px',
+                  padding: '10px',
+                  color: '#38BDF8',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  marginTop: '4px'
+                }}
+              >
+                ⚡ Entrar como staff@techweek.com (1 clique garantido)
+              </button>
+            )}
           </form>
         </div>
       </div>

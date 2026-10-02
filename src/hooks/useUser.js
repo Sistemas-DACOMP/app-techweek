@@ -93,6 +93,12 @@ export function useUser() {
   const hasScannedCode = (code) => scannedCodes.includes(code);
   const hasCompletedChallenge = (challengeId) => {
     if (!challengeId) return false;
+    if (challengeId === 'sponsor_colecao' || challengeId === 'passport_complete') {
+      const visitedCount = Object.keys(profile?.visitedSponsors || {}).length;
+      if (profile?.goldenTicketAwarded || visitedCount >= 5) {
+        return true;
+      }
+    }
     return (
       completedChallenges.includes(challengeId) ||
       pointEvents.some(event => {
@@ -260,7 +266,7 @@ export function useUser() {
 
       if (result.success) {
         addNotification({
-          title: 'Missão Concluída! 🎉',
+          title: 'Missão Concluída!',
           message: `Você ganhou +${awardedPoints} pontos por completar a missão.`,
           type: 'points',
           actionUrl: '/ranking',

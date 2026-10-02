@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useUser } from '../hooks/useUser';
@@ -19,7 +20,9 @@ import {
 } from 'lucide-react';
 import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
 import { DEFAULT_ACTIVITIES } from '../lib/activityService';
-import WhatsAppButton from '../components/WhatsAppButton';
+import { resolveParticipantFromQr } from '../lib/sponsorService';
+import { stopAllMediaTracks } from '../lib/cameraUtils';
+import ParticipantCard from '../components/ParticipantCard';
 
 export default function Scanner() {
   const navigate = useNavigate();
@@ -30,24 +33,64 @@ export default function Scanner() {
   const [showInfoModal, setShowInfoModal] = useState(false);
   const { registerCodeScan } = useUser();
 
+  const scannerRef = useRef(null);
+  const isStartingRef = useRef(false);
+  const isMountedRef = useRef(true);
+
   // O botão demo só fica visível em ambiente de desenvolvimento ou com ?demo=true na URL
   const isDevMode = typeof window !== 'undefined' && (
     import.meta.env.DEV || window.location.search.includes('demo=true')
   );
 
-  useEffect(() => {
-    // Não inicia a câmera se já houver um resultado ativo
-    if (scanResult) return;
+  const stopScannerCamera = async () => {
+    setIsCameraActive(false);
+    stopAllMediaTracks();
+    if (scannerRef.current) {
+      try {
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+        await scannerRef.current.clear();
+      } catch (_e) {
+        // Ignora caso já esteja parado
+      }
+      scannerRef.current = null;
+    }
+    stopAllMediaTracks();
+  };
 
-    let isMounted = true;
-    let html5QrCode = null;
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    // Se houver modal com resultado da leitura, a câmera é desligada imediatamente
+    if (scanResult) {
+      stopScannerCamera();
+      return;
+    }
 
     const startCamera = async () => {
+      if (isStartingRef.current || scannerRef.current?.isScanning) return;
+      isStartingRef.current = true;
+
       try {
         setCameraError(null);
         setIsCameraActive(false);
 
-        html5QrCode = new Html5Qrcode('techweek-camera-viewport');
+        await stopScannerCamera();
+
+        if (!isMountedRef.current) {
+          isStartingRef.current = false;
+          return;
+        }
+
+        const viewportEl = document.getElementById('techweek-camera-viewport');
+        if (!viewportEl) {
+          isStartingRef.current = false;
+          return;
+        }
+
+        const html5QrCode = new Html5Qrcode('techweek-camera-viewport');
+        scannerRef.current = html5QrCode;
 
         await html5QrCode.start(
           { facingMode: 'environment' },
@@ -57,42 +100,49 @@ export default function Scanner() {
             aspectRatio: 1
           },
           (decodedText) => {
-            if (!isMounted) return;
-            try {
-              html5QrCode.stop().catch(() => {});
-            } catch {}
+            if (!isMountedRef.current) return;
+            // Desliga o hardware da câmera imediatamente ao capturar o código
+            stopScannerCamera();
             handleScan(decodedText);
           },
-          () => {
-            // Ignorado (ruído frame-a-frame)
-          }
+          () => {}
         );
 
-        if (isMounted) {
-          setIsCameraActive(true);
+        if (!isMountedRef.current || scanResult) {
+          await stopScannerCamera();
+          return;
         }
+
+        setIsCameraActive(true);
       } catch (err) {
-        if (!isMounted) return;
+        if (!isMountedRef.current) return;
         console.warn('Erro ao inicializar câmera do scanner:', err);
         setCameraError('Permissão de câmera não concedida ou dispositivo sem câmera.');
+        stopAllMediaTracks();
+      } finally {
+        isStartingRef.current = false;
       }
     };
 
     startCamera();
 
+    // Desliga a câmera se o app for minimizado ou a aba for para segundo plano
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopScannerCamera();
+      } else if (isMountedRef.current && !scanResult) {
+        startCamera();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', stopAllMediaTracks);
+
     return () => {
-      isMounted = false;
-      if (html5QrCode) {
-        try {
-          html5QrCode.stop().catch(() => {});
-        } catch {}
-      }
-      const videoElement = document.querySelector('#techweek-camera-viewport video');
-      if (videoElement && videoElement.srcObject) {
-        try {
-          videoElement.srcObject.getTracks().forEach((track) => track.stop());
-        } catch {}
-      }
+      isMountedRef.current = false;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', stopAllMediaTracks);
+      stopScannerCamera();
     };
   }, [scanResult]);
 
@@ -110,9 +160,9 @@ export default function Scanner() {
       const decoded = decodeURIComponent(data);
       if (decoded.startsWith('{') && decoded.endsWith('}')) {
         const parsed = JSON.parse(decoded);
-        if (parsed.username) {
+        if (parsed.username || parsed.participantUid || (parsed.uid && !parsed.lectureId)) {
           isUserQr = true;
-          usernameToValidate = parsed.username;
+          usernameToValidate = parsed.username || null;
           participantData = parsed;
         } else if (parsed.lectureId || parsed.activityId) {
           isActivityQr = true;
@@ -124,9 +174,9 @@ export default function Scanner() {
       try {
         if (data.startsWith('{') && data.endsWith('}')) {
           const parsed = JSON.parse(data);
-          if (parsed.username) {
+          if (parsed.username || parsed.participantUid || (parsed.uid && !parsed.lectureId)) {
             isUserQr = true;
-            usernameToValidate = parsed.username;
+            usernameToValidate = parsed.username || null;
             participantData = parsed;
           } else if (parsed.lectureId || parsed.activityId) {
             isActivityQr = true;
@@ -137,11 +187,23 @@ export default function Scanner() {
       } catch {}
     }
 
+    // Se não for atividade e ainda não tiver identificado participante, tenta resolver pelo helper do crachá/sympla
+    if (!isActivityQr && !isUserQr) {
+      try {
+        const resolved = await resolveParticipantFromQr(data);
+        if (resolved) {
+          isUserQr = true;
+          usernameToValidate = resolved.username || null;
+          participantData = resolved;
+        }
+      } catch {}
+    }
+
     let fetchedProfile = null;
     if (isUserQr && usernameToValidate) {
       fetchedProfile = await findUserByUsername(usernameToValidate).catch(() => null);
 
-      if (!fetchedProfile) {
+      if (!fetchedProfile && !participantData) {
         setIsLoading(false);
         setScanResult({ 
           status: 'error',
@@ -153,8 +215,26 @@ export default function Scanner() {
     }
 
     const result = await registerCodeScan(data, 5);
-    const participantName = fetchedProfile?.displayName || participantData?.name || participantData?.username || usernameToValidate || 'Participante';
-    const participantPhone = fetchedProfile?.phone || participantData?.phone || '34991234567';
+
+    // Constrói objeto enriquecido do participante para o card (KAN-95)
+    const consolidatedParticipant = isUserQr ? {
+      name: fetchedProfile?.displayName || 
+            [fetchedProfile?.firstName, fetchedProfile?.lastName].filter(Boolean).join(' ') || 
+            participantData?.name || 
+            participantData?.username || 
+            usernameToValidate || 
+            'Participante',
+      username: fetchedProfile?.username || participantData?.username || usernameToValidate || '',
+      avatarUrl: fetchedProfile?.avatarUrl || fetchedProfile?.photoURL || participantData?.avatarUrl || participantData?.photoURL || null,
+      course: fetchedProfile?.course || participantData?.course || 'Computação',
+      period: fetchedProfile?.period || participantData?.period || null,
+      participantType: fetchedProfile?.participantType || fetchedProfile?.participant_type || participantData?.participantType || 'Aluno da UFU',
+      phone: fetchedProfile?.phone || participantData?.phone || '',
+      email: fetchedProfile?.email || participantData?.email || '',
+      linkedin: fetchedProfile?.linkedin || participantData?.linkedin || '',
+      instagram: fetchedProfile?.instagram || participantData?.instagram || '',
+      github: fetchedProfile?.github || participantData?.github || ''
+    } : null;
 
     if (result && result.success) {
       if (isUserQr) {
@@ -165,13 +245,7 @@ export default function Scanner() {
           message: 'Conexão realizada com sucesso!',
           points: 5,
           challenges: result.unlockedChallenges,
-          participant: {
-            name: participantName,
-            phone: participantPhone,
-            course: fetchedProfile?.course || participantData?.course || 'Computação',
-            period: fetchedProfile?.period || participantData?.period || null,
-            username: usernameToValidate
-          }
+          participant: consolidatedParticipant
         });
       } else if (isActivityQr) {
         setScanResult({
@@ -199,11 +273,7 @@ export default function Scanner() {
         type: isUserQr ? 'participant' : 'generic',
         title: 'Código já processado',
         message: 'Você já escaneou este código anteriormente.',
-        participant: isUserQr ? {
-          name: participantName,
-          phone: participantPhone,
-          course: fetchedProfile?.course || participantData?.course || 'Computação'
-        } : null
+        participant: consolidatedParticipant
       });
     }
 
@@ -212,23 +282,22 @@ export default function Scanner() {
 
   const simulateScan = async () => {
     setIsLoading(true);
-    const rand = Math.random();
-    if (rand < 0.2) {
-      handleScan('kanastra_code');
-      return;
-    }
 
     try {
       const users = await getLeaderboardUsers(10).catch(() => []);
-      if (users && users.length > 0) {
-        const randomDbUser = users[Math.floor(Math.random() * users.length)];
+      const validUsers = (users || []).filter(u => u.username || u.displayName);
+      if (validUsers.length > 0) {
+        const randomDbUser = validUsers[Math.floor(Math.random() * validUsers.length)];
         const payload = JSON.stringify({
-          username: randomDbUser.username,
-          name: randomDbUser.displayName || randomDbUser.firstName || randomDbUser.username,
-          phone: randomDbUser.phone || '34998765432',
-          course: randomDbUser.course,
-          participantType: randomDbUser.participant_type || randomDbUser.participantType,
-          period: randomDbUser.period
+          username: randomDbUser.username || '',
+          name: randomDbUser.displayName || [randomDbUser.firstName, randomDbUser.lastName].filter(Boolean).join(' ') || randomDbUser.username || 'Participante',
+          course: randomDbUser.course || '',
+          participantType: randomDbUser.participant_type || randomDbUser.participantType || 'Participante',
+          period: randomDbUser.period || null,
+          avatarUrl: randomDbUser.avatarUrl || randomDbUser.photoURL || '',
+          linkedin: randomDbUser.linkedin || '',
+          instagram: randomDbUser.instagram || '',
+          github: randomDbUser.github || ''
         });
         handleScan(payload);
         return;
@@ -240,10 +309,13 @@ export default function Scanner() {
     const fallbackUser = {
       username: 'lucas_silva',
       name: 'Lucas Silva',
-      phone: '(34) 99876-5432',
       course: 'Sistemas de Informação',
       participantType: 'Aluno da UFU',
-      period: 4
+      period: 4,
+      avatarUrl: '',
+      linkedin: '',
+      instagram: '',
+      github: ''
     };
     handleScan(JSON.stringify(fallbackUser));
   };
@@ -695,291 +767,256 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* 5. BOTTOM SHEET / MODAL DE RESULTADO DA LEITURA */}
-      {scanResult && (
+      {/* 5. BOTTOM SHEET / POPUP DE RESULTADO DA LEITURA (ESTILO AIRDROP / CRACHÁ VIRTUAL) */}
+      {scanResult && typeof document !== 'undefined' && createPortal(
         <div
           role="dialog"
           aria-modal="true"
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 1100,
-            backgroundColor: 'rgba(0, 0, 0, 0.65)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 2000,
+            backgroundColor: 'rgba(0, 0, 0, 0.82)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
             display: 'flex',
             alignItems: 'flex-end',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            overflow: 'hidden',
+            padding: '0 8px'
           }}
           onClick={() => setScanResult(null)}
         >
           <div
             style={{
               width: '100%',
-              maxWidth: '430px',
-              backgroundColor: '#0A0E17',
-              borderTop: '1px solid #1E293B',
-              borderTopLeftRadius: '24px',
-              borderTopRightRadius: '24px',
-              padding: '16px 20px 24px',
+              maxWidth: '460px',
+              maxHeight: '94dvh',
+              backgroundColor: '#090D16',
+              border: '1px solid #1E293B',
+              borderTopLeftRadius: '28px',
+              borderTopRightRadius: '28px',
+              padding: '18px 20px',
               paddingBottom: 'max(24px, calc(env(safe-area-inset-bottom) + 16px))',
-              boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.8)',
-              animation: 'slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-              position: 'relative'
+              boxShadow: '0 -16px 50px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(56, 189, 248, 0.12)',
+              animation: 'slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Handle do Bottom Sheet */}
-            <div
-              style={{
-                width: '36px',
-                height: '4px',
-                backgroundColor: '#334155',
-                borderRadius: '999px',
-                margin: '0 auto 16px'
-              }}
-            />
-
-            {/* Botão Fechar X */}
-            <button
-              type="button"
-              onClick={() => setScanResult(null)}
-              aria-label="Fechar resultado"
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '18px',
-                width: '30px',
-                height: '30px',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                border: 'none',
-                color: '#94A3B8',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <X size={16} />
-            </button>
-
-            {/* Status Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+            {/* Botão Fechar Flutuante para Crachá ou Cabeçalho para outras leituras */}
+            {scanResult.participant ? (
               <div
                 style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '10px',
-                  backgroundColor: scanResult.status === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                  border: scanResult.status === 'success' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: scanResult.status === 'success' ? '#10B981' : '#F59E0B',
+                  justifyContent: 'flex-end',
+                  marginBottom: '6px',
                   flexShrink: 0
                 }}
               >
-                {scanResult.status === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-              </div>
-              <div>
-                <h3
-                  style={{
-                    fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                    fontSize: '1.05rem',
-                    fontWeight: 800,
-                    color: '#F8FAFC',
-                    margin: 0,
-                    lineHeight: 1.2
-                  }}
-                >
-                  {scanResult.title}
-                </h3>
-                <p style={{ fontSize: '0.74rem', color: '#94A3B8', margin: '2px 0 0' }}>
-                  {scanResult.message}
-                </p>
-              </div>
-            </div>
-
-            {/* SE FOR PARTICIPANTE */}
-            {scanResult.participant && (
-              <div
-                style={{
-                  backgroundColor: '#0F141F',
-                  border: '1px solid #1E293B',
-                  borderRadius: '16px',
-                  padding: '14px 16px',
-                  marginBottom: '16px'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                  {/* Avatar Squircle com iniciais */}
-                  <div
-                    style={{
-                      width: '42px',
-                      height: '42px',
-                      borderRadius: '12px',
-                      backgroundColor: '#1E293B',
-                      border: '1px solid #334155',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#38BDF8',
-                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontWeight: 800,
-                      fontSize: '0.95rem',
-                      flexShrink: 0
-                    }}
-                  >
-                    {scanResult.participant.name?.substring(0, 2).toUpperCase() || 'TW'}
-                  </div>
-
-                  <div style={{ overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        fontSize: '0.96rem',
-                        fontWeight: 800,
-                        color: '#F8FAFC',
-                        fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}
-                    >
-                      {scanResult.participant.name}
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: '#94A3B8', marginTop: '1px' }}>
-                      {scanResult.participant.course}
-                      {scanResult.participant.period ? ` • ${scanResult.participant.period}º período` : ''}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Botão de Conexão WhatsApp */}
-                <WhatsAppButton
-                  phone={scanResult.participant.phone}
-                  participantName={scanResult.participant.name}
-                  companyName="TechWeek FACOM"
-                  fullWidth
-                />
-              </div>
-            )}
-
-            {/* SE FOR ATIVIDADE */}
-            {scanResult.activity && (
-              <div
-                style={{
-                  backgroundColor: '#0F141F',
-                  border: '1px solid #1E293B',
-                  borderRadius: '16px',
-                  padding: '14px 16px',
-                  marginBottom: '16px'
-                }}
-              >
-                <div style={{ fontSize: '0.96rem', fontWeight: 800, color: '#F8FAFC', marginBottom: '4px' }}>
-                  {scanResult.activity.title}
-                </div>
-                {scanResult.activity.time && (
-                  <div style={{ fontSize: '0.76rem', color: '#94A3B8', marginBottom: '12px' }}>
-                    {scanResult.activity.time} {scanResult.activity.location ? `• ${scanResult.activity.location}` : ''}
-                  </div>
-                )}
                 <button
                   type="button"
-                  onClick={() => {
-                    setScanResult(null);
-                    navigate('/agenda');
-                  }}
+                  onClick={() => setScanResult(null)}
+                  aria-label="Fechar resultado"
                   style={{
-                    width: '100%',
-                    height: '40px',
-                    borderRadius: '10px',
-                    backgroundColor: '#1E293B',
-                    border: '1px solid #334155',
-                    color: '#F8FAFC',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    border: 'none',
+                    color: '#94A3B8',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '6px'
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease'
                   }}
                 >
-                  <span>Ver na programação</span>
-                  <ExternalLink size={14} />
+                  <X size={16} />
                 </button>
               </div>
-            )}
-
-            {/* Badge de Pontuação Secundária (Aparece como consequência) */}
-            {scanResult.points && (
+            ) : (
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
-                  border: '1px solid rgba(245, 158, 11, 0.2)',
-                  marginBottom: '16px'
+                  marginBottom: '12px',
+                  flexShrink: 0
                 }}
               >
-                <span style={{ fontSize: '0.74rem', color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Sparkles size={13} color="#F59E0B" />
-                  Participação registrada
-                </span>
-                <span
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '10px',
+                      backgroundColor: scanResult.status === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                      border: scanResult.status === 'success' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: scanResult.status === 'success' ? '#10B981' : '#F59E0B',
+                      flexShrink: 0
+                    }}
+                  >
+                    {scanResult.status === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <h3
+                      style={{
+                        fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                        fontSize: '0.96rem',
+                        fontWeight: 800,
+                        color: '#F8FAFC',
+                        margin: 0,
+                        lineHeight: 1.2,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}
+                    >
+                      {scanResult.title}
+                    </h3>
+                    <p style={{ fontSize: '0.72rem', color: '#94A3B8', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {scanResult.message}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setScanResult(null)}
+                  aria-label="Fechar resultado"
                   style={{
-                    fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                    fontSize: '0.76rem',
-                    fontWeight: 800,
-                    color: '#F59E0B'
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    border: 'none',
+                    color: '#94A3B8',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    marginLeft: '8px',
+                    transition: 'background 0.15s ease'
                   }}
                 >
-                  +{scanResult.points} pontos
-                </span>
+                  <X size={16} />
+                </button>
               </div>
             )}
 
-            {/* Ação de Novo Escaneamento */}
-            <button
-              type="button"
-              onClick={() => setScanResult(null)}
+            {/* Conteúdo Central com rolagem se necessário */}
+            <div
               style={{
-                width: '100%',
-                height: '42px',
-                borderRadius: '12px',
-                backgroundColor: '#2563EB',
-                border: 'none',
-                color: '#FFFFFF',
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontSize: '0.84rem',
-                fontWeight: 700,
-                cursor: 'pointer',
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                paddingRight: '2px',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.15s ease'
+                flexDirection: 'column'
               }}
             >
-              Escanear outro código
-            </button>
+              {/* SE FOR PARTICIPANTE (KAN-95) */}
+              {scanResult.participant && (
+                <ParticipantCard participant={scanResult.participant} />
+              )}
+
+              {/* SE FOR ATIVIDADE */}
+              {scanResult.activity && (
+                <div
+                  style={{
+                    backgroundColor: '#0F141F',
+                    border: '1px solid #1E293B',
+                    borderRadius: '14px',
+                    padding: '12px 14px',
+                    marginBottom: '10px'
+                  }}
+                >
+                  <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#F8FAFC', marginBottom: '4px' }}>
+                    {scanResult.activity.title}
+                  </div>
+                  {scanResult.activity.time && (
+                    <div style={{ fontSize: '0.74rem', color: '#94A3B8', marginBottom: '10px' }}>
+                      {scanResult.activity.time} {scanResult.activity.location ? `• ${scanResult.activity.location}` : ''}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScanResult(null);
+                      navigate('/agenda');
+                    }}
+                    style={{
+                      width: '100%',
+                      height: '38px',
+                      borderRadius: '10px',
+                      backgroundColor: '#1E293B',
+                      border: '1px solid #334155',
+                      color: '#F8FAFC',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>Ver na programação</span>
+                    <ExternalLink size={13} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Rodapé Fixo: Botão sempre visível na parte inferior */}
+            <div style={{ paddingTop: '8px', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setScanResult(null)}
+                style={{
+                  width: '100%',
+                  height: '40px',
+                  borderRadius: '11px',
+                  backgroundColor: '#2563EB',
+                  border: 'none',
+                  color: '#FFFFFF',
+                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Escanear outro código
+              </button>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL DE INFORMAÇÃO RÁPIDA (INFO) */}
-      {showInfoModal && (
+      {showInfoModal && typeof document !== 'undefined' && createPortal(
         <div
           role="dialog"
           aria-modal="true"
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 1100,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 2000,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
             backdropFilter: 'blur(6px)',
             display: 'flex',
             alignItems: 'center',
@@ -1048,7 +1085,8 @@ export default function Scanner() {
               Entendi
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
