@@ -22,6 +22,11 @@ import { stopAllMediaTracks } from '../lib/cameraUtils';
 import SponsorLeadModal from '../components/SponsorLeadModal';
 import WhatsAppButton from '../components/WhatsAppButton';
 
+// Atalhos de simulação só existem fora de produção (mesmo padrão do Scanner.jsx).
+const isDevMode = typeof window !== 'undefined' && (
+  import.meta.env.DEV || window.location.search.includes('demo=true')
+);
+
 export default function Sponsor() {
   const navigate = useNavigate();
   const { user: authUser } = useAuth();
@@ -234,27 +239,29 @@ export default function Sponsor() {
           </button>
 
           {/* Atalho para facilitar demonstração e testes locais */}
-          <button
-            type="button"
-            onClick={() => setDevSponsorOverride(true)}
-            style={{
-              background: 'rgba(56, 189, 248, 0.1)',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
-              borderRadius: '14px',
-              padding: '10px',
-              color: '#38BDF8',
-              fontSize: '12px',
-              fontWeight: '700',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px'
-            }}
-          >
-            <Sparkles size={14} />
-            <span>Simular Permissão de Patrocinador (Teste)</span>
-          </button>
+          {isDevMode && (
+            <button
+              type="button"
+              onClick={() => setDevSponsorOverride(true)}
+              style={{
+                background: 'rgba(56, 189, 248, 0.1)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: '14px',
+                padding: '10px',
+                color: '#38BDF8',
+                fontSize: '12px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}
+            >
+              <Sparkles size={14} />
+              <span>Simular Permissão de Patrocinador (Teste)</span>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -454,48 +461,50 @@ export default function Sponsor() {
         )}
 
         {/* Botão de Teste e Simulação */}
-        <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-            OU SIMULE A BIPAGEM (TESTE LOCAL):
-          </div>
+        {isDevMode && (
+          <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+              OU SIMULE A BIPAGEM (TESTE LOCAL):
+            </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => simulateBadgeScan('app')}
-              disabled={isResolving}
-              style={{ flex: 1, padding: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-            >
-              <Sparkles size={14} />
-              <span>Crachá App</span>
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => simulateBadgeScan('app')}
+                disabled={isResolving}
+                style={{ flex: 1, padding: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                <Sparkles size={14} />
+                <span>Crachá App</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => simulateBadgeScan('sympla')}
-              disabled={isResolving}
-              style={{
-                flex: 1,
-                padding: '10px',
-                fontSize: '12px',
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                borderRadius: '14px',
-                color: '#ffffff',
-                fontWeight: '700',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px'
-              }}
-            >
-              <QrCode size={14} />
-              <span>Crachá Sympla</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => simulateBadgeScan('sympla')}
+                disabled={isResolving}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  fontSize: '12px',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '14px',
+                  color: '#ffffff',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <QrCode size={14} />
+                <span>Crachá Sympla</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Lista de Leads Recentes no Estande */}

@@ -147,6 +147,26 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
     });
   });
 
+  describe('Fallback de conta de teste (deve existir só fora de produção)', () => {
+    it('não deve criar sessão fake para credenciais de teste quando DEV=false e sem ?demo=true', async () => {
+      vi.resetModules();
+      vi.stubEnv('DEV', false);
+      vi.stubGlobal('window', { location: { search: '' } });
+
+      const { signInWithEmailAndPassword: signInMock } = await import('firebase/auth');
+      signInMock.mockRejectedValue({ code: 'auth/invalid-credential' });
+
+      const { loginWithEmailAndPassword: loginProd } = await import('./auth');
+      const res = await loginProd('admin@admin.com', 'AdminPassword123!');
+
+      expect(res.success).toBe(false);
+
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    });
+  });
+
   describe('Sessão Global', () => {
     it('deve registrar callback no onAuthStateChanged', () => {
       const mockCb = vi.fn();
