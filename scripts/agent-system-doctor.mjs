@@ -35,6 +35,7 @@ const EXPECTED_AGENTS = [
   'devops.md', // added 2026-09-22
   'adr.md',
   'ponytail.md',
+  'frontend.md', // added 2026-10-02
 ];
 
 const EXPECTED_CONTEXT_FILES = [

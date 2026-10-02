@@ -34,8 +34,9 @@ Você (o runtime lendo este arquivo, Claude Code ou Antigravity) deve classifica
 | Divergência entre documentação e implementação, comportamento funcional ambíguo | `product` |
 | Mudança que toca fronteira/estrutura do sistema (nova collection Firestore, contrato de API, novo serviço) | `architecture` |
 | Mudança em `backend/` (Cloud Functions/Express) | `backend` |
-| Mudança em `apps/pwa/` | `pwa` |
-| Mudança em `apps/admin-web/` | `admin` |
+| Mudança em tela/fluxo de participante/staff/sponsor (`src/pages/`, `src/components/` — **não** `apps/pwa/`, essa pasta não existe, corrigido 2026-10-02) | `pwa` |
+| Mudança em tela do painel admin (`src/pages/Admin.jsx`/`Staff.jsx`/`Sponsor.jsx` — **não** `apps/admin-web/`, mesmo app React, corrigido 2026-10-02) | `admin` |
+| Identidade visual, Design System, consistência entre telas, acessibilidade, responsividade, revisão visual de PR | `frontend` (added 2026-10-02 — corta através de `pwa`/`admin` pela dimensão de design, igual `security`/`qa` cortam por outra dimensão) |
 | Mudança em `firebase.json`, `firestore.rules`, `storage.rules`, config/deploy do Firebase | `infra` (nunca altera código do app pra "resolver" problema de infra) |
 | Decisão técnica real acabou de ser tomada e precisa virar registro permanente | `adr` (nunca inventa uma decisão que não foi tomada) |
 | Antes de aceitar qualquer solução como pronta | `ponytail` — existe complexidade/abstração/dependência desnecessária? Ver `.agent-system/agents/ponytail.md` (plugin real só disponível nativamente no Claude Code hoje; em outros runtimes, aplique a pergunta você mesmo antes de finalizar) |
