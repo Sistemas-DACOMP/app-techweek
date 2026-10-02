@@ -7,7 +7,7 @@ import { Eye, EyeOff, Loader2, Camera, RefreshCw, Trash2, Plus, ShieldCheck, X }
 import logoTw from '../assets/logo-tw.png';
 import { auth } from '../lib/firebase';
 import { signUpWithEmail } from '../lib/auth';
-import { createUserProfile, uploadUserAvatar } from '../lib/userService';
+import { createUserProfile, uploadUserAvatar, findUserByUsername } from '../lib/userService';
 import { 
   getPasswordStrength, 
   MIN_PASSWORD_LENGTH, 
@@ -102,6 +102,10 @@ export default function Register() {
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [usernameCheck, setUsernameCheck] = useState({
+    status: 'idle', // 'idle' | 'checking' | 'available' | 'taken'
+    message: ''
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -111,6 +115,31 @@ export default function Register() {
       navigate(hasOnboarding ? '/' : '/onboarding', { replace: true });
     }
   }, []);
+
+  // Verificação em tempo real de unicidade de username (chave única) com debounce
+  useEffect(() => {
+    const cleanUsername = formData.username ? formData.username.trim().replace(/^@/, '').toLowerCase() : '';
+
+    if (!cleanUsername || !isValidUsername(cleanUsername)) {
+      setUsernameCheck({ status: 'idle', message: '' });
+      return;
+    }
+
+    setUsernameCheck({ status: 'checking', message: 'Verificando disponibilidade...' });
+
+    const timer = setTimeout(async () => {
+      try {
+        const existing = await findUserByUsername(cleanUsername);
+        setUsernameCheck(existing
+          ? { status: 'taken', message: `O @${cleanUsername} já está em uso por outro participante.` }
+          : { status: 'available', message: `@${cleanUsername} está disponível!` });
+      } catch (_e) {
+        setUsernameCheck({ status: 'idle', message: '' });
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [formData.username]);
 
   const passwordStrength = getPasswordStrength(formData.password);
 
@@ -185,7 +214,7 @@ export default function Register() {
     return errors;
   };
 
-  const handleNextStep = (e) => {
+  const handleNextStep = async (e) => {
     e.preventDefault();
     setError(null);
 
@@ -193,6 +222,24 @@ export default function Register() {
     if (Object.keys(step1Errors).length > 0) {
       setFieldErrors(step1Errors);
       setError('Por favor, corrija os erros nos campos antes de prosseguir.');
+      return;
+    }
+
+    if (usernameCheck.status === 'taken') {
+      setFieldErrors(prev => ({ ...prev, username: usernameCheck.message }));
+      setError('Esse nome de usuário já está em uso. Escolha outro.');
+      return;
+    }
+
+    // Revalida no banco antes de avançar, caso o debounce ainda não tenha resolvido
+    setLoading(true);
+    const cleanUsername = formData.username.trim().replace(/^@/, '').toLowerCase();
+    const existing = await findUserByUsername(cleanUsername).catch(() => null);
+    setLoading(false);
+    if (existing) {
+      setUsernameCheck({ status: 'taken', message: `O @${cleanUsername} já está em uso por outro participante.` });
+      setFieldErrors(prev => ({ ...prev, username: `O @${cleanUsername} já está em uso.` }));
+      setError('Esse nome de usuário já está em uso. Escolha outro.');
       return;
     }
 
@@ -220,6 +267,16 @@ export default function Register() {
       : '';
     
     setLoading(true);
+
+    const cleanUsername = formData.username.trim().replace(/^@/, '').toLowerCase();
+    const existingUsername = await findUserByUsername(cleanUsername).catch(() => null);
+    if (existingUsername) {
+      setError(`O nome de usuário '@${cleanUsername}' já foi registrado por outro participante. Por favor, escolha outro.`);
+      setStep(1);
+      setUsernameCheck({ status: 'taken', message: `O @${cleanUsername} já está em uso por outro participante.` });
+      setLoading(false);
+      return;
+    }
 
     try {
       // 1. Cria a conta no Firebase Auth
@@ -394,11 +451,18 @@ export default function Register() {
                   style={fieldErrors.username ? { borderColor: '#ef4444' } : {}}
                   required
                 />
-                {fieldErrors.username && (
+                {fieldErrors.username ? (
                   <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
                     {fieldErrors.username}
                   </div>
-                )}
+                ) : usernameCheck.message ? (
+                  <div style={{
+                    color: usernameCheck.status === 'taken' ? '#ef4444' : usernameCheck.status === 'available' ? '#10b981' : 'var(--text-secondary)',
+                    fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px'
+                  }}>
+                    {usernameCheck.message}
+                  </div>
+                ) : null}
               </div>
 
               <div>
