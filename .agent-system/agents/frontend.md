@@ -7,7 +7,8 @@ runtime_requirements:
   - git
 
 optional:
-  - browser   # validação visual real (claude-in-chrome neste projeto) — ausente, ver Known gaps
+  - browser   # validação visual real — claude-in-chrome (intermitente) ou chrome-devtools-mcp/
+              # playwright MCP (.mcp.json, desde 2026-10-02, precisa sessão reiniciada)
 
 inputs:
   - task
@@ -23,11 +24,12 @@ outputs:
 portable: true
 portability_note: >
   Processo de design/UX/consistência visual, sem chamada a ferramenta específica
-  de runtime — funciona igual sob Claude Code ou Antigravity. As ferramentas de
-  validação visual citadas na spec original do Fabio (shadcn MCP, 21st/Magic MCP,
-  Impeccable, Taste Skill, Chrome DevTools MCP, Playwright MCP) NÃO existem nesta
-  máquina/projeto (confirmado 2026-10-02) — ver Known gaps antes de assumir
-  qualquer uma disponível.
+  de runtime — funciona igual sob Claude Code ou Antigravity. Das ferramentas
+  citadas na spec original do Fabio: Chrome DevTools MCP e Playwright MCP estão
+  conectadas via `.mcp.json` (2026-10-02, requer reiniciar sessão); shadcn está
+  instalado como dependência real do projeto (CLI via `npx shadcn@latest`, não
+  MCP); 21st/Magic MCP, Impeccable e Taste Skill seguem não confirmados — ver
+  Known gaps antes de assumir qualquer uma disponível.
 
 ## Purpose
 
@@ -40,11 +42,14 @@ interface genérica de IA (ver seção "Anti-AI-slop").
 
 ## Scope
 
-- Identidade visual e Design System do produto: hoje vive informalmente em `src/index.css`
-  (tokens reais: `--primary`, `--primary-gradient`, `--secondary-gradient`, `--bg-color`,
-  `--text-primary`, `--text-secondary`, `--card-bg`, `--card-border` — tema escuro/azul) e em
-  `src/App.css` + CSS por componente (`src/components/*.css`). Formalizar em `DESIGN.md` quando
-  a tarefa justificar (ver Process item 2), sem inventar paleta nova por cima da que já existe.
+- Identidade visual e Design System do produto: tokens reais em `src/index.css`
+  (`--primary`, `--primary-gradient`, `--secondary-gradient`, `--bg-color`, `--text-primary`,
+  `--text-secondary`, `--card-bg`, `--card-border` — tema escuro/azul), espelhados em `@theme`
+  (classe utilitária Tailwind) e no `:root` semântico do shadcn (`--background`/`--card`/
+  `--border`/etc, desde 2026-10-02). CSS por componente (`src/components/*.css`) e componentes
+  shadcn (`src/components/ui/`) coexistem — nenhum substitui o outro, use o que fizer sentido pra
+  cada caso. Formalizar em `DESIGN.md` quando a tarefa justificar (ver Process item 2), sem
+  inventar paleta nova por cima da que já existe.
 - Qualquer tela/componente em `src/pages/` e `src/components/` quando a tarefa for sobre
   consistência visual, UX, acessibilidade, responsividade ou qualidade de interface — não sobre
   lógica de negócio ou dado (isso é `pwa`/`admin`).
@@ -60,9 +65,9 @@ interface genérica de IA (ver seção "Anti-AI-slop").
   `product`/`spec`.
 - Achado de segurança (ex.: botão client-side que deveria estar gated por role e não está) —
   reportar e handoff pro `security`, nunca corrigir sozinho decisão de autorização.
-- Introduzir uma biblioteca de componentes nova (Tailwind, shadcn, Material, etc.) sem decisão
-  explícita do Fabio — o projeto hoje é CSS puro + inline styles, isso é um fato do stack, não uma
-  lacuna a "corrigir" por conta própria (ver Ponytail — YAGNI, usar o que já existe).
+- Introduzir uma biblioteca de componentes/CSS framework *diferente* da já decidida (Tailwind +
+  shadcn, 2026-10-02) sem decisão explícita do Fabio — trocar de novo é mudança estrutural, não
+  escolha de implementação (ver Ponytail — YAGNI, usar o que já existe antes de adicionar mais).
 
 ## Process
 
@@ -141,17 +146,24 @@ Nunca promover INFERENCE/ASSUMPTION a FACT silenciosamente — mesma regra de
 
 ## Known gaps
 
-- **Nenhuma das ferramentas de design listadas na spec original (shadcn MCP, 21st/Magic MCP,
-  Impeccable, Taste Skill, Chrome DevTools MCP, Playwright MCP) existe neste projeto/máquina**
-  (confirmado 2026-10-02, nenhuma aparece na lista de tools/skills da sessão). Tratar como
-  aspiracionais até alguém instalar/conectar de verdade — não fingir que rodou um comando dessas
-  ferramentas.
-- `claude-in-chrome` (MCP de browser real deste projeto) depende da extensão Chrome estar
-  conectada na sessão — intermitente (visto conectado e desconectado na mesma sessão em
-  2026-09-22/2026-10-02). Verificar antes de assumir validação visual real é possível.
-- Nenhum `DESIGN.md`/Design System formal existe ainda — só os tokens soltos em `src/index.css`.
-  Primeira tarefa relevante de design provavelmente deveria formalizar isso, não inventar do zero.
-- Projeto não usa Tailwind/shadcn/nenhuma lib de componentes — 100% CSS puro + inline style
-  (confirmado lendo `package.json` e `src/pages/*.jsx`, 2026-10-02). Qualquer menção a
-  Tailwind em `agents/pwa.md` (`portability_note`) está stale — não é este agente que corrige
-  isso, mas não repetir o erro aqui.
+- **Resolvido 2026-10-02**: Tailwind CSS v4 + shadcn/ui instalados (ver PR de
+  `feature/tailwind-shadcn-setup-2026-10-02`) — adicionados ao lado do CSS puro existente, não
+  substituindo nada. Tokens do projeto (`--primary`, `--bg-color`, etc.) espelhados em `@theme` +
+  mapeados no `:root` semântico do shadcn (tema escuro real, não o light theme default do init —
+  isso teria que ser corrigido de novo se alguém rodar `shadcn init` outra vez por engano).
+  2 componentes de prova instalados (`button`, `input`) em `src/components/ui/`. Use
+  `npx shadcn@latest add <componente>` para os próximos — sempre conferir depois se o comando não
+  sobrescreveu token nenhum em `src/index.css` (já aconteceu uma vez).
+- **Resolvido 2026-10-02**: `.mcp.json` na raiz do repo conecta `chrome-devtools-mcp` e
+  `@playwright/mcp` (ambos reais, testados rodando antes de configurar). Precisa a sessão do
+  Claude Code ser reiniciada pra carregar — se as tools `mcp__chrome-devtools__*`/
+  `mcp__playwright__*` não aparecerem, é isso, não falta de instalação.
+- **Ainda não resolvido**: 21st/Magic MCP, Impeccable, Taste Skill — não confirmado se existem
+  como algo instalável sem conta/API key externa. Não assumir disponível sem checar de novo.
+- `claude-in-chrome` (MCP de browser deste projeto) depende da extensão Chrome estar conectada na
+  sessão — intermitente (visto conectado e desconectado na mesma sessão em
+  2026-09-22/2026-10-02). Com `chrome-devtools-mcp`/`@playwright/mcp` agora configurados, esses
+  são a alternativa mais estável quando `claude-in-chrome` estiver fora.
+- Nenhum `DESIGN.md`/Design System formal existe ainda — só os tokens em `src/index.css` +
+  `components.json` (config do shadcn). Primeira tarefa relevante de design provavelmente deveria
+  formalizar isso, não inventar do zero.

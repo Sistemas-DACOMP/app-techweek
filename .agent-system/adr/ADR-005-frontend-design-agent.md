@@ -64,3 +64,12 @@ DevTools MCP, etc.) no futuro, os três arquivos deste agente (`agents/frontend.
 essas ferramentas como "Known gaps" — não é automático, alguém precisa lembrar de editar.
 
 Status: ACCEPTED
+
+Addendum (2026-10-02, mesmo dia): Fabio pediu explicitamente pra fechar 2 dos 3 gaps de
+ferramenta listados acima. Tailwind CSS v4 + shadcn/ui instalados de verdade (ver
+`feature/tailwind-shadcn-setup-2026-10-02`) — tokens do projeto preservados (corrigida uma
+sobrescrita real que o `shadcn init` fez em `--primary` e na fonte). `.mcp.json` criado conectando
+`chrome-devtools-mcp` e `@playwright/mcp` (ambos reais, testados antes de configurar). 21st/Magic
+MCP, Impeccable e Taste Skill continuam sem confirmação — não resolvidos, não inventados como
+disponíveis. Os 3 arquivos deste agente atualizados de acordo (seção "Known gaps"/"Pendências
+conhecidas").
