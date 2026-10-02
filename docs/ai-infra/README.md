@@ -20,12 +20,13 @@ definidas. Ver a missão completa em `Update Prompts/` (fora deste repo, notas p
 
 ```
 Orchestrator (.claude/skills/dev-workflows/SKILL.md ↔ .agent-system/agents/orchestrator.md)
-├── Agents (15 papéis lógicos — canônico em .agent-system/agents/, executado via .claude/)
+├── Agents (16 papéis lógicos — canônico em .agent-system/agents/, executado via .claude/)
 │   ├── qa                  (.claude/skills/qa-agent/SKILL.md)
 │   ├── code-review         (.claude/agents/code-review.md — inclui a análise de duplicação, sob pedido)
 │   ├── security             (.claude/agents/security.md)
 │   ├── git-ops               (.claude/agents/git-ops.md — cirurgia mecânica de branch/PR/Jira)
 │   ├── devops               (.claude/agents/devops.md — CI/CD, build scripts, release flow)
+│   ├── frontend              (.claude/agents/frontend.md — added 2026-10-02, Design System/acessibilidade/consistência visual, corta através de pwa/admin)
 │   ├── spec, product, adr, architecture, backend, pwa, admin, infra  (.claude/agents/<id>.md)
 │   └── ponytail              (plugin real instalado — não é arquivo .claude/agents/)
 ├── Workflows                (dentro de dev-workflows/SKILL.md: FEATURE, BUGFIX, PR REVIEW, TESTING;
@@ -123,7 +124,7 @@ falha: `.claude/skills/dev-workflows/SKILL.md`.
    sessão. Verificado em 2026-09-20 (research via `claude-code-guide`, docs oficiais
    `code.claude.com/docs/en/sub-agents.md`). Sem fix de config — é comportamento fixo do Claude
    Code. **Sempre abrir o Claude Code com cwd em `app-techweek/`** (não na pasta pai) pra ter os
-   13 agentes (`.claude/agents/`) + 2 skills (`dev-workflows`, `qa-agent`) + Ponytail funcionando
+   14 agentes (`.claude/agents/`, incluindo `frontend` desde 2026-10-02) + 2 skills (`dev-workflows`, `qa-agent`) + Ponytail funcionando
    como time de verdade.
 4. Regras de negócio ficam em `docs/business-rules/` — sempre consultadas antes de reclassificar
    uma regra do zero.
