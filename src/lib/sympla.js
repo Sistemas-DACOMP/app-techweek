@@ -107,7 +107,7 @@ export async function verifySymplaTicket({ email, ticketNumber }) {
 
   if (auth?.currentUser) {
     try {
-      const token = await auth.currentUser.getIdToken();
+      const token = await auth.currentUser.getIdToken(true);
       headers['Authorization'] = `Bearer ${token}`;
     } catch (_e) {}
   }
@@ -168,7 +168,7 @@ export async function syncUserSymplaTicket() {
   if (!user) return { status: 'unauthenticated', synced: false };
 
   try {
-    const token = await user.getIdToken();
+    const token = await user.getIdToken(true);
     const response = await fetch(`${getApiBaseUrl()}/sympla/sync-user`, {
       method: 'POST',
       headers: {
