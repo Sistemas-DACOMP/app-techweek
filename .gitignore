@@ -48,3 +48,4 @@ claude-context/
 .env*
 test-results/
 docs/redesign/screens/
+.playwright-mcp/
