@@ -52,3 +52,11 @@ delegate to parallel agents, never sequential.
 An agent that finds something outside its given scope reports it (as a recommendation or handoff
 target) — it does not silently expand its own mandate. No unrequested abstractions, no
 speculative code "for later" (Ponytail governs this — see `.agent-system/agents/ponytail.md`).
+
+## UI / design
+
+Any UI change (participant app, admin, staff) follows `DESIGN.md` (approved Design System,
+2026-10-04) — tokens, components, motion and accessibility rules live there, not in individual
+screens. The `frontend` agent owns the visual dimension; business rules the design depends on
+are classified in `DESIGN.md` §12 and never become backend rules or permanent tests without
+Fabio's confirmation (same rule as `docs/business-rules/`).
