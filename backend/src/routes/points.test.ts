@@ -70,11 +70,15 @@ it('KAN-84: requireSymplaTicket está montado na rota real, antes do handler fin
 
 function makeTx(snaps: { eventSnap: any; userSnap: any; missionSnap?: any }) {
   const { eventSnap, userSnap, missionSnap = { exists: true, data: () => ({ points: 50 }) } } = snaps;
+  const normalizedUserSnap = {
+    data: () => ({}),
+    ...userSnap
+  };
   return {
     get: vi.fn((ref: { path: string }) => {
       if (ref.path.includes('/point_events/')) return Promise.resolve(eventSnap);
       if (ref.path.startsWith('missions/')) return Promise.resolve(missionSnap);
-      if (ref.path.startsWith('users/')) return Promise.resolve(userSnap);
+      if (ref.path.startsWith('users/')) return Promise.resolve(normalizedUserSnap);
       throw new Error(`ref inesperada no mock: ${ref.path}`);
     }),
     set: vi.fn(),
@@ -268,5 +272,49 @@ describe('POST /api/points/claim (KAN-79, KAN-80)', () => {
       error: 'INTERNAL_ERROR',
       message: 'Não foi possível registrar os pontos.'
     });
+  });
+
+  it('KAN-80: falha na comprovação da missão (palavra secreta errada) retorna 400 e não credita pontos', async () => {
+    const tx = makeTx({
+      eventSnap: { exists: false },
+      userSnap: { exists: true, data: () => ({}) },
+      missionSnap: { exists: true, data: () => ({ points: 30 }) }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq({
+      eventType: 'challenge',
+      referenceId: 'secret_password',
+      metadata: { secretWord: 'ERRADA' }
+    });
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(tx.set).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_SECRET_WORD' }));
+  });
+
+  it('KAN-80: comprovação válida (palavra secreta correta) retorna 200 e credita pontos do catálogo', async () => {
+    const tx = makeTx({
+      eventSnap: { exists: false },
+      userSnap: { exists: true, data: () => ({}) },
+      missionSnap: { exists: true, data: () => ({ points: 30 }) }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq({
+      eventType: 'challenge',
+      referenceId: 'secret_password',
+      metadata: { secretWord: 'OPORTUNIDADES' }
+    });
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(tx.set).toHaveBeenCalled();
+    expect(tx.update).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ success: true, points: 30 });
   });
 });
