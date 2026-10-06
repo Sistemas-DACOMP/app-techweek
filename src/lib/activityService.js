@@ -746,27 +746,28 @@ export function calculateActivityStatus(activityOrId, bookings = [], checkins = 
 
 /**
  * Formata labels amigáveis para tipos de atividade.
+ * Cores = DESIGN.md §2.3, em sincronia com CATEGORY_STYLES.accent (components/Badge.jsx).
  */
 export function formatActivityType(type = '') {
   const norm = String(type).toLowerCase().trim();
   switch (norm) {
     case 'palestra':
     case 'palestras':
-      return { label: 'Palestra', color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)', border: 'rgba(56, 189, 248, 0.35)' };
+      return { label: 'Palestra', color: '#8fa0ff', bg: 'rgba(143, 160, 255, 0.16)', border: 'rgba(143, 160, 255, 0.45)' };
     case 'minicurso':
     case 'minicursos':
-      return { label: 'Minicurso', color: '#c084fc', bg: 'rgba(192, 132, 252, 0.15)', border: 'rgba(192, 132, 252, 0.35)' };
+      return { label: 'Minicurso', color: '#67d4e8', bg: 'rgba(103, 212, 232, 0.16)', border: 'rgba(103, 212, 232, 0.45)' };
     case 'workshop':
     case 'workshops':
-      return { label: 'Workshop', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.35)' };
+      return { label: 'Workshop', color: '#b9a6f5', bg: 'rgba(185, 166, 245, 0.16)', border: 'rgba(185, 166, 245, 0.45)' };
     case 'ativacao':
     case 'ativacoes':
     case 'ativação':
-      return { label: 'Ativação', color: '#34d399', bg: 'rgba(52, 211, 153, 0.15)', border: 'rgba(52, 211, 153, 0.35)' };
+      return { label: 'Ativação', color: '#f2c46a', bg: 'rgba(242, 196, 106, 0.16)', border: 'rgba(242, 196, 106, 0.45)' };
     case 'hackathon':
-      return { label: 'Hackathon', color: '#ec4899', bg: 'rgba(236, 72, 153, 0.15)', border: 'rgba(236, 72, 153, 0.35)' };
+      return { label: 'Hackathon', color: '#f59ac0', bg: 'rgba(245, 154, 192, 0.16)', border: 'rgba(245, 154, 192, 0.45)' };
     default:
-      return { label: type ? type.toUpperCase() : 'Evento', color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.15)', border: 'rgba(96, 165, 250, 0.35)' };
+      return { label: type ? type.toUpperCase() : 'Evento', color: '#8fa0ff', bg: 'rgba(143, 160, 255, 0.16)', border: 'rgba(143, 160, 255, 0.45)' };
   }
 }
 

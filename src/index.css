@@ -703,6 +703,7 @@ body.modal-open .login-container {
    Design System 2026-10-04 — base global (DESIGN.md §3, §9, §10)
    Primitivos compartilhados. Tela nova usa Tailwind + estes utilitários.
    ========================================================================== */
+@layer components {
 body { font-variant-numeric: tabular-nums; }
 
 :focus-visible {
@@ -850,6 +851,7 @@ select.field {
 @keyframes dsSpin { to { transform: rotate(360deg); } }
 @keyframes dsDraw { to { stroke-dashoffset: 0; } }
 .anim-fade-up { animation: dsFadeUp 380ms var(--ease-out) both; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
