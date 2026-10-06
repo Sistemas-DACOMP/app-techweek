@@ -97,13 +97,15 @@ export default function Challenges() {
     return () => unsubscribe();
   }, []);
 
-  // Inscrição em tempo real de missões dinâmicas (KAN-104)
-  const [missions, setMissions] = useState(DEFAULT_MISSIONS);
+  // Inscrição em tempo real de missões dinâmicas (KAN-104 e KAN-106)
+  const [missions, setMissions] = useState([]);
+  const [loadingMissions, setLoadingMissions] = useState(true);
   const [activeFlashCountdown, setActiveFlashCountdown] = useState(null);
 
   useEffect(() => {
     const unsub = subscribeToMissions((list) => {
-      setMissions(list && list.length > 0 ? list : DEFAULT_MISSIONS);
+      setMissions(list || []);
+      setLoadingMissions(false);
     });
     return () => unsub();
   }, []);
@@ -533,7 +535,56 @@ export default function Challenges() {
             </div>
           )}
 
-          {missions.filter(m => m.status !== 'paused').map((challenge) => {
+          {loadingMissions ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {[1, 2, 3, 4].map((i) => (
+                <div 
+                  key={i} 
+                  className="card"
+                  style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    gap: '16px',
+                    padding: '16px 18px',
+                    backgroundColor: '#0F141F', 
+                    borderColor: '#1E293B',
+                    borderRadius: '14px',
+                    opacity: 0.7
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flex: 1 }}>
+                    <div 
+                      style={{ 
+                        width: '46px',
+                        height: '46px',
+                        borderRadius: '12px',
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}
+                    >
+                      <Loader2 size={20} className="animate-spin" color="#60A5FA" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ height: '14px', width: '50%', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '6px', marginBottom: '8px' }} />
+                      <div style={{ height: '10px', width: '75%', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '4px' }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : missions.filter(m => m.status !== 'paused').length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 20px', color: '#94A3B8' }}>
+              <Sparkles size={32} color="#60A5FA" style={{ margin: '0 auto 12px', opacity: 0.6 }} />
+              <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#F1F5F9' }}>Nenhuma missão disponível no momento</div>
+              <div style={{ fontSize: '0.80rem', marginTop: '4px' }}>Fique atento aos anúncios e avisos do evento!</div>
+            </div>
+          ) : (
+            missions.filter(m => m.status !== 'paused').map((challenge) => {
             const isCompleted = (hasCompletedChallenge && hasCompletedChallenge(challenge.id)) || completedChallenges.includes(challenge.id);
             const isHighlighted = (challenge.id === 'instagram_story' || challenge.isFlash) && !isCompleted;
             const isSecret = (challenge.isSecret || challenge.triggerMode === 'secret') && !isCompleted;
@@ -649,7 +700,7 @@ export default function Challenges() {
                 )}
               </div>
             );
-          })}
+          }))}
         </div>
       )}
 

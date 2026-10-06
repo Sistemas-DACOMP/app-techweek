@@ -61,6 +61,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Segredos de missões (palavras-chave, gabaritos de quizzes): apenas backend via Admin SDK
+    match /mission_secrets/{missionId} {
+      allow read, write: if false;
+    }
+
     // Regras de Comunicados: Leitura pública autenticada; escrita apenas para ADMIN
     match /announcements/{announcementId} {
       allow read: if isAuthenticated();
