@@ -5,6 +5,8 @@ import {
   onSnapshot, 
   addDoc, 
   doc, 
+  setDoc,
+  writeBatch,
   updateDoc, 
   deleteDoc, 
   serverTimestamp,
@@ -325,10 +327,10 @@ export function isFlashMissionActive(mission) {
  */
 export function subscribeToMissions(callback, onError) {
   try {
-    const q = query(collection(db, 'missions'), orderBy('order', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const colRef = collection(db, 'missions');
+    const unsubscribe = onSnapshot(colRef, (snapshot) => {
       if (snapshot.empty) {
-        callback(DEFAULT_MISSIONS);
+        callback([]);
         return;
       }
 
@@ -336,6 +338,9 @@ export function subscribeToMissions(callback, onError) {
         id: docSnap.id,
         ...docSnap.data()
       }));
+
+      // Ordenação resiliente client-side (evita descartar documentos que não tenham o campo order)
+      list.sort((a, b) => (Number(a.order) || 99) - (Number(b.order) || 99));
 
       callback(list);
     }, (err) => {
@@ -350,6 +355,41 @@ export function subscribeToMissions(callback, onError) {
     callback(DEFAULT_MISSIONS);
     return () => {};
   }
+}
+
+/**
+ * Popula ou sincroniza o Firestore com as missões padrão da FACOM TechWeek.
+ * Operação idempotente usando batch com { merge: true }, preservando edições anteriores
+ * e novos documentos criados no banco.
+ * @returns {Promise<number>} Quantidade de missões sincronizadas.
+ */
+export async function seedDefaultMissions() {
+  const batch = writeBatch(db);
+  for (const mission of DEFAULT_MISSIONS) {
+    const docRef = doc(db, 'missions', mission.id);
+    batch.set(docRef, {
+      ...mission,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  }
+
+  // Também garante que o evento genérico de scan de QR code tenha um documento correspondente
+  const scanRef = doc(db, 'missions', 'scan');
+  batch.set(scanRef, {
+    id: 'scan',
+    title: 'Check-in / Scan QR',
+    description: 'Pontos por escanear QR codes pelo evento.',
+    points: 5,
+    category: 'event',
+    status: 'active',
+    type: 'auto',
+    triggerMode: 'auto',
+    order: 0,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  await batch.commit();
+  return DEFAULT_MISSIONS.length + 1;
 }
 
 /**
