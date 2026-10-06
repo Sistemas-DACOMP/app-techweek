@@ -3,8 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Mascot from '../components/Mascot';
 import AvatarCropperModal from '../components/AvatarCropperModal';
 import Terms from './Terms';
-import { Eye, EyeOff, Loader2, Camera, RefreshCw, Trash2, Plus, ShieldCheck, X } from 'lucide-react';
-import logoTw from '../assets/logo-tw.png';
+import { Eye, EyeOff, Loader2, Camera, Trash2, ChevronLeft, ArrowRight, Check, User } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { signUpWithEmail } from '../lib/auth';
 import { createUserProfile, uploadUserAvatar, findUserByUsername } from '../lib/userService';
@@ -16,9 +15,25 @@ import {
   isValidUsername, 
   formatPhone, 
   isValidPhone, 
-  passwordsMatch 
+  passwordsMatch,
+  normalizeGithub,
+  isValidGithub
 } from '../lib/validators';
 import { verifySymplaTicket } from '../lib/sympla';
+import '../styles/entrada.css';
+
+const SOCIAL_PREFIX_RE = {
+  linkedin: /^(https?:\/\/)?(www\.)?linkedin\.com\/in\//i,
+  instagram: /^((https?:\/\/)?(www\.)?instagram\.com\/|@)/i,
+  github: /^((https?:\/\/)?(www\.)?github\.com\/|@)/i
+};
+
+// Só visual (check verde no campo): não bloqueia o cadastro. GitHub usa a regra real (KAN-96).
+const SOCIAL_LOOKS_OK = {
+  linkedin: (v) => /^[A-Za-z0-9\-_%]{3,100}\/?$/.test(v),
+  instagram: (v) => /^[A-Za-z0-9._]{1,30}$/.test(v),
+  github: (v) => isValidGithub(normalizeGithub(v))
+};
 
 const UFU_COURSES = [
   'Sistemas de Informação',
@@ -57,7 +72,6 @@ export default function Register() {
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [rawImageForCrop, setRawImageForCrop] = useState(null);
-  const [isAvatarHovered, setIsAvatarHovered] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const passwordInputRef = useRef(null);
@@ -107,6 +121,12 @@ export default function Register() {
     message: ''
   });
   const navigate = useNavigate();
+  const scrollRef = useRef(null);
+
+  // Troca de etapa começa do topo da tela
+  useEffect(() => {
+    scrollRef.current?.scrollTo(0, 0);
+  }, [step]);
 
   useEffect(() => {
     // Redireciona apenas se o usuário já abrir a tela autenticado
@@ -150,6 +170,11 @@ export default function Register() {
     // Máscara automática de telefone para evitar letras e formatar como (XX) XXXXX-XXXX
     if (name === 'phone') {
       newVal = formatPhone(value);
+    }
+
+    // Campo de rede tem prefixo fixo na tela: quem colar a URL inteira fica só com o usuário
+    if (name in SOCIAL_PREFIX_RE) {
+      newVal = value.trim().replace(SOCIAL_PREFIX_RE[name], '');
     }
 
     setFormData(prev => ({ ...prev, [name]: newVal }));
@@ -375,124 +400,138 @@ export default function Register() {
   const isCoveringEyes = !isStep2 && isPasswordFocused;
   const isPeeking = !isStep2 && isPasswordFocused && showPassword;
 
-  return (
-    <div className="login-container animate-fade-in" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto', width: '100%', maxWidth: '100%', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 16px 40px 16px' }}>
-      <div className="login-glow"></div>
-      
-      <div className="login-glass-card" style={{ zIndex: 2, position: 'relative', width: '100%', maxWidth: '500px', padding: '36px 24px 28px 24px' }}>
-        
-        <div style={{ textAlign: 'center', marginBottom: '14px', paddingTop: '4px' }}>
-          <img 
-            src={logoTw} 
-            alt="FACOM Tech Week" 
-            style={{ height: '48px', width: 'auto', objectFit: 'contain', marginBottom: '14px', display: 'inline-block' }} 
-          />
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0px' }}>
-            <Mascot 
-              color="blue" 
-              isCoveringEyes={isCoveringEyes} 
-              isPeeking={isPeeking}
-              lookOffset={lookOffset} 
-              lookOffsetY={lookOffsetY}
-            />
-          </div>
-          <h2 className="font-lastica" style={{ fontSize: '1.2rem', fontWeight: '500', letterSpacing: '1px', marginTop: '14px', marginBottom: '6px' }}>Cadastro</h2>
-          <div style={{ fontSize: '0.8rem', color: 'var(--primary-color, #00d2ff)', marginBottom: '20px', fontWeight: 'bold' }}>
-            Etapa {step} de 2: {step === 1 ? 'Dados da Conta' : 'Perfil & Foto'}
-          </div>
-        </div>
+  const isStudent = formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
+  const cleanUsernameView = formData.username.trim().replace(/^@/, '').toLowerCase();
+  const usernameError = fieldErrors.username || (usernameCheck.status === 'taken' ? usernameCheck.message : '');
+  const strengthTone = passwordStrength.score >= 3 ? 'var(--ok)' : passwordStrength.score === 2 ? 'var(--warn)' : 'var(--err)';
+  const socialOk = (name) => Boolean(formData[name]) && SOCIAL_LOOKS_OK[name](formData[name]);
 
-        <form onSubmit={step === 1 ? handleNextStep : handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          
-          {step === 1 && (
-            <>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Nome</label>
-                  <input 
-                    name="firstName" type="text" placeholder="Nome"
+  return (
+    <div ref={scrollRef} className={`${isStep2 ? 'ent-bg-form-2' : 'ent-bg-form'} relative flex h-full w-full flex-col overflow-x-hidden overflow-y-auto text-text`}>
+      <header className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center px-3 pt-2.5">
+        {isStep2 ? (
+          <button type="button" onClick={() => setStep(1)} aria-label="Voltar para a etapa 1" className="flex size-11 cursor-pointer items-center justify-center border-0 bg-transparent text-text">
+            <ChevronLeft size={22} aria-hidden="true" />
+          </button>
+        ) : (
+          <Link to="/login" aria-label="Voltar para o login" className="flex size-11 items-center justify-center text-text">
+            <ChevronLeft size={22} aria-hidden="true" />
+          </Link>
+        )}
+        <div className="text-center text-[13px] font-bold text-text-2">Etapa {step} de 2</div>
+        <span />
+      </header>
+      <div className="mx-5 mt-2 grid shrink-0 grid-cols-2 gap-1.5" aria-hidden="true">
+        <span className="h-[5px] rounded-[3px] bg-[linear-gradient(90deg,#2563EB,#7C3AED)]" />
+        <span className={`h-[5px] rounded-[3px] ${isStep2 ? 'bg-[linear-gradient(90deg,#5B3BE0,#7C3AED)]' : 'bg-surface-raised'}`} />
+      </div>
+
+      <form onSubmit={step === 1 ? handleNextStep : handleRegister} className="flex flex-1 flex-col" noValidate>
+        {step === 1 && (
+          <>
+            <div className="mx-5 mt-[22px] flex items-center gap-3">
+              <div className="flex-1">
+                <h1 className="text-2xl leading-[1.2] font-extrabold">Vamos montar<br /><span className="ent-grad-text">o seu crachá</span></h1>
+                <p className="mt-1.5 text-sm text-text-2">Leva menos de 2 minutos.</p>
+              </div>
+              <div aria-hidden="true">
+                <Mascot
+                  color="blue"
+                  className="ent-still"
+                  style={{ width: 84, height: 84 }}
+                  isCoveringEyes={isCoveringEyes}
+                  isPeeking={isPeeking}
+                  lookOffset={lookOffset}
+                  lookOffsetY={lookOffsetY}
+                />
+              </div>
+            </div>
+
+            <div className="mx-5 mt-[22px] flex flex-col gap-3.5">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="flex min-w-0 flex-col">
+                  <label htmlFor="reg-nome" className="field-label">Nome</label>
+                  <input
+                    id="reg-nome" name="firstName" type="text" autoComplete="given-name"
                     value={formData.firstName} onChange={handleChange}
                     onFocus={() => setFocusedInput('firstName')} onBlur={() => setFocusedInput(null)}
-                    className="login-input" 
-                    style={fieldErrors.firstName ? { borderColor: '#ef4444' } : {}}
+                    className="field ent-field"
+                    aria-invalid={fieldErrors.firstName ? 'true' : undefined}
+                    aria-describedby={fieldErrors.firstName ? 'reg-nome-err' : undefined}
                     required
                   />
-                  {fieldErrors.firstName && (
-                    <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
-                      {fieldErrors.firstName}
-                    </div>
-                  )}
+                  {fieldErrors.firstName && <p id="reg-nome-err" className="field-error">{fieldErrors.firstName}</p>}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Sobrenome</label>
-                  <input 
-                    name="lastName" type="text" placeholder="Sobrenome"
+                <div className="flex min-w-0 flex-col">
+                  <label htmlFor="reg-sobrenome" className="field-label">Sobrenome</label>
+                  <input
+                    id="reg-sobrenome" name="lastName" type="text" autoComplete="family-name"
                     value={formData.lastName} onChange={handleChange}
                     onFocus={() => setFocusedInput('lastName')} onBlur={() => setFocusedInput(null)}
-                    className="login-input" 
-                    style={fieldErrors.lastName ? { borderColor: '#ef4444' } : {}}
+                    className="field ent-field"
+                    aria-invalid={fieldErrors.lastName ? 'true' : undefined}
+                    aria-describedby={fieldErrors.lastName ? 'reg-sobrenome-err' : undefined}
                     required
                   />
-                  {fieldErrors.lastName && (
-                    <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
-                      {fieldErrors.lastName}
-                    </div>
-                  )}
+                  {fieldErrors.lastName && <p id="reg-sobrenome-err" className="field-error">{fieldErrors.lastName}</p>}
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Nome de Usuário (@handle)</label>
-                <input 
-                  name="username" type="text" placeholder="Ex: devninja"
-                  value={formData.username} onChange={handleChange}
-                  onFocus={() => setFocusedInput('username')} onBlur={() => setFocusedInput(null)}
-                  className="login-input" 
-                  style={fieldErrors.username ? { borderColor: '#ef4444' } : {}}
-                  required
-                />
-                {fieldErrors.username ? (
-                  <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
-                    {fieldErrors.username}
-                  </div>
-                ) : usernameCheck.message ? (
-                  <div style={{
-                    color: usernameCheck.status === 'taken' ? '#ef4444' : usernameCheck.status === 'available' ? '#10b981' : 'var(--text-secondary)',
-                    fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px'
-                  }}>
-                    {usernameCheck.message}
-                  </div>
-                ) : null}
+              <div className="flex flex-col">
+                <label htmlFor="reg-user" className="field-label">Nome de usuário</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-base text-text-3" aria-hidden="true">@</span>
+                  <input
+                    id="reg-user" name="username" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false}
+                    placeholder="seu.usuario"
+                    value={formData.username} onChange={handleChange}
+                    onFocus={() => setFocusedInput('username')} onBlur={() => setFocusedInput(null)}
+                    className="field ent-field ent-field-at"
+                    data-ok={!usernameError && usernameCheck.status === 'available' ? 'true' : undefined}
+                    aria-invalid={usernameError ? 'true' : undefined}
+                    aria-describedby="reg-user-status"
+                    required
+                  />
+                </div>
+                <div id="reg-user-status" aria-live="polite">
+                  {usernameError ? (
+                    <p className="field-error">{usernameError}</p>
+                  ) : usernameCheck.status === 'available' ? (
+                    <p className="mt-1.5 flex items-center gap-1.5 text-[13px] font-semibold text-ok">
+                      <Check size={14} strokeWidth={2.8} aria-hidden="true" />@{cleanUsernameView} está disponível
+                    </p>
+                  ) : usernameCheck.status === 'checking' ? (
+                    <p className="mt-1.5 text-[13px] text-text-3">Verificando…</p>
+                  ) : null}
+                </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Perfil no Evento</label>
-                <select 
-                  name="participantType"
+              <div className="flex flex-col">
+                <label htmlFor="reg-perfil" className="field-label">Você vem como</label>
+                <select
+                  id="reg-perfil" name="participantType"
                   value={formData.participantType} onChange={handleChange}
                   onFocus={() => setFocusedInput('participantType')} onBlur={() => setFocusedInput(null)}
-                  className="login-input" required
-                  style={{ width: '100%' }}
+                  className="field ent-field font-semibold" required
                 >
                   <option value="" disabled>Selecione uma opção</option>
                   <option value="Aluno da UFU">Aluno da UFU</option>
                   <option value="Aluno de outra instituição">Aluno de outra instituição</option>
-                  <option value="Servidor / Professor">Servidor / Professor</option>
-                  <option value="Comunidade Externa">Comunidade Externa</option>
+                  <option value="Servidor / Professor">Servidor ou professor</option>
+                  <option value="Comunidade Externa">Comunidade externa</option>
                 </select>
               </div>
 
-              {(formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição') && (
+              {isStudent && (
                 <>
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <div style={{ flex: 2 }}>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Curso</label>
-                      <select 
-                        name="course"
+                  <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-2.5">
+                    <div className="flex min-w-0 flex-col">
+                      <label htmlFor="reg-curso" className="field-label">Curso</label>
+                      <select
+                        id="reg-curso" name="course"
                         value={formData.course} onChange={handleChange}
                         onFocus={() => setFocusedInput('course')} onBlur={() => setFocusedInput(null)}
-                        className="login-input" required
-                        style={{ width: '100%' }}
+                        className="field ent-field ent-field-sm" required
                       >
                         <option value="" disabled>Selecione seu curso</option>
                         {UFU_COURSES.map(courseName => (
@@ -500,436 +539,220 @@ export default function Register() {
                         ))}
                       </select>
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Período</label>
-                      <input 
-                        name="period" type="number" placeholder="Ex: 3" min="1" max="20"
+                    <div className="flex flex-col">
+                      <label htmlFor="reg-periodo" className="field-label">Período</label>
+                      <input
+                        id="reg-periodo" name="period" type="number" inputMode="numeric" placeholder="3" min="1" max="20"
                         value={formData.period} onChange={handleChange}
                         onFocus={() => setFocusedInput('period')} onBlur={() => setFocusedInput(null)}
-                        className="login-input" required
+                        className="field ent-field" required
                       />
                     </div>
                   </div>
 
                   {formData.course === 'Outro (especificar)' && (
-                    <div className="animate-fade-in" style={{ marginTop: '-4px' }}>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--primary-color, #00d2ff)', marginBottom: '4px', marginLeft: '4px', fontWeight: '500' }}>
-                        Qual é o seu curso?
-                      </label>
-                      <input 
-                        name="customCourse" type="text" placeholder="Digite o nome completo do seu curso..."
+                    <div className="flex flex-col">
+                      <label htmlFor="reg-curso-outro" className="field-label">Qual é o seu curso?</label>
+                      <input
+                        id="reg-curso-outro" name="customCourse" type="text" placeholder="Nome completo do curso"
                         value={formData.customCourse} onChange={handleChange}
                         onFocus={() => setFocusedInput('customCourse')} onBlur={() => setFocusedInput(null)}
-                        className="login-input" 
-                        style={fieldErrors.customCourse ? { borderColor: '#ef4444' } : {}}
+                        className="field ent-field"
+                        aria-invalid={fieldErrors.customCourse ? 'true' : undefined}
+                        aria-describedby={fieldErrors.customCourse ? 'reg-curso-outro-err' : undefined}
                         required
                       />
-                      {fieldErrors.customCourse && (
-                        <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
-                          {fieldErrors.customCourse}
-                        </div>
-                      )}
+                      {fieldErrors.customCourse && <p id="reg-curso-outro-err" className="field-error">{fieldErrors.customCourse}</p>}
                     </div>
                   )}
                 </>
               )}
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>E-mail (preferencialmente o mesmo do Sympla)</label>
-                <input 
-                  name="email" type="email" placeholder="seu.email@exemplo.com"
+              <div className="flex flex-col">
+                <label htmlFor="reg-email" className="field-label">E-mail</label>
+                <input
+                  id="reg-email" name="email" type="email" autoComplete="email" placeholder="seu.email@exemplo.com"
                   value={formData.email} onChange={handleChange}
-                  onFocus={() => setFocusedInput('email')} 
-                  onBlur={() => setFocusedInput(null)}
-                  className="login-input" 
-                  style={fieldErrors.email ? { borderColor: '#ef4444' } : {}}
+                  onFocus={() => setFocusedInput('email')} onBlur={() => setFocusedInput(null)}
+                  className="field ent-field"
+                  aria-invalid={fieldErrors.email ? 'true' : undefined}
+                  aria-describedby="reg-email-hint"
                   required
                 />
-                {fieldErrors.email && (
-                  <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
-                    {fieldErrors.email}
-                  </div>
-                )}
+                {fieldErrors.email
+                  ? <p id="reg-email-hint" className="field-error">{fieldErrors.email}</p>
+                  : <p id="reg-email-hint" className="mt-1.5 text-[13px] text-text-2">Use o mesmo e-mail do seu ingresso Sympla.</p>}
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>WhatsApp / Telefone (apenas números)</label>
-                <input 
-                  name="phone" type="tel" placeholder="(34) 99999-9999"
+              <div className="flex flex-col">
+                <label htmlFor="reg-tel" className="field-label">WhatsApp</label>
+                <input
+                  id="reg-tel" name="phone" type="tel" autoComplete="tel" inputMode="tel" placeholder="(34) 99999-9999"
                   value={formData.phone} onChange={handleChange}
                   onFocus={() => setFocusedInput('phone')} onBlur={() => setFocusedInput(null)}
-                  className="login-input" 
-                  style={fieldErrors.phone ? { borderColor: '#ef4444' } : {}}
+                  className="field ent-field"
+                  aria-invalid={fieldErrors.phone ? 'true' : undefined}
+                  aria-describedby={fieldErrors.phone ? 'reg-tel-err' : undefined}
                   required
                 />
-                {fieldErrors.phone && (
-                  <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
-                    {fieldErrors.phone}
-                  </div>
-                )}
+                {fieldErrors.phone && <p id="reg-tel-err" className="field-error">{fieldErrors.phone}</p>}
               </div>
 
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Senha</label>
-                  <div style={{ position: 'relative' }}>
-                    <input 
-                      ref={passwordInputRef}
-                      name="password" type={showPassword ? "text" : "password"} placeholder="••••••••"
-                      value={formData.password} onChange={handleChange}
-                      onFocus={() => setFocusedInput('password')} onBlur={() => setFocusedInput(null)}
-                      className="login-input" 
-                      style={fieldErrors.password ? { paddingRight: '40px', borderColor: '#ef4444' } : { paddingRight: '40px' }} 
-                      required
-                    />
-                    <button
-                      type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleTogglePassword}
-                      style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  {fieldErrors.password && (
-                    <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
-                      {fieldErrors.password}
-                    </div>
-                  )}
-                </div>
-                
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Confirmar Senha</label>
-                  <div style={{ position: 'relative' }}>
-                    <input 
-                      ref={confirmPasswordInputRef}
-                      name="confirmPassword" type={showPassword ? "text" : "password"} placeholder="••••••••"
-                      value={formData.confirmPassword} onChange={handleChange}
-                      onFocus={() => setFocusedInput('confirmPassword')} onBlur={() => setFocusedInput(null)}
-                      className="login-input" 
-                      style={fieldErrors.confirmPassword ? { paddingRight: '40px', borderColor: '#ef4444' } : { paddingRight: '40px' }} 
-                      required
-                    />
-                  </div>
-                  {fieldErrors.confirmPassword && (
-                    <div style={{ color: '#ef4444', fontSize: '0.72rem', marginTop: '4px', marginLeft: '4px' }}>
-                      {fieldErrors.confirmPassword}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Barra Reativa de Força de Senha (KAN-27 / KAN-45) */}
-              {formData.password && (
-                <div style={{ marginTop: '-8px', marginLeft: '4px', marginRight: '4px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Força da Senha:</span>
-                    <span style={{ fontSize: '0.7rem', color: passwordStrength.color, fontWeight: 'bold' }}>{passwordStrength.label}</span>
-                  </div>
-                  <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-                    <div 
-                      style={{ 
-                        width: `${passwordStrength.percent}%`, 
-                        height: '100%', 
-                        background: passwordStrength.color, 
-                        transition: 'width 0.3s ease, background 0.3s ease' 
-                      }} 
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              {/* Seletor de Foto de Perfil com Preview Ampliado e Clicável */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '16px' }}>
-                <input 
-                  ref={fileInputRef}
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleAvatarChange}
-                  style={{ display: 'none' }}
-                />
-
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  title="Clique para escolher ou trocar sua foto"
-                  onMouseEnter={() => setIsAvatarHovered(true)}
-                  onMouseLeave={() => setIsAvatarHovered(false)}
-                  style={{
-                    position: 'relative',
-                    width: '124px',
-                    height: '124px',
-                    marginBottom: '12px',
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s ease',
-                    transform: isAvatarHovered ? 'scale(1.03)' : 'scale(1)'
-                  }}
-                >
-                  {/* Moldura circular com overflow: hidden para cortar apenas a imagem de perfil */}
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: '50%',
-                      border: `3px solid ${isAvatarHovered ? '#00d2ff' : 'rgba(0, 210, 255, 0.4)'}`,
-                      boxShadow: avatarPreview 
-                        ? '0 0 20px rgba(0, 210, 255, 0.25)' 
-                        : '0 0 10px rgba(255, 255, 255, 0.05)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      overflow: 'hidden',
-                      background: avatarPreview ? '#09090b' : 'rgba(255, 255, 255, 0.04)',
-                      transition: 'border-color 0.2s ease'
-                    }}
-                  >
-                    {avatarPreview ? (
-                      <img
-                        src={avatarPreview}
-                        alt="Preview"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <>
-                        <div 
-                          style={{
-                            width: '44px',
-                            height: '44px',
-                            borderRadius: '50%',
-                            background: 'rgba(0, 210, 255, 0.1)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginBottom: '6px',
-                            color: '#00d2ff'
-                          }}
-                        >
-                          <Camera size={24} />
-                        </div>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: '500' }}>
-                          Toque para foto
-                        </span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Ícone flutuante da câmera posicionado fora do overflow: hidden (KAN-103) */}
-                  {avatarPreview && (
-                    <div 
-                      style={{
-                        position: 'absolute',
-                        bottom: '2px',
-                        right: '2px',
-                        width: '32px',
-                        height: '32px',
-                        background: '#090d16',
-                        color: '#00d2ff',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: `2px solid ${isAvatarHovered ? '#00d2ff' : 'rgba(0, 210, 255, 0.6)'}`,
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.6), 0 0 10px rgba(0, 210, 255, 0.3)',
-                        pointerEvents: 'none',
-                        zIndex: 2,
-                        transition: 'border-color 0.2s ease'
-                      }}
-                    >
-                      <Camera size={15} strokeWidth={2.2} />
-                    </div>
-                  )}
-                </div>
-
-                {/* Botões de Ação do Avatar */}
-                {!avatarPreview ? (
+              <div className="flex flex-col">
+                <label htmlFor="reg-senha" className="field-label">Senha</label>
+                <div className="relative">
+                  <input
+                    id="reg-senha" ref={passwordInputRef}
+                    name="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password"
+                    value={formData.password} onChange={handleChange}
+                    onFocus={() => setFocusedInput('password')} onBlur={() => setFocusedInput(null)}
+                    className="field ent-field ent-field-pw"
+                    aria-invalid={fieldErrors.password ? 'true' : undefined}
+                    aria-describedby="reg-senha-forca"
+                    required
+                  />
                   <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="login-btn"
-                    style={{
-                      cursor: 'pointer',
-                      fontSize: '0.8rem',
-                      padding: '8px 18px',
-                      background: 'rgba(0, 210, 255, 0.12)',
-                      border: '1px solid rgba(0, 210, 255, 0.35)',
-                      color: '#00d2ff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      marginTop: '0',
-                      borderRadius: '8px',
-                      transition: 'all 0.2s ease'
-                    }}
+                    type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleTogglePassword}
+                    className="absolute top-[5px] right-[5px] flex size-11 cursor-pointer items-center justify-center rounded-xl border-0 bg-transparent text-text-2"
+                    aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                    aria-pressed={showPassword}
                   >
-                    <Plus size={16} /> Adicionar Foto de Perfil
+                    {showPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
                   </button>
-                ) : (
-                  <div style={{ display: 'flex', gap: '8px', width: '100%', maxWidth: '280px', justifyContent: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="login-btn"
-                      style={{
-                        flex: 1,
-                        cursor: 'pointer',
-                        fontSize: '0.75rem',
-                        padding: '6px 12px',
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        marginTop: '0',
-                        borderRadius: '8px'
-                      }}
-                    >
-                      <RefreshCw size={14} /> Trocar Foto
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAvatarFile(null);
-                        setAvatarPreview(null);
-                      }}
-                      className="login-btn"
-                      style={{
-                        cursor: 'pointer',
-                        fontSize: '0.75rem',
-                        padding: '6px 12px',
-                        background: 'rgba(239, 68, 68, 0.1)',
-                        border: '1px solid rgba(239, 68, 68, 0.25)',
-                        color: '#ef4444',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        marginTop: '0',
-                        borderRadius: '8px'
-                      }}
-                    >
-                      <Trash2 size={14} /> Remover
-                    </button>
-                  </div>
-                )}
-
-                <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
-                  PNG, JPG ou WebP até 2MB (opcional)
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>LinkedIn (Opcional)</label>
-                  <input 
-                    name="linkedin" type="text" placeholder="linkedin.com/in/seu-perfil"
-                    value={formData.linkedin} onChange={handleChange}
-                    onFocus={() => setFocusedInput('linkedin')} onBlur={() => setFocusedInput(null)}
-                    className="login-input"
-                  />
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>Instagram (Opcional)</label>
-                  <input 
-                    name="instagram" type="text" placeholder="@seu_usuario"
-                    value={formData.instagram} onChange={handleChange}
-                    onFocus={() => setFocusedInput('instagram')} onBlur={() => setFocusedInput(null)}
-                    className="login-input"
-                  />
+                <div id="reg-senha-forca">
+                  {fieldErrors.password ? (
+                    <p className="field-error">{fieldErrors.password}</p>
+                  ) : formData.password ? (
+                    <p className="mt-2 flex items-center gap-2 text-[13px] text-text-2">
+                      <span className="grid grid-cols-[repeat(4,22px)] gap-1" aria-hidden="true">
+                        {[1, 2, 3, 4].map((n) => (
+                          <span key={n} className="h-1 rounded-sm" style={{ background: n <= Math.max(passwordStrength.score, 1) ? strengthTone : 'var(--surface-raised)' }} />
+                        ))}
+                      </span>
+                      Senha {passwordStrength.label.toLowerCase()}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px', marginLeft: '4px' }}>GitHub (Opcional)</label>
-                <input 
-                  name="github" type="text" placeholder="github.com/seu-usuario ou @seu-usuario"
-                  value={formData.github} onChange={handleChange}
-                  onFocus={() => setFocusedInput('github')} onBlur={() => setFocusedInput(null)}
-                  className="login-input"
-                />
-              </div>
-
-              {/* Termo de Consentimento LGPD */}
-              <div 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'flex-start', 
-                  gap: '10px', 
-                  marginTop: '8px', 
-                  background: 'rgba(255,255,255,0.03)', 
-                  padding: '12px', 
-                  borderRadius: '8px', 
-                  border: '1px solid rgba(255,255,255,0.08)' 
-                }}
-              >
-                <input 
-                  name="termsAccepted" type="checkbox" id="terms"
-                  checked={formData.termsAccepted} onChange={handleChange}
-                  style={{ marginTop: '3px', accentColor: 'var(--primary-color, #00d2ff)' }}
+              <div className="flex flex-col">
+                <label htmlFor="reg-senha2" className="field-label">Confirmar senha</label>
+                <input
+                  id="reg-senha2" ref={confirmPasswordInputRef}
+                  name="confirmPassword" type={showPassword ? 'text' : 'password'} autoComplete="new-password"
+                  value={formData.confirmPassword} onChange={handleChange}
+                  onFocus={() => setFocusedInput('confirmPassword')} onBlur={() => setFocusedInput(null)}
+                  className="field ent-field"
+                  aria-invalid={fieldErrors.confirmPassword ? 'true' : undefined}
+                  aria-describedby={fieldErrors.confirmPassword ? 'reg-senha2-err' : undefined}
                   required
                 />
-                <label htmlFor="terms" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: '1.4', cursor: 'pointer' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 'bold', color: 'white', marginBottom: '2px' }}>
-                    <ShieldCheck size={14} color="#10b981" /> Termo de Privacidade (LGPD)
-                  </span>
-                  Concordo com a coleta dos meus dados conforme os{' '}
-                  <button 
-                    type="button" 
-                    onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }} 
-                    style={{ background: 'none', border: 'none', color: '#00d2ff', textDecoration: 'underline', padding: 0, font: 'inherit', cursor: 'pointer', fontWeight: '500' }}
-                  >
-                    Termos de Uso
-                  </button>{' '}
-                  e a{' '}
-                  <button 
-                    type="button" 
-                    onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }} 
-                    style={{ background: 'none', border: 'none', color: '#10b981', textDecoration: 'underline', padding: 0, font: 'inherit', cursor: 'pointer', fontWeight: '500' }}
-                  >
-                    Política de Privacidade (LGPD)
-                  </button>{' '}
-                  da FACOM Tech Week.
-                </label>
+                {fieldErrors.confirmPassword && <p id="reg-senha2-err" className="field-error">{fieldErrors.confirmPassword}</p>}
               </div>
-            </>
-          )}
-
-          {error && (
-            <div style={{ color: '#ef4444', fontSize: '0.8rem', textAlign: 'center', background: 'rgba(239, 68, 68, 0.1)', padding: '8px', borderRadius: '8px' }}>
-              {error}
             </div>
-          )}
+          </>
+        )}
 
-          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-            {step === 2 && (
-              <button 
-                type="button" 
-                onClick={() => setStep(1)} 
-                className="login-btn" 
-                style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'rgba(255,255,255,0.1)' }}
+        {step === 2 && (
+          <>
+            <div className="mx-6 mt-6 text-center">
+              <h1 className="text-[25px] leading-[1.2] font-extrabold">Como você quer<br />ser <span className="ent-grad-text-social">encontrado?</span></h1>
+              <p className="mt-2 text-sm leading-normal text-text-2">Sua foto e suas redes aparecem para quem escanear o seu crachá.</p>
+            </div>
+
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+
+            {/* Órbita: foto no centro, redes em volta (acendem quando preenchidas) */}
+            <div className="relative mx-auto mt-[18px] h-[230px] w-[280px] shrink-0">
+              <svg aria-hidden="true" width="280" height="230" viewBox="0 0 280 230" className="absolute top-0 left-0">
+                <defs>
+                  <linearGradient id="reg-arc" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#2563EB" /><stop offset="1" stopColor="#E1306C" /></linearGradient>
+                </defs>
+                <circle cx="140" cy="115" r="98" fill="none" stroke="#2A3460" strokeWidth="1.5" strokeDasharray="4 6" />
+                <circle cx="140" cy="115" r="98" fill="none" stroke="url(#reg-arc)" strokeWidth="2.5" strokeDasharray="120 500" strokeLinecap="round" transform="rotate(200 140 115)" />
+              </svg>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                aria-label={avatarPreview ? 'Trocar foto de perfil' : 'Adicionar foto de perfil'}
+                className="press absolute top-[51px] left-[76px] size-32 cursor-pointer rounded-full border-0 bg-[linear-gradient(135deg,#2563EB,#7C3AED)] p-1 shadow-[0_14px_36px_rgba(91,59,224,0.45)]"
               >
-                Voltar
+                {/* Moldura com overflow hidden só para a foto; o selo da câmera fica fora dela (KAN-103) */}
+                <span className="flex size-full items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-[#8F7BFF] bg-surface-raised text-you-text">
+                  {avatarPreview
+                    ? <img src={avatarPreview} alt="" className="size-full object-cover" />
+                    : <User size={56} strokeWidth={1.6} aria-hidden="true" />}
+                </span>
+                <span className="absolute right-0.5 bottom-1.5 flex size-[38px] items-center justify-center rounded-full border-[3px] border-bg bg-white text-[#3730A3]">
+                  <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
+                </span>
               </button>
-            )}
-            <button 
-              type="submit" 
-              className="login-btn" 
-              style={{ flex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }} 
-              disabled={loading}
-            >
-              {loading ? <Loader2 className="animate-spin" size={20} /> : (step === 1 ? 'Próximo' : 'Concluir Cadastro')}
-            </button>
-          </div>
-        </form>
+              <SocialBubble className="top-[26px] left-[28px]" filled={!!formData.linkedin} ok={socialOk('linkedin')} ring="#0A66C2"><LinkedInLogo size={26} /></SocialBubble>
+              <SocialBubble className="top-[26px] left-[200px]" filled={!!formData.instagram} ok={socialOk('instagram')} ring="#E1306C"><InstagramLogo size={26} /></SocialBubble>
+              <SocialBubble className="top-[148px] left-[218px]" filled={!!formData.github} ok={socialOk('github')} ring="#EEF1FA"><GithubLogo size={26} /></SocialBubble>
+            </div>
 
-        <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-          Já possui conta? <Link to="/login" style={{ color: 'white', fontWeight: 'bold', textDecoration: 'none' }}>Fazer Login</Link>
+            <div className="mt-1 flex justify-center gap-2">
+              {!avatarPreview ? (
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="press inline-flex h-11 cursor-pointer items-center gap-2 rounded-[22px] border-[1.5px] border-[#8F7BFF] bg-[rgba(124,58,237,0.16)] px-[18px] text-sm font-extrabold text-text">
+                  <Camera size={18} className="text-[#C4B5FD]" aria-hidden="true" /> Adicionar foto de perfil
+                </button>
+              ) : (
+                <>
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="press inline-flex h-11 cursor-pointer items-center gap-2 rounded-[22px] border-[1.5px] border-[#8F7BFF] bg-[rgba(124,58,237,0.16)] px-[18px] text-sm font-extrabold text-text">
+                    <Camera size={18} className="text-[#C4B5FD]" aria-hidden="true" /> Trocar foto
+                  </button>
+                  <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(null); }} className="press inline-flex h-11 cursor-pointer items-center gap-2 rounded-[22px] border-0 bg-[rgba(245,154,154,0.1)] px-4 text-sm font-bold text-err">
+                    <Trash2 size={16} aria-hidden="true" /> Remover
+                  </button>
+                </>
+              )}
+            </div>
+            <p className="mt-1.5 text-center text-xs text-text-3">Opcional · PNG, JPG ou WebP até 2 MB</p>
+
+            <div className="mx-5 mt-[18px] flex flex-col gap-3.5">
+              <SocialField id="reg-li" name="linkedin" label="LinkedIn" prefix="linkedin.com/in/" placeholder="seu-perfil" brand="#0A66C2" value={formData.linkedin} ok={socialOk('linkedin')} onChange={handleChange} logo={<LinkedInLogo />} />
+              <SocialField id="reg-ig" name="instagram" label="Instagram" prefix="@" placeholder="seu.usuario" brand="#E1306C" value={formData.instagram} ok={socialOk('instagram')} onChange={handleChange} logo={<InstagramLogo />} />
+              <SocialField id="reg-gh" name="github" label="GitHub" prefix="github.com/" placeholder="usuario" brand="#8FA0FF" value={formData.github} ok={socialOk('github')} onChange={handleChange} logo={<GithubLogo />} />
+            </div>
+
+            <div className="mx-5 mt-5 flex items-start gap-3 text-[13px] leading-normal text-[#C3C9DE]">
+              <input
+                id="terms" name="termsAccepted" type="checkbox"
+                checked={formData.termsAccepted} onChange={handleChange}
+                className="m-0 mt-px size-[22px] shrink-0 cursor-pointer accent-[#5B3BE0]"
+                required
+              />
+              <label htmlFor="terms" className="cursor-pointer">
+                Li e concordo com os{' '}
+                <button type="button" onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }} className="cursor-pointer border-0 bg-transparent p-0 font-bold text-link underline">
+                  Termos de Uso
+                </button>{' '}e a{' '}
+                <button type="button" onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }} className="cursor-pointer border-0 bg-transparent p-0 font-bold text-link underline">
+                  Política de Privacidade (LGPD)
+                </button>.
+              </label>
+            </div>
+          </>
+        )}
+
+        {error && (
+          <p role="alert" className="mx-5 mt-4 rounded-xl bg-[rgba(245,154,154,0.1)] px-3.5 py-2.5 text-[13px] font-semibold text-err">
+            {error}
+          </p>
+        )}
+
+        <div className="sticky bottom-0 z-20 mt-auto bg-[linear-gradient(180deg,rgba(10,15,36,0),#0A0F24_30%)] px-5 pt-3.5 pb-[26px]">
+          <button type="submit" className="btn btn-primary btn-block ent-btn-lg ent-cta" disabled={loading}>
+            {loading
+              ? <><Loader2 className="animate-spin" size={20} aria-hidden="true" /> {step === 1 ? 'Verificando' : 'Criando seu crachá'}</>
+              : step === 1
+                ? <>Continuar <ArrowRight size={18} strokeWidth={2.4} aria-hidden="true" /></>
+                : 'Criar meu crachá'}
+          </button>
         </div>
-      </div>
+      </form>
 
       {/* Modal Interativo de Corte de Foto */}
       {rawImageForCrop && (
@@ -940,48 +763,90 @@ export default function Register() {
         />
       )}
 
-      {/* Modal Interativo de Termos de Uso e LGPD */}
+      {/* Termos de Uso e LGPD */}
       {showTermsModal && (
-        <div 
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            background: 'rgba(0,0,0,0.85)',
-            backdropFilter: 'blur(8px)',
-            overflowY: 'auto',
-            padding: '20px 16px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'flex-start'
-          }}
+        <div
+          role="dialog" aria-modal="true" aria-label="Termos de Uso e Política de Privacidade"
+          className="fixed inset-0 z-[9999] overflow-y-auto bg-[rgba(5,8,20,0.85)]"
+          onKeyDown={(e) => e.key === 'Escape' && setShowTermsModal(false)}
         >
-          <div style={{ position: 'relative', width: '100%', maxWidth: '880px' }}>
-            <button
-              onClick={() => setShowTermsModal(false)}
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                zIndex: 10,
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                color: 'white',
-                borderRadius: '50%',
-                width: '36px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <X size={20} />
-            </button>
-            <Terms isModal={true} onClose={() => setShowTermsModal(false)} />
-          </div>
+          <Terms isModal={true} onClose={() => setShowTermsModal(false)} />
         </div>
       )}
     </div>
+  );
+}
+
+function SocialField({ id, name, label, prefix, placeholder, brand, value, ok, onChange, logo }) {
+  return (
+    <div className="flex flex-col">
+      <label htmlFor={id} className="field-label">{label}</label>
+      <div className="ent-social" style={{ '--ent-brand': brand, '--ent-brand-halo': `${brand}2E`, ...(ok ? { borderColor: 'rgba(111,216,166,0.35)' } : null) }}>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#0D1430]" aria-hidden="true">{logo}</span>
+        <span className="text-[15px] whitespace-nowrap text-text-4" aria-hidden="true">{prefix}</span>
+        <input id={id} name={name} type="text" autoCapitalize="none" spellCheck={false} placeholder={placeholder} value={value} onChange={onChange} />
+        {ok && (
+          <span className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-ok text-[#0A2A1C]" role="img" aria-label="válido">
+            <Check size={13} strokeWidth={3.2} aria-hidden="true" />
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SocialBubble({ className, filled, ok, ring, children }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`absolute flex size-[52px] items-center justify-center rounded-full transition-opacity duration-200 ${className} ${filled ? 'bg-surface' : 'border-[1.5px] border-dashed border-[#3A4675] bg-[#0F1530] opacity-75'}`}
+      style={filled ? { boxShadow: `0 0 0 2px ${ok ? 'var(--ok)' : ring}, 0 6px 18px rgba(0,0,0,0.4)` } : undefined}
+    >
+      {children}
+      {ok && (
+        <span className="absolute -right-1 -bottom-1 flex size-[22px] items-center justify-center rounded-full bg-ok text-[#0A2A1C]" style={{ animation: 'dsPop 300ms var(--spring) both' }}>
+          <Check size={13} strokeWidth={3.2} />
+        </span>
+      )}
+    </span>
+  );
+}
+
+/* Logos reais das redes (marca registrada de cada uma; lucide não tem ícone de marca) */
+function LinkedInLogo({ size = 24 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <rect width="24" height="24" rx="6" fill="#0A66C2" />
+      <circle cx="7" cy="7.4" r="1.7" fill="#fff" />
+      <rect x="5.5" y="9.8" width="3" height="8.4" rx="0.5" fill="#fff" />
+      <path d="M10.6 9.8h2.7v1.2c.4-.7 1.3-1.4 2.7-1.4 2.6 0 3.1 1.6 3.1 3.8v4.8h-2.8v-4.2c0-1-.1-2.2-1.4-2.2s-1.6 1-1.6 2.1v4.3h-2.7z" fill="#fff" />
+    </svg>
+  );
+}
+
+function InstagramLogo({ size = 24 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <defs>
+        <linearGradient id={`ig-${size}`} x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stopColor="#F58529" /><stop offset="0.5" stopColor="#DD2A7B" /><stop offset="1" stopColor="#8134AF" />
+        </linearGradient>
+      </defs>
+      <rect width="24" height="24" rx="6" fill={`url(#ig-${size})`} />
+      <rect x="5" y="5" width="14" height="14" rx="4.2" fill="none" stroke="#fff" strokeWidth="1.9" />
+      <circle cx="12" cy="12" r="3.3" fill="none" stroke="#fff" strokeWidth="1.9" />
+      <circle cx="16.3" cy="7.7" r="1" fill="#fff" />
+    </svg>
+  );
+}
+
+function GithubLogo({ size = 24 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <rect width="24" height="24" rx="6" fill="#EEF1FA" />
+      <g transform="translate(4 4)">
+        <path fill="#0A0F24" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+      </g>
+    </svg>
   );
 }

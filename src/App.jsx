@@ -18,6 +18,8 @@ import Sponsor from './pages/Sponsor';
 import Terms from './pages/Terms';
 import BottomNavigation from './components/BottomNavigation';
 import logoTw from './assets/logo-tw.png';
+import Mascot from './components/Mascot';
+import './styles/entrada.css';
 import { getAppSubdomain } from './lib/subdomain';
 import { stopAllMediaTracks } from './lib/cameraUtils';
 
@@ -67,36 +69,34 @@ function AppContent() {
   }, [user, authLoading, isSplashVisible, isAuthPage, isPortalPage, navigate, location.pathname]);
 
   if (isSplashVisible || authLoading) {
+    // Abertura (EstAbertura, DESIGN.md §6/§9): única tela com animação em tela cheia.
     return (
-      <div className="app-wrapper animate-fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'transparent', zIndex: 9999 }}>
-        <img src={logoTw} alt="FACOM Tech Week" style={{ width: '180px', marginBottom: '40px' }} className="animate-fade-in" />
-        
-        <div style={{ width: '60%', maxWidth: '200px', textAlign: 'center' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 'bold', letterSpacing: '1px' }}>
-            CARREGANDO...
+      <div className="app-wrapper ent-bg-splash text-text" role="status" aria-live="polite" aria-label="Abrindo o app da Tech Week">
+        <div className="absolute top-1/2 left-1/2 h-[844px] w-[390px] -translate-x-1/2 -translate-y-1/2">
+          <div aria-hidden="true" className="absolute top-[452px] left-1/2 -ml-[150px] h-10 w-[300px] rounded-[50%] bg-[radial-gradient(closest-side,rgba(0,0,0,0.5),rgba(0,0,0,0))]" />
+          <div className="ent-crew absolute inset-0">
+            <div className="ent-crew-bob absolute inset-0">
+              <div className="ent-sign absolute top-[286px] left-[75px] flex h-24 w-60 items-center justify-center rounded-[20px] border-2 border-[#2E3878] bg-surface shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
+                <img src={logoTw} alt="FACOM Tech Week" className="h-[54px] w-[200px] object-contain" />
+              </div>
+              <div className="absolute top-[348px] -left-2" aria-hidden="true">
+                <Mascot color="blue" isWaving className="ent-still" style={{ width: 124, height: 124 }} />
+              </div>
+              <div className="absolute top-[348px] left-[274px] -scale-x-100" aria-hidden="true">
+                <Mascot color="purple" isWaving className="ent-still" style={{ width: 124, height: 124 }} />
+              </div>
+            </div>
           </div>
-          <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
-            <div 
-              style={{ 
-                position: 'absolute', 
-                top: 0, 
-                left: 0, 
-                height: '100%', 
-                width: '100%',
-                background: 'linear-gradient(90deg, var(--primary), #a855f7)', 
-                borderRadius: '4px',
-                animation: 'loadingBar 2s ease-in-out forwards'
-              }} 
-            />
+          <div className="ent-splash-text absolute inset-x-0 top-[548px] text-center">
+            <div className="text-2xl font-extrabold">Bora pra <span className="ent-grad-text">Tech Week!</span></div>
+            <div className="mt-1.5 text-sm text-text-2">Abrindo sua semana…</div>
+          </div>
+          <div className="ent-dots absolute inset-x-0 top-[632px] flex justify-center gap-2" aria-hidden="true">
+            <span className="size-2 rounded-full bg-[#5B7CFF]" />
+            <span className="size-2 rounded-full bg-[#8F7BFF]" />
+            <span className="size-2 rounded-full bg-[#B794FF]" />
           </div>
         </div>
-        <style>{`
-          @keyframes loadingBar {
-            0% { width: 0%; }
-            50% { width: 70%; }
-            100% { width: 100%; }
-          }
-        `}</style>
       </div>
     );
   }
