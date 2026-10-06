@@ -49,7 +49,8 @@ import {
   Minimize2,
   Radio,
   Layers,
-  Award
+  Award,
+  RefreshCw
 } from 'lucide-react';
 
 const LinkedinIcon = ({ size = 15, color = 'currentColor' }) => (
@@ -106,6 +107,7 @@ import {
   deleteMission, 
   toggleMissionStatus, 
   triggerFlashMission, 
+  seedDefaultMissions,
   DEFAULT_MISSIONS 
 } from '../lib/missionService';
 import { subscribeToAllUsers, updateUserRoleInFirestore } from '../lib/userService';
@@ -359,7 +361,9 @@ export default function Admin() {
   const [locationForm, setLocationForm] = useState({ name: '', capacity: 100, description: '' });
 
   // Gestão de Missões & Desafios (KAN-104)
-  const [missionsList, setMissionsList] = useState(DEFAULT_MISSIONS);
+  const [missionsList, setMissionsList] = useState([]);
+  const [loadingMissions, setLoadingMissions] = useState(true);
+  const [isSeedingMissions, setIsSeedingMissions] = useState(false);
   const [missionCategoryFilter, setMissionCategoryFilter] = useState('ALL');
   const [missionStatusFilter, setMissionStatusFilter] = useState('ALL');
   const [missionSearch, setMissionSearch] = useState('');
@@ -420,7 +424,8 @@ export default function Admin() {
     });
 
     const unsubMissions = subscribeToMissions((missions) => {
-      setMissionsList(missions && missions.length > 0 ? missions : DEFAULT_MISSIONS);
+      setMissionsList(missions || []);
+      setLoadingMissions(false);
     });
 
     return () => {
@@ -605,6 +610,28 @@ export default function Admin() {
       });
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleSeedDefaultMissions = async () => {
+    if (!window.confirm('Deseja popular ou sincronizar todas as missões padrão da TechWeek no Firestore? Missões existentes serão preservadas e atualizadas.')) return;
+    setIsSeedingMissions(true);
+    try {
+      const count = await seedDefaultMissions();
+      setFeedback({
+        type: 'success',
+        title: 'Missões Sincronizadas!',
+        message: `${count} missões padrão foram gravadas com sucesso no Firestore.`
+      });
+    } catch (err) {
+      console.error('Erro ao popular missões padrão:', err);
+      setFeedback({
+        type: 'error',
+        title: 'Falha na Sincronização',
+        message: err.message || 'Ocorreu um erro ao gravar as missões padrão no Firestore.'
+      });
+    } finally {
+      setIsSeedingMissions(false);
     }
   };
 
@@ -1105,6 +1132,22 @@ export default function Admin() {
       return matchText && matchClass;
     });
   }, [speakers, speakerSearch, speakerClassificationFilter]);
+
+  // Filtros de Missões & Desafios (KAN-106)
+  const filteredMissions = useMemo(() => {
+    return (missionsList || []).filter((m) => {
+      if (missionCategoryFilter !== 'ALL' && m.category !== missionCategoryFilter) return false;
+      if (missionStatusFilter !== 'ALL' && m.status !== missionStatusFilter) return false;
+      if (missionSearch) {
+        const q = missionSearch.toLowerCase();
+        const titleMatch = (m.title || m.name || '').toLowerCase().includes(q);
+        const descMatch = (m.description || '').toLowerCase().includes(q);
+        const secretMatch = (m.secretConfig?.secretWord || '').toLowerCase().includes(q);
+        return titleMatch || descMatch || secretMatch;
+      }
+      return true;
+    });
+  }, [missionsList, missionCategoryFilter, missionStatusFilter, missionSearch]);
 
   // Se não autorizado, tela de login corporativo
   if (!isAuthorized) {
@@ -2428,6 +2471,31 @@ export default function Admin() {
 
                   <button
                     type="button"
+                    onClick={handleSeedDefaultMissions}
+                    disabled={isSeedingMissions}
+                    title="Grava ou sincroniza todas as missões padrão da TechWeek no Firestore"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 14px',
+                      backgroundColor: '#1E293B',
+                      border: '1px solid #334155',
+                      borderRadius: '6px',
+                      color: '#E2E8F0',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      cursor: isSeedingMissions ? 'not-allowed' : 'pointer',
+                      opacity: isSeedingMissions ? 0.7 : 1,
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <RefreshCw size={14} className={isSeedingMissions ? 'animate-spin' : ''} />
+                    <span>{isSeedingMissions ? 'Sincronizando...' : 'Popular Missões Padrão'}</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={handleOpenNewMissionModal}
                     style={{
                       display: 'inline-flex',
@@ -2546,20 +2614,52 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody>
-                    {missionsList
-                      .filter(m => {
-                        if (missionCategoryFilter !== 'ALL' && m.category !== missionCategoryFilter) return false;
-                        if (missionStatusFilter !== 'ALL' && m.status !== missionStatusFilter) return false;
-                        if (missionSearch) {
-                          const q = missionSearch.toLowerCase();
-                          const titleMatch = (m.title || m.name || '').toLowerCase().includes(q);
-                          const descMatch = (m.description || '').toLowerCase().includes(q);
-                          const secretMatch = (m.secretConfig?.secretWord || '').toLowerCase().includes(q);
-                          return titleMatch || descMatch || secretMatch;
-                        }
-                        return true;
-                      })
-                      .map((m) => {
+                    {loadingMissions ? (
+                      <tr>
+                        <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', color: '#9CA3AF' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                            <Loader2 size={18} className="animate-spin" color="#3B82F6" />
+                            <span>Carregando missões do Firestore...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredMissions.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', color: '#9CA3AF' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                            <p style={{ margin: 0, fontSize: '0.88rem', color: '#9CA3AF' }}>
+                              {missionsList.length === 0
+                                ? 'Nenhuma missão cadastrada no banco de dados ainda.'
+                                : 'Nenhuma missão encontrada para os filtros selecionados.'}
+                            </p>
+                            {missionsList.length === 0 && (
+                              <button
+                                type="button"
+                                onClick={handleSeedDefaultMissions}
+                                disabled={isSeedingMissions}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  padding: '8px 16px',
+                                  backgroundColor: '#2563EB',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  color: '#FFFFFF',
+                                  fontSize: '0.82rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <RefreshCw size={14} className={isSeedingMissions ? 'animate-spin' : ''} />
+                                <span>Popular Missões Padrão Agora</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredMissions.map((m) => {
                         const isFlash = !!m.isFlash;
                         const triggerModeLabel = 
                           m.triggerMode === 'secret' ? 'Palavra Secreta' :
@@ -2685,7 +2785,8 @@ export default function Admin() {
                             </td>
                           </tr>
                         );
-                      })}
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
