@@ -2,27 +2,231 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
-import { useUser } from '../hooks/useUser';
-import { 
-  Info, 
-  X, 
-  Users, 
-  Calendar, 
-  Building2, 
-  CheckCircle2, 
-  AlertCircle, 
-  Loader2, 
-  Sparkles, 
-  Camera, 
-  RefreshCw, 
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  Check,
+  UserPlus,
+  Flag,
+  Monitor,
+  Flashlight,
+  FlashlightOff,
+  CameraOff,
+  Lock,
+  Ticket,
+  WifiOff,
+  AlertCircle,
+  RefreshCw,
   ExternalLink,
-  ArrowLeft
+  X
 } from 'lucide-react';
+import { useUser } from '../hooks/useUser';
 import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
 import { DEFAULT_ACTIVITIES } from '../lib/activityService';
+import { DEFAULT_MISSIONS } from '../lib/missionService';
 import { resolveParticipantFromQr } from '../lib/sponsorService';
+import { getBadgeQrValue } from '../lib/sympla';
 import { stopAllMediaTracks } from '../lib/cameraUtils';
-import ParticipantCard from '../components/ParticipantCard';
+import ParticipantCard, { periodLabel } from '../components/ParticipantCard';
+import SymplaRequirementModal from '../components/SymplaRequirementModal';
+import Mascot from '../components/Mascot';
+import logoTw from '../assets/logo-tw.png';
+import '../styles/cracha.css';
+
+// "O que dá para escanear" (board Escanear). Pontos: crachá = registerCodeScan(data, 5);
+// QR de missão = "Caça ao QR" (40 pts) em DEFAULT_MISSIONS; telão = presença na atividade.
+const SCANNABLES = [
+  { Icon: UserPlus, title: 'Crachá de outra pessoa', desc: 'Vira conexão e conta para missões', pts: '+5', tile: 'bg-[rgba(155,123,255,0.18)] text-[#C4B5FD]' },
+  { Icon: Flag, title: 'QR de missão', desc: 'Escondidos pelo evento', pts: 'até +40', tile: 'bg-[rgba(242,196,106,0.16)] text-warn' },
+  { Icon: Monitor, title: 'Telão da sala', desc: 'Confirma sua presença na atividade', pts: 'presença', tile: 'bg-[rgba(111,216,166,0.16)] text-ok' }
+];
+
+const missionTitle = (id) => DEFAULT_MISSIONS.find((m) => m.id === id)?.title || null;
+
+// Normaliza o perfil do useUser (camelCase ou snake_case, vindo do cache local ou do Firestore).
+function badgeFromProfile(profile) {
+  if (!profile) return null;
+  const first = profile.firstName || profile.first_name || '';
+  const last = profile.lastName || profile.last_name || '';
+  const username = (profile.username || '').replace(/^@/, '');
+  return {
+    name: profile.displayName || [first, last].filter(Boolean).join(' ') || username || 'Participante',
+    username,
+    course: profile.course || '',
+    period: profile.period || null,
+    participantType: profile.participantType || profile.participant_type || 'Participante',
+    avatarUrl: profile.avatarUrl || profile.avatar_url || profile.photoURL || null,
+    symplaTicket: profile.symplaTicket || profile.sympla_ticket || null,
+    uid: profile.uid || profile.id || ''
+  };
+}
+
+const initialsOf = (name) =>
+  (name || 'TW')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('') || 'TW';
+
+function BadgeAvatar({ badge, size = 84 }) {
+  const [broken, setBroken] = useState(false);
+  const src = !broken && badge.avatarUrl;
+  return (
+    <span
+      className="box-border shrink-0 rounded-[24px] bg-[linear-gradient(135deg,#2563EB,#7C3AED)] p-[3px]"
+      style={{ width: size, height: size }}
+    >
+      <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-[21px] bg-bg font-black text-text" style={{ fontSize: Math.round(size * 0.36) }}>
+        {src ? <img src={src} alt="" onError={() => setBroken(true)} className="h-full w-full object-cover" /> : <span aria-hidden="true">{initialsOf(badge.name)}</span>}
+      </span>
+    </span>
+  );
+}
+
+function BadgeTop({ badge }) {
+  return (
+    <>
+      <span aria-hidden="true" className="mx-auto block h-1.5 w-12 rounded-[3px] bg-bg" />
+      <div className="mt-3.5 flex items-center justify-between gap-2">
+        <img src={logoTw} alt="FACOM Tech Week" className="h-7 w-[104px] object-contain object-left" />
+        <span className="rounded-lg border border-[rgba(107,124,255,0.5)] bg-[rgba(61,80,230,0.2)] px-2.5 py-1 text-[11px] font-extrabold text-[#B4C0FF]">
+          {badge.participantType}
+        </span>
+      </div>
+    </>
+  );
+}
+
+const cardClass =
+  'mt-4 rounded-[26px] border border-[#2A3460] bg-[linear-gradient(180deg,#151D3E_0%,#0F1530_100%)] px-[18px] pt-3.5';
+
+// Meu QR (board Cracha)
+function MyBadge({ badge, points, onZoom }) {
+  const id = badge.symplaTicket?.ticketNumber || badge.uid.slice(0, 8).toUpperCase();
+  return (
+    <>
+      <section aria-label="Meu crachá digital" className={`${cardClass} pb-4 shadow-[0_18px_44px_rgba(0,0,0,0.45)]`}>
+        <BadgeTop badge={badge} />
+        <div className="mt-3.5 flex flex-col items-center text-center">
+          <BadgeAvatar badge={badge} />
+          <div className="mt-2.5 text-[21px] font-black">{badge.name}</div>
+          {badge.username && <div className="mt-0.5 text-sm font-bold text-link">@{badge.username}</div>}
+          {(badge.course || badge.period) && (
+            <div className="mt-1 text-[13px] text-text-2">
+              {[badge.course, periodLabel(badge.period)].filter(Boolean).join(' · ')}
+            </div>
+          )}
+        </div>
+        <div className="mt-3.5 flex justify-center">
+          <button
+            type="button"
+            onClick={onZoom}
+            aria-label="Ampliar QR Code do crachá"
+            className="press cursor-pointer rounded-[18px] border-0 bg-[#F4F5FA] p-2.5 leading-[0]"
+          >
+            <QRCodeSVG value={getBadgeQrValue(badge)} size={164} bgColor="#F4F5FA" fgColor="#0A0F24" level="M" />
+          </button>
+        </div>
+        <div className="mt-3 flex justify-center">
+          <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] bg-[rgba(111,216,166,0.14)] px-3 text-xs font-extrabold text-ok">
+            <Check size={14} strokeWidth={2.6} aria-hidden="true" />
+            Ingresso Sympla vinculado
+          </span>
+        </div>
+        <div className="mt-3.5 flex items-center justify-between border-t border-dashed border-[#2A3460] pt-3 text-xs text-text-3">
+          {id ? <span>ID #{id}</span> : <span />}
+          <span>
+            <b className="text-[15px] text-[#C4B5FD]">{points}</b> pts
+          </span>
+        </div>
+      </section>
+      <p className="mx-3 mt-3 mb-0 text-center text-[13px] leading-normal text-text-3">
+        Mostre na entrada e nos estandes. Toque no código para ampliar.
+      </p>
+    </>
+  );
+}
+
+// Sem ingresso (board CrachaBloqueado). O QR borrado é decorativo, não é o código da pessoa.
+function LockedBadge({ badge, onLink }) {
+  return (
+    <section aria-label="Meu crachá digital" className={`${cardClass} pb-[18px]`}>
+      <BadgeTop badge={badge} />
+      <div className="mt-3 flex flex-col items-center text-center">
+        <BadgeAvatar badge={badge} size={76} />
+        <div className="mt-2 text-xl font-black">{badge.name}</div>
+        {badge.username && <div className="text-sm font-bold text-link">@{badge.username}</div>}
+      </div>
+      <div className="relative mx-auto mt-3.5 h-[184px] w-[184px] overflow-hidden rounded-[18px] bg-[#F4F5FA]">
+        <div aria-hidden="true" className="opacity-55 blur-[6px]">
+          <QRCodeSVG value="facom-techweek" size={184} bgColor="#F4F5FA" fgColor="#0A0F24" />
+        </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[rgba(10,15,36,0.55)] text-center">
+          <span className="flex h-[46px] w-[46px] items-center justify-center rounded-full bg-action">
+            <Lock size={22} strokeWidth={2.2} color="#fff" aria-hidden="true" />
+          </span>
+          <span className="text-sm font-black">QR bloqueado</span>
+        </div>
+      </div>
+      <p className="mt-3 mb-0 text-center text-[13px] leading-normal text-[#C3C9DE]">
+        Vincule seu ingresso Sympla para liberar o QR na entrada e nos estandes.
+      </p>
+      <button type="button" onClick={onLink} className="btn btn-primary btn-block mt-3.5 min-h-[54px] text-base">
+        <Ticket size={20} aria-hidden="true" />
+        Vincular ingresso
+      </button>
+    </section>
+  );
+}
+
+// Offline (board EstOfflineCracha): o QR é gerado no aparelho a partir do perfil em cache.
+function OfflineBadge({ badge }) {
+  return (
+    <section aria-label="Seu crachá" className="mt-4 rounded-[22px] bg-surface">
+      <div className="flex items-center justify-between rounded-t-[22px] px-[18px] pt-3.5 pb-10" style={{ background: 'var(--brand-gradient)' }}>
+        <img src={logoTw} alt="FACOM Tech Week" className="h-8 w-[120px] object-contain object-left brightness-0 invert" />
+        <span className="flex items-center gap-1.5 rounded-[10px] bg-[rgba(10,15,36,0.35)] px-2.5 py-1 text-xs font-extrabold">
+          <WifiOff size={14} aria-hidden="true" />
+          offline
+        </span>
+      </div>
+      <div className="-mt-[30px] flex flex-col items-center px-[18px] pb-[18px]">
+        <span className="box-border h-16 w-16 rounded-full bg-surface p-[3px]">
+          <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-surface-raised text-xl font-extrabold">
+            {badge.avatarUrl ? <img src={badge.avatarUrl} alt="" className="h-full w-full object-cover" /> : <span aria-hidden="true">{initialsOf(badge.name)}</span>}
+          </span>
+        </span>
+        <div className="mt-2 text-lg font-extrabold">{badge.name}</div>
+        <div className="mt-3.5 rounded-2xl bg-[#F4F5FA] p-2.5 leading-[0]">
+          <QRCodeSVG value={getBadgeQrValue(badge)} size={168} bgColor="#F4F5FA" fgColor="#0A0F24" level="M" title="QR Code do seu crachá" />
+        </div>
+        <div className="mt-3 flex items-center gap-1.5 text-[13px] font-bold text-ok">
+          <Check size={15} strokeWidth={2.6} aria-hidden="true" />
+          Salvo neste celular · funciona offline
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CameraFrame({ live }) {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute top-1/2 left-1/2 z-[8] -mt-[120px] -ml-[110px] h-[220px] w-[220px]">
+      <svg width="220" height="220" viewBox="0 0 220 220">
+        <defs>
+          <linearGradient id="cracha-frame" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#6B8CFF" />
+            <stop offset="1" stopColor="#B794FF" />
+          </linearGradient>
+        </defs>
+        {['M6 54 V26 a20 20 0 0 1 20 -20 H54', 'M166 6 H194 a20 20 0 0 1 20 20 V54', 'M214 166 V194 a20 20 0 0 1 -20 20 H166', 'M54 214 H26 a20 20 0 0 1 -20 -20 V166'].map((d) => (
+          <path key={d} d={d} fill="none" stroke="url(#cracha-frame)" strokeWidth="6" strokeLinecap="round" />
+        ))}
+      </svg>
+      <span className={`absolute top-[104px] left-6 h-[3px] w-[172px] rounded-sm bg-[#B794FF] opacity-70 ${live ? 'cracha-scanline-live' : ''}`} />
+    </div>
+  );
+}
 
 export default function Scanner() {
   const navigate = useNavigate();
@@ -30,8 +234,15 @@ export default function Scanner() {
   const [isLoading, setIsLoading] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [showInfoModal, setShowInfoModal] = useState(false);
-  const { registerCodeScan } = useUser();
+  const [tab, setTab] = useState('qr'); // o botão central da barra abre em Meu QR (DESIGN.md §5)
+  const [cameraAttempt, setCameraAttempt] = useState(0);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  const [showLinkTicket, setShowLinkTicket] = useState(false);
+  const [qrZoom, setQrZoom] = useState(false);
+  const { registerCodeScan, profile, points, hasSymplaTicket } = useUser();
+  const badge = badgeFromProfile(profile);
 
   const scannerRef = useRef(null);
   const isStartingRef = useRef(false);
@@ -42,8 +253,23 @@ export default function Scanner() {
     import.meta.env.DEV || window.location.search.includes('demo=true')
   );
 
+  useEffect(() => {
+    const update = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    };
+  }, []);
+
+  // Sem rede só o crachá funciona: a aba Escanear não registraria a leitura.
+  const showScanTab = tab === 'scan' && isOnline;
+
   const stopScannerCamera = async () => {
     setIsCameraActive(false);
+    setTorchSupported(false);
+    setTorchOn(false);
     stopAllMediaTracks();
     if (scannerRef.current) {
       try {
@@ -62,8 +288,8 @@ export default function Scanner() {
   useEffect(() => {
     isMountedRef.current = true;
 
-    // Se houver modal com resultado da leitura, a câmera é desligada imediatamente
-    if (scanResult) {
+    // Câmera só liga na aba Escanear; resultado aberto ou outra aba desligam o hardware
+    if (scanResult || !showScanTab) {
       stopScannerCamera();
       return;
     }
@@ -114,6 +340,11 @@ export default function Scanner() {
         }
 
         setIsCameraActive(true);
+        try {
+          setTorchSupported(html5QrCode.getRunningTrackCameraCapabilities().torchFeature().isSupported());
+        } catch {
+          setTorchSupported(false);
+        }
       } catch (err) {
         if (!isMountedRef.current) return;
         console.warn('Erro ao inicializar câmera do scanner:', err);
@@ -144,7 +375,29 @@ export default function Scanner() {
       window.removeEventListener('pagehide', stopAllMediaTracks);
       stopScannerCamera();
     };
-  }, [scanResult]);
+  }, [scanResult, showScanTab, cameraAttempt]);
+
+  const toggleTorch = async () => {
+    try {
+      await scannerRef.current?.getRunningTrackCameraCapabilities().torchFeature().apply(!torchOn);
+      setTorchOn(!torchOn);
+    } catch {
+      setTorchSupported(false);
+    }
+  };
+
+  // Esc fecha resultado / QR ampliado
+  useEffect(() => {
+    if (!scanResult && !qrZoom) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setScanResult(null);
+        setQrZoom(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [scanResult, qrZoom]);
 
   const handleScan = async (data) => {
     setIsLoading(true);
@@ -320,770 +573,248 @@ export default function Scanner() {
     handleScan(JSON.stringify(fallbackUser));
   };
 
+  const isParticipantResult = Boolean(scanResult?.participant);
+  const unlocked = (scanResult?.challenges || []).map(missionTitle).filter(Boolean);
+  const closeResultAndScan = () => {
+    setScanResult(null);
+    setTab('scan');
+  };
+
   return (
-    <div 
-      className="page-container animate-fade-in" 
-      style={{ 
-        maxWidth: '430px', 
-        margin: '0 auto',
-        paddingLeft: '16px',
-        paddingRight: '16px',
-        paddingTop: '16px',
-        paddingBottom: 'max(90px, calc(env(safe-area-inset-bottom) + 80px))',
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column'
-      }}
-    >
-      <style>{`
-        #techweek-camera-viewport {
-          width: 100% !important;
-          height: 100% !important;
-          position: relative;
-        }
-        #techweek-camera-viewport video {
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: cover !important;
-          border-radius: 20px !important;
-        }
-        #techweek-camera-viewport img {
-          display: none !important;
-        }
-        @keyframes laserSweep {
-          0% { top: 10%; opacity: 0.15; }
-          50% { opacity: 0.85; }
-          100% { top: 88%; opacity: 0.15; }
-        }
-        .scanner-laser-line {
-          position: absolute;
-          left: 8%;
-          right: 8%;
-          height: 2px;
-          background: linear-gradient(90deg, transparent, #38BDF8, #60A5FA, transparent);
-          box-shadow: 0 0 10px rgba(56, 189, 248, 0.7);
-          animation: laserSweep 2.4s ease-in-out infinite alternate;
-          z-index: 10;
-        }
-        @keyframes pulseGlow {
-          0% { transform: scale(1); opacity: 0.8; }
-          50% { transform: scale(1.15); opacity: 1; }
-          100% { transform: scale(1); opacity: 0.8; }
-        }
-        .pulse-indicator {
-          animation: pulseGlow 1.8s ease-in-out infinite;
-        }
-      `}</style>
-
-      {/* 1. HEADER SIMPLES & EDITORIAL PADRONIZADO */}
-      <header 
-        style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between', 
-          marginBottom: '22px' 
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-              fontSize: '1.75rem',
-              fontWeight: 800,
-              color: '#F8FAFC',
-              margin: 0,
-              letterSpacing: '-0.03em',
-              lineHeight: 1.15
-            }}
-          >
-            Escanear
-          </h1>
-          <p
-            style={{
-              fontSize: '0.80rem',
-              color: '#94A3B8',
-              margin: '3px 0 0',
-              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
-            }}
-          >
-            Leia QR Codes de participantes e estandes • 18°55'S 48°15'W
-          </p>
-        </div>
-
-        {/* Ícone de Informação no canto superior direito */}
-        <button
-          type="button"
-          onClick={() => setShowInfoModal(true)}
-          aria-label="Informações sobre o scanner"
-          style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '12px',
-            backgroundColor: '#0F141F',
-            border: '1px solid #1E293B',
-            color: '#94A3B8',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            flexShrink: 0,
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <Info size={18} />
-        </button>
-      </header>
-
-      {/* 2. ÁREA DO SCANNER (VIEWPORT DE CÂMERA PROFISSIONAL) */}
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          maxWidth: '286px',
-          aspectRatio: '1 / 1',
-          margin: '0 auto',
-          borderRadius: '24px',
-          backgroundColor: '#050811',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          overflow: 'hidden',
-          boxShadow: '0 12px 36px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(56, 189, 248, 0.05)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
-      >
-        {/* Elemento de montagem do Html5Qrcode */}
-        <div id="techweek-camera-viewport" />
-
-        {/* Linha laser animada sutil */}
-        {isCameraActive && !isLoading && <div className="scanner-laser-line" />}
-
-        {/* Estado Carregando / Iniciando câmera */}
-        {!isCameraActive && !cameraError && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              backgroundColor: '#050811',
-              zIndex: 5
-            }}
-          >
-            <Loader2 size={24} className="animate-spin" color="#38BDF8" />
-            <span style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: 600 }}>
-              Iniciando câmera...
+    <div className="no-scrollbar mx-auto h-full w-full max-w-[430px] overflow-x-hidden overflow-y-auto px-5 pt-[18px] pb-[max(120px,calc(env(safe-area-inset-bottom)+110px))] text-text">
+      {!isOnline ? (
+        <>
+          <div role="status" className="flex items-center gap-3 rounded-2xl border border-[#A9B1CC55] bg-surface py-3 pr-3 pl-3.5">
+            <WifiOff size={20} className="shrink-0 text-text-2" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-extrabold text-text-2">Você está sem internet</span>
+              <span className="mt-px block text-xs text-[#C3C9DE]">Seu crachá e a agenda salva continuam funcionando.</span>
             </span>
           </div>
-        )}
-
-        {/* Estado Erro de Câmera */}
-        {cameraError && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '20px',
-              textAlign: 'center',
-              backgroundColor: '#0F141F',
-              zIndex: 6
-            }}
-          >
-            <Camera size={30} color="#EF4444" style={{ marginBottom: '8px' }} />
-            <span style={{ fontSize: '0.82rem', color: '#F8FAFC', fontWeight: 700, marginBottom: '4px' }}>
-              Câmera indisponível
-            </span>
-            <p style={{ fontSize: '0.72rem', color: '#94A3B8', margin: 0, lineHeight: 1.4 }}>
-              {cameraError}
+          {!badge ? (
+            <p className="mt-6 text-center text-[13px] text-text-2">
+              Abra o crachá uma vez com internet para salvá-lo neste celular.
             </p>
-          </div>
-        )}
-
-        {/* 4 Cantos de Enquadramento em Azul Elétrico (Cantoneiras Elegantes) */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '14px',
-            left: '14px',
-            width: '24px',
-            height: '24px',
-            borderTop: '2.5px solid #38BDF8',
-            borderLeft: '2.5px solid #38BDF8',
-            borderTopLeftRadius: '8px',
-            pointerEvents: 'none',
-            zIndex: 8
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: '14px',
-            right: '14px',
-            width: '24px',
-            height: '24px',
-            borderTop: '2.5px solid #38BDF8',
-            borderRight: '2.5px solid #38BDF8',
-            borderTopRightRadius: '8px',
-            pointerEvents: 'none',
-            zIndex: 8
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '14px',
-            left: '14px',
-            width: '24px',
-            height: '24px',
-            borderBottom: '2.5px solid #38BDF8',
-            borderLeft: '2.5px solid #38BDF8',
-            borderBottomLeftRadius: '8px',
-            pointerEvents: 'none',
-            zIndex: 8
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '14px',
-            right: '14px',
-            width: '24px',
-            height: '24px',
-            borderBottom: '2.5px solid #38BDF8',
-            borderRight: '2.5px solid #38BDF8',
-            borderBottomRightRadius: '8px',
-            pointerEvents: 'none',
-            zIndex: 8
-          }}
-        />
-      </div>
-
-      {/* 3. INSTRUÇÃO COMPACTA */}
-      <div 
-        style={{ 
-          textAlign: 'center', 
-          marginTop: '12px', 
-          marginBottom: '20px' 
-        }}
-      >
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '0.76rem',
-            color: '#94A3B8',
-            fontFamily: "'Inter', system-ui, sans-serif"
-          }}
-        >
-          <span 
-            className="pulse-indicator"
-            style={{ 
-              width: '6px', 
-              height: '6px', 
-              borderRadius: '50%', 
-              backgroundColor: '#38BDF8',
-              boxShadow: '0 0 6px #38BDF8'
-            }} 
-          />
-          {isLoading 
-            ? 'Processando código...' 
-            : isCameraActive 
-              ? 'Posicione o QR Code dentro da área' 
-              : 'Aguardando câmera...'}
-        </span>
-      </div>
-
-      {/* 4. ÁREA DE INFORMAÇÃO ("O que você pode escanear") */}
-      <div style={{ marginTop: 'auto', marginBottom: '8px' }}>
-        <h2
-          style={{
-            fontSize: '0.72rem',
-            fontWeight: 700,
-            color: '#64748B',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-            margin: '0 0 10px 4px',
-            fontFamily: "'Inter', system-ui, sans-serif"
-          }}
-        >
-          O que você pode escanear
-        </h2>
-
-        <div 
-          style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            gap: '8px' 
-          }}
-        >
-          {/* Item 1: Participantes */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '10px 14px',
-              borderRadius: '12px',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B'
-            }}
-          >
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(56, 189, 248, 0.1)',
-                border: '1px solid rgba(56, 189, 248, 0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#38BDF8',
-                flexShrink: 0
-              }}
-            >
-              <Users size={16} />
-            </div>
-            <div>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#F8FAFC', lineHeight: 1.2 }}>
-                Participantes
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '2px' }}>
-                Conecte-se com outros participantes
-              </div>
-            </div>
-          </div>
-
-          {/* Item 2: Atividades */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '10px 14px',
-              borderRadius: '12px',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B'
-            }}
-          >
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                border: '1px solid rgba(37, 99, 235, 0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#60A5FA',
-                flexShrink: 0
-              }}
-            >
-              <Calendar size={16} />
-            </div>
-            <div>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#F8FAFC', lineHeight: 1.2 }}>
-                Atividades
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '2px' }}>
-                Registre sua presença e participação
-              </div>
-            </div>
-          </div>
-
-          {/* Item 3: Estandes */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '10px 14px',
-              borderRadius: '12px',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B'
-            }}
-          >
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                border: '1px solid rgba(168, 85, 247, 0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#C084FC',
-                flexShrink: 0
-              }}
-            >
-              <Building2 size={16} />
-            </div>
-            <div>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#F8FAFC', lineHeight: 1.2 }}>
-                Estandes
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '2px' }}>
-                Descubra empresas e parceiros do evento
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 7. BOTÃO DEMO (Apenas DEV ou ?demo=true) */}
-      {isDevMode && (
-        <div style={{ textAlign: 'center', marginTop: '12px' }}>
-          <button
-            type="button"
-            onClick={simulateScan}
-            disabled={isLoading}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#475569',
-              fontSize: '0.7rem',
-              fontWeight: 500,
-              fontFamily: "'Inter', system-ui, sans-serif",
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px'
-            }}
-          >
-            <RefreshCw size={11} />
-            <span>Simulação de leitura (Ambiente de Testes)</span>
-          </button>
-        </div>
-      )}
-
-      {/* 5. BOTTOM SHEET / POPUP DE RESULTADO DA LEITURA (ESTILO AIRDROP / CRACHÁ VIRTUAL) */}
-      {scanResult && typeof document !== 'undefined' && createPortal(
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 2000,
-            backgroundColor: 'rgba(0, 0, 0, 0.82)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'center',
-            overflow: 'hidden',
-            padding: '0 8px'
-          }}
-          onClick={() => setScanResult(null)}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '460px',
-              maxHeight: '94dvh',
-              backgroundColor: '#090D16',
-              border: '1px solid #1E293B',
-              borderTopLeftRadius: '28px',
-              borderTopRightRadius: '28px',
-              padding: '18px 20px',
-              paddingBottom: 'max(24px, calc(env(safe-area-inset-bottom) + 16px))',
-              boxShadow: '0 -16px 50px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(56, 189, 248, 0.12)',
-              animation: 'slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
-              position: 'relative',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Botão Fechar Flutuante para Crachá ou Cabeçalho para outras leituras */}
-            {scanResult.participant ? (
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  marginBottom: '6px',
-                  flexShrink: 0
-                }}
+          ) : hasSymplaTicket ? (
+            <OfflineBadge badge={badge} />
+          ) : (
+            <LockedBadge badge={badge} onLink={() => setShowLinkTicket(true)} />
+          )}
+        </>
+      ) : (
+        <>
+          <div role="tablist" aria-label="Crachá" className="grid grid-cols-2 gap-1 rounded-[14px] bg-surface p-1">
+            {[
+              ['scan', 'Escanear'],
+              ['qr', 'Meu QR']
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                id={`cracha-tab-${key}`}
+                aria-selected={tab === key}
+                aria-controls={`cracha-panel-${key}`}
+                onClick={() => setTab(key)}
+                className={`h-10 cursor-pointer rounded-[10px] border-0 font-[Montserrat] text-sm transition-colors duration-150 ${
+                  tab === key ? 'bg-surface-selected font-bold text-text' : 'bg-transparent font-semibold text-text-2'
+                }`}
               >
-                <button
-                  type="button"
-                  onClick={() => setScanResult(null)}
-                  aria-label="Fechar resultado"
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    border: 'none',
-                    color: '#94A3B8',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s ease'
-                  }}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '12px',
-                  flexShrink: 0
-                }}
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'scan' ? (
+            <div role="tabpanel" id="cracha-panel-scan" aria-labelledby="cracha-tab-scan">
+              <section
+                aria-label="Câmera"
+                className="relative mt-[18px] h-[330px] overflow-hidden rounded-[26px] bg-[radial-gradient(120%_90%_at_50%_40%,#2B3157_0%,#11152A_70%)]"
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                  <div
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '10px',
-                      backgroundColor: scanResult.status === 'success' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                      border: scanResult.status === 'success' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: scanResult.status === 'success' ? '#10B981' : '#F59E0B',
-                      flexShrink: 0
-                    }}
-                  >
-                    {scanResult.status === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <h3
-                      style={{
-                        fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                        fontSize: '0.96rem',
-                        fontWeight: 800,
-                        color: '#F8FAFC',
-                        margin: 0,
-                        lineHeight: 1.2,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}
-                    >
-                      {scanResult.title}
-                    </h3>
-                    <p style={{ fontSize: '0.72rem', color: '#94A3B8', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {scanResult.message}
-                    </p>
-                  </div>
-                </div>
+                <div aria-hidden="true" className="cracha-stripes absolute inset-0" />
+                {/* Elemento de montagem do Html5Qrcode */}
+                <div id="techweek-camera-viewport" />
 
-                <button
-                  type="button"
-                  onClick={() => setScanResult(null)}
-                  aria-label="Fechar resultado"
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    border: 'none',
-                    color: '#94A3B8',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                    marginLeft: '8px',
-                    transition: 'background 0.15s ease'
-                  }}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            )}
-
-            {/* Conteúdo Central com rolagem se necessário */}
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: 'auto',
-                WebkitOverflowScrolling: 'touch',
-                paddingRight: '2px',
-                display: 'flex',
-                flexDirection: 'column'
-              }}
-            >
-              {/* SE FOR PARTICIPANTE (KAN-95) */}
-              {scanResult.participant && (
-                <ParticipantCard participant={scanResult.participant} />
-              )}
-
-              {/* SE FOR ATIVIDADE */}
-              {scanResult.activity && (
-                <div
-                  style={{
-                    backgroundColor: '#0F141F',
-                    border: '1px solid #1E293B',
-                    borderRadius: '14px',
-                    padding: '12px 14px',
-                    marginBottom: '10px'
-                  }}
-                >
-                  <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#F8FAFC', marginBottom: '4px' }}>
-                    {scanResult.activity.title}
+                {cameraError ? (
+                  <div className="absolute inset-0 z-[9] flex flex-col items-center justify-center gap-2 px-8 text-center">
+                    <span className="mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-surface-selected text-text-2">
+                      <CameraOff size={22} aria-hidden="true" />
+                    </span>
+                    <span className="text-[15px] font-extrabold">Câmera indisponível</span>
+                    <span className="text-[13px] leading-snug text-text-2">
+                      Permita o acesso à câmera nas configurações do navegador para ler QR Codes.
+                    </span>
+                    <button type="button" onClick={() => setCameraAttempt((n) => n + 1)} className="btn btn-secondary btn-sm mt-2">
+                      <RefreshCw size={16} aria-hidden="true" />
+                      Tentar de novo
+                    </button>
                   </div>
-                  {scanResult.activity.time && (
-                    <div style={{ fontSize: '0.74rem', color: '#94A3B8', marginBottom: '10px' }}>
-                      {scanResult.activity.time} {scanResult.activity.location ? `• ${scanResult.activity.location}` : ''}
+                ) : (
+                  <>
+                    <CameraFrame live={isCameraActive && !isLoading} />
+                    <div aria-live="polite" className="absolute inset-x-0 bottom-[18px] z-[9] text-center text-sm font-semibold text-[#E0E7FF]">
+                      {isLoading ? 'Lendo o código…' : isCameraActive ? 'Aponte para um QR Code' : 'Abrindo a câmera…'}
                     </div>
-                  )}
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={toggleTorch}
+                  disabled={!torchSupported}
+                  aria-pressed={torchSupported ? torchOn : undefined}
+                  aria-label={torchSupported ? (torchOn ? 'Desligar lanterna' : 'Ligar lanterna') : 'Lanterna indisponível neste aparelho'}
+                  className="press absolute top-3.5 right-3.5 z-10 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-0 bg-[rgba(10,15,36,0.55)] text-text disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {torchOn ? <FlashlightOff size={20} aria-hidden="true" /> : <Flashlight size={20} aria-hidden="true" />}
+                </button>
+              </section>
+
+              <section aria-labelledby="cracha-oq" className="mt-5">
+                <h2 id="cracha-oq" className="mt-0 mb-2.5 text-sm font-extrabold text-text-2">
+                  O que dá para escanear
+                </h2>
+                <div className="flex flex-col gap-2">
+                  {SCANNABLES.map(({ Icon, title, desc, pts, tile }) => (
+                    <div key={title} className="flex items-center gap-3.5 rounded-2xl bg-surface px-3.5 py-3">
+                      <span className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full ${tile}`}>
+                        <Icon size={20} aria-hidden="true" />
+                      </span>
+                      <span className="flex-1">
+                        <span className="block text-[15px] font-bold">{title}</span>
+                        <span className="mt-px block text-[13px] text-text-2">{desc}</span>
+                      </span>
+                      <span className="pts-chip rounded-[10px]">{pts}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Simulação de leitura: só DEV ou ?demo=true */}
+              {isDevMode && (
+                <div className="mt-3 text-center">
                   <button
                     type="button"
-                    onClick={() => {
-                      setScanResult(null);
-                      navigate('/agenda');
-                    }}
-                    style={{
-                      width: '100%',
-                      height: '38px',
-                      borderRadius: '10px',
-                      backgroundColor: '#1E293B',
-                      border: '1px solid #334155',
-                      color: '#F8FAFC',
-                      fontSize: '0.78rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px'
-                    }}
+                    onClick={simulateScan}
+                    disabled={isLoading}
+                    className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 border-0 bg-transparent px-2 text-xs font-medium text-text-4"
                   >
-                    <span>Ver na programação</span>
-                    <ExternalLink size={13} />
+                    <RefreshCw size={12} aria-hidden="true" />
+                    Simulação de leitura (ambiente de testes)
                   </button>
                 </div>
               )}
             </div>
-
-            {/* Rodapé Fixo: Botão sempre visível na parte inferior */}
-            <div style={{ paddingTop: '8px', flexShrink: 0 }}>
-              <button
-                type="button"
-                onClick={() => setScanResult(null)}
-                style={{
-                  width: '100%',
-                  height: '40px',
-                  borderRadius: '11px',
-                  backgroundColor: '#2563EB',
-                  border: 'none',
-                  color: '#FFFFFF',
-                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                  fontSize: '0.82rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                Escanear outro código
-              </button>
+          ) : (
+            <div role="tabpanel" id="cracha-panel-qr" aria-labelledby="cracha-tab-qr">
+              {!badge ? (
+                <div className="skeleton mt-4 h-[540px] rounded-[26px]" aria-label="Carregando crachá" />
+              ) : hasSymplaTicket ? (
+                <MyBadge badge={badge} points={points} onZoom={() => setQrZoom(true)} />
+              ) : (
+                <LockedBadge badge={badge} onLink={() => setShowLinkTicket(true)} />
+              )}
             </div>
+          )}
+        </>
+      )}
+
+      <SymplaRequirementModal isOpen={showLinkTicket} onClose={() => setShowLinkTicket(false)} featureName="o QR do seu crachá" />
+
+      {/* QR ampliado */}
+      {qrZoom && badge && typeof document !== 'undefined' && createPortal(
+        <>
+          <div className="ds-scrim" onClick={() => setQrZoom(false)} aria-hidden="true" />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="QR Code do crachá ampliado"
+            className="fixed inset-0 z-[2001] m-auto flex h-fit w-fit flex-col items-center gap-4"
+          >
+            <div className="rounded-3xl bg-[#F4F5FA] p-4 leading-[0]">
+              <QRCodeSVG value={getBadgeQrValue(badge)} size={Math.min(320, (typeof window !== 'undefined' ? window.innerWidth : 360) - 72)} bgColor="#F4F5FA" fgColor="#0A0F24" level="M" />
+            </div>
+            <button type="button" onClick={() => setQrZoom(false)} className="btn btn-secondary btn-sm" autoFocus>
+              <X size={16} aria-hidden="true" />
+              Fechar
+            </button>
           </div>
-        </div>,
+        </>,
         document.body
       )}
 
-      {/* MODAL DE INFORMAÇÃO RÁPIDA (INFO) */}
-      {showInfoModal && typeof document !== 'undefined' && createPortal(
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 2000,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(6px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px'
-          }}
-          onClick={() => setShowInfoModal(false)}
-        >
+      {/* Resultado da leitura (board EscanearOk) */}
+      {scanResult && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[2000] bg-bg">
+          <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(70%_45%_at_50%_30%,#3B2B9A_0%,#121647_45%,#0A0F24_80%)]" />
           <div
-            style={{
-              width: '100%',
-              maxWidth: '360px',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B',
-              borderRadius: '20px',
-              padding: '22px',
-              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.6)'
-            }}
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cracha-result-title"
+            className="relative mx-auto flex h-full max-w-[430px] flex-col px-4 pt-10 pb-[max(28px,env(safe-area-inset-bottom))]"
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-              <h3 style={{ fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif", fontSize: '1rem', fontWeight: 800, color: '#F8FAFC', margin: 0 }}>
-                Como usar o Scanner
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowInfoModal(false)}
-                aria-label="Fechar"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#94A3B8',
-                  cursor: 'pointer',
-                  padding: '4px'
-                }}
-              >
-                <X size={18} />
+            <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-center overflow-y-auto rounded-[28px] border border-[#2E3878] bg-[#0F1530] p-[18px] text-center shadow-[0_24px_60px_rgba(0,0,0,0.5)] [animation:dsFadeUp_300ms_var(--ease-out)_both]">
+              {isParticipantResult ? (
+                <ParticipantCard
+                  participant={scanResult.participant}
+                  titleId="cracha-result-title"
+                  points={scanResult.status === 'success' ? scanResult.points : null}
+                  eyebrow={scanResult.status === 'success' ? 'Conexão feita!' : 'Vocês já estão conectados'}
+                  eyebrowTone={scanResult.status === 'success' ? 'ok' : 'neutral'}
+                />
+              ) : (
+                <div className="flex w-full flex-1 flex-col items-center justify-center">
+                  <span
+                    className={`flex h-16 w-16 items-center justify-center rounded-full ${
+                      scanResult.status === 'success' ? 'bg-[rgba(111,216,166,0.16)] text-ok' : 'bg-[rgba(242,196,106,0.16)] text-warn'
+                    }`}
+                  >
+                    {scanResult.status === 'success' ? <Check size={30} strokeWidth={2.6} aria-hidden="true" /> : <AlertCircle size={30} aria-hidden="true" />}
+                  </span>
+                  <h2 id="cracha-result-title" className="mt-4 mb-0 text-[22px] font-black">{scanResult.title}</h2>
+                  <p className="mt-1.5 mb-0 text-sm text-text-2">{scanResult.message}</p>
+                  {scanResult.status === 'success' && scanResult.points ? (
+                    <span className="pts-chip mt-3">+{scanResult.points} pts</span>
+                  ) : null}
+                  {scanResult.activity && (
+                    <div className="mt-5 w-full rounded-2xl bg-surface p-3.5 text-left">
+                      <div className="text-[15px] font-extrabold">{scanResult.activity.title}</div>
+                      {scanResult.activity.time && (
+                        <div className="mt-1 text-[13px] text-text-2">
+                          {scanResult.activity.time}
+                          {scanResult.activity.location ? ` · ${scanResult.activity.location}` : ''}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScanResult(null);
+                          navigate('/agenda');
+                        }}
+                        className="btn btn-secondary btn-sm btn-block mt-3"
+                      >
+                        Ver na programação
+                        <ExternalLink size={15} aria-hidden="true" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {unlocked.length > 0 && (
+                <div className="mt-auto flex w-full items-center gap-2.5 pt-3.5">
+                  <Mascot color="purple" style={{ width: 40, height: 40, flexShrink: 0 }} />
+                  <span className="flex-1 text-left text-[13px] leading-snug text-you-text">
+                    Missão <b>{unlocked[0]}</b> concluída!
+                    {unlocked.length > 1 ? ` E mais ${unlocked.length - 1}.` : ''}
+                  </span>
+                </div>
+              )}
+              {unlocked.length === 0 && <div className="mt-auto" />}
+              <button type="button" onClick={closeResultAndScan} className="btn btn-primary btn-block mt-3 shrink-0 text-base">
+                Escanear outro
               </button>
             </div>
-
-            <p style={{ fontSize: '0.78rem', color: '#94A3B8', lineHeight: 1.5, margin: '0 0 16px' }}>
-              O leitor óptico oficial da FACOM TechWeek permite interagir em tempo real durante todo o evento:
-            </p>
-
-            <ul style={{ fontSize: '0.76rem', color: '#CBD5E1', paddingLeft: '18px', margin: '0 0 18px', lineHeight: 1.6 }}>
-              <li><strong>Crachás:</strong> Escaneie o QR Code de colegas para salvar o contato e iniciar conversa no WhatsApp.</li>
-              <li><strong>Palestras & Minicursos:</strong> Confirme presença nos momentos indicados pelos palestrantes.</li>
-              <li><strong>Estandes:</strong> Descubra desafios especiais e interaja com os patrocinadores.</li>
-            </ul>
-
-            <button
-              type="button"
-              onClick={() => setShowInfoModal(false)}
-              style={{
-                width: '100%',
-                height: '38px',
-                borderRadius: '10px',
-                backgroundColor: '#1E293B',
-                border: '1px solid #334155',
-                color: '#F8FAFC',
-                fontWeight: 700,
-                fontSize: '0.8rem',
-                cursor: 'pointer'
-              }}
-            >
-              Entendi
-            </button>
           </div>
         </div>,
         document.body

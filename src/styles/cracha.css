@@ -1,0 +1,32 @@
+/* Crachá (/scanner) — o que Tailwind não cobre: vídeo do html5-qrcode e a linha de leitura. */
+
+#techweek-camera-viewport {
+  position: absolute !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border: 0 !important;
+}
+#techweek-camera-viewport video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+/* A moldura de gradiente substitui a sombra/cantos que a biblioteca desenha. */
+#techweek-camera-viewport img,
+#techweek-camera-viewport #qr-shaded-region {
+  display: none !important;
+}
+
+.cracha-stripes {
+  background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 12px, rgba(255, 255, 255, 0) 12px 24px);
+}
+
+/* Linha de leitura: só transform/opacity (DESIGN.md §9). Reduced motion é global. */
+@keyframes crachaScan {
+  0%, 100% { transform: translateY(-70px); opacity: 0.35; }
+  50% { transform: translateY(70px); opacity: 0.9; }
+}
+.cracha-scanline-live {
+  animation: crachaScan 2.4s var(--ease-out) infinite;
+}
