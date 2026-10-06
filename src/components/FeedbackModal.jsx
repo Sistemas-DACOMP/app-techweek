@@ -1,7 +1,19 @@
-import React from 'react';
+import { useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertCircle, AlertTriangle, Info, Award, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Info, Check, X } from 'lucide-react';
 import { useScrollLock } from '../hooks/useScrollLock';
+import '../styles/perfil.css';
+
+/**
+ * Diálogo de resultado (sucesso / erro / aviso / info), no Design System (DESIGN.md §6, §10).
+ * API de props estável — usado por Perfil, Admin, Challenges e Cadastro.
+ */
+const TYPES = {
+  success: { tone: 'var(--ok)', soft: 'rgba(111, 216, 166, 0.14)', defaultTitle: 'Missão concluída!', Icon: Check },
+  error: { tone: 'var(--err)', soft: 'rgba(245, 154, 154, 0.12)', defaultTitle: 'Algo deu errado', Icon: AlertCircle },
+  warning: { tone: 'var(--warn)', soft: 'rgba(242, 196, 106, 0.14)', defaultTitle: 'Atenção', Icon: AlertTriangle },
+  info: { tone: 'var(--link)', soft: 'rgba(143, 160, 255, 0.14)', defaultTitle: 'Informação', Icon: Info }
+};
 
 export default function FeedbackModal({
   isOpen,
@@ -12,187 +24,60 @@ export default function FeedbackModal({
   onClose,
   actionLabel = 'Continuar'
 }) {
+  const titleId = useId();
   useScrollLock(isOpen);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e) => e.key === 'Escape' && onClose?.();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
-  const config = {
-    success: {
-      borderColor: 'rgba(34, 197, 94, 0.25)',
-      iconBg: 'rgba(34, 197, 94, 0.15)',
-      iconColor: '#4ade80',
-      defaultTitle: 'Missão Concluída!',
-      Icon: Award,
-    },
-    error: {
-      borderColor: 'rgba(239, 68, 68, 0.25)',
-      iconBg: 'rgba(239, 68, 68, 0.15)',
-      iconColor: '#f87171',
-      defaultTitle: 'Ops! Algo deu errado',
-      Icon: AlertCircle,
-    },
-    warning: {
-      borderColor: 'rgba(234, 179, 8, 0.25)',
-      iconBg: 'rgba(234, 179, 8, 0.15)',
-      iconColor: '#facc15',
-      defaultTitle: 'Atenção',
-      Icon: AlertTriangle,
-    },
-    info: {
-      borderColor: 'rgba(59, 130, 246, 0.25)',
-      iconBg: 'rgba(59, 130, 246, 0.15)',
-      iconColor: '#60a5fa',
-      defaultTitle: 'Informação',
-      Icon: Info,
-    }
-  };
-
-  const current = config[type] || config.info;
+  const current = TYPES[type] || TYPES.info;
   const ModalIcon = current.Icon;
 
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div
-      className="modal-overlay-fixed"
-      onClick={onClose}
-      style={{
-        background: 'rgba(3, 7, 18, 0.82)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        padding: '20px',
-        animation: 'fadeIn 0.2s ease-out'
-      }}
-    >
+    <div className="modal-overlay-fixed ds-dialog-scrim p-5" onClick={onClose}>
       <div
-        className="modal-card-fixed"
+        role={type === 'error' ? 'alertdialog' : 'dialog'}
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="modal-card-fixed ds-dialog relative flex w-full max-w-[380px] flex-col items-center rounded-[26px] border border-line-2 bg-surface px-6 pb-6 pt-7 text-center text-text"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%',
-          maxWidth: '380px',
-          background: 'rgba(17, 24, 39, 0.95)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderRadius: '24px',
-          padding: '28px 24px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          position: 'relative',
-          animation: 'slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
-        }}
       >
-        {/* Botão de Fechar no Topo */}
         <button
           onClick={onClose}
           type="button"
           aria-label="Fechar"
-          style={{
-            position: 'absolute',
-            top: '16px',
-            right: '16px',
-            background: 'rgba(255, 255, 255, 0.08)',
-            border: 'none',
-            borderRadius: '50%',
-            width: '32px',
-            height: '32px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#94a3b8',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
+          className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full text-text-3"
         >
-          <X size={18} />
+          <X size={20} aria-hidden="true" />
         </button>
 
-        {/* Ícone */}
-        <div
-          style={{
-            width: '68px',
-            height: '68px',
-            borderRadius: '50%',
-            background: current.iconBg,
-            border: `1px solid ${current.borderColor}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '20px'
-          }}
+        <span
+          aria-hidden="true"
+          className="mb-4 flex h-14 w-14 items-center justify-center rounded-full"
+          style={{ background: current.soft, color: current.tone }}
         >
-          <ModalIcon size={34} color={current.iconColor} />
-        </div>
+          <ModalIcon size={26} strokeWidth={type === 'success' ? 2.6 : 2} />
+        </span>
 
-        {/* Título */}
-        <h3
-          style={{
-            fontSize: '1.25rem',
-            fontWeight: '800',
-            color: '#ffffff',
-            marginBottom: points ? '8px' : '12px',
-            fontFamily: "'Space Grotesk', sans-serif"
-          }}
-        >
+        <h2 id={titleId} className="text-[19px] font-extrabold leading-tight">
           {(title || current.defaultTitle)?.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}🎉✨]/gu, '').trim()}
-        </h3>
+        </h2>
 
-        {/* Badge de Pontos Ganhos (se aplicável) */}
         {points !== undefined && points !== null && (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 14px',
-              borderRadius: '9999px',
-              background: 'rgba(245, 158, 11, 0.15)',
-              border: '1px solid rgba(245, 158, 11, 0.35)',
-              color: '#fbbf24',
-              fontWeight: '700',
-              fontSize: '0.85rem',
-              fontFamily: "'JetBrains Mono', monospace",
-              marginBottom: '14px'
-            }}
-          >
-            <Award size={16} />
-            <span>+{points} PONTOS</span>
-          </div>
+          <span className="pts-chip mt-3 !px-3 !py-1 !text-[14px]">+{points} pts</span>
         )}
 
-        {/* Mensagem Explicativa */}
-        <p
-          style={{
-            fontSize: '0.92rem',
-            color: '#cbd5e1',
-            lineHeight: '1.5',
-            marginBottom: '24px',
-            fontFamily: "'Inter', sans-serif"
-          }}
-        >
-          {message}
-        </p>
+        <p className="mb-6 mt-2 text-[14px] leading-relaxed text-text-2">{message}</p>
 
-        {/* Botão de Ação Estilizado */}
-        <button
-          onClick={onClose}
-          type="button"
-          style={{
-            width: '100%',
-            padding: '14px 20px',
-            borderRadius: '16px',
-            background: type === 'error' ? '#ef4444' : '#2563eb',
-            border: 'none',
-            color: '#ffffff',
-            fontWeight: '700',
-            fontSize: '0.95rem',
-            cursor: 'pointer',
-            transition: 'transform 0.15s, opacity 0.15s',
-            fontFamily: "'Space Grotesk', sans-serif"
-          }}
-        >
+        <button onClick={onClose} type="button" autoFocus className={`btn btn-block ${type === 'error' ? 'btn-secondary' : 'btn-primary'}`}>
           {actionLabel}
         </button>
       </div>
@@ -200,4 +85,3 @@ export default function FeedbackModal({
     document.body
   );
 }
-

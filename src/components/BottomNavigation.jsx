@@ -31,6 +31,7 @@ export default function BottomNavigation({ className = '' }) {
             <NavLink
               key={path}
               to={path}
+              end
               aria-current={active ? 'page' : undefined}
               className={`flex min-h-14 flex-col items-center gap-1 text-[12px] no-underline transition-colors duration-150 ${
                 central ? 'justify-end' : 'justify-center'
