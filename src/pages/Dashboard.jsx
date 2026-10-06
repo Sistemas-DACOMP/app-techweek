@@ -1,35 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowRight, 
-  MapPin, 
-  CheckCircle2, 
-  Ticket, 
-  BookmarkCheck,
-  ChevronRight,
-  Zap,
-  Heart,
-  AlertCircle,
-  AlertTriangle,
-  Calendar,
-  QrCode,
-  Trophy,
-  Target,
-  Sparkles
-} from 'lucide-react';
+import { Check, Clock, ChevronRight, Ticket, Smartphone, CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import ActivityModal from '../components/ActivityModal';
 import Mascot from '../components/Mascot';
-import MascotDuo from '../components/MascotDuo';
-import InstallPwaCard from '../components/InstallPwaCard';
+import InstallPwaCard, { InstallAppSheet, usePwaInstall } from '../components/InstallPwaCard';
 import SymplaRequirementModal from '../components/SymplaRequirementModal';
-import SymplaStickyBanner from '../components/SymplaStickyBanner';
 import { onAuthChange } from '../lib/auth';
-import { getUserProfile } from '../lib/userService';
-import { subscribeToFeedPosts, DEFAULT_FEED_POSTS } from '../lib/feedService';
-import { 
-  subscribeToActivities, 
-  DEFAULT_ACTIVITIES, 
+import { getUserProfile, getLeaderboardUsers } from '../lib/userService';
+import {
+  subscribeToActivities,
+  DEFAULT_ACTIVITIES,
   subscribeToUserBookings,
   subscribeToUserCheckins,
   subscribeToUserPointEvents,
@@ -37,24 +18,75 @@ import {
   cancelActivityReservation,
   calculateActivityStatus
 } from '../lib/activityService';
-import { calculateLevel } from '../lib/level';
+import { calculateLevel, LEVEL_TIERS } from '../lib/level';
 import { useUser } from '../hooks/useUser';
-import logoTw from '../assets/logo-tw.png';
+import icone from '../assets/icone.png';
+import '../styles/inicio.css';
 
-/**
- * HOME FACOM TECHWEEK 2026 — DIREÇÃO DE ARTE EDITORIAL PREMIUM
- * 
- * Hierarquia Estrita:
- * 1. Identidade do Evento & Hero Monumental (Pôster Digital com TECHWEEK vazado e Mascotes integrados)
- * 2. Saudação Secundária (Discreta, sem competir com a marca)
- * 3. Acontecendo Agora / Próximo na Programação (Editorial, sem card gigante)
- * 4. Próximos Destaques (Lista tipográfica com divisores finos)
- * 5. Atualizações (Feed social autêntico e direto)
- * 6. Gamificação (Secundária, mini status HUD no rodapé)
- */
+/* ------------------------------------------------------------------ */
+/* Apresentação: tipo, horário e dia (DESIGN.md §2.3, §6 "A seguir")   */
+/* ------------------------------------------------------------------ */
+
+const CATEGORIES = {
+  palestra: { label: 'Palestra', color: 'var(--cat-palestra)' },
+  workshop: { label: 'Workshop', color: 'var(--cat-workshop)' },
+  minicurso: { label: 'Minicurso', color: 'var(--cat-minicurso)' },
+  ativacao: { label: 'Ativação', color: 'var(--cat-ativacao)' },
+  hackathon: { label: 'Hackathon', color: 'var(--cat-hackathon)' }
+};
+
+function categoryOf(type) {
+  const t = (type || '').toLowerCase();
+  if (t.includes('workshop')) return CATEGORIES.workshop;
+  if (t.includes('mini') || t.includes('curso')) return CATEGORIES.minicurso;
+  if (t.includes('ativa') || t.includes('estande')) return CATEGORIES.ativacao;
+  if (t.includes('hack')) return CATEGORIES.hackathon;
+  return CATEGORIES.palestra;
+}
+
+// Data/hora de início e fim a partir de `date` (AAAA-MM-DD) ou `day` (DD/MM) + `time`/`endTime`.
+function activityWindow(a) {
+  const time = /^\d{1,2}:\d{2}/.test(a?.time || '') ? a.time : null;
+  if (!time) return null;
+  let ymd = /^\d{4}-\d{2}-\d{2}/.test(a.date || '') ? a.date.slice(0, 10) : null;
+  if (!ymd && /^\d{2}\/\d{2}$/.test(a.day || '')) {
+    const [dd, mm] = a.day.split('/');
+    ymd = `2026-${mm}-${dd}`; // ponytail: ano fixo do evento quando só vem DD/MM
+  }
+  if (!ymd) return null;
+  const start = new Date(`${ymd}T${time.padStart(5, '0')}:00`);
+  if (Number.isNaN(start.getTime())) return null;
+  const endTime = /^\d{1,2}:\d{2}/.test(a.endTime || '') ? a.endTime : null;
+  let end = endTime ? new Date(`${ymd}T${endTime.padStart(5, '0')}:00`) : null;
+  if (!end || end <= start) end = new Date(start.getTime() + 60 * 60 * 1000);
+  return { start, end };
+}
+
+function dayLabel(date, now) {
+  const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diff = Math.round((startOf(date) - startOf(now)) / 86400000);
+  if (diff === 0) return 'Hoje';
+  if (diff === 1) return 'Amanhã';
+  const wd = date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+  const dm = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  return `${wd.charAt(0).toUpperCase()}${wd.slice(1)} ${dm}`;
+}
+
+const hhmm = (d) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+const STATUS_TEXT = {
+  BOOKED: 'você está inscrito',
+  CHECKED_IN: 'você está inscrito',
+  WAITING_LIST: 'você está na lista de espera',
+  COMPLETED: 'presença confirmada'
+};
+
+/* ------------------------------------------------------------------ */
+
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { hasSymplaTicket, points: hookPoints } = useUser();
+  const { hasSymplaTicket, points: hookPoints, profile: hookProfile, refreshProfile } = useUser();
+  const pwa = usePwaInstall();
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [firstName, setFirstName] = useState('Participante');
@@ -66,11 +98,18 @@ export default function Dashboard() {
   const [bookings, setBookings] = useState([]);
   const [checkins, setCheckins] = useState([]);
   const [pointEvents, setPointEvents] = useState([]);
-  const [latestPost, setLatestFeedPost] = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [reservingId, setReservingId] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+  const [now, setNow] = useState(() => new Date());
+
+  // Relógio do "Acontecendo agora" (reavalia a cada minuto)
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   // Autenticação
   useEffect(() => {
@@ -117,18 +156,6 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Feed
-  useEffect(() => {
-    const unsubFeed = subscribeToFeedPosts((posts) => {
-      if (posts && posts.length > 0) {
-        setLatestFeedPost(posts[0]);
-      }
-    });
-    return () => {
-      if (typeof unsubFeed === 'function') unsubFeed();
-    };
-  }, []);
-
   // Inscrições e Pontos
   useEffect(() => {
     if (!currentUser?.uid) {
@@ -149,33 +176,56 @@ export default function Dashboard() {
     };
   }, [currentUser?.uid]);
 
-  // Atividade do Momento (Destaque Principal)
-  const currentActivity = useMemo(() => activities[0] || null, [activities]);
+  // Vizinhos no ranking ("Sua jornada") — leitura única, mesma fonte da tela Ranking
+  useEffect(() => {
+    if (!currentUser?.uid) return undefined;
+    let alive = true;
+    getLeaderboardUsers(50).then((rows) => { if (alive) setLeaderboard(rows || []); }).catch(() => {});
+    return () => { alive = false; };
+  }, [currentUser?.uid]);
 
-  // Próximos Destaques da Grade (Carrossel Horizontal)
-  const featuredActivities = useMemo(() => activities.slice(1, 6), [activities]);
+  const statusOf = (act) => calculateActivityStatus(act.id, bookings, checkins, pointEvents);
 
-  // Determina se o app está no período de aquecimento/pré-evento (antes de 21 Out 2026 08:00)
-  const isPreEvent = useMemo(() => {
-    const eventStartDate = new Date(2026, 9, 21, 8, 0, 0); // 21/10/2026 08:00 BRT
-    return new Date() < eventStartDate;
-  }, []);
+  // Agora / próxima / a seguir, pelo horário real das atividades
+  const { hero, upcoming } = useMemo(() => {
+    const timed = activities
+      .map((a) => ({ a, w: activityWindow(a) }))
+      .filter((x) => x.w)
+      .sort((x, y) => x.w.start - y.w.start);
+    const live = timed.filter((x) => x.w.start <= now && now < x.w.end);
+    const mine = (x) => ['BOOKED', 'CHECKED_IN', 'WAITING_LIST', 'COMPLETED'].includes(
+      calculateActivityStatus(x.a.id, bookings, checkins, pointEvents)
+    );
+    const future = timed.filter((x) => x.w.start > now);
+    const liveItem = live.find(mine) || live[0];
+    const heroItem = liveItem ? { ...liveItem, live: true } : (future[0] ? { ...future[0], live: false } : null);
+    return {
+      hero: heroItem,
+      upcoming: future.filter((x) => x.a.id !== heroItem?.a.id).slice(0, 6)
+    };
+  }, [activities, bookings, checkins, pointEvents, now]);
 
-  const getCategoryAccent = (type) => {
-    const t = (type || '').toLowerCase();
-    if (t.includes('workshop')) return '#F59E0B';
-    if (t.includes('minicurso')) return '#A855F7';
-    if (t.includes('estande') || t.includes('ativa')) return '#10B981';
-    if (t.includes('hack')) return '#EC4899';
-    return '#38BDF8';
-  };
-
-  // Gamificação Secundária
+  // Gamificação
   const userXP = typeof hookPoints === 'number' ? hookPoints : (userProfile?.totalPoints || 0);
   const gameLevel = useMemo(() => calculateLevel(userXP), [userXP]);
+  const nextTier = LEVEL_TIERS.find((t) => t.level === gameLevel.level + 1);
 
-  // Publicação Ativa
-  const activeFeedPost = latestPost || DEFAULT_FEED_POSTS[0];
+  const rankingRows = useMemo(() => {
+    const idx = leaderboard.findIndex((u) => u.id === currentUser?.uid);
+    if (idx < 0) return [];
+    return leaderboard.slice(Math.max(0, idx - 1), idx + 2).map((u) => ({
+      id: u.id,
+      rank: u.rank,
+      me: u.id === currentUser?.uid,
+      name: u.id === currentUser?.uid ? 'Você' : `@${(u.username || 'participante').replace(/^@/, '')}`,
+      points: u.id === currentUser?.uid ? Math.max(u.points || 0, userXP) : (u.points || 0)
+    }));
+  }, [leaderboard, currentUser?.uid, userXP]);
+
+  // Passaporte (regra OBSERVADA do PassportTab: 5 estandes = Bilhete Dourado)
+  const profileForPassport = hookProfile || userProfile;
+  const visitedStands = Object.keys(profileForPassport?.visitedSponsors || {}).length;
+  const standsLeft = profileForPassport?.goldenTicketAwarded ? 0 : Math.max(0, 5 - visitedStands);
 
   // Cancela Reserva de Vaga Presencial
   const handleCancelReserve = async (activityId) => {
@@ -187,7 +237,7 @@ export default function Dashboard() {
         const bActId = b.activityId || b.activity_id;
         return bActId !== activityId && b.id !== activityId && !b.id?.endsWith(`_${activityId}`);
       }));
-      setToastMessage({ type: 'info', message: 'Inscrição cancelada e vaga liberada com sucesso.' });
+      setToastMessage({ type: 'info', message: 'Inscrição cancelada e vaga liberada.' });
     } catch (err) {
       setToastMessage({ type: 'error', message: err.data?.message || err.message || 'Erro ao cancelar inscrição.' });
     } finally {
@@ -220,28 +270,28 @@ export default function Dashboard() {
         });
 
         if (res.status === 'WAITING_LIST') {
-          setToastMessage({ type: 'warning', message: `Você entrou na lista de espera (Posição #${res.position || 1}).` });
+          setToastMessage({ type: 'warning', message: `Você entrou na lista de espera (posição ${res.position || 1}).` });
         } else if (res.alreadyBooked) {
-          setToastMessage({ type: 'info', message: 'Você já possui inscrição confirmada nesta atividade!' });
+          setToastMessage({ type: 'info', message: 'Você já tem vaga nesta atividade.' });
         } else {
-          setToastMessage({ type: 'success', message: 'Inscrição confirmada com sucesso! Vaga garantida na sua Agenda.' });
+          setToastMessage({ type: 'success', message: 'Vaga garantida. Já está na sua agenda.' });
         }
       } else {
         setToastMessage({ type: 'error', message: res?.message || 'Não foi possível confirmar a inscrição.' });
       }
     } catch (err) {
       if (err.status === 403 && (err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')) {
-        setToastMessage({ 
-          type: 'warning', 
-          message: 'Ingresso do Sympla obrigatório! Vincule seu ingresso no Perfil para garantir sua vaga presencial.' 
+        setToastMessage({
+          type: 'warning',
+          message: 'Vincule seu ingresso Sympla para garantir sua vaga presencial.'
         });
       } else {
         const errorMsg = err.data?.message || err.message;
-        setToastMessage({ 
-          type: 'error', 
-          message: (errorMsg && !errorMsg.includes('Failed to fetch')) 
-            ? errorMsg 
-            : 'Erro de conexão ao servidor de reservas. Tente novamente em instantes.' 
+        setToastMessage({
+          type: 'error',
+          message: (errorMsg && !errorMsg.includes('Failed to fetch'))
+            ? errorMsg
+            : 'Não conseguimos falar com o servidor de reservas. Tente de novo em instantes.'
         });
       }
     } finally {
@@ -250,1318 +300,132 @@ export default function Dashboard() {
     }
   };
 
+  // Estado da tela: carregando perfil → Primeiros passos (sem ingresso) → Início
+  const profileLoaded = Boolean(hookProfile || userProfile);
+  const pending = profileLoaded && !hasSymplaTicket;
+  const avatarUrl = userProfile?.avatarUrl || hookProfile?.avatarUrl || hookProfile?.avatar_url || null;
+
   return (
-    <div 
-      className="page-container animate-fade-in"
-      style={{
-        maxWidth: '430px',
-        margin: '0 auto',
-        paddingLeft: '18px',
-        paddingRight: '18px',
-        paddingTop: '6px',
-        paddingBottom: 'max(96px, calc(env(safe-area-inset-bottom) + 84px))',
-        color: '#F8FAFC'
-      }}
-    >
-      <SymplaStickyBanner />
-      <style>{`
-        @keyframes livePulse {
-          0% {
-            transform: scale(0.95);
-            box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7);
-            opacity: 0.85;
-          }
-          70% {
-            transform: scale(1.25);
-            box-shadow: 0 0 0 6px rgba(56, 189, 248, 0);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(0.95);
-            box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
-            opacity: 0.85;
-          }
-        }
-        .live-pulse-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          background-color: #38BDF8;
-          animation: livePulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-          flex-shrink: 0;
-          display: inline-block;
-        }
-        .now-card-border {
-          background: #0F141F;
-          border: 1px solid #1E293B;
-          border-radius: 18px;
-          overflow: hidden;
-          transition: all 0.2s ease;
-        }
-        .now-card-border:active {
-          transform: scale(0.99);
-        }
-        .horizontal-scroll-container {
-          display: flex;
-          overflow-x: auto;
-          gap: 12px;
-          padding-bottom: 8px;
-          padding-top: 4px;
-          padding-right: 32px;
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-          scroll-snap-type: x mandatory;
-          -webkit-mask-image: linear-gradient(to right, black 82%, transparent 100%);
-          mask-image: linear-gradient(to right, black 82%, transparent 100%);
-        }
-        .horizontal-scroll-container::-webkit-scrollbar {
-          display: none;
-        }
-        .mini-event-card {
-          flex: 0 0 240px;
-          scroll-snap-align: start;
-          background: #0F141F;
-          border: 1px solid #1E293B;
-          border-radius: 14px;
-          padding: 12px 14px;
-          cursor: pointer;
-          transition: border-color 0.15s ease, transform 0.15s ease;
-        }
-        .mini-event-card:active {
-          transform: scale(0.98);
-          border-color: #38BDF8;
-        }
-        .quick-action-btn {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justifyContent: center;
-          gap: 8px;
-          background: #0F141F;
-          border: 1px solid #1E293B;
-          border-radius: 16px;
-          padding: 14px 10px;
-          cursor: pointer;
-          transition: all 0.15s ease;
-          text-align: center;
-        }
-        .quick-action-btn:active {
-          transform: scale(0.96);
-          border-color: #38BDF8;
-          background: #141C2B;
-        }
-      `}</style>
-
-      {/* ============================================================ */}
-      {/* 1. HERO OFICIAL — IDENTIDADE FACOM TECHWEEK + SAUDAÇÃO PROEMINENTE */}
-      {/* ============================================================ */}
-      <section
-        style={{
-          position: 'relative',
-          borderRadius: '24px',
-          background: 'radial-gradient(ellipse at 85% 15%, rgba(37, 99, 235, 0.16) 0%, rgba(124, 58, 237, 0.1) 35%, transparent 70%), linear-gradient(175deg, #090E21 0%, #050814 60%, #03060E 100%)',
-          border: '1px solid #1E293B',
-          boxShadow: '0 16px 40px -10px rgba(0, 0, 0, 0.8)',
-          overflow: 'hidden',
-          padding: '18px 16px 16px',
-          marginBottom: '20px'
-        }}
-      >
-        {/* Topo do Crachá: Logotipo Oficial Ampliado + Ações e Datas */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: '12px',
-            marginBottom: '16px'
-          }}
-        >
-          <img
-            src={logoTw}
-            alt="FACOM TechWeek 2026"
-            style={{ 
-              height: '52px', 
-              width: 'auto', 
-              maxWidth: '215px', 
-              objectFit: 'contain',
-              marginTop: '14px',
-              filter: 'drop-shadow(0 4px 14px rgba(0, 0, 0, 0.8))'
-            }}
-          />
-
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <NotificationBell />
-              <button
-                type="button"
-                onClick={() => navigate('/profile')}
-                aria-label="Abrir Perfil"
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  backgroundColor: '#1E293B',
-                  border: '1px solid #334155',
-                  color: '#94A3B8',
-                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  overflow: 'hidden',
-                  padding: 0
-                }}
-              >
-                {userProfile?.avatarUrl ? (
-                  <img src={userProfile.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <span>{userInitials}</span>
-                )}
-              </button>
-            </div>
-
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                backgroundColor: '#0F141F',
-                border: '1px solid #1E293B',
-                borderRadius: '8px',
-                padding: '4px 9px'
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  color: '#F8FAFC',
-                  letterSpacing: '0.02em'
-                }}
-              >
-                21 — 26 OUT
-              </span>
-              <span style={{ color: '#475569' }}>•</span>
-              <span
-                style={{
-                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                  fontSize: '0.72rem',
-                  color: '#94A3B8',
-                  fontWeight: 700
-                }}
-              >
-                2026
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* BLOCO DE SAUDAÇÃO COM DESTAQUE MAIOR & CREDENCIAL INTEGRADA */}
-        <div
-          style={{
-            padding: '14px 14px 12px',
-            backgroundColor: 'rgba(15, 20, 31, 0.75)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: '16px',
-            marginBottom: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px'
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: '0.66rem',
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontWeight: 700,
-                color: '#64748B',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: '3px'
-              }}
-            >
-              BEM-VINDO(A) DE VOLTA
-            </div>
-            <h1
-              style={{
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontSize: '1.42rem',
-                fontWeight: 800,
-                color: '#F8FAFC',
-                margin: 0,
-                lineHeight: 1.15,
-                letterSpacing: '-0.02em'
-              }}
-            >
-              Olá, {firstName}
-            </h1>
-          </div>
-
-          <div>
-            {hasSymplaTicket ? (
-              <div
-                onClick={() => navigate('/profile')}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter') navigate('/profile'); }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  fontSize: '0.72rem',
-                  color: '#60A5FA',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  backgroundColor: 'rgba(37, 99, 235, 0.12)',
-                  border: '1px solid rgba(59, 130, 246, 0.55)',
-                  boxShadow: '0 0 14px rgba(37, 99, 235, 0.35)',
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                <CheckCircle2 size={13} color="#60A5FA" strokeWidth={2} />
-                <span>Crachá Ativo</span>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => navigate('/profile')}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  background: '#0F141F',
-                  border: '1px solid #1E293B',
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)',
-                  fontSize: '0.72rem',
-                  color: '#CBD5E1',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                <Ticket size={13} color="#94A3B8" strokeWidth={1.75} />
-                <span>Vincular Ingresso</span>
-                <ArrowRight size={11} strokeWidth={1.75} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Fases do Evento: 21-23 Palestras | 24-25 Hackathon | 26 Premiação (Forma de Crachá Neutra) */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '6px',
-            fontSize: '0.66rem',
-            fontFamily: "'Space Grotesk', sans-serif"
-          }}
-        >
-          <div
-            style={{
-              padding: '6px 8px',
-              borderRadius: '6px',
-              clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B',
-              textAlign: 'center'
-            }}
-          >
-            <div style={{ color: '#F8FAFC', fontWeight: 700, fontSize: '0.68rem' }}>21 — 23 OUT</div>
-            <div style={{ color: '#94A3B8', fontSize: '0.60rem' }}>Palestras & Minis</div>
-          </div>
-
-          <div
-            style={{
-              padding: '6px 8px',
-              borderRadius: '6px',
-              clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B',
-              textAlign: 'center'
-            }}
-          >
-            <div style={{ color: '#F8FAFC', fontWeight: 700, fontSize: '0.68rem' }}>24 — 25 OUT</div>
-            <div style={{ color: '#94A3B8', fontSize: '0.60rem' }}>Hackathon 48h</div>
-          </div>
-
-          <div
-            style={{
-              padding: '6px 8px',
-              borderRadius: '6px',
-              clipPath: 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B',
-              textAlign: 'center'
-            }}
-          >
-            <div style={{ color: '#F8FAFC', fontWeight: 700, fontSize: '0.68rem' }}>26 OUT</div>
-            <div style={{ color: '#94A3B8', fontSize: '0.60rem' }}>Premiação Final</div>
-          </div>
-        </div>
-      </section>
-
-      {/* BANNER EDUCATIVO DE INSTALAÇÃO DO PWA (DISPENSÁVEL COM PERSISTÊNCIA 24H) */}
-      <InstallPwaCard />
-
-      {/* ============================================================ */}
-      {/* 2. PROGRAMAÇÃO: PRÉ-EVENTO (AQUECIMENTO) OU AO VIVO          */}
-      {/* ============================================================ */}
-      <section style={{ marginBottom: '24px' }}>
-        {isPreEvent ? (
-          /* ESTADO 1: PRÉ-EVENTO COM ALAN & ADA CONVIDANDO PARA INSCRIÇÃO */
-          <>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '10px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span
-                  style={{
-                    fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    color: '#64748B',
-                    letterSpacing: '0.05em',
-                    textTransform: 'uppercase'
-                  }}
-                >
-                  AQUECIMENTO TECHWEEK
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => navigate('/agenda')}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#94A3B8',
-                  fontSize: '0.74rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                  padding: 0
-                }}
-              >
-                <span>Ver grade</span>
-                <ArrowRight size={12} strokeWidth={1.75} />
-              </button>
-            </div>
-
-            {/* Card de Boas-Vindas e Inscrição com Alan & Ada (Nível 2 — Neutro #0F141F) */}
-            <div
-              style={{
-                backgroundColor: '#0F141F',
-                border: '1px solid #1E293B',
-                borderRadius: '16px',
-                clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)',
-                padding: '16px',
-                marginBottom: '14px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                    <Sparkles size={14} color="#94A3B8" strokeWidth={1.75} />
-                    <span
-                      style={{
-                        fontSize: '0.70rem',
-                        fontWeight: 700,
-                        color: '#64748B',
-                        textTransform: 'uppercase',
-                        fontFamily: "'Space Grotesk', sans-serif",
-                        letterSpacing: '0.05em'
-                      }}
-                    >
-                      ALAN & ADA AVISAM
-                    </span>
-                  </div>
-
-                  <h3
-                    style={{
-                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontSize: '1.02rem',
-                      fontWeight: 700,
-                      color: '#F8FAFC',
-                      lineHeight: 1.25,
-                      margin: '0 0 6px'
-                    }}
-                  >
-                    {hasSymplaTicket ? 'Garanta suas vagas na grade!' : 'Faça sua inscrição e ative seu crachá!'}
-                  </h3>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: '0.76rem',
-                      color: '#94A3B8',
-                      lineHeight: 1.42,
-                      fontFamily: "'Inter', sans-serif"
-                    }}
-                  >
-                    {hasSymplaTicket
-                      ? 'Seu crachá oficial já está ativado. Aproveite agora para explorar a programação e garantir sua vaga nas palestras e minicursos concorridos.'
-                      : 'O evento começa dia 21 de Outubro. Vincule seu ingresso do Sympla para liberar seu crachá digital, acumular XP e reservar vagas.'
-                    }
-                  </p>
-                </div>
-
-                {/* Mascotes Alan & Ada juntos */}
-                <div style={{ width: '92px', height: '68px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <MascotDuo style={{ width: '100%', height: '100%' }} />
-                </div>
-              </div>
-
-              {/* Botões de Ação do Pré-Evento */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '14px', flexWrap: 'wrap' }}>
-                {!hasSymplaTicket ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/profile')}
-                      style={{
-                        flex: 1,
-                        minWidth: '160px',
-                        backgroundColor: '#2563EB',
-                        border: 'none',
-                        borderRadius: '8px',
-                        padding: '9px 12px',
-                        color: '#FFFFFF',
-                        fontFamily: "'Space Grotesk', sans-serif",
-                        fontSize: '0.76rem',
-                        fontWeight: 700,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <Ticket size={14} strokeWidth={1.75} />
-                      <span>Vincular Ingresso Sympla</span>
-                      <ArrowRight size={13} strokeWidth={1.75} />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => navigate('/agenda')}
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: '1px solid #1E293B',
-                        borderRadius: '8px',
-                        padding: '9px 12px',
-                        color: '#94A3B8',
-                        fontSize: '0.74rem',
-                        fontWeight: 600,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <Calendar size={13} strokeWidth={1.75} />
-                      <span>Ver Grade</span>
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/agenda')}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#2563EB',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '9px 14px',
-                      color: '#FFFFFF',
-                      fontFamily: "'Space Grotesk', sans-serif",
-                      fontSize: '0.76rem',
-                      fontWeight: 700,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Calendar size={14} strokeWidth={1.75} />
-                    <span>Explorar e Reservar Vagas</span>
-                    <ArrowRight size={13} strokeWidth={1.75} />
-                  </button>
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
-          /* ESTADO 2: AO VIVO DURANTE O EVENTO (ACONTECENDO AGORA) */
-          currentActivity && (
-            <>
-              {/* Header da Seção */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '10px'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="live-pulse-dot" />
-                  <span
-                    style={{
-                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      color: '#64748B',
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase'
-                    }}
-                  >
-                    ACONTECENDO AGORA
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => navigate('/agenda')}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#94A3B8',
-                    fontSize: '0.74rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '3px',
-                    padding: 0
-                  }}
-                >
-                  <span>Ver grade</span>
-                  <ArrowRight size={12} strokeWidth={1.75} />
-                </button>
-              </div>
-
-              {/* Card Principal da Atividade Atual */}
-              <div
-                onClick={() => setSelectedActivity(currentActivity)}
-                className="now-card-border"
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter') setSelectedActivity(currentActivity); }}
-                style={{
-                  padding: '16px',
-                  borderLeft: `4px solid ${getCategoryAccent(currentActivity.type)}`,
-                  cursor: 'pointer',
-                  marginBottom: '12px'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span
-                    style={{
-                      fontSize: '0.68rem',
-                      fontWeight: 800,
-                      color: getCategoryAccent(currentActivity.type),
-                      textTransform: 'uppercase',
-                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      letterSpacing: '0.04em'
-                    }}
-                  >
-                    {currentActivity.type || 'Palestra Magna'}
-                  </span>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span
-                      style={{
-                        fontSize: '0.72rem',
-                        color: '#94A3B8',
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontWeight: 700
-                      }}
-                    >
-                      {currentActivity.time || '19:00'}
-                    </span>
-
-                    {(() => {
-                      const st = calculateActivityStatus(currentActivity.id, bookings, checkins, pointEvents);
-                      if (st === 'COMPLETED') {
-                        return (
-                          <span style={{ color: '#10B981', fontSize: '0.64rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <CheckCircle2 size={11} />
-                            Presença Confirmada
-                          </span>
-                        );
-                      }
-                      if (st === 'BOOKED' || st === 'CHECKED_IN') {
-                        return (
-                          <span style={{ color: '#10B981', fontSize: '0.64rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <BookmarkCheck size={11} />
-                            Inscrito
-                          </span>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
-                </div>
-
-                <h3
-                  style={{
-                    fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                    fontSize: '1.05rem',
-                    fontWeight: 800,
-                    color: '#F8FAFC',
-                    lineHeight: 1.3,
-                    marginBottom: '6px'
-                  }}
-                >
-                  {currentActivity.title}
-                </h3>
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.74rem', color: '#64748B' }}>
-                    <MapPin size={13} color="#94A3B8" />
-                    <span>{currentActivity.location || 'Auditório 5R'}</span>
-                    {currentActivity.speaker && (
-                      <>
-                        <span style={{ opacity: 0.4 }}>•</span>
-                        <span style={{ color: '#94A3B8' }}>{currentActivity.speaker}</span>
-                      </>
-                    )}
-                  </div>
-
-                  <span
-                    style={{
-                      fontSize: '0.72rem',
-                      fontWeight: 600,
-                      color: '#94A3B8',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '2px'
-                    }}
-                  >
-                    <span>Detalhes</span>
-                    <ChevronRight size={14} strokeWidth={1.75} />
-                  </span>
-                </div>
-              </div>
-            </>
-          )
-        )}
-
-        {/* Carrossel Horizontal: Destaques da Grade / A Seguir */}
-        {featuredActivities && featuredActivities.length > 0 && (
-          <div>
-            <div
-              style={{
-                fontSize: '0.66rem',
-                fontWeight: 700,
-                color: '#64748B',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: '8px',
-                fontFamily: "'Space Grotesk', sans-serif"
-              }}
-            >
-              {isPreEvent ? 'DESTAQUES DA PROGRAMAÇÃO' : 'A SEGUIR NA GRADE'}
-            </div>
-              <div className="horizontal-scroll-container">
-                {featuredActivities.map((act) => {
-                  const actStatus = calculateActivityStatus(act.id, bookings, checkins, pointEvents);
-                  return (
-                    <div
-                      key={act.id}
-                      onClick={() => setSelectedActivity(act)}
-                      className="mini-event-card"
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === 'Enter') setSelectedActivity(act); }}
-                      style={{ borderLeft: `3px solid ${getCategoryAccent(act.type)}` }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <span style={{ fontSize: '0.64rem', fontWeight: 800, color: getCategoryAccent(act.type), textTransform: 'uppercase' }}>
-                          {act.type || 'Palestra'}
-                        </span>
-                        <span style={{ fontSize: '0.68rem', fontFamily: "'JetBrains Mono', monospace", color: '#94A3B8', fontWeight: 700 }}>
-                          {act.time}
-                        </span>
-                      </div>
-
-                      <div
-                        style={{
-                          fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                          fontSize: '0.84rem',
-                          fontWeight: 700,
-                          color: '#F8FAFC',
-                          lineHeight: 1.25,
-                          marginBottom: '6px',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden'
-                        }}
-                      >
-                        {act.title}
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.68rem', color: '#64748B' }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px' }}>
-                          {act.location || 'FACOM'}
-                        </span>
-                        {actStatus === 'BOOKED' && (
-                          <span style={{ color: '#10B981', fontWeight: 700 }}>✓ Inscrito</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </section>
-
-      {/* ============================================================ */}
-      {/* 3. EMBLEMA GAMIFICADO & MEU PROGRESSO (SWEEP NAVY→ROXO)      */}
-      {/* ============================================================ */}
-      <section style={{ marginBottom: '22px' }}>
-        <div
-          onClick={() => navigate('/ranking')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter') navigate('/ranking'); }}
-          style={{
-            position: 'relative',
-            borderRadius: '20px',
-            background: 'linear-gradient(135deg, rgba(10, 14, 33, 0.96) 0%, rgba(30, 27, 75, 0.7) 55%, rgba(76, 29, 149, 0.3) 100%)',
-            border: '1px solid rgba(139, 92, 246, 0.25)',
-            boxShadow: '0 12px 32px -8px rgba(76, 29, 149, 0.2)',
-            padding: '16px',
-            cursor: 'pointer',
-            overflow: 'hidden',
-            transition: 'border-color 0.2s ease, transform 0.15s ease'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
-            {/* Selo / Emblema Visual com Anel Circular SVG */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <div style={{ position: 'relative', width: '64px', height: '64px', flexShrink: 0 }}>
-                {/* SVG Progress Ring */}
-                <svg width="64" height="64" viewBox="0 0 64 64" style={{ transform: 'rotate(-90deg)' }}>
-                  <circle
-                    cx="32"
-                    cy="32"
-                    r="27"
-                    stroke="rgba(255, 255, 255, 0.08)"
-                    strokeWidth="3.5"
-                    fill="none"
-                  />
-                  <circle
-                    cx="32"
-                    cy="32"
-                    r="27"
-                    stroke="url(#xpProgressGrad)"
-                    strokeWidth="3.5"
-                    fill="none"
-                    strokeDasharray={2 * Math.PI * 27}
-                    strokeDashoffset={2 * Math.PI * 27 - (2 * Math.PI * 27 * (gameLevel.progress || 0)) / 100}
-                    strokeLinecap="round"
-                    style={{ transition: 'stroke-dashoffset 0.8s ease' }}
-                  />
-                  <defs>
-                    <linearGradient id="xpProgressGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#7C3AED" />
-                      <stop offset="100%" stopColor="#A855F7" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-
-                {/* Centro do Selo: Ícone do Nível Monocromático */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <Zap size={16} color="#94A3B8" strokeWidth={1.75} />
-                  <span
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: '0.62rem',
-                      fontWeight: 700,
-                      color: '#F8FAFC',
-                      lineHeight: 1,
-                      marginTop: '2px'
-                    }}
-                  >
-                    N{gameLevel.level}
-                  </span>
-                </div>
-              </div>
-
-              {/* Informações Integradas ao Selo */}
-              <div>
-                <div style={{ marginBottom: '3px' }}>
-                  <span
-                    style={{
-                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontSize: '0.98rem',
-                      fontWeight: 700,
-                      color: '#F8FAFC',
-                      letterSpacing: '-0.01em'
-                    }}
-                  >
-                    Nível {gameLevel.level} · {gameLevel.title}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: '1.25rem',
-                      fontWeight: 700,
-                      color: '#F8FAFC'
-                    }}
-                  >
-                    {userXP}
-                  </span>
-                  <span style={{ fontSize: '0.70rem', color: '#94A3B8', fontWeight: 700 }}>XP</span>
-                  {gameLevel.pointsToNext > 0 && (
-                    <span style={{ fontSize: '0.64rem', color: '#94A3B8' }}>
-                      ({gameLevel.pointsToNext} XP para o próximo nível)
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Acesso ao Ranking sem seta em texto */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                color: '#94A3B8',
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                whiteSpace: 'nowrap'
-              }}
-            >
-              <span>Ranking</span>
-              <ChevronRight size={14} strokeWidth={1.75} />
-            </div>
-          </div>
-        </div>
-
-        {/* Dica Inteligente de Alan & Ada (Sem setas em texto) */}
-        <div
-          onClick={() => navigate('/challenges')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter') navigate('/challenges'); }}
-          style={{
-            marginTop: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            backgroundColor: '#0F141F',
-            border: '1px solid #1E293B',
-            borderRadius: '12px',
-            padding: '9px 12px',
-            cursor: 'pointer'
-          }}
-        >
-          <div style={{ width: '28px', height: '28px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Mascot color="blue" isWaving={true} style={{ width: '28px', height: '28px' }} />
-          </div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: '0.66rem',
-                color: '#64748B',
-                fontWeight: 700,
-                letterSpacing: '0.05em',
-                textTransform: 'uppercase',
-                fontFamily: "'Space Grotesk', sans-serif",
-                marginBottom: '1px'
-              }}
-            >
-              DICA DE ALAN & ADA
-            </div>
-            <p style={{ margin: 0, fontSize: '0.70rem', color: '#94A3B8', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif" }}>
-              Bipe nos estandes ou participe das palestras para somar até +100 XP.
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#94A3B8', fontSize: '0.68rem', fontWeight: 600, flexShrink: 0 }}>
-            <span>Desafios</span>
-            <ArrowRight size={12} strokeWidth={1.75} />
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================================ */}
-      {/* 4. AÇÕES RÁPIDAS & TELEMETRIA OPERACIONAL (SQUIRCLE + DADOS)  */}
-      {/* ============================================================ */}
-      <section style={{ marginBottom: '24px' }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '10px'
-          }}
-        >
-          {/* Programação */}
-          <div
-            className="quick-action-btn"
-            onClick={() => navigate('/agenda')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/agenda'); }}
-            style={{
-              clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)'
-            }}
-          >
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#1E293B', border: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Calendar size={18} color="#94A3B8" strokeWidth={1.75} />
-            </div>
-            <div>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.82rem', fontWeight: 700, color: '#F8FAFC' }}>
-                Programação
-              </div>
-              <div style={{ fontSize: '0.66rem', color: '#94A3B8', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, marginTop: '2px' }}>
-                {activities.length > 0 ? `${activities.length} atividades` : 'Grade oficial'}
-              </div>
-            </div>
-          </div>
-
-          {/* Escanear QR */}
-          <div
-            className="quick-action-btn"
-            onClick={() => navigate('/scanner')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/scanner'); }}
-            style={{
-              clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)'
-            }}
-          >
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#1E293B', border: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <QrCode size={18} color="#94A3B8" strokeWidth={1.75} />
-            </div>
-            <div>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.82rem', fontWeight: 700, color: '#F8FAFC' }}>
-                Escanear QR
-              </div>
-              <div style={{ fontSize: '0.66rem', color: '#94A3B8', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, marginTop: '2px' }}>
-                {checkins.length > 0 ? `${checkins.length} presenças` : 'Check-in ativo'}
-              </div>
-            </div>
-          </div>
-
-          {/* Missões */}
-          <div
-            className="quick-action-btn"
-            onClick={() => navigate('/challenges')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/challenges'); }}
-            style={{
-              clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)'
-            }}
-          >
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#1E293B', border: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Target size={18} color="#94A3B8" strokeWidth={1.75} />
-            </div>
-            <div>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.82rem', fontWeight: 700, color: '#F8FAFC' }}>
-                Missões
-              </div>
-              <div style={{ fontSize: '0.66rem', color: '#94A3B8', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, marginTop: '2px' }}>
-                5 ativas • +XP
-              </div>
-            </div>
-          </div>
-
-          {/* Ranking */}
-          <div
-            className="quick-action-btn"
-            onClick={() => navigate('/ranking')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/ranking'); }}
-            style={{
-              clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)'
-            }}
-          >
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#1E293B', border: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Trophy size={18} color="#94A3B8" strokeWidth={1.75} />
-            </div>
-            <div>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.82rem', fontWeight: 700, color: '#F8FAFC' }}>
-                Ranking
-              </div>
-              <div style={{ fontSize: '0.66rem', color: '#94A3B8', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, marginTop: '2px' }}>
-                Tabela ao vivo
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================================ */}
-      {/* 5. COMUNICADOS & FEED (PULSO DA COMUNIDADE)                 */}
-      {/* ============================================================ */}
-      <section style={{ marginBottom: '24px' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '10px'
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              color: '#64748B',
-              letterSpacing: '0.05em',
-              textTransform: 'uppercase'
-            }}
-          >
-            ÚLTIMO COMUNICADO
-          </span>
-
+    <div className="page-container !p-0 font-sans text-text">
+      <div className="mx-auto max-w-[430px]" style={{ paddingBottom: 'max(104px, calc(env(safe-area-inset-bottom) + 92px))' }}>
+        {/* Header "Olá, Nome" (DESIGN.md §3 exceção do Início) */}
+        <header className="flex items-center gap-3 pl-5 pr-4 pt-[18px]">
+          <img src={icone} alt="" className="h-8 w-[30px] object-contain" />
+          <h1 className="m-0 min-w-0 flex-1 truncate text-[21px] font-extrabold">Olá, {firstName}</h1>
+          <NotificationBell />
           <button
             type="button"
-            onClick={() => navigate('/feed')}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#94A3B8',
-              fontSize: '0.74rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '3px',
-              padding: 0
-            }}
+            onClick={() => navigate('/profile')}
+            aria-label="Meu perfil"
+            className="press size-10 shrink-0 cursor-pointer rounded-full border-0 bg-[image:var(--brand-gradient)] p-0.5"
           >
-            <span>Ver feed</span>
-            <ArrowRight size={12} strokeWidth={1.75} />
+            <span className="flex size-full items-center justify-center overflow-hidden rounded-full bg-surface-raised text-[13px] font-bold text-text">
+              {avatarUrl ? <img src={avatarUrl} alt="" className="size-full object-cover" /> : userInitials}
+            </span>
           </button>
-        </div>
+        </header>
 
-        <div 
-          onClick={() => navigate('/feed')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter') navigate('/feed'); }}
-          style={{
-            background: '#0F141F',
-            border: '1px solid #1E293B',
-            borderRadius: '16px',
-            padding: '14px',
-            cursor: 'pointer'
-          }}
-        >
-          {/* Autor Oficial (Círculo para foto de pessoa real) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <div
-              style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                backgroundColor: '#1E293B',
-                overflow: 'hidden',
-                flexShrink: 0,
-                border: '1px solid rgba(56, 189, 248, 0.4)'
-              }}
+        {!profileLoaded ? (
+          <div aria-busy="true" aria-label="Carregando" className="mx-5 mt-[26px] flex flex-col gap-3.5">
+            <div className="skeleton h-[200px] !rounded-[20px]" />
+            <div className="skeleton h-16 !rounded-2xl" />
+            <div className="skeleton h-[120px] !rounded-[18px]" />
+          </div>
+        ) : pending ? (
+          <PendingHome
+            installed={pwa.isInstalled}
+            onLink={() => setShowSymplaModal(true)}
+            onInstall={pwa.install}
+            upcoming={upcoming.length ? upcoming : (hero ? [hero] : [])}
+            now={now}
+            onOpen={setSelectedActivity}
+            onAgenda={() => navigate('/agenda')}
+          />
+        ) : (
+          <>
+            {hero ? (
+              <HeroNow
+                item={hero}
+                status={statusOf(hero.a)}
+                now={now}
+                reserving={reservingId === hero.a.id}
+                onValidate={() => navigate('/scanner')}
+                onReserve={() => handleReserve(hero.a.id)}
+                onDetails={() => setSelectedActivity(hero.a)}
+              />
+            ) : (
+              <section className="mx-5 mt-[26px] rounded-[20px] bg-surface p-[18px]">
+                <h2 className="m-0 text-[17px] font-extrabold">A programação ainda não saiu</h2>
+                <p className="m-0 mt-1 text-sm text-text-2">Assim que as atividades forem publicadas, elas aparecem aqui.</p>
+              </section>
+            )}
+
+            {/* Faltando só instalar: card único logo abaixo do "Acontecendo agora" */}
+            <InstallPwaCard pwa={pwa} />
+
+            {standsLeft > 0 && (
+              <button
+                type="button"
+                onClick={() => navigate('/challenges?tab=passport')}
+                className="press mx-5 mt-3.5 flex w-[calc(100%-40px)] cursor-pointer items-center gap-3 rounded-2xl border-0 bg-surface py-2.5 pl-2 pr-3.5 text-left font-sans text-text"
+              >
+                <Mascot color="purple" className="mascot-still shrink-0" style={{ width: 44, height: 44 }} />
+                <span className="flex-1 text-sm leading-[1.4]">
+                  <b className="font-bold text-[#C4B5FD]">Ada:</b>{' '}
+                  {standsLeft === 1 ? 'falta 1 estande' : `faltam ${standsLeft} estandes`} para o seu Bilhete Dourado!
+                </span>
+                <ChevronRight size={18} strokeWidth={2} className="shrink-0 text-text-3" aria-hidden="true" />
+              </button>
+            )}
+
+            {upcoming.length > 0 && (
+              <UpNext items={upcoming} now={now} statusOf={statusOf} onOpen={setSelectedActivity} onAgenda={() => navigate('/agenda')} />
+            )}
+
+            {/* Sua jornada */}
+            <button
+              type="button"
+              onClick={() => navigate('/ranking')}
+              className="press mx-5 mt-6 block w-[calc(100%-40px)] cursor-pointer rounded-[20px] border-0 bg-surface p-4 text-left font-sans text-text"
             >
-              {activeFeedPost.authorAvatar ? (
-                <img 
-                  src={activeFeedPost.authorAvatar} 
-                  alt="" 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                />
-              ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38BDF8', fontWeight: 800, fontSize: '0.65rem' }}>
-                  TW
-                </div>
+              <span className="flex items-center justify-between">
+                <span className="text-[15px] font-extrabold">Sua jornada</span>
+                <span className="rounded-[10px] bg-you-soft px-2.5 py-1 text-xs font-bold text-you-text">
+                  Nível {gameLevel.level} · {gameLevel.title}
+                </span>
+              </span>
+              <span className="mt-2.5 flex items-baseline gap-1.5">
+                <span className="text-[30px] font-extrabold leading-none">{userXP}</span>
+                <span className="text-sm text-text-2">pontos</span>
+                <span className="ml-auto text-[13px] text-text-2">
+                  {gameLevel.isMaxLevel ? 'Nível máximo' : `${gameLevel.pointsToNext} para ${nextTier?.title}`}
+                </span>
+              </span>
+              <span className="ds-progress mt-2.5 block" role="progressbar" aria-valuenow={gameLevel.progress} aria-valuemin={0} aria-valuemax={100} aria-label="Progresso até o próximo nível">
+                <span style={{ width: `${gameLevel.progress}%` }} />
+              </span>
+              {rankingRows.length > 0 && (
+                <span className="mt-3.5 block border-t border-line-2 pt-2.5">
+                  {rankingRows.map((r) => (
+                    <span
+                      key={r.id}
+                      className={`grid grid-cols-[30px_1fr_auto] items-center text-sm ${
+                        r.me ? '-mx-2 h-9 rounded-[10px] bg-you-soft px-2 font-extrabold text-text' : 'h-[34px] text-text-2'
+                      }`}
+                    >
+                      <span>{r.rank}º</span>
+                      <span className="truncate">{r.name}</span>
+                      <span>{r.points}</span>
+                    </span>
+                  ))}
+                </span>
               )}
-            </div>
+            </button>
+          </>
+        )}
+      </div>
 
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span
-                  style={{
-                    fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    color: '#F8FAFC'
-                  }}
-                >
-                  {activeFeedPost.author || 'Organização FACOM TechWeek'}
-                </span>
-                {/* Selo Verificado em Squircle */}
-                <span
-                  style={{
-                    backgroundColor: '#2563EB',
-                    color: '#FFFFFF',
-                    borderRadius: '4px',
-                    width: '13px',
-                    height: '13px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.52rem',
-                    fontWeight: 900
-                  }}
-                >
-                  ✓
-                </span>
-              </div>
-              <div style={{ fontSize: '0.64rem', color: '#64748B' }}>
-                {activeFeedPost.formattedTime || 'há pouco'}
-              </div>
-            </div>
-          </div>
-
-          {/* Texto do Post */}
-          <p
-            style={{
-              fontSize: '0.8rem',
-              color: '#CBD5E1',
-              lineHeight: 1.44,
-              margin: '0 0 10px',
-              fontFamily: "'Inter', sans-serif",
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden'
-            }}
-          >
-            {activeFeedPost.content}
-          </p>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', color: '#94A3B8' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <Heart size={12} color="#EF4444" fill="#EF4444" />
-              <span>{activeFeedPost.likes?.length || 12} curtidas</span>
-            </span>
-
-            <span style={{ color: '#94A3B8', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-              <span>Abrir postagem</span>
-              <ArrowRight size={12} strokeWidth={1.75} />
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================================ */}
-      {/* 6. APOIO & REALIZAÇÃO (RODAPÉ SUTIL)                         */}
-      {/* ============================================================ */}
-      <footer
-        style={{
-          paddingTop: '16px',
-          paddingBottom: '8px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-          textAlign: 'center'
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-            fontSize: '0.66rem',
-            fontWeight: 700,
-            color: '#64748B',
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
-            marginBottom: '8px'
-          }}
-        >
-          REALIZAÇÃO & PARCEIROS OFICIAIS
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '16px',
-            fontSize: '0.72rem',
-            fontWeight: 700,
-            color: '#94A3B8',
-            fontFamily: "'Space Grotesk', sans-serif"
-          }}
-        >
-          <span>FACOM / UFU</span>
-          <span style={{ color: '#334155' }}>•</span>
-          <span>DACOMP</span>
-          <span style={{ color: '#334155' }}>•</span>
-          <span>EMPRESAS PARCEIRAS</span>
-        </div>
-      </footer>
-
-      {/* FEEDBACK TOAST ERGONÔMICO */}
-      {toastMessage && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 9999,
-            width: '90%',
-            maxWidth: '390px',
-            padding: '12px 16px',
-            borderRadius: '12px',
-            backgroundColor: toastMessage.type === 'success' ? '#064E3B' : toastMessage.type === 'warning' ? '#78350F' : '#7F1D1D',
-            border: `1px solid ${toastMessage.type === 'success' ? '#10B981' : toastMessage.type === 'warning' ? '#F59E0B' : '#EF4444'}`,
-            color: '#FFFFFF',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            fontSize: '0.82rem',
-            fontWeight: 600,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)'
-          }}
-        >
-          {toastMessage.type === 'success' ? (
-            <CheckCircle2 size={18} color="#34D399" />
-          ) : toastMessage.type === 'warning' ? (
-            <AlertTriangle size={18} color="#FBBF24" />
-          ) : (
-            <AlertCircle size={18} color="#F87171" />
-          )}
-          <span>{toastMessage.message}</span>
-        </div>
-      )}
+      <Toast toast={toastMessage} />
 
       {/* MODAL OFICIAL DE DETALHES DA ATIVIDADE */}
       {selectedActivity && (
@@ -1579,8 +443,270 @@ export default function Dashboard() {
       <SymplaRequirementModal
         isOpen={showSymplaModal}
         onClose={() => setShowSymplaModal(false)}
+        onLinked={refreshProfile}
         featureName="a reserva de vagas na grade presencial"
       />
+      <InstallAppSheet pwa={pwa} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Hero "Acontecendo agora" — único gradiente da tela (DESIGN.md §2.2) */
+/* ------------------------------------------------------------------ */
+function HeroNow({ item, status, now, reserving, onValidate, onReserve, onDetails }) {
+  const { a, w, live } = item;
+  const cat = categoryOf(a.type);
+  const meta = [cat.label, a.location, STATUS_TEXT[status]].filter(Boolean).join(' · ');
+  const enrolled = status === 'BOOKED' || status === 'CHECKED_IN';
+
+  let primary = { label: 'Ver detalhes', onClick: onDetails };
+  if (live && enrolled) primary = { label: 'Validar presença', onClick: onValidate };
+  else if (status === 'NONE') primary = { label: reserving ? 'Reservando' : 'Reservar vaga', onClick: onReserve };
+  const showDetailsLink = primary.onClick !== onDetails;
+
+  return (
+    <section
+      aria-labelledby="agora-t"
+      className="relative mx-5 mt-[26px] rounded-[20px] bg-[image:var(--brand-gradient)] p-[18px] text-white shadow-[0_12px_32px_rgba(79,70,229,0.35)]"
+    >
+      <div className="pointer-events-none absolute -right-1.5 -top-[30px]" aria-hidden="true">
+        <Mascot color="blue" isWaving className="mascot-no-float" style={{ width: 74, height: 74 }} />
+      </div>
+      <p className="m-0 flex items-center gap-2 text-[13px] font-semibold">
+        {live && <span className="size-2 rounded-full bg-[#A7F3D0] shadow-[0_0_0_4px_rgba(167,243,208,0.25)]" aria-hidden="true" />}
+        {live ? `Acontecendo agora · ${hhmm(w.start)}` : `Próxima atividade · ${dayLabel(w.start, now)} · ${hhmm(w.start)}`}
+      </p>
+      <h2 id="agora-t" className="m-0 mr-[72px] mt-2.5 text-[19px] font-bold leading-[1.3]">{a.title}</h2>
+      <p className="m-0 mt-1.5 text-sm text-[#E0E7FF]">{meta}</p>
+      <div className="mt-4 flex items-center gap-3.5">
+        <button
+          type="button"
+          onClick={primary.onClick}
+          disabled={reserving}
+          className="btn btn-on-gradient !min-h-[46px] flex-1 !rounded-xl !font-bold"
+        >
+          {reserving && (
+            <span className="size-4 rounded-full border-2 border-[#3730A3]/30 border-t-[#3730A3]" style={{ animation: 'dsSpin 800ms linear infinite' }} aria-hidden="true" />
+          )}
+          {primary.label}
+        </button>
+        {showDetailsLink && (
+          <button
+            type="button"
+            onClick={onDetails}
+            className="min-h-11 cursor-pointer border-0 bg-transparent px-1.5 font-sans text-[15px] font-semibold text-white"
+          >
+            Detalhes
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* "A seguir": tira enxuta de 236px com arrasto lateral e pontinhos    */
+/* ------------------------------------------------------------------ */
+function UpNext({ items, now, statusOf, onOpen, onAgenda }) {
+  const stripRef = useRef(null);
+  const [page, setPage] = useState(0);
+
+  const handleScroll = () => {
+    const el = stripRef.current;
+    if (!el) return;
+    setPage(Math.min(items.length - 1, Math.round(el.scrollLeft / 248)));
+  };
+
+  return (
+    <section aria-labelledby="prox" className="mt-6">
+      <div className="flex items-baseline justify-between px-5">
+        <h2 id="prox" className="m-0 text-[17px] font-extrabold">A seguir</h2>
+        <button type="button" onClick={onAgenda} className="min-h-11 cursor-pointer border-0 bg-transparent p-0 font-sans text-sm font-bold text-link">
+          Ver agenda
+        </button>
+      </div>
+      <ul ref={stripRef} onScroll={handleScroll} className="inicio-strip m-0 mt-1 list-none">
+        {items.map(({ a, w }) => {
+          const cat = categoryOf(a.type);
+          const st = statusOf(a);
+          return (
+            <li key={a.id} className="w-[236px]">
+              <button
+                type="button"
+                onClick={() => onOpen(a)}
+                className="press flex h-full w-full flex-col justify-start cursor-pointer rounded-[18px] border border-solid border-line p-3.5 text-left font-sans text-text"
+                style={{ background: `linear-gradient(160deg, color-mix(in srgb, ${cat.color} 15%, transparent), var(--surface) 55%)` }}
+              >
+                <span className="flex items-center justify-between">
+                  <span className="text-[22px] font-extrabold leading-none">{hhmm(w.start)}</span>
+                  {(st === 'BOOKED' || st === 'CHECKED_IN' || st === 'COMPLETED') && (
+                    <span className="flex size-[22px] items-center justify-center rounded-full bg-[rgba(143,160,255,0.18)]" title="Reservado">
+                      <Check size={13} strokeWidth={2.8} className="text-[#B4C0FF]" aria-hidden="true" />
+                      <span className="sr-only">Reservado</span>
+                    </span>
+                  )}
+                  {st === 'WAITING_LIST' && (
+                    <span className="flex size-[22px] items-center justify-center rounded-full bg-[rgba(242,196,106,0.18)]" title="Lista de espera">
+                      <Clock size={13} strokeWidth={2.4} className="text-warn" aria-hidden="true" />
+                      <span className="sr-only">Lista de espera</span>
+                    </span>
+                  )}
+                </span>
+                <span className="mt-1 block text-xs font-bold" style={{ color: cat.color }}>
+                  {dayLabel(w.start, now)} · {cat.label}
+                </span>
+                <span className="mt-2.5 line-clamp-2 block text-sm font-bold leading-[1.35]">{a.title}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {items.length > 1 && (
+        <div aria-hidden="true" className="mt-3 flex justify-center gap-1.5">
+          {items.map((x, i) => (
+            <span
+              key={x.a.id}
+              className={`h-1.5 rounded-[3px] transition-[width,background-color] duration-150 ${i === page ? 'w-[18px] bg-[#8F7BFF]' : 'w-1.5 bg-[#2A3460]'}`}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Primeiros passos (sem ingresso) — board InicioPendente              */
+/* ------------------------------------------------------------------ */
+function PendingHome({ installed, onLink, onInstall, upcoming, now, onOpen, onAgenda }) {
+  const done = 1 + (installed ? 1 : 0); // passo 2 (ingresso) está pendente por definição nesta tela
+  const steps = [
+    { title: 'Conta criada', text: 'Bem-vindo ao app da Tech Week.', state: 'done' },
+    {
+      title: 'Vincule seu ingresso Sympla',
+      text: 'Libera reservas de vagas, o QR do seu crachá e os pontos.',
+      state: 'current',
+      action: (
+        <button type="button" onClick={onLink} className="btn btn-action mt-2.5 !min-h-[44px] !rounded-xl !px-4 !text-sm">
+          <Ticket size={18} strokeWidth={1.9} aria-hidden="true" /> Vincular ingresso
+        </button>
+      )
+    },
+    {
+      title: 'Instale o app no celular',
+      text: 'Abre em tela cheia e avisa quando sua atividade vai começar.',
+      state: installed ? 'done' : 'todo',
+      action: installed ? null : (
+        <button type="button" onClick={onInstall} className="btn btn-secondary mt-2.5 !min-h-[44px] !rounded-xl !px-4 !text-sm !font-bold">
+          <Smartphone size={18} strokeWidth={1.9} aria-hidden="true" /> Como instalar
+        </button>
+      )
+    }
+  ];
+
+  return (
+    <>
+      <section aria-labelledby="ativ-t" className="inicio-steps-card relative mx-5 mt-[26px] rounded-[22px] p-[18px]">
+        <div className="pointer-events-none absolute -right-1 -top-[34px]" aria-hidden="true">
+          <Mascot color="blue" isWaving className="mascot-no-float" style={{ width: 80, height: 80 }} />
+        </div>
+        <p className="m-0 text-xs font-extrabold text-link">Primeiros passos · {done} de 3</p>
+        <h2 id="ativ-t" className="m-0 mr-20 mt-1.5 text-[21px] font-black leading-[1.2]">
+          Falta pouco para o seu <span className="inicio-text-gradient">crachá</span>
+        </h2>
+        <div className="mb-1.5 mt-3 h-1.5 overflow-hidden rounded-[3px] bg-white/10" role="progressbar" aria-valuenow={done} aria-valuemin={0} aria-valuemax={3} aria-label="Primeiros passos concluídos">
+          <div className="h-1.5 rounded-[3px] bg-[image:var(--progress-fill)]" style={{ width: `${Math.round((done / 3) * 100)}%` }} />
+        </div>
+        <ol className="m-0 list-none p-0">
+          {steps.map((s, i) => (
+            <li key={s.title} className="flex items-start gap-3 border-t border-white/[0.08] py-3" aria-current={s.state === 'current' ? 'step' : undefined}>
+              {s.state === 'done' ? (
+                <span className="flex size-[30px] shrink-0 items-center justify-center rounded-full bg-ok text-[#0A2A1C]">
+                  <Check size={16} strokeWidth={3} aria-hidden="true" />
+                  <span className="sr-only">Feito:</span>
+                </span>
+              ) : (
+                <span
+                  className={`flex size-[30px] shrink-0 items-center justify-center rounded-full border-2 border-solid text-[13px] font-black ${
+                    s.state === 'current' ? 'border-link text-link' : 'border-[#3A4675] text-text-4'
+                  }`}
+                >
+                  {i + 1}
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className={`block text-[15px] font-extrabold ${s.state === 'done' ? 'text-text-3 line-through' : ''}`}>{s.title}</span>
+                <span className="mt-0.5 block text-[13px] leading-[1.45] text-text-2">{s.text}</span>
+                {s.action}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {upcoming.length > 0 && (
+        <section aria-labelledby="prog-t" className="mt-[26px]">
+          <h2 id="prog-t" className="m-0 px-5 text-[17px] font-extrabold">Enquanto isso, veja a programação</h2>
+          <p className="m-0 mx-5 mt-1 text-[13px] text-text-3">Para reservar vaga, vincule seu ingresso primeiro.</p>
+          <ul className="inicio-strip m-0 mt-3 list-none">
+            {upcoming.map(({ a, w }) => {
+              const cat = categoryOf(a.type);
+              return (
+                <li key={a.id} className="w-[150px]">
+                  <button
+                    type="button"
+                    onClick={() => onOpen(a)}
+                    className="press flex h-full w-full flex-col justify-start cursor-pointer rounded-2xl border-0 border-t-[3px] border-solid bg-surface p-3 text-left font-sans text-text"
+                    style={{ borderTopColor: cat.color }}
+                  >
+                    <span className="block text-xs font-bold" style={{ color: cat.color }}>{cat.label}</span>
+                    <span className="mt-2 block text-[19px] font-extrabold leading-none">{hhmm(w.start)}</span>
+                    <span className="mt-0.5 block truncate text-xs text-text-2">
+                      {dayLabel(w.start, now)}{a.location ? ` · ${a.location}` : ''}
+                    </span>
+                    <span className="mt-2 line-clamp-3 block text-[13px] font-semibold leading-[1.35]">{a.title}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <button
+            type="button"
+            onClick={onAgenda}
+            className="mx-auto mt-2 flex min-h-11 cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-5 font-sans text-sm font-bold text-link"
+          >
+            Ver a agenda completa <ChevronRight size={16} strokeWidth={1.9} aria-hidden="true" />
+          </button>
+        </section>
+      )}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Toast (DESIGN.md §6): acima da barra, ícone redondo, erro = alert   */
+/* ------------------------------------------------------------------ */
+const TOAST_ICON = {
+  success: { Icon: CheckCircle2, cls: 'bg-ok text-[#0A2A1C]' },
+  warning: { Icon: AlertTriangle, cls: 'bg-warn text-[#2A1F05]' },
+  info: { Icon: Info, cls: 'bg-link text-[#0A0F24]' },
+  error: { Icon: AlertCircle, cls: 'bg-err text-[#2A0A0A]' }
+};
+
+function Toast({ toast }) {
+  if (!toast) return null;
+  const { Icon, cls } = TOAST_ICON[toast.type] || TOAST_ICON.info;
+  return (
+    <div
+      role={toast.type === 'error' ? 'alert' : 'status'}
+      className="fixed inset-x-4 z-[1500] mx-auto flex max-w-[398px] items-center gap-3 rounded-2xl bg-surface-selected py-3 pl-3.5 pr-4 text-sm font-semibold text-text shadow-[0_10px_28px_rgba(0,0,0,0.4)]"
+      style={{ bottom: 'calc(max(10px, env(safe-area-inset-bottom)) + 84px)', animation: 'dsFadeUp 220ms var(--ease-out) both' }}
+    >
+      <span className={`flex size-7 shrink-0 items-center justify-center rounded-full ${cls}`}>
+        <Icon size={16} strokeWidth={2.4} aria-hidden="true" />
+      </span>
+      <span className="flex-1">{toast.message}</span>
     </div>
   );
 }

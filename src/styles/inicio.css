@@ -1,0 +1,41 @@
+/* Início do participante (DESIGN.md §5, §6 "A seguir" e "Primeiros passos").
+   Só o que Tailwind não cobre bem: borda em gradiente, tira com snap, mascote parado. */
+
+/* Borda de gradiente (Primeiros passos) — fundo por padding-box, borda por border-box */
+.inicio-gradient-border {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(135deg, #2563EB, #7C3AED) border-box;
+}
+.inicio-steps-card {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(160deg, #1E2470, var(--surface) 70%) padding-box,
+    linear-gradient(135deg, #2563EB, #7C3AED) border-box;
+}
+.inicio-text-gradient {
+  background: linear-gradient(90deg, #6B8CFF, #B794FF);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Tira horizontal com arrasto lateral e snap */
+.inicio-strip {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 20px;
+  padding: 0 20px;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.inicio-strip::-webkit-scrollbar { display: none; }
+.inicio-strip > * { scroll-snap-align: start; flex-shrink: 0; }
+
+/* Um mascote animado por tela (§8): os demais ficam parados */
+.mascot-still,
+.mascot-still * { animation: none !important; }
+.mascot-no-float { animation: none !important; }

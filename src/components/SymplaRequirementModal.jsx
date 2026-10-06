@@ -1,177 +1,170 @@
-import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, Ticket, QrCode, Trophy, ArrowRight, X, ExternalLink } from 'lucide-react';
-import { SYMPLA_EVENT_URL } from '../lib/sympla';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { Ticket, CalendarDays, QrCode, Trophy, ExternalLink, Check } from 'lucide-react';
+import { SYMPLA_EVENT_URL, verifySymplaTicket } from '../lib/sympla';
+import { updateUserProfile } from '../lib/userService';
+import { auth } from '../lib/firebase';
 
-export default function SymplaRequirementModal({
-  isOpen,
-  onClose,
-  featureName = 'esta funcionalidade'
-}) {
-  const navigate = useNavigate();
+const BENEFITS = [
+  { label: 'Reservar vagas', Icon: CalendarDays, color: 'text-link' },
+  { label: 'QR do crachá', Icon: QrCode, color: 'text-cat-minicurso' },
+  { label: 'Pontos e ranking', Icon: Trophy, color: 'text-warn' }
+];
 
-  if (!isOpen) return null;
+/**
+ * Bottom sheet "Vincule seu ingresso" (board VincularIngresso).
+ * Mesma API de antes (isOpen, onClose, featureName) + `onLinked` opcional pra quem quiser
+ * recarregar o perfil depois do vínculo. Sem `onLinked`, "Continuar" recarrega a página.
+ * Vínculo usa o mesmo caminho do Perfil (verifySymplaTicket por e-mail → updateUserProfile).
+ */
+export default function SymplaRequirementModal({ isOpen, onClose, onLinked }) {
+  if (!isOpen || typeof document === 'undefined') return null;
+  return createPortal(<LinkTicketSheet onClose={onClose} onLinked={onLinked} />, document.body);
+}
+
+function LinkTicketSheet({ onClose, onLinked }) {
+  const [email, setEmail] = useState(() => auth?.currentUser?.email || '');
+  const [state, setState] = useState('idle'); // idle | loading | error | done
+  const [message, setMessage] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus({ preventScroll: true });
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setState('error');
+      setMessage('Digite o e-mail que você usou para comprar o ingresso.');
+      return;
+    }
+    setState('loading');
+    setMessage('');
+    try {
+      const res = await verifySymplaTicket({ email: cleanEmail });
+      const p = res?.participant || res?.ticket;
+      if (res?.verified && (res.symplaTicket || p)) {
+        const ticketObj = res.symplaTicket || {
+          ticketNumber: p.ticketNumber,
+          ticketName: p.ticketName,
+          qrCodeData: p.qrCodeData || p.ticketNumber,
+          orderId: p.orderId
+        };
+        const uid = auth?.currentUser?.uid;
+        if (uid) {
+          try {
+            await updateUserProfile(uid, { symplaTicket: ticketObj, hasSymplaTicket: true });
+          } catch (updateErr) {
+            console.warn('[Sympla] Atualização client-side secundária (já salvo pelo backend):', updateErr);
+          }
+        }
+        setState('done');
+      } else {
+        setState('error');
+        setMessage(res?.message || 'Não achamos ingresso com esse e-mail. Confira se é o mesmo da compra no Sympla.');
+      }
+    } catch {
+      setState('error');
+      setMessage('Não conseguimos falar com o Sympla agora. Tente de novo em instantes.');
+    }
+  };
+
+  const finish = () => {
+    onClose();
+    if (onLinked) onLinked();
+    else window.location.reload();
+  };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        background: 'rgba(7, 10, 18, 0.88)',
-        backdropFilter: 'blur(10px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px'
-      }}
-      className="animate-fade-in"
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '440px',
-          background: 'linear-gradient(180deg, #131A29 0%, #0F141F 100%)',
-          border: '1px solid rgba(234, 179, 8, 0.35)',
-          borderRadius: '20px',
-          padding: '24px',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.6), 0 0 30px rgba(234, 179, 8, 0.15)',
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center'
-        }}
-      >
-        {/* Botão Fechar */}
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '16px',
-            right: '16px',
-            background: 'rgba(255, 255, 255, 0.06)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            color: '#94A3B8',
-            borderRadius: '50%',
-            width: '32px',
-            height: '32px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer'
-          }}
-        >
-          <X size={18} />
-        </button>
-
-        {/* Ícone de Destaque */}
-        <div
-          style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '20px',
-            background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.25), rgba(161, 98, 7, 0.15))',
-            border: '1px solid rgba(234, 179, 8, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '16px',
-            color: '#FACC15'
-          }}
-        >
-          <ShieldAlert size={32} />
-        </div>
-
-        {/* Título e Subtítulo */}
-        <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'white', margin: '0 0 8px 0' }}>
-          Ative seu Ingresso Sympla
-        </h2>
-        <p style={{ fontSize: '0.85rem', color: '#94A3B8', margin: '0 0 20px 0', lineHeight: '1.45' }}>
-          Para acessar {featureName}, você precisa conectar seu ingresso oficial da FACOM Tech Week.
-        </p>
-
-        {/* Lista de Recursos Bloqueados */}
-        <div
-          style={{
-            width: '100%',
-            background: 'rgba(255, 255, 255, 0.025)',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            borderRadius: '14px',
-            padding: '14px 16px',
-            marginBottom: '20px',
-            textAlign: 'left',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '10px'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem', color: '#CBD5E1' }}>
-            <Ticket size={16} color="#38BDF8" style={{ flexShrink: 0 }} />
-            <span>Reserva de vagas na grade presencial</span>
+    <>
+      <div className="ds-scrim" aria-hidden="true" onClick={onClose} />
+      <div className="ds-sheet !px-[22px]" role="dialog" aria-modal="true" aria-labelledby="sympla-sheet-title">
+        {state === 'done' ? (
+          <div className="flex flex-col items-center py-4 text-center" role="status">
+            <span className="flex size-14 items-center justify-center rounded-full bg-ok text-[#0A2A1C]" style={{ animation: 'dsPop 380ms var(--spring) both' }}>
+              <Check size={28} strokeWidth={3} aria-hidden="true" />
+            </span>
+            <h2 id="sympla-sheet-title" className="m-0 mt-4 text-[21px] font-black text-text">Ingresso vinculado</h2>
+            <p className="m-0 mt-1 text-sm text-text-2">Reservas, QR do crachá e pontos liberados.</p>
+            <button type="button" className="btn btn-primary btn-block mt-6 !min-h-[54px] text-base" onClick={finish}>
+              Continuar
+            </button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem', color: '#CBD5E1' }}>
-            <QrCode size={16} color="#38BDF8" style={{ flexShrink: 0 }} />
-            <span>Scanner QR Code de presença em palestras</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem', color: '#CBD5E1' }}>
-            <Trophy size={16} color="#38BDF8" style={{ flexShrink: 0 }} />
-            <span>Missões e acúmulo de pontos no ranking</span>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="mt-0.5 flex items-center gap-3">
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-[14px] bg-[rgba(61,80,230,0.2)] text-link">
+                <Ticket size={26} strokeWidth={1.9} aria-hidden="true" />
+              </span>
+              <div>
+                <h2 id="sympla-sheet-title" className="m-0 text-[21px] font-black text-text">Vincule seu ingresso</h2>
+                <p className="m-0 mt-0.5 text-[13px] text-text-2">Leva menos de 1 minuto.</p>
+              </div>
+            </div>
 
-        {/* Ações */}
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <button
-            onClick={() => {
-              onClose();
-              navigate('/profile');
-            }}
-            style={{
-              width: '100%',
-              height: '46px',
-              borderRadius: '12px',
-              background: '#2563EB',
-              border: '1px solid #3B82F6',
-              color: 'white',
-              fontSize: '0.88rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
-            }}
-          >
-            <span>Vincular Ingresso no Perfil</span>
-            <ArrowRight size={16} />
-          </button>
+            <ul className="m-0 mt-4 grid list-none grid-cols-3 gap-2 p-0">
+              {BENEFITS.map(({ label, Icon, color }) => (
+                <li key={label} className="flex flex-col items-center gap-2 rounded-[14px] bg-surface-raised px-1.5 py-3 text-center">
+                  <Icon size={22} strokeWidth={1.9} className={color} aria-hidden="true" />
+                  <span className="text-xs font-bold leading-[1.3] text-text">{label}</span>
+                </li>
+              ))}
+            </ul>
 
-          <a
-            href={SYMPLA_EVENT_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              width: '100%',
-              height: '42px',
-              borderRadius: '12px',
-              background: 'rgba(234, 179, 8, 0.1)',
-              border: '1px solid rgba(234, 179, 8, 0.3)',
-              color: '#FACC15',
-              fontSize: '0.82rem',
-              fontWeight: 600,
-              textDecoration: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px'
-            }}
-          >
-            <span>Garantir Ingresso no Sympla</span>
-            <ExternalLink size={14} />
-          </a>
-        </div>
+            <form onSubmit={handleSubmit} noValidate>
+              <div className="mt-[18px]">
+                <label htmlFor="sympla-email" className="field-label">E-mail usado na compra do ingresso</label>
+                <input
+                  ref={inputRef}
+                  id="sympla-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  className="field !min-h-[54px] !rounded-2xl !px-4"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); if (state === 'error') setState('idle'); }}
+                  aria-invalid={state === 'error'}
+                  aria-describedby="sympla-email-hint"
+                />
+                {state === 'error' ? (
+                  <p id="sympla-email-hint" className="field-error m-0" role="alert">{message}</p>
+                ) : (
+                  <p id="sympla-email-hint" className="m-0 mt-1.5 text-xs text-text-3">A gente procura seu ingresso no Sympla com esse e-mail.</p>
+                )}
+              </div>
+
+              <button type="submit" className="btn btn-primary btn-block mt-[18px] !min-h-[54px] text-base" disabled={state === 'loading'}>
+                {state === 'loading' ? (
+                  <>
+                    <span className="size-[18px] rounded-full border-2 border-white/40 border-t-white" style={{ animation: 'dsSpin 800ms linear infinite' }} aria-hidden="true" />
+                    Procurando ingresso
+                  </>
+                ) : (
+                  <>
+                    <Ticket size={20} strokeWidth={1.9} aria-hidden="true" />
+                    Vincular ingresso
+                  </>
+                )}
+              </button>
+            </form>
+
+            <a
+              href={SYMPLA_EVENT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 flex min-h-11 items-center justify-center gap-1.5 text-center text-sm font-bold text-link no-underline"
+            >
+              Ainda não tem ingresso? Garantir no Sympla
+              <ExternalLink size={15} strokeWidth={1.9} aria-hidden="true" />
+            </a>
+          </>
+        )}
       </div>
-    </div>
+    </>
   );
 }
