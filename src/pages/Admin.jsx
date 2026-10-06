@@ -2430,11 +2430,8 @@ export default function Admin() {
               {/* Header da Seção */}
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
                 <div>
-                  <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#F9FAFB', margin: '0 0 4px', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span>Gestão de Missões & Desafios</span>
-                    <span style={{ fontSize: '0.72rem', backgroundColor: '#1E3A8A', color: '#93C5FD', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
-                      KAN-104
-                    </span>
+                  <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#F9FAFB', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+                    Gestão de Missões & Desafios
                   </h1>
                   <p style={{ margin: 0, fontSize: '0.82rem', color: '#9CA3AF' }}>
                     Crie missões com gatilhos dinâmicos, configure perguntas, segredos e dispare missões relâmpago ao vivo.
