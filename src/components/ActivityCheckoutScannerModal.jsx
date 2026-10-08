@@ -1,10 +1,115 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { QrCode, X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, AlertCircle, Loader2 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { checkoutDoubleCheck } from '../lib/activityService';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { stopAllMediaTracks } from '../lib/cameraUtils';
+import Mascot from './Mascot';
+import '../styles/agenda.css';
+
+function useEscape(onClose) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose?.();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+}
+
+// 12 peças de confete nas cores da marca e dos tipos (DESIGN.md §9)
+const CONFETTI = [
+  [-50, -90, 200, 0.35, '#2563EB', 13, 6], [-20, -120, -160, 0.38, '#7C3AED', 10, 10],
+  [20, -130, 240, 0.36, '#F2C46A', 13, 6], [60, -100, -200, 0.4, '#6FD8A6', 10, 10],
+  [100, -70, 180, 0.42, '#F59AC0', 13, 6], [140, -110, -240, 0.37, '#67D4E8', 10, 10],
+  [-70, -40, 160, 0.45, '#2563EB', 10, 10], [180, -60, 220, 0.44, '#7C3AED', 13, 6],
+  [40, -150, -180, 0.5, '#F2C46A', 10, 10], [-40, -140, 260, 0.48, '#6FD8A6', 13, 6],
+  [120, -140, -220, 0.52, '#F59AC0', 10, 10], [220, -100, 200, 0.46, '#67D4E8', 13, 6],
+];
+
+/** Bottom sheet "Presença confirmada" (DESIGN.md 1.25, §9 animação pesada). */
+export function PresenceConfirmedSheet({ title, location, points = 0, kicker = 'Check-out feito', onClose }) {
+  useEscape(onClose);
+  return (
+    <>
+      <div className="ds-scrim" aria-hidden="true" onClick={onClose} />
+      <div className="ds-sheet overflow-visible! px-6! pb-7!" role="dialog" aria-modal="true" aria-labelledby="presenca-titulo">
+        {CONFETTI.map(([x, y, rr, d, bg, w, h], i) => (
+          <span
+            key={i}
+            aria-hidden="true"
+            className="confetti ag-burst absolute left-[60px] top-10 rounded-[2px]"
+            style={{ '--x': `${x}px`, '--y': `${y}px`, '--rr': `${rr}deg`, '--d': `${d}s`, width: w, height: h, background: bg }}
+          />
+        ))}
+        <div className="flex items-end gap-3">
+          <div className="ag-mascot-up h-[76px] w-[76px] shrink-0">
+            <Mascot color="blue" className="animate-none! h-[76px]! w-[76px]!" />
+          </div>
+          <div className="pb-2">
+            <p className="flex items-center gap-1.5 text-[13px] font-bold text-ok">
+              <svg className="ag-draw" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10" /></svg>
+              {kicker}
+            </p>
+            <h2 id="presenca-titulo" className="ag-in mt-0.5 text-[22px] font-extrabold text-text" style={{ '--d': '.4s' }}>
+              Presença confirmada!
+            </h2>
+          </div>
+        </div>
+        <p className="ag-in mt-2.5 text-[15px] leading-[1.45] text-text-2" style={{ '--d': '.5s' }}>
+          {[title, location].filter(Boolean).join(' · ')}
+        </p>
+
+        {points > 0 && (
+          <div className="ag-in mt-[18px]" style={{ '--d': '.7s' }}>
+            <div className="ag-pulse flex items-center gap-3 rounded-2xl bg-[linear-gradient(135deg,rgba(124,58,237,0.28),rgba(124,58,237,0.1))] px-3.5 py-3">
+              <Mascot color="purple" className="animate-none! h-11! w-11! shrink-0" />
+              <span className="flex-1">
+                <span className="block text-[15px] font-bold text-text">Pontos da presença</span>
+                <span className="block text-[13px] text-you-text">Somados ao seu total em Conquistas</span>
+              </span>
+              <span className="ag-pop text-[20px] font-extrabold text-you-text">+{points}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="ag-in mt-[22px]" style={{ '--d': '.85s' }}>
+          <button type="button" onClick={onClose} className="btn btn-primary btn-block min-h-[54px]! text-base!">
+            Continuar
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Área da câmera com moldura de gradiente e linha de leitura (DESIGN.md §6 Crachá · Escanear). */
+export function ScannerFrame({ readerId }) {
+  return (
+    <div className="mx-auto aspect-square w-full max-w-[260px] rounded-[20px] bg-[var(--brand-gradient)] p-[2px]">
+      <div className="relative h-full w-full overflow-hidden rounded-[18px] bg-bg">
+        <div id={readerId} className="ag-reader" />
+        <span className="ag-scanline" aria-hidden="true" />
+      </div>
+    </div>
+  );
+}
+
+export { useEscape };
+
+/** Cabeçalho comum das folhas de leitura de QR. */
+export function ScanSheetHeader({ title, subtitle, onClose }) {
+  return (
+    <div className="mb-4 flex items-start gap-3">
+      <div className="min-w-0 flex-1">
+        <h2 id="scan-titulo" className="text-[20px] font-extrabold text-text">{title}</h2>
+        {subtitle && <p className="mt-1 text-sm leading-[1.45] text-text-2">{subtitle}</p>}
+      </div>
+      <button type="button" onClick={onClose} aria-label="Fechar" className="-mr-2.5 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text">
+        <X size={20} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
 
 export default function ActivityCheckoutScannerModal({
   activity,
@@ -92,220 +197,62 @@ export default function ActivityCheckoutScannerModal({
     };
   }, [scanResult, successData]);
 
+  useEscape(onClose);
+
   if (typeof document === 'undefined') return null;
 
+  if (successData) {
+    return createPortal(
+      <PresenceConfirmedSheet
+        title={activity?.title}
+        location={activity?.location}
+        points={successData.pointsCredited || 0}
+        kicker="Check-out feito"
+        onClose={onClose}
+      />,
+      document.body
+    );
+  }
+
   return createPortal(
-    <div
-      className="modal-overlay-fixed"
-      onClick={onClose}
-      style={{
-        padding: '20px',
-        background: 'rgba(5, 15, 35, 0.65)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)'
-      }}
-    >
-      <div
-        className="modal-card-fixed"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-          width: '100%',
-          maxWidth: '460px',
-          padding: '28px 24px',
-          position: 'relative',
-          background: 'linear-gradient(145deg, rgba(20, 35, 65, 0.95), rgba(10, 20, 45, 0.98))',
-          backdropFilter: 'blur(30px) saturate(140%)',
-          WebkitBackdropFilter: 'blur(30px) saturate(140%)',
-          border: '1px solid rgba(180, 225, 255, 0.25)',
-          borderRadius: '28px',
-          boxShadow: '0 30px 80px rgba(0, 5, 20, 0.6)',
-          color: 'white'
-        }}
-      >
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          aria-label="Fechar"
-          style={{
-            position: 'absolute',
-            top: '16px',
-            right: '16px',
-            width: '36px',
-            height: '36px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: '50%',
-            border: '1px solid rgba(255,255,255,0.15)',
-            background: 'rgba(255,255,255,0.08)',
-            color: 'rgba(255,255,255,0.8)',
-            cursor: 'pointer'
-          }}
-        >
-          <X size={18} />
-        </button>
+    <>
+      <div className="ds-scrim" aria-hidden="true" onClick={onClose} />
+      <div className="ds-sheet" role="dialog" aria-modal="true" aria-labelledby="scan-titulo">
+        <ScanSheetHeader
+          title="Ler QR do telão"
+          subtitle="Aponte a câmera para o QR projetado na sala antes de sair."
+          onClose={onClose}
+        />
 
-        {successData ? (
-          /* Success Screen */
-          <div style={{ textAlign: 'center', padding: '16px 0' }}>
-            <div
-              style={{
-                width: '72px',
-                height: '72px',
-                borderRadius: '50%',
-                background: 'rgba(16, 185, 129, 0.15)',
-                border: '2px solid #10b981',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 20px',
-                color: '#34d399'
-              }}
-            >
-              <CheckCircle2 size={42} />
-            </div>
+        <ScannerFrame readerId="checkout-screen-reader" />
 
-            <h3 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '8px' }}>
-              Presença Confirmada!
-            </h3>
+        {submitting && (
+          <p className="mt-4 flex items-center justify-center gap-2 text-[13px] font-semibold text-link" role="status">
+            <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+            Validando sua presença...
+          </p>
+        )}
 
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '16px', lineHeight: '1.5' }}>
-              Sua presença na atividade <strong>{activity?.title}</strong> foi registrada e validada com sucesso.
+        {errorMessage && (
+          <>
+            <p role="alert" className="mt-4 flex items-start gap-2 rounded-[14px] bg-[rgba(245,154,154,0.1)] p-3 text-[13px] leading-[1.45] text-err">
+              <AlertCircle size={18} className="shrink-0" aria-hidden="true" />
+              <span>{errorMessage}</span>
             </p>
-
-            {successData.pointsCredited > 0 && (
-              <div
-                style={{
-                  display: 'inline-block',
-                  padding: '8px 20px',
-                  borderRadius: '20px',
-                  background: 'rgba(59, 130, 246, 0.2)',
-                  border: '1px solid rgba(59, 130, 246, 0.4)',
-                  color: '#60a5fa',
-                  fontWeight: '800',
-                  fontSize: '1.1rem',
-                  marginBottom: '24px'
-                }}
-              >
-                +{successData.pointsCredited} pontos creditados!
-              </div>
-            )}
-
             <button
-              onClick={onClose}
-              className="btn-primary"
-              style={{ width: '100%', height: '48px', fontSize: '14px', fontWeight: '700', borderRadius: '16px' }}
-            >
-              Concluir
-            </button>
-          </div>
-        ) : (
-          /* Scanner Screen */
-          <div>
-            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-              <div
-                style={{
-                  width: '54px',
-                  height: '54px',
-                  borderRadius: '16px',
-                  background: 'rgba(245, 158, 11, 0.15)',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 12px',
-                  color: '#fbbf24'
-                }}
-              >
-                <QrCode size={28} />
-              </div>
-
-              <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', color: '#fbbf24', fontWeight: '700' }}>
-                Double Check • Checkout
-              </span>
-
-              <h3 style={{ fontSize: '1.3rem', fontWeight: '700', margin: '6px 0' }}>
-                QR Code do Telão
-              </h3>
-
-              <p style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: '0.85rem', margin: 0 }}>
-                Aponte a câmera para o QR Code projetado no telão no encerramento da atividade.
-              </p>
-            </div>
-
-            {/* Camera Area */}
-            <div
-              id="checkout-screen-reader"
-              style={{
-                width: '100%',
-                maxWidth: '280px',
-                aspectRatio: '1 / 1',
-                margin: '0 auto',
-                borderRadius: '20px',
-                overflow: 'hidden',
-                background: 'rgba(0, 0, 0, 0.4)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                position: 'relative'
+              type="button"
+              onClick={() => {
+                setErrorMessage('');
+                setScanResult(null);
               }}
-            />
-
-            {submitting && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '16px', color: '#60a5fa' }}>
-                <Loader2 size={18} className="animate-spin" />
-                <span style={{ fontSize: '13px', fontWeight: '600' }}>Validando presença no telão...</span>
-              </div>
-            )}
-
-            {errorMessage && (
-              <div
-                style={{
-                  marginTop: '16px',
-                  padding: '12px',
-                  borderRadius: '14px',
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: '#f87171',
-                  fontSize: '13px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <AlertCircle size={18} style={{ flexShrink: 0 }} />
-                <span>{errorMessage}</span>
-              </div>
-            )}
-
-            {errorMessage && (
-              <button
-                onClick={() => {
-                  setErrorMessage('');
-                  setScanResult(null);
-                }}
-                style={{
-                  width: '100%',
-                  marginTop: '12px',
-                  padding: '10px',
-                  borderRadius: '12px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  color: 'white',
-                  border: 'none',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: 'pointer'
-                }}
-              >
-                Tentar Ler Novamente
-              </button>
-            )}
-          </div>
+              className="btn btn-secondary btn-block mt-3"
+            >
+              Ler de novo
+            </button>
+          </>
         )}
       </div>
-    </div>,
+    </>,
     document.body
   );
 }

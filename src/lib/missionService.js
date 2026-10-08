@@ -410,6 +410,10 @@ export async function createMission(missionData) {
     updatedAt: serverTimestamp()
   };
 
+  // Estilo visual do card escolhido no admin (DESIGN.md §6 Missões).
+  if (missionData.cardStyle) cleanData.cardStyle = missionData.cardStyle;
+  if (missionData.cardStyleOptions) cleanData.cardStyleOptions = missionData.cardStyleOptions;
+
   if (missionData.triggerMode === 'secret' && missionData.secretConfig) {
     cleanData.isSecret = true;
     cleanData.secretConfig = {

@@ -52,6 +52,10 @@ Quality gate objetivo (lint/build/test) roda com `npm run quality-gate`. Checage
 
 `.github/workflows/ci.yml` roda em todo PR: `npm ci` → `npx oxlint --quiet` → `npm run build` → `npm run test --if-present`. `--quiet` no lint porque o projeto tem warnings pré-existentes (unused vars, hook deps) que não bloqueiam merge — só erros reais quebram o CI. Corrigir esses warnings é tarefa separada, ainda não agendada.
 
+## Design System (redesign aprovado 2026-10-04)
+
+`DESIGN.md` (raiz) é o Design System aprovado pelo Fabio: cores, tipografia, navegação, componentes, movimento, a11y e as regras de negócio que o design assume (§12, classificadas). `DESIGN-AUDIT.md` é a auditoria + histórico do redesign. Toda tarefa que toca UI (`src/pages`, `src/components`, painel admin/staff) lê `DESIGN.md` antes - dono da dimensão visual é o agente `frontend`. **A implementação ainda não começou**: o código segue o design antigo; a ordem combinada é tokens → primitivos → telas, validando com Playwright contra o canvas de design (claude.ai, do Fabio). Capturas da develop e scripts em `docs/redesign/screens/` e `e2e/`. Patrocinador e Bilhete Dourado ainda não têm design.
+
 ## Regras de negócio
 
 Catálogo persistente em `docs/business-rules/` (ver `docs/business-rules/README.md` pro template e legenda). Classificação obrigatória antes de qualquer regra virar teste permanente: `CONFIRMADA` (critério de aceite no Jira ou `changes/*/SPEC.md`) / `INFERIDA` (dedução razoável, não documentada) / `OBSERVADA` (já implementado, não é critério de aceite oficial) / `NÃO DEFINIDA` (nem código nem doc resolvem). **Nunca tratar inferência como regra confirmada sem perguntar ao Fabio antes** (pergunta com opção recomendada). Se a inferência virar bug/gap real, abrir card no Jira antes de escrever o teste permanente.

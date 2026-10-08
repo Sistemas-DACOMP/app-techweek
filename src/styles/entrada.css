@@ -1,0 +1,101 @@
+/* Entrada do participante: login, cadastro, onboarding e abertura.
+   DESIGN.md §8 (mascotes) e §9 (movimento médio do onboarding).
+   Só transform/opacity; reduced-motion já é global em index.css (fica no estado final). */
+
+/* index.css é importado DEPOIS dos CSS de tela (main.jsx): em empate de especificidade ele vence,
+   por isso os ajustes de .field/.btn mais abaixo usam classe dupla. */
+
+.ent-bg-login { background: radial-gradient(90% 55% at 50% 30%, #1E2470 0%, var(--bg) 70%); }
+.ent-bg-form { background: radial-gradient(90% 30% at 50% 0%, #1E2470 0%, var(--bg) 100%); }
+.ent-bg-form-2 { background: radial-gradient(100% 34% at 50% 14%, #251C66 0%, var(--bg) 100%); }
+.ent-bg-onb { background: radial-gradient(90% 50% at 50% 30%, #26227A 0%, #131650 45%, var(--bg) 80%); }
+.ent-bg-splash { background: radial-gradient(85% 55% at 50% 46%, #26227A 0%, #141650 40%, var(--bg) 78%); }
+
+/* Texto em gradiente: só no título de destaque (§13) */
+.ent-grad-text {
+  background: linear-gradient(90deg, #6B8CFF, #B794FF);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ent-grad-text-social {
+  background: linear-gradient(90deg, #6B8CFF, #E1306C);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Campo grande da entrada (54px, raio 16) — variação do .field global */
+.field.ent-field { min-height: 54px; border-radius: 16px; }
+.field.ent-field:focus { border-color: #6B7CFF; box-shadow: 0 0 0 4px rgba(107, 124, 255, .18); }
+.field.ent-field[data-ok="true"] { border-color: var(--ok); }
+
+/* Campo de rede social: tile com o logo + prefixo fixo + input sem borda */
+.ent-social {
+  display: flex; align-items: center; gap: 10px;
+  height: 56px; padding: 0 14px 0 8px;
+  border-radius: 16px; background: var(--field-bg); border: 1.5px solid var(--field-line);
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.ent-social:focus-within { border-color: var(--ent-brand, #6B7CFF); box-shadow: 0 0 0 4px var(--ent-brand-halo, rgba(107, 124, 255, .18)); }
+.ent-social input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 700 15px 'Montserrat', sans-serif; }
+.ent-social input::placeholder { color: var(--text-4); }
+
+/* Mascote parado: desliga o float/hover próprio do Mascot.css; quem anima é o wrapper */
+.mascot-container.ent-still,
+.mascot-container.ent-still:hover { animation: none; cursor: default; }
+
+/* .btn/.field são CSS sem layer: utilitário Tailwind não sobrescreve, por isso os ajustes ficam aqui */
+.field.ent-field-pw { padding-right: 52px; }
+.field.ent-field-at { padding-left: 32px; }
+.field.ent-field-sm { font-size: 15px; padding: 0 36px 0 12px; background-position: right 12px center; }
+.btn.ent-btn-lg { min-height: 54px; font-size: 16px; }
+.ent-cta { box-shadow: 0 12px 28px rgba(91, 59, 224, .45); }
+.btn.ent-btn-link { background: transparent; color: var(--link); font-weight: 700; min-height: 50px; }
+
+/* ---------- Movimento ---------- */
+@keyframes entIn { from { opacity: 0; transform: translateY(14px) rotate(var(--r, 0deg)); } to { opacity: 1; transform: translateY(0) rotate(var(--r, 0deg)); } }
+@keyframes entPop { 0% { opacity: 0; transform: scale(.4) rotate(var(--r, 0deg)); } 60% { opacity: 1; transform: scale(1.08) rotate(var(--r, 0deg)); } 100% { opacity: 1; transform: scale(1) rotate(var(--r, 0deg)); } }
+@keyframes entUp { 0% { opacity: 0; transform: translateY(90px); } 65% { opacity: 1; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes entBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes entFromL { from { opacity: 0; transform: translateX(-140px) rotate(-18deg); } to { opacity: 1; transform: translateX(0) rotate(var(--r, 0deg)); } }
+@keyframes entFromR { from { opacity: 0; transform: translateX(140px) rotate(18deg); } to { opacity: 1; transform: translateX(0) rotate(var(--r, 0deg)); } }
+@keyframes entDrop { from { opacity: 0; transform: translateY(-70px) rotate(-12deg); } to { opacity: 1; transform: translateY(0) rotate(var(--r, 0deg)); } }
+@keyframes entGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes entStamp { 0% { opacity: 0; transform: scale(2.3) rotate(10deg); } 55% { opacity: 1; transform: scale(.92) rotate(var(--r, 0deg)); } 100% { opacity: 1; transform: scale(1) rotate(var(--r, 0deg)); } }
+@keyframes entPill { from { transform: scaleX(.31); } to { transform: scaleX(1); } }
+@keyframes entScan { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(var(--scan, 90px)); } }
+@keyframes entGlow { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes entRise { 0% { transform: translateY(320px); } 62% { transform: translateY(-14px); } 78% { transform: translateY(6px); } 100% { transform: translateY(0); } }
+@keyframes entTilt { 0%, 100% { transform: rotate(-1.5deg); } 50% { transform: rotate(1.5deg); } }
+@keyframes entDot { 0%, 100% { transform: translateY(0); opacity: .4; } 50% { transform: translateY(-5px); opacity: 1; } }
+
+.ent-in { animation: entIn 500ms var(--ease-out) var(--d, 0s) both; }
+.ent-pop { animation: entPop 550ms var(--spring) var(--d, 0s) both; }
+.ent-from-l { animation: entFromL 750ms var(--ease-out) var(--d, 0s) both; }
+.ent-from-r { animation: entFromR 750ms var(--ease-out) var(--d, 0s) both; }
+.ent-drop { animation: entDrop 800ms var(--spring) var(--d, 0s) both; }
+.ent-mascot { animation: entUp 800ms var(--ease-out) var(--d, 0s) both, entBob 3.2s ease-in-out calc(var(--d, 0s) + .9s) infinite; }
+.ent-float { animation: entBob 3s ease-in-out infinite; }
+.ent-grow { transform-origin: 50% 100%; animation: entGrow 600ms var(--spring) var(--d, 0s) both; }
+.ent-stamp { animation: entStamp 600ms var(--ease-out) var(--d, 0s) both; }
+.ent-pill { animation: entPill 450ms var(--ease-out) 250ms both; }
+.ent-scanline { animation: entScan 2.6s ease-in-out 1.2s infinite; }
+/* Halo pulsando via pseudo-elemento (opacity), não box-shadow animado */
+/* .ent-glow precisa de um ancestral posicionado (o próprio chip já é absolute) */
+.ent-glow::after { content: ''; position: absolute; inset: 0; border-radius: 14px; box-shadow: 0 0 0 6px rgba(124, 58, 237, .18); opacity: 0; animation: entGlow 2.4s ease-in-out 1.4s infinite; pointer-events: none; }
+
+/* Abertura */
+.ent-crew { animation: entRise 900ms var(--ease-out) both; }
+.ent-crew-bob { animation: entBob 2.4s ease-in-out .9s infinite; }
+.ent-sign { transform-origin: 50% 100%; animation: entTilt 2.4s ease-in-out .9s infinite; }
+.ent-splash-text { animation: entIn 500ms ease-out 700ms both; }
+.ent-dots span { animation: entDot 1.1s ease-in-out infinite; }
+.ent-dots span:nth-child(2) { animation-delay: .15s; }
+.ent-dots span:nth-child(3) { animation-delay: .3s; }
+
+/* Reduced motion: o reset global zera a duração, mas o atraso (--d) ainda esconderia o
+   elemento por até 1s com fill "both". Sem atraso, tudo aparece já no estado final. */
+@media (prefers-reduced-motion: reduce) {
+  [class*="ent-"], [class*="ent-"]::after { animation-delay: 0s !important; }
+}

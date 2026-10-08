@@ -1,28 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft,
-  Search, 
-  X, 
-  MapPin, 
-  Users, 
-  CheckCircle2, 
-  AlertCircle, 
-  AlertTriangle, 
-  BookmarkCheck, 
-  ChevronRight, 
-  ArrowRight,
-  Clock
-} from 'lucide-react';
-import { CATEGORY_STYLES } from '../components/Badge';
+import { Search, X, MapPin, Users, Check, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { onAuthChange } from '../lib/auth';
 import { useUser } from '../hooks/useUser';
-import ActivityModal from '../components/ActivityModal';
+import ActivityModal, { SeatsLight, categoryOf, describeDay } from '../components/ActivityModal';
 import ActivityCheckoutScannerModal from '../components/ActivityCheckoutScannerModal';
 import LectureScanner from '../components/LectureScanner';
 import Mascot from '../components/Mascot';
 import SymplaRequirementModal from '../components/SymplaRequirementModal';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
+import '../styles/agenda.css';
 import { 
   subscribeToActivities, 
   subscribeToUserBookings, 
@@ -35,7 +21,6 @@ import {
 } from '../lib/activityService';
 
 export default function Agenda() {
-  const navigate = useNavigate();
   const { hasSymplaTicket } = useUser();
   const [currentUser, setCurrentUser] = useState(null);
   const [showSymplaModal, setShowSymplaModal] = useState(false);
@@ -45,7 +30,8 @@ export default function Agenda() {
 
   // Filtros
   const [selectedType, setSelectedType] = useState('all');
-  const [selectedDay, setSelectedDay] = useState('all');
+  const [selectedDay, setSelectedDay] = useState(null); // Programação: null = hoje ou 1º dia
+  const [myDay, setMyDay] = useState('all'); // Minha agenda: 'all' = Todos os dias
   const [searchQuery, setSearchQuery] = useState('');
 
   // Dados
@@ -104,49 +90,26 @@ export default function Agenda() {
     };
   }, [currentUser?.uid]);
 
-  // Dias Reais Disponíveis no Evento (Pills compactas: SEG 19, TER 20, etc.)
+  // Dias do evento a partir das atividades (chips "Qua 21")
   const availableDays = useMemo(() => {
-    const daysMap = new Map();
-
-    const getWeekday = (dayStr) => {
-      const weekdays = {
-        '21/10': 'QUA',
-        '22/10': 'QUI',
-        '23/10': 'SEX',
-        '24/10': 'SÁB',
-        '25/10': 'DOM',
-        '26/10': 'SEG'
-      };
-      return weekdays[dayStr] || 'DIA';
-    };
-
-    activities.forEach((act) => {
-      if (act.day && !daysMap.has(act.day)) {
-        const [dayNum] = act.day.split('/');
-        const weekday = getWeekday(act.day);
-        daysMap.set(act.day, {
-          id: act.day,
-          label: `${weekday} ${dayNum}`,
-          dayNum,
-          weekday
-        });
-      }
-    });
-
-    return Array.from(daysMap.values()).sort((a, b) => a.id.localeCompare(b.id));
+    const ids = [...new Set(activities.map((act) => act.day).filter(Boolean))];
+    return ids
+      .map((id) => {
+        const d = describeDay(id);
+        return { id, label: `${d.short} ${d.dayNum}`, ...d };
+      })
+      .sort((a, b) => dayOrder(a.id) - dayOrder(b.id));
   }, [activities]);
 
-  // Verifica se uma data coincide com hoje
-  const isCurrentDayToday = (dayStr) => {
-    try {
-      const now = new Date();
-      const currentDay = String(now.getDate()).padStart(2, '0');
-      const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
-      return dayStr === `${currentDay}/${currentMonth}`;
-    } catch {
-      return false;
-    }
-  };
+  const todayId = useMemo(() => {
+    const now = new Date();
+    return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
+
+  // Programação mostra um dia por vez: o escolhido, senão hoje, senão o primeiro
+  const programDay = selectedDay
+    || (availableDays.some((d) => d.id === todayId) ? todayId : availableDays[0]?.id)
+    || 'all';
 
   // Status de Inscrição/Check-in de Cada Atividade
   const activityStatuses = useMemo(() => {
@@ -157,7 +120,7 @@ export default function Agenda() {
     return statuses;
   }, [activities, bookings, checkins, pointEvents]);
 
-  // Lista de Atividades do Usuário ("Minha Agenda")
+  // Lista de Atividades do Usuário ("Minha Agenda") — base da checagem de conflito
   const myAgendaActivities = useMemo(() => {
     return activities.filter((act) => {
       const st = activityStatuses[act.id];
@@ -165,18 +128,27 @@ export default function Agenda() {
     });
   }, [activities, activityStatuses]);
 
-  // Filtro de Atividades da Programação
-  const filteredActivities = useMemo(() => {
+  // O que aparece na aba Minha agenda: inscrições + lista de espera
+  const myListActivities = useMemo(() => {
     return activities.filter((act) => {
+      const st = activityStatuses[act.id];
+      return st === 'BOOKED' || st === 'CHECKED_IN' || st === 'COMPLETED' || st === 'WAITING_LIST';
+    });
+  }, [activities, activityStatuses]);
+
+  const isMyTab = activeTab === 'my_agenda';
+  const dayFilter = isMyTab ? myDay : programDay;
+
+  // Filtro (tipo, busca, dia) + agrupamento por dia e, dentro do dia, por horário
+  const groupedByDay = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const visible = (isMyTab ? myListActivities : activities).filter((act) => {
       if (selectedType !== 'all') {
         const actType = String(act.type || 'palestra').toLowerCase().trim();
         if (actType !== selectedType) return false;
       }
-      if (selectedDay !== 'all') {
-        if (act.day !== selectedDay) return false;
-      }
-      if (searchQuery.trim() !== '') {
-        const query = searchQuery.toLowerCase();
+      if (dayFilter !== 'all' && act.day !== dayFilter) return false;
+      if (query) {
         const matchTitle = act.title?.toLowerCase().includes(query);
         const matchSpeaker = act.speaker?.toLowerCase().includes(query);
         const matchLoc = act.location?.toLowerCase().includes(query);
@@ -184,23 +156,26 @@ export default function Agenda() {
       }
       return true;
     });
-  }, [activities, selectedType, selectedDay, searchQuery]);
 
-  // Agrupamento Cronológico por Horário
-  const timelineGrouped = useMemo(() => {
-    const targetList = activeTab === 'all' ? filteredActivities : myAgendaActivities;
-    const groups = {};
-
-    targetList.forEach((act) => {
+    const days = new Map();
+    visible.forEach((act) => {
+      const dayKey = act.day || '';
       const timeKey = act.time || '19:00';
-      if (!groups[timeKey]) groups[timeKey] = [];
-      groups[timeKey].push(act);
+      if (!days.has(dayKey)) days.set(dayKey, new Map());
+      const times = days.get(dayKey);
+      if (!times.has(timeKey)) times.set(timeKey, []);
+      times.get(timeKey).push(act);
     });
-
-    return Object.entries(groups)
-      .sort(([timeA], [timeB]) => timeA.localeCompare(timeB))
-      .map(([time, items]) => ({ time, items }));
-  }, [activeTab, filteredActivities, myAgendaActivities]);
+    return [...days.entries()]
+      .sort(([a], [b]) => dayOrder(a) - dayOrder(b))
+      .map(([day, times]) => ({
+        day,
+        count: [...times.values()].reduce((n, items) => n + items.length, 0),
+        slots: [...times.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([time, items]) => ({ time, items }))
+      }));
+  }, [isMyTab, myListActivities, activities, selectedType, dayFilter, searchQuery]);
 
   // Verificação de Conflito de Horário
   const conflictingActivity = useMemo(() => {
@@ -216,6 +191,13 @@ export default function Agenda() {
     }) || null;
   }, [selectedActivity, myAgendaActivities, activityStatuses]);
 
+  // Toast: some em 4 s; erro fica até ser fechado (DESIGN.md §6)
+  useEffect(() => {
+    if (!toastMessage || toastMessage.type === 'error') return undefined;
+    const t = setTimeout(() => setToastMessage(null), 4000);
+    return () => clearTimeout(t);
+  }, [toastMessage]);
+
   // Alterna salvar atividade na agenda pessoal
   // Cancela reserva de vaga presencial
   const handleCancelReserve = async (activityId) => {
@@ -228,12 +210,11 @@ export default function Agenda() {
         const bActId = b.activityId || b.activity_id;
         return bActId !== activityId && b.id !== activityId && !b.id?.endsWith(`_${activityId}`);
       }));
-      setToastMessage({ type: 'info', message: 'Inscrição cancelada e vaga liberada com sucesso.' });
+      setToastMessage({ type: 'info', message: 'Vaga liberada.' });
     } catch (err) {
       setToastMessage({ type: 'error', message: err.data?.message || err.message || 'Erro ao cancelar inscrição.' });
     } finally {
       setCancellingId(null);
-      setTimeout(() => setToastMessage(null), 3500);
     }
   };
 
@@ -241,7 +222,6 @@ export default function Agenda() {
   const handleReserve = async (activityId) => {
     if (!currentUser?.uid) {
       setToastMessage({ type: 'warning', message: 'Faça login com sua conta para se inscrever nas atividades.' });
-      setTimeout(() => setToastMessage(null), 3500);
       return;
     }
 
@@ -269,11 +249,11 @@ export default function Agenda() {
         });
 
         if (res.status === 'WAITING_LIST') {
-          setToastMessage({ type: 'warning', message: `Você entrou na lista de espera (Posição #${res.position || 1}).` });
+          setToastMessage({ type: 'warning', message: `Você entrou na lista de espera (${res.position || 1}º).` });
         } else if (res.alreadyBooked) {
-          setToastMessage({ type: 'info', message: 'Você já possui inscrição confirmada nesta atividade!' });
+          setToastMessage({ type: 'info', message: 'Você já tem vaga nesta atividade.' });
         } else {
-          setToastMessage({ type: 'success', message: 'Inscrição confirmada com sucesso! Vaga garantida na Minha Agenda.' });
+          setToastMessage({ type: 'success', message: 'Vaga reservada. Ela já está na Minha agenda.' });
         }
       } else {
         setToastMessage({ type: 'error', message: res?.message || 'Não foi possível confirmar a inscrição.' });
@@ -295,7 +275,6 @@ export default function Agenda() {
       }
     } finally {
       setReservingId(null);
-      setTimeout(() => setToastMessage(null), 3500);
     }
   };
 
@@ -326,593 +305,206 @@ export default function Agenda() {
     }
   };
 
-  // Status de Tempo: Acontecendo Agora ou Próxima
-  const getActivityTimeBadge = (act) => {
-    try {
-      if (!act.day || !act.time) return null;
-      const now = new Date();
-      const [dayNum, monthNum] = act.day.split('/');
-      const [hourNum, minuteNum] = act.time.split(':');
-      const actStart = new Date(2026, parseInt(monthNum, 10) - 1, parseInt(dayNum, 10), parseInt(hourNum, 10), parseInt(minuteNum, 10));
-      const actEnd = new Date(actStart.getTime() + 90 * 60 * 1000);
-
-      if (now >= actStart && now <= actEnd) {
-        return { label: 'Acontecendo agora', color: '#10B981', dotColor: '#34D399' };
-      }
-      const diffMinutes = (actStart.getTime() - now.getTime()) / (1000 * 60);
-      if (diffMinutes > 0 && diffMinutes <= 45) {
-        return { label: 'Próxima', color: '#38BDF8', dotColor: '#38BDF8' };
-      }
-      return null;
-    } catch {
-      return null;
+  // Abre direto a leitura de presença (mesma regra do painel da atividade)
+  const presenceAction = (act, status) => {
+    if (status === 'CHECKED_IN') {
+      return act.attendanceMode === 'DOUBLE_CHECK' ? () => setCheckoutModalActivity(act) : () => setSelfScanActivity(act);
     }
+    if (status === 'BOOKED' && act.attendanceMode === 'SELF_SCAN') return () => setSelfScanActivity(act);
+    return null;
   };
 
+  const resetFilters = () => {
+    setSearchQuery('');
+    setSelectedType('all');
+    setSelectedDay(null);
+    setMyDay('all');
+  };
+
+  const myCount = myListActivities.length;
+  const dayChips = isMyTab
+    ? [{ id: 'all', label: 'Todos os dias' }, ...availableDays]
+    : availableDays;
+
   return (
-    <div className="page-container animate-fade-in" style={{ paddingBottom: '120px', maxWidth: '430px', margin: '0 auto' }}>
+    <div className="page-container mx-auto max-w-[430px] px-0! pt-0! pb-[120px]! text-text">
       <SymplaStickyBanner />
 
-      {/* Toast Feedback */}
       {toastMessage && (
         <div
-          style={{
-            position: 'fixed',
-            top: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 9999,
-            width: '90%',
-            maxWidth: '390px',
-            padding: '12px 16px',
-            borderRadius: '12px',
-            backgroundColor: toastMessage.type === 'success' ? '#064E3B' : '#7F1D1D',
-            border: `1px solid ${toastMessage.type === 'success' ? '#10B981' : '#EF4444'}`,
-            color: '#FFFFFF',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            fontSize: '0.82rem',
-            fontWeight: 600,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)'
-          }}
+          role={toastMessage.type === 'error' ? 'alert' : 'status'}
+          className="anim-fade-up fixed inset-x-0 bottom-[96px] z-[2100] mx-auto flex w-[calc(100%-40px)] max-w-[390px] items-center gap-3 rounded-2xl bg-surface-selected px-3.5 py-3 text-sm font-semibold text-text shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
         >
-          {toastMessage.type === 'success' ? <CheckCircle2 size={18} color="#34D399" /> : <AlertCircle size={18} color="#F87171" />}
-          <span>{toastMessage.message}</span>
+          <span
+            aria-hidden="true"
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${TOAST_ICON[toastMessage.type] || TOAST_ICON.error}`}
+          >
+            {toastMessage.type === 'success' || toastMessage.type === 'info' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          </span>
+          <span className="flex-1">{toastMessage.message}</span>
+          {toastMessage.type === 'error' && (
+            <button type="button" onClick={() => setToastMessage(null)} aria-label="Fechar aviso" className="-mr-2 flex h-11 w-11 items-center justify-center text-text-2">
+              <X size={18} aria-hidden="true" />
+            </button>
+          )}
         </div>
       )}
 
-      {/* 1. TOP HEADER */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-              fontSize: '1.75rem',
-              fontWeight: 800,
-              color: '#F8FAFC',
-              margin: 0,
-              letterSpacing: '-0.03em',
-              lineHeight: 1.15
-            }}
-          >
-            Agenda
-          </h1>
-          <p
-            style={{
-              fontSize: '0.80rem',
-              color: '#94A3B8',
-              margin: '3px 0 0',
-              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
-            }}
-          >
-            Programação oficial da FACOM TechWeek 2026
-          </p>
-        </div>
-      </div>
+      <div className="px-5 pt-[18px]">
+        <h1 className="screen-title mb-[22px]! text-[22px]!">Agenda</h1>
 
-      {/* 2. TABS: Programação (Active, underlined in Primary Blue #2563EB) | Minha agenda (Inactive, Slate Gray #94A3B8) */}
-      <div style={{ marginBottom: '18px', borderBottom: '1px solid #1E293B' }}>
-        <div style={{ display: 'flex', gap: '24px' }}>
-          <button
-            type="button"
-            onClick={() => setActiveTab('all')}
-            style={{
-              padding: '10px 0',
-              backgroundColor: 'transparent',
-              color: activeTab === 'all' ? '#F8FAFC' : '#94A3B8',
-              border: 'none',
-              borderBottom: activeTab === 'all' ? '2.5px solid #2563EB' : '2.5px solid transparent',
-              fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-              fontWeight: activeTab === 'all' ? 700 : 500,
-              fontSize: '0.94rem',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            Programação
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('my_agenda')}
-            style={{
-              padding: '10px 0',
-              backgroundColor: 'transparent',
-              color: activeTab === 'my_agenda' ? '#F8FAFC' : '#94A3B8',
-              border: 'none',
-              borderBottom: activeTab === 'my_agenda' ? '2.5px solid #2563EB' : '2.5px solid transparent',
-              fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-              fontWeight: activeTab === 'my_agenda' ? 700 : 500,
-              fontSize: '0.94rem',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            Minha agenda
-          </button>
-        </div>
-      </div>
-
-      {/* 3. SEARCH BAR (Pill-shaped input with Lucide search icon. Placeholder: "Buscar atividade...") */}
-      <div style={{ position: 'relative', marginBottom: '16px' }}>
-        <Search size={16} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#64748B' }} />
-        <input
-          type="text"
-          placeholder="Buscar atividade..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            width: '100%',
-            height: '46px',
-            padding: '0 40px 0 44px',
-            borderRadius: '9999px',
-            backgroundColor: '#0F141F',
-            border: '1px solid #1E293B',
-            color: '#F8FAFC',
-            fontSize: '0.86rem',
-            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-            outline: 'none',
-            boxSizing: 'border-box',
-            transition: 'border-color 0.15s ease'
-          }}
-        />
-        {searchQuery && (
-          <button
-            type="button"
-            onClick={() => setSearchQuery('')}
-            aria-label="Limpar busca"
-            style={{
-              position: 'absolute',
-              right: '14px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              background: 'transparent',
-              border: 'none',
-              color: '#64748B',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              padding: '4px'
-            }}
-          >
-            <X size={15} />
-          </button>
-        )}
-      </div>
-
-      {/* 4. HORIZONTAL DATE SELECTOR (Scrollable row of day pills: SEG 19, TER 20, etc.) */}
-      <div style={{ marginBottom: '18px' }}>
-        <div 
-          className="no-scrollbar"
-          style={{ 
-            display: 'flex', 
-            gap: '8px', 
-            overflowX: 'auto', 
-            paddingBottom: '4px'
-          }}
-        >
-          {/* Pill "Todos" */}
-          <button
-            type="button"
-            onClick={() => setSelectedDay('all')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: '38px',
-              padding: '0 16px',
-              borderRadius: '9999px',
-              backgroundColor: selectedDay === 'all' ? '#2563EB' : '#0F141F',
-              border: selectedDay === 'all' ? '1px solid #3B82F6' : '1px solid #1E293B',
-              color: selectedDay === 'all' ? '#FFFFFF' : '#94A3B8',
-              fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              flexShrink: 0,
-              whiteSpace: 'nowrap',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            Todos
-          </button>
-
-          {/* Pills dos Dias */}
-          {availableDays.map((dayObj) => {
-            const isSelected = selectedDay === dayObj.id;
+        <div role="tablist" aria-label="Agenda" className="flex gap-6 border-b border-line">
+          {[
+            { id: 'all', label: 'Programação' },
+            { id: 'my_agenda', label: myCount > 0 ? `Minha agenda · ${myCount}` : 'Minha agenda' }
+          ].map((tab) => {
+            const selected = activeTab === tab.id;
             return (
               <button
-                key={dayObj.id}
+                key={tab.id}
                 type="button"
-                onClick={() => setSelectedDay(dayObj.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: '38px',
-                  padding: '0 16px',
-                  borderRadius: '9999px',
-                  backgroundColor: isSelected ? '#2563EB' : '#0F141F',
-                  border: isSelected ? '1px solid #3B82F6' : '1px solid #1E293B',
-                  color: isSelected ? '#FFFFFF' : '#94A3B8',
-                  fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                  fontSize: '0.82rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.15s ease'
-                }}
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setActiveTab(tab.id)}
+                className={`h-11 text-[15px] transition-colors duration-150 ${selected ? 'font-extrabold text-text shadow-[inset_0_-3px_0_#7C3AED]' : 'font-semibold text-text-2'}`}
               >
-                {dayObj.label}
+                {tab.label}
               </button>
             );
           })}
         </div>
-      </div>
 
-      {/* 5. CATEGORY FILTERS (Text-only pills: "Todos", "Palestras", "Workshops", "Minicursos". No icons, 48pt touch targets) */}
-      {activeTab === 'all' && (
-        <div style={{ marginBottom: '22px' }}>
-          <div className="no-scrollbar" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-            {[
-              { id: 'all', label: 'Todos' },
-              { id: 'palestra', label: 'Palestras' },
-              { id: 'workshop', label: 'Workshops' },
-              { id: 'minicurso', label: 'Minicursos' },
-              { id: 'hackathon', label: 'Hackathon' }
-            ].map((type) => {
-              const isActive = selectedType === type.id;
-              return (
-                <button
-                  key={type.id}
-                  type="button"
-                  onClick={() => setSelectedType(type.id)}
-                  style={{
-                    minHeight: '44px',
-                    padding: '0 18px',
-                    borderRadius: '9999px',
-                    backgroundColor: isActive ? '#2563EB' : '#0F141F',
-                    border: isActive ? '1px solid #3B82F6' : '1px solid #1E293B',
-                    color: isActive ? '#FFFFFF' : '#94A3B8',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {type.label}
+        {(!isMyTab || myCount > 0) && (
+          <>
+            <label className="mt-3.5 flex h-[46px] items-center gap-2.5 rounded-full border border-line bg-surface px-3.5 text-text-3 focus-within:border-link">
+              <Search size={18} aria-hidden="true" className="shrink-0" />
+              <input
+                type="search"
+                aria-label="Buscar atividade"
+                placeholder="Buscar atividade, palestrante ou sala"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-text-3 [&::-webkit-search-cancel-button]:hidden"
+              />
+              {searchQuery && (
+                <button type="button" onClick={() => setSearchQuery('')} aria-label="Limpar busca" className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center text-text-3">
+                  <X size={16} aria-hidden="true" />
                 </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+              )}
+            </label>
 
-      {/* 5. LISTA TEMPORAL COMPACTA DA PROGRAMAÇÃO / MINHA AGENDA */}
-      {timelineGrouped.length === 0 ? (
-        activeTab === 'my_agenda' ? (
-          /* Estado Vazio: Minha Agenda */
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
-            {/* Intervenção Sutil do Mascote Oficial no Empty State */}
-            <div
-              style={{
-                width: '48px',
-                height: '48px',
-                margin: '0 auto 12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'visible'
-              }}
-            >
-              <Mascot color="purple" isWaving={true} style={{ width: '48px', height: '48px' }} />
+            <div className="no-scrollbar -mx-5 mt-3 flex gap-2 overflow-x-auto px-5" role="group" aria-label="Dia">
+              {dayChips.map((d) => {
+                const selected = d.id === dayFilter;
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => (isMyTab ? setMyDay(d.id) : setSelectedDay(d.id))}
+                    className={`press h-[38px] shrink-0 whitespace-nowrap rounded-full px-3.5 text-[13px] ${selected ? 'bg-[linear-gradient(135deg,#2563EB,#5B3BE0)] font-extrabold text-white' : 'border border-field-line font-semibold text-text'}`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
             </div>
 
-            <h3 style={{ fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif", fontSize: '0.98rem', fontWeight: 800, color: '#F8FAFC', margin: '0 0 4px' }}>
-              Ainda não há atividades aqui.
-            </h3>
-            <p style={{ margin: '0 0 16px', fontSize: '0.78rem', color: '#94A3B8', maxWidth: '280px', marginInline: 'auto', lineHeight: 1.45 }}>
-              Explore a programação e monte sua agenda para aproveitar o TechWeek.
-            </p>
-            <button
-              type="button"
-              onClick={() => setActiveTab('all')}
-              style={{
-                padding: '8px 18px',
-                borderRadius: '10px',
-                backgroundColor: '#2563EB',
-                border: '1px solid #3B82F6',
-                color: '#FFFFFF',
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              Ver programação
-            </button>
-          </div>
-        ) : (
-          /* Estado Vazio: Busca / Filtro */
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
-            <p style={{ margin: '0 0 10px', fontSize: '0.86rem', fontWeight: 600, color: '#F8FAFC' }}>
-              Nenhuma atividade encontrada nesta seleção.
-            </p>
-            {(searchQuery || selectedType !== 'all' || selectedDay !== 'all') && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedType('all');
-                  setSelectedDay('all');
-                }}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: '8px',
-                  backgroundColor: '#0F141F',
-                  border: '1px solid #1E293B',
-                  color: '#38BDF8',
-                  fontSize: '0.76rem',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                Limpar todos os filtros
-              </button>
-            )}
-          </div>
-        )
-      ) : (
-        /* Linha Temporal Contínua e Discreta com Marcadores e Now Line */
-        <div style={{ position: 'relative', paddingLeft: '54px' }}>
-          {/* Linha Vertical da Timeline (sutil e discreta) */}
-          <div
-            style={{
-              position: 'absolute',
-              left: '44px',
-              top: '8px',
-              bottom: '12px',
-              width: '1px',
-              backgroundColor: '#1E293B'
-            }}
-          />
-
-          {timelineGrouped.map(({ time, items }) => {
-            const hasCurrentItem = items.some(act => {
-              const st = getActivityTimingState(act);
-              return st === 'CURRENT' || (time === '14:00' && selectedDay === '22/10');
-            });
-            const allPast = items.every(act => {
-              const st = getActivityTimingState(act);
-              return st === 'PAST' || (time === '10:00' && selectedDay === '22/10');
-            });
-
-            return (
-              <div key={time} style={{ marginBottom: '22px', position: 'relative' }}>
-                {/* Marcador de Horário com Tabular-Nums */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: '-54px',
-                    top: '12px',
-                    width: '46px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontSize: '0.80rem',
-                      fontWeight: 700,
-                      color: hasCurrentItem ? '#2563EB' : allPast ? '#64748B' : '#94A3B8',
-                      fontVariantNumeric: 'tabular-nums',
-                      letterSpacing: '-0.02em',
-                      opacity: allPast ? 0.6 : 1
-                    }}
+            <div className="no-scrollbar -mx-5 mt-2.5 flex gap-2 overflow-x-auto px-5" role="group" aria-label="Tipo de atividade">
+              {TYPE_FILTERS.map((type) => {
+                const selected = selectedType === type.id;
+                return (
+                  <button
+                    key={type.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setSelectedType(type.id)}
+                    className={`press inline-flex h-[34px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] ${selected ? 'bg-text font-bold text-bg' : 'border border-field-line font-semibold text-text'}`}
                   >
-                    {time}
-                  </span>
+                    {type.id !== 'all' && !selected && (
+                      <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full" style={{ background: categoryOf(type).accent }} />
+                    )}
+                    {type.label}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
 
-                  {/* Now Line: Linha horizontal ultra-fina azul saindo do marcador */}
-                  {hasCurrentItem && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        right: '-8px',
-                        top: '50%',
-                        width: '10px',
-                        height: '1.5px',
-                        backgroundColor: '#2563EB',
-                        zIndex: 2
-                      }}
-                    />
-                  )}
-                </div>
-
-                {/* Event Cards */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {items.map((act) => {
-                    const status = activityStatuses[act.id] || 'NONE';
-                    const isCheckedIn = status === 'CHECKED_IN';
-                    const isCompleted = status === 'COMPLETED';
-                    const isBooked = status === 'BOOKED';
-
-                    const timingState = getActivityTimingState(act);
-                    const isCurrent = timingState === 'CURRENT' || (time === '14:00' && selectedDay === '22/10');
-                    const isPast = timingState === 'PAST' || (time === '10:00' && selectedDay === '22/10');
-
-                    // Acento lateral de 3.5px por modalidade
-                    const catType = String(act.type || 'palestra').toLowerCase().trim();
-                    const accentColor = catType === 'workshop'
-                      ? '#F59E0B'
-                      : catType === 'minicurso'
-                      ? '#A855F7'
-                      : (catType === 'estande' || catType === 'estandes')
-                      ? '#10B981'
-                      : catType === 'hackathon'
-                      ? '#EC4899'
-                      : '#38BDF8';
-
-                    const seatsAvailable = typeof act.vagas_disponiveis === 'number' ? act.vagas_disponiveis : 0;
-                    const isSoldOut = seatsAvailable <= 0;
-
+        {groupedByDay.length === 0 ? (
+          isMyTab && myCount === 0 ? (
+            <div className="flex flex-col items-center px-3 pt-16 text-center">
+              <Mascot color="blue" isWaving className="h-[120px]! w-[120px]!" />
+              <h2 className="mt-[22px] text-[19px] font-extrabold">Sua agenda ainda está vazia</h2>
+              <p className="mt-2 max-w-[290px] text-sm leading-[1.5] text-text-2">
+                Quando você reservar uma vaga ou se inscrever numa atividade, ela aparece aqui, separada por dia e horário.
+              </p>
+              <button type="button" onClick={() => setActiveTab('all')} className="btn btn-action mt-[22px] min-h-12! rounded-[14px]! px-[22px]!">
+                Ver programação
+              </button>
+            </div>
+          ) : (
+            <div className="px-3 pt-12 text-center">
+              <p className="text-[15px] font-bold">Nenhuma atividade com esses filtros</p>
+              <p className="mt-1.5 text-sm text-text-2">Tente outro dia, outro tipo ou outra busca.</p>
+              <button type="button" onClick={resetFilters} className="btn btn-secondary btn-sm mt-4">
+                Limpar filtros
+              </button>
+            </div>
+          )
+        ) : (
+          groupedByDay.map(({ day, count, slots }) => {
+            const d = describeDay(day);
+            const isToday = day === todayId;
+            return (
+              <section key={day || 'sem-dia'}>
+                {isMyTab && (
+                  <div className="mb-2.5 mt-5 flex items-baseline gap-2">
+                    <h2 className="text-[17px] font-extrabold">{isToday ? 'Hoje' : d.weekday}</h2>
+                    <span className="text-[13px] text-text-3">
+                      {isToday ? `${d.short.toLowerCase()}, ${d.dayNum} ${d.month}` : `${d.dayNum} ${d.month}`}
+                    </span>
+                    <span className="ml-auto text-xs font-bold text-text-3">
+                      {count} {count === 1 ? 'atividade' : 'atividades'}
+                    </span>
+                  </div>
+                )}
+                <div className={`relative ${isMyTab ? '' : 'mt-[18px]'}`}>
+                  <span aria-hidden="true" className="absolute bottom-3 left-[61px] top-2 w-0.5 bg-line" />
+                  {slots.map(({ time, items }) => {
+                    const timings = items.map(getActivityTimingState);
                     return (
-                      <div
-                        key={act.id}
-                        onClick={() => setSelectedActivity(act)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === 'Enter') setSelectedActivity(act); }}
-                        style={{
-                          backgroundColor: '#0F141F',
-                          border: isCurrent ? '1px solid #2563EB' : '1px solid #1E293B',
-                          borderLeft: `3.5px solid ${accentColor}`,
-                          borderRadius: '12px',
-                          padding: '14px 16px',
-                          cursor: 'pointer',
-                          opacity: isPast ? 0.5 : 1,
-                          boxShadow: isCurrent ? '0 0 16px rgba(37, 99, 235, 0.12)' : 'none',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        {/* Título da Atividade em Space Grotesk Bold */}
-                        <h3
-                          style={{
-                            fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                            fontSize: '0.96rem',
-                            fontWeight: 700,
-                            color: '#F8FAFC',
-                            margin: '0 0 8px',
-                            lineHeight: 1.35,
-                            letterSpacing: '-0.02em'
-                          }}
-                        >
-                          {act.title}
-                        </h3>
-
-                        {/* Local e Palestrante em Inter Regular com Ícones Lucide */}
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '4px',
-                            fontSize: '0.78rem',
-                            color: '#94A3B8',
-                            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-                            marginBottom: '10px'
-                          }}
-                        >
-                          {act.speaker && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <Users size={13} color="#64748B" style={{ flexShrink: 0 }} />
-                              <span style={{ color: '#94A3B8' }}>{act.speaker}</span>
-                            </div>
-                          )}
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <MapPin size={13} color="#64748B" style={{ flexShrink: 0 }} />
-                            <span style={{ color: '#CBD5E1' }}>{act.location || 'Local a definir'}</span>
-                          </div>
-                        </div>
-
-                        {/* Rodapé do Card: Status Semântico e Ação Discreta */}
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            paddingTop: '8px',
-                            borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-                            fontSize: '0.74rem'
-                          }}
-                        >
-                          {/* Status no canto inferior esquerdo */}
-                          <div>
-                            {isPast ? (
-                              <span style={{ color: '#94A3B8', fontWeight: 500, fontFamily: "'Inter', sans-serif" }}>
-                                Concluído
-                              </span>
-                            ) : isCompleted ? (
-                              <span style={{ color: '#10B981', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                <CheckCircle2 size={13} />
-                                Presença confirmada
-                              </span>
-                            ) : isCheckedIn ? (
-                              <span style={{ color: '#F59E0B', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                <CheckCircle2 size={13} />
-                                Check-in realizado
-                              </span>
-                            ) : isBooked ? (
-                              <span style={{ color: '#38BDF8', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                <BookmarkCheck size={13} />
-                                Vaga reservada
-                              </span>
-                            ) : isSoldOut ? (
-                              <span style={{ color: '#EF4444', fontWeight: 600 }}>Lotado</span>
-                            ) : (
-                              <span style={{ color: '#64748B', fontVariantNumeric: 'tabular-nums' }}>
-                                {seatsAvailable} vagas
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Ação Textual Discreta */}
-                          <div
-                            style={{
-                              color: isBooked ? '#34D399' : '#38BDF8',
-                              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-                              fontSize: '0.74rem',
-                              fontWeight: 600,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <span>{isBooked ? 'Ver detalhes' : 'Ver detalhes'}</span>
-                            <ArrowRight size={12} />
-                          </div>
+                      <div key={time} className="grid grid-cols-[52px_1fr] gap-2.5">
+                        <span className={`block pt-3.5 text-sm font-extrabold ${timings.includes('CURRENT') ? 'text-text' : 'text-text-2'}`}>{time}</span>
+                        <div className="flex flex-col gap-2.5 pb-3.5">
+                          {items.map((act, i) => {
+                            const status = activityStatuses[act.id] || 'NONE';
+                            return (
+                              <ActivityRow
+                                key={act.id}
+                                act={act}
+                                status={status}
+                                timing={timings[i]}
+                                compact={isMyTab}
+                                hasTicket={hasSymplaTicket}
+                                onOpen={() => setSelectedActivity(act)}
+                                onPresence={isMyTab && timings[i] === 'CURRENT' ? presenceAction(act, status) : null}
+                              />
+                            );
+                          })}
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
+              </section>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
-      {/* 6. MODAIS EXISTENTES INTEGRADOS (DETALHES, CHECKOUT E LEITURA DE QR CODE) */}
+      {/* Painel da atividade, leitura do telão e leitura de QR */}
       {selectedActivity && (
         <ActivityModal
           activity={selectedActivity}
@@ -952,6 +544,118 @@ export default function Agenda() {
         onClose={() => setShowSymplaModal(false)}
         featureName="a reserva de vagas na grade presencial"
       />
+    </div>
+  );
+}
+
+function dayOrder(id) {
+  const [d, m] = String(id).split('/').map(Number);
+  return (m || 0) * 100 + (d || 0);
+}
+
+const TYPE_FILTERS = [
+  { id: 'all', type: 'palestra', label: 'Todos' },
+  { id: 'palestra', type: 'palestra', label: 'Palestra' },
+  { id: 'workshop', type: 'workshop', label: 'Workshop' },
+  { id: 'minicurso', type: 'minicurso', label: 'Minicurso' },
+  { id: 'ativacao', type: 'ativacao', label: 'Ativação' },
+  { id: 'hackathon', type: 'hackathon', label: 'Hackathon' }
+];
+
+const TOAST_ICON = {
+  success: 'bg-ok/20 text-ok',
+  info: 'bg-ok/20 text-ok',
+  warning: 'bg-warn/20 text-warn',
+  error: 'bg-err/20 text-err'
+};
+
+const STATUS_TEXT = {
+  CHECKED_IN: { label: 'Entrada registrada', className: 'text-ok' },
+  BOOKED: { label: 'Reservado', className: 'text-link' },
+  WAITING_LIST: { label: 'Lista de espera', className: 'text-warn' }
+};
+
+function NowDot() {
+  return <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full bg-ok shadow-[0_0_0_3px_rgba(111,216,166,0.25)]" />;
+}
+
+/**
+ * Cartão da linha do tempo (DESIGN.md §6): faixa de 4 px na cor do tipo, rodapé com
+ * seu status à esquerda e o semáforo à direita (só para quem não tem vaga). Sem barra de vagas.
+ */
+function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, onPresence }) {
+  const category = categoryOf(act);
+  const isCurrent = timing === 'CURRENT';
+  const isPast = timing === 'PAST';
+  const hasSeat = status === 'BOOKED' || status === 'CHECKED_IN' || status === 'COMPLETED';
+  const showLight = !hasSeat && status !== 'WAITING_LIST' && !isPast && !compact;
+  const soldOut = !(typeof act.vagas_disponiveis === 'number' && act.vagas_disponiveis > 0);
+
+  let left;
+  if (status === 'COMPLETED') {
+    left = <span className="flex items-center gap-1.5 text-ok"><Check size={13} strokeWidth={3} aria-hidden="true" />Presença confirmada</span>;
+  } else if (isCurrent && hasSeat) {
+    left = <span className="flex items-center gap-1.5 text-ok"><NowDot />{compact ? 'Agora' : 'Agora · você está inscrito'}</span>;
+  } else if (STATUS_TEXT[status]) {
+    left = <span className={STATUS_TEXT[status].className}>{status === 'BOOKED' && compact ? 'Vaga reservada' : STATUS_TEXT[status].label}</span>;
+  } else if (isPast) {
+    left = <span className="text-text-3">Encerrada</span>;
+  } else if (isCurrent) {
+    left = <span className="flex items-center gap-1.5 text-ok"><NowDot />Acontecendo agora</span>;
+  } else if (!hasTicket) {
+    left = <span className="text-link">Vincule o ingresso</span>;
+  } else if (soldOut) {
+    left = <span className="text-warn">Entrar na lista de espera</span>;
+  } else {
+    left = <span className="text-link">Reservar vaga</span>;
+  }
+
+  return (
+    <div
+      className={`relative rounded-2xl border border-l-4 transition-transform duration-100 has-[>button:active]:scale-[0.98] pb-3 pl-4 pr-3.5 pt-3.5 ${isCurrent ? 'border-[#3D4BB0] bg-[#161F45]' : 'border-line bg-surface'} ${isPast ? 'opacity-60' : ''}`}
+      style={{ borderLeftColor: category.accent }}
+    >
+      {/* O cartão inteiro abre o painel; o botão cobre o cartão e o texto fica por cima sem capturar o toque */}
+      <button
+        type="button"
+        onClick={onOpen}
+        data-activity-card
+        aria-label={`${act.title} · ${category.label}${act.time ? ` · ${act.time}` : ''}`}
+        className="absolute inset-0 rounded-2xl"
+      />
+      <div className="pointer-events-none relative">
+        <span className="block text-xs font-extrabold" style={{ color: category.accent }}>{category.label}</span>
+        <span className="mt-1 block text-[15px] font-bold leading-[1.35]">{act.title}</span>
+        {act.speaker && !compact && (
+          <span className="mt-2 flex items-center gap-1.5 text-[13px] text-text-2">
+            <Users size={14} aria-hidden="true" className="shrink-0" />
+            {act.speaker}
+          </span>
+        )}
+        <span className={`${compact || !act.speaker ? 'mt-1.5' : 'mt-1'} flex items-center gap-1.5 text-[13px] text-text-2`}>
+          <MapPin size={14} aria-hidden="true" className="shrink-0" />
+          {act.location || 'Local a definir'}
+        </span>
+        <span className="mt-2.5 flex min-h-[18px] items-center justify-between gap-1.5 whitespace-nowrap border-t border-line pt-2.5 text-xs font-extrabold">
+          {left}
+          {onPresence ? (
+            <button
+              type="button"
+              onClick={onPresence}
+              className="press pointer-events-auto -my-2 flex h-11 items-center"
+            >
+              <span className="flex h-[30px] items-center rounded-[9px] bg-action px-3 text-xs font-extrabold text-white">Validar presença</span>
+            </button>
+          ) : showLight ? (
+            <span className="flex items-center gap-1.5">
+              <SeatsLight activity={act} />
+              <ChevronRight size={14} aria-hidden="true" className="text-text-4" />
+            </span>
+          ) : !compact ? (
+            <ChevronRight size={14} aria-hidden="true" className="text-text-4" />
+          ) : null}
+        </span>
+      </div>
     </div>
   );
 }

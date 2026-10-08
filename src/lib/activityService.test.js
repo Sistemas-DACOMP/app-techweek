@@ -94,25 +94,25 @@ describe('activityService (KAN-50)', () => {
     it('formata Palestra com cores e label corretos', () => {
       const formatted = formatActivityType('palestra');
       expect(formatted.label).toBe('Palestra');
-      expect(formatted.color).toBe('#38bdf8');
+      expect(formatted.color).toBe('#8fa0ff');
     });
 
     it('formata Workshop com cores e label corretos', () => {
       const formatted = formatActivityType('workshop');
       expect(formatted.label).toBe('Workshop');
-      expect(formatted.color).toBe('#f59e0b');
+      expect(formatted.color).toBe('#b9a6f5');
     });
 
     it('formata Minicurso com cores e label corretos', () => {
       const formatted = formatActivityType('minicurso');
       expect(formatted.label).toBe('Minicurso');
-      expect(formatted.color).toBe('#c084fc');
+      expect(formatted.color).toBe('#67d4e8');
     });
 
     it('formata Ativação com cores e label corretos', () => {
       const formatted = formatActivityType('ativacao');
       expect(formatted.label).toBe('Ativação');
-      expect(formatted.color).toBe('#34d399');
+      expect(formatted.color).toBe('#f2c46a');
     });
   });
 

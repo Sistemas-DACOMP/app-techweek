@@ -248,7 +248,7 @@ export default function Sponsor() {
                 border: '1px solid rgba(56, 189, 248, 0.3)',
                 borderRadius: '14px',
                 padding: '10px',
-                color: '#38BDF8',
+                color: 'var(--link)',
                 fontSize: '12px',
                 fontWeight: '700',
                 cursor: 'pointer',
@@ -268,7 +268,7 @@ export default function Sponsor() {
   }
 
   return (
-    <div className="page-container animate-fade-in" style={{ paddingBottom: '100px', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+    <div className="page-container animate-fade-in" style={{ paddingBottom: '100px', fontFamily: "Montserrat, sans-serif" }}>
       {/* Toast Alert */}
       {toastMessage && (
         <div
@@ -325,7 +325,7 @@ export default function Sponsor() {
           <div>
             <h1
               style={{
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
+                fontFamily: 'Montserrat, sans-serif',
                 fontSize: '1.75rem',
                 fontWeight: 800,
                 color: '#F8FAFC',
@@ -339,12 +339,12 @@ export default function Sponsor() {
             <div
               style={{
                 fontSize: '0.80rem',
-                color: '#38BDF8',
+                color: 'var(--link)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '5px',
                 margin: '3px 0 0',
-                fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+                fontFamily: "Montserrat, sans-serif"
               }}
             >
               <Building2 size={13} />
@@ -386,9 +386,9 @@ export default function Sponsor() {
                 fontSize: '11px',
                 fontWeight: 700,
                 cursor: 'pointer',
-                border: activeCompanyId === comp ? '1px solid #38BDF8' : '1px solid #334155',
+                border: activeCompanyId === comp ? '1px solid var(--link)' : '1px solid #334155',
                 backgroundColor: activeCompanyId === comp ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                color: activeCompanyId === comp ? '#38BDF8' : '#94A3B8',
+                color: activeCompanyId === comp ? 'var(--link)' : '#94A3B8',
                 textTransform: 'capitalize'
               }}
             >
@@ -404,7 +404,7 @@ export default function Sponsor() {
           <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>
             Leads Bipados
           </div>
-          <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#38BDF8' }}>
+          <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--link)' }}>
             {capturedLeads.length}
           </div>
         </div>
@@ -422,7 +422,7 @@ export default function Sponsor() {
       {/* Leitor Contínuo de QR Code */}
       <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px', textAlign: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '14px' }}>
-          <QrCode size={18} color="#38BDF8" />
+          <QrCode size={18} color="var(--link)" />
           <span style={{ fontSize: '13px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#ffffff' }}>
             Leitor de Crachá do Estande
           </span>
@@ -454,7 +454,7 @@ export default function Sponsor() {
         )}
 
         {isResolving && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#38BDF8', marginTop: '14px', fontSize: '13px', fontWeight: '700' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--link)', marginTop: '14px', fontSize: '13px', fontWeight: '700' }}>
             <Loader2 className="animate-spin" size={18} />
             <span>Processando crachá lido...</span>
           </div>

@@ -1,138 +1,59 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { 
-  Home, 
-  MessageSquare, 
-  CalendarDays, 
-  ScanLine, 
-  Target, 
-  Trophy, 
-  User 
-} from 'lucide-react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { Home, CalendarDays, QrCode, MessageSquare, Trophy } from 'lucide-react';
 
 /**
- * Itens de navegação principal da FACOM TechWeek 2026.
- * Inclui: Início, Feed, Agenda, Escanear, Missões, Ranking e Perfil.
+ * Barra inferior do participante (DESIGN.md §5): Início · Agenda · Crachá (central) · Feed · Conquistas.
+ * Perfil abre pelo avatar do Início. Conquistas cobre Missões, Ranking e Passaporte.
  */
 const NAV_ITEMS = [
   { path: '/', label: 'Início', icon: Home },
-  { path: '/feed', label: 'Feed', icon: MessageSquare },
   { path: '/agenda', label: 'Agenda', icon: CalendarDays },
-  { path: '/scanner', label: 'Escanear', icon: ScanLine },
-  { path: '/challenges', label: 'Missões', icon: Target },
-  { path: '/ranking', label: 'Ranking', icon: Trophy },
-  { path: '/profile', label: 'Perfil', icon: User },
+  { path: '/scanner', label: 'Crachá', icon: QrCode, central: true },
+  { path: '/feed', label: 'Feed', icon: MessageSquare },
+  { path: '/challenges', label: 'Conquistas', icon: Trophy, also: ['/ranking', '/instagram-mission'] },
 ];
 
 export default function BottomNavigation({ className = '' }) {
+  const { pathname } = useLocation();
+
   return (
     <nav
-      role="navigation"
       aria-label="Navegação principal"
-      className={`bottom-navigation ${className}`}
-      style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        width: '100%',
-        zIndex: 1000,
-        display: 'flex',
-        justifyContent: 'center',
-        pointerEvents: 'none'
-      }}
+      className={`bottom-navigation fixed inset-x-0 bottom-0 z-[1000] flex justify-center pointer-events-none ${className}`}
     >
       <div
-        style={{
-          width: '100%',
-          maxWidth: '430px',
-          backgroundColor: '#07090E',
-          borderTop: '1px solid #1E293B',
-          boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingLeft: '2px',
-          paddingRight: '2px',
-          paddingTop: '6px',
-          paddingBottom: 'max(0.65rem, env(safe-area-inset-bottom))',
-          pointerEvents: 'auto'
-        }}
+        className="pointer-events-auto grid w-full max-w-[430px] grid-cols-5 border-t border-line-2 bg-nav px-2 pt-1.5"
+        style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}
       >
-        {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
-          <NavLink
-            key={path}
-            to={path}
-            className={({ isActive }) => `nav-tab ${isActive ? 'active' : ''}`}
-            style={({ isActive }) => ({
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: '38px',
-              minHeight: '46px',
-              padding: '3px 1px',
-              textDecoration: 'none',
-              borderRadius: '8px',
-              transition: 'all 0.15s ease',
-              color: isActive ? '#F8FAFC' : '#64748B',
-              backgroundColor: isActive ? 'rgba(30, 41, 59, 0.45)' : 'transparent',
-              outline: 'none',
-              WebkitTapHighlightColor: 'transparent',
-              flex: 1,
-              position: 'relative',
-              overflow: 'hidden'
-            })}
-          >
-            {({ isActive }) => (
-              <>
-                {/* Linha de indicador na aba ativa */}
-                {isActive && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: '15%',
-                      right: '15%',
-                      height: '2px',
-                      backgroundColor: '#2563EB',
-                      borderRadius: '999px'
-                    }}
-                    aria-hidden="true"
-                  />
-                )}
-
-                <Icon
-                  size={18}
-                  strokeWidth={isActive ? 2 : 1.75}
-                  color={isActive ? '#38BDF8' : '#64748B'}
-                  style={{
-                    marginBottom: '2px',
-                    transition: 'transform 0.15s ease'
-                  }}
-                  aria-hidden="true"
-                />
-
+        {NAV_ITEMS.map(({ path, label, icon: Icon, central, also = [] }) => {
+          const active = path === '/' ? pathname === '/' : pathname === path || also.includes(pathname);
+          return (
+            <NavLink
+              key={path}
+              to={path}
+              end
+              aria-current={active ? 'page' : undefined}
+              className={`flex min-h-14 flex-col items-center gap-1 text-[12px] no-underline transition-colors duration-150 ${
+                central ? 'justify-end' : 'justify-center'
+              } ${active ? 'font-bold text-text' : 'font-medium text-text-3'}`}
+            >
+              {central ? (
                 <span
+                  className="-mt-[22px] flex h-[52px] w-[52px] items-center justify-center rounded-full transition-transform duration-100 active:scale-95"
                   style={{
-                    fontFamily: "'Inter', system-ui, sans-serif",
-                    fontSize: '8.8px',
-                    fontWeight: isActive ? 700 : 500,
-                    letterSpacing: '-0.01em',
-                    lineHeight: 1.1,
-                    color: isActive ? '#F8FAFC' : '#64748B',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: '100%'
+                    background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
+                    boxShadow: '0 0 0 4px var(--bg), 0 6px 18px rgba(91,59,224,0.45)',
                   }}
                 >
-                  {label}
+                  <Icon size={24} color="#fff" strokeWidth={2} aria-hidden="true" />
                 </span>
-              </>
-            )}
-          </NavLink>
-        ))}
+              ) : (
+                <Icon size={22} strokeWidth={1.9} color={active ? 'var(--link)' : 'currentColor'} aria-hidden="true" />
+              )}
+              {label}
+            </NavLink>
+          );
+        })}
       </div>
     </nav>
   );
