@@ -21,16 +21,27 @@ import logoTw from './assets/logo-tw.png';
 import Mascot from './components/Mascot';
 import './styles/entrada.css';
 import { getAppSubdomain, isRouteAllowedOnSubdomain } from './lib/subdomain';
+import { shouldShowBottomNav } from './lib/bottomNav';
+import { getCachedUserProfile } from './lib/userService';
 import { stopAllMediaTracks } from './lib/cameraUtils';
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  // Papel vindo do token (claim do servidor); enquanto não chega, usa o perfil em cache.
+  const [claimRole, setClaimRole] = useState(null);
   const isPortalPage = location.pathname === '/admin' || location.pathname === '/staff';
   const isAuthPage = location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding' || location.pathname === '/termos';
 
   const [isSplashVisible, setIsSplashVisible] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) { setClaimRole(null); return undefined; }
+    user.getIdTokenResult().then((r) => { if (!cancelled) setClaimRole(r.claims?.role || null); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [user]);
 
   // Detecção de subdomínio: admin.* ou staff.*
   useEffect(() => {
@@ -121,7 +132,7 @@ function AppContent() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       
-      {!isAuthPage && !isPortalPage && <BottomNavigation />}
+      {shouldShowBottomNav({ pathname: location.pathname, search: location.search, role: claimRole || getCachedUserProfile()?.role, isAuthPage, isPortalPage }) && <BottomNavigation />}
     </div>
   );
 }
