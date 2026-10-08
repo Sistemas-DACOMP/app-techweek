@@ -9,6 +9,8 @@ import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityServic
 import { getMyProfile } from '../lib/gameplay';
 import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
 import { auth } from '../lib/firebase';
+import { useAuth } from '../contexts/AuthContext';
+import { decideAccess } from '../lib/accessGuard';
 import { stopAllMediaTracks } from '../lib/cameraUtils';
 import Mascot from '../components/Mascot';
 import RoleSwitcher from '../components/RoleSwitcher';
@@ -90,9 +92,9 @@ function RoundButton({ label, onClick, children, ...rest }) {
 
 export default function Staff() {
   const navigate = useNavigate();
+  const { user: authUser, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
-  const [authTick, setAuthTick] = useState(0); // re-checa o papel após login
   const [profile, setProfile] = useState(null);
   const [activities, setActivities] = useState([]);
   const [selectedActivity, setSelectedActivity] = useState('');
@@ -120,26 +122,34 @@ export default function Staff() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
 
+  // Só decide painel x login depois que o Firebase restaurou a sessão (senão o reload pisca o login).
   useEffect(() => {
+    if (authLoading) return;
+    if (!authUser) {
+      setProfile(null);
+      setAuthorized(false);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
     async function checkAuth() {
       try {
         const profile = await getMyProfile();
+        if (cancelled) return;
         setProfile(profile);
         // Papel vem só do perfil/claims do servidor; a UI não é autorização (o backend barra /api/staff/*).
-        if (profile?.role === 'STAFF' || profile?.role === 'ADMIN') {
-          setAuthorized(true);
-          fetchActivities();
-        } else {
-          setAuthorized(false);
-        }
+        const ok = decideAccess({ authLoading: false, user: authUser, profileReady: !!profile, role: profile?.role, allowed: ['STAFF', 'ADMIN'] }) === 'allowed';
+        setAuthorized(ok);
+        if (ok) fetchActivities();
       } catch (error) {
         console.error('Auth error', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     checkAuth();
-  }, [authTick]);
+    return () => { cancelled = true; };
+  }, [authLoading, authUser]);
 
   const handleStaffLogin = async (e) => {
     if (e) e.preventDefault();
@@ -150,8 +160,6 @@ export default function Staff() {
       const res = await loginWithEmailAndPassword(staffEmail, staffPassword);
       if (!res.success) {
         setLoginError(res.error || 'Credenciais inválidas.');
-      } else {
-        setAuthTick((n) => n + 1);
       }
     } catch (err) {
       setLoginError(err.message || 'Falha ao autenticar.');

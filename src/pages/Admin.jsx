@@ -56,6 +56,7 @@ import { LinkedinIcon, GithubIcon, InstagramIcon } from './admin/SocialIcons';
 import { QRCodeSVG } from 'qrcode.react';
 import { useUser } from '../hooks/useUser';
 import { useAuth } from '../contexts/AuthContext';
+import { decideAccess } from '../lib/accessGuard';
 import { 
   createActivity, 
   deleteActivity, 
@@ -219,12 +220,13 @@ const MISSION_PRESETS = [
 
 export default function Admin() {
   const navigate = useNavigate();
-  const { profile, role, refreshProfile } = useUser();
-  const { user: authUser } = useAuth();
+  const { profile, role, refreshProfile, profileReady } = useUser();
+  const { user: authUser, loading: authLoading } = useAuth();
 
   // Guard de autorização Admin: só o papel vindo do perfil/claims do servidor libera a tela.
   // A UI não é autorização; o backend barra /api/admin/* por papel de qualquer forma.
-  const isAuthorized = !!authUser && (role === 'ADMIN' || profile?.role === 'ADMIN');
+  const access = decideAccess({ authLoading, user: authUser, profileReady, role: profile?.role || role, allowed: ['ADMIN'] });
+  const isAuthorized = access === 'allowed';
 
   // Login de contingência
   const [adminEmail, setAdminEmail] = useState('');
@@ -1164,6 +1166,9 @@ export default function Admin() {
   }, [missionsList, missionCategoryFilter, missionStatusFilter, missionSearch]);
 
   // Se não autorizado, tela de login corporativo
+  if (access === 'loading') {
+    return <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)' }} aria-busy="true" aria-label="Carregando" />;
+  }
   if (!isAuthorized) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: "inherit" }}>
