@@ -5,6 +5,9 @@ import { SYMPLA_EVENT_URL, verifySymplaTicket } from '../lib/sympla';
 import { updateUserProfile } from '../lib/userService';
 import { auth } from '../lib/firebase';
 
+// Acima do painel da atividade (z 2000/2001) para o aviso aparecer na frente dele (KAN-112)
+export const SYMPLA_SHEET_Z = 2200;
+
 const BENEFITS = [
   { label: 'Reservar vagas', Icon: CalendarDays, color: 'text-link' },
   { label: 'QR do crachá', Icon: QrCode, color: 'text-cat-minicurso' },
@@ -82,8 +85,8 @@ function LinkTicketSheet({ onClose, onLinked }) {
 
   return (
     <>
-      <div className="ds-scrim" aria-hidden="true" onClick={onClose} />
-      <div className="ds-sheet !px-[22px]" role="dialog" aria-modal="true" aria-labelledby="sympla-sheet-title">
+      <div className="ds-scrim" style={{ zIndex: SYMPLA_SHEET_Z }} aria-hidden="true" onClick={onClose} />
+      <div className="ds-sheet !px-[22px]" style={{ zIndex: SYMPLA_SHEET_Z + 1 }} role="dialog" aria-modal="true" aria-labelledby="sympla-sheet-title">
         {state === 'done' ? (
           <div className="flex flex-col items-center py-4 text-center" role="status">
             <span className="flex size-14 items-center justify-center rounded-full bg-ok text-[#0A2A1C]" style={{ animation: 'dsPop 380ms var(--spring) both' }}>
