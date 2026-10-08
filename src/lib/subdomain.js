@@ -18,3 +18,17 @@ export function getAppSubdomain() {
 
   return null;
 }
+
+/**
+ * Rotas que cada subdomínio pode abrir. Além do painel, /profile precisa passar:
+ * "Editar perfil" do Admin/Staff leva pra lá, e sem isso o App devolvia a pessoa pro painel
+ * (ou, sem sessão Firebase real, pro /login) em vez de abrir a edição (KAN-118).
+ */
+const SUBDOMAIN_ROUTES = {
+  admin: ['/admin', '/profile'],
+  staff: ['/staff', '/profile'],
+};
+
+export function isRouteAllowedOnSubdomain(sub, pathname) {
+  return SUBDOMAIN_ROUTES[sub]?.includes(pathname) ?? true;
+}
