@@ -225,9 +225,8 @@ export default function Feed() {
 
   const isAdminOrOrg = useMemo(() => {
     const role = userProfile?.role || userProfile?.userRole || '';
-    const email = (userProfile?.email || user?.email || '').toLowerCase();
-    return role === 'ADMIN' || role === 'ORGANIZATION' || email === 'admin@admin.com' || email === 'sam03amorim@gmail.com';
-  }, [userProfile, user]);
+    return role === 'ADMIN' || role === 'ORGANIZATION';
+  }, [userProfile]);
 
   const canCreatePost = useMemo(() => {
     if (!userProfile) return true; // Permite para testes/demonstração

@@ -248,10 +248,8 @@ export default function Scanner() {
   const isStartingRef = useRef(false);
   const isMountedRef = useRef(true);
 
-  // O botão demo só fica visível em ambiente de desenvolvimento ou com ?demo=true na URL
-  const isDevMode = typeof window !== 'undefined' && (
-    import.meta.env.DEV || window.location.search.includes('demo=true')
-  );
+  // O botão demo só existe no build de desenvolvimento; parâmetro de URL não libera nada em produção.
+  const isDevMode = import.meta.env.DEV;
 
   useEffect(() => {
     const update = () => setIsOnline(navigator.onLine);
@@ -690,7 +688,7 @@ export default function Scanner() {
                 </div>
               </section>
 
-              {/* Simulação de leitura: só DEV ou ?demo=true */}
+              {/* Simulação de leitura: só DEV */}
               {isDevMode && (
                 <div className="mt-3 text-center">
                   <button

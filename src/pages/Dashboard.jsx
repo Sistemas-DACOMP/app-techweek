@@ -237,7 +237,7 @@ export default function Dashboard() {
         const bActId = b.activityId || b.activity_id;
         return bActId !== activityId && b.id !== activityId && !b.id?.endsWith(`_${activityId}`);
       }));
-      setToastMessage({ type: 'info', message: 'Inscrição cancelada e vaga liberada.' });
+      setToastMessage({ type: 'info', message: 'Inscrição cancelada. A vaga foi liberada.' });
     } catch (err) {
       setToastMessage({ type: 'error', message: err.data?.message || err.message || 'Erro ao cancelar inscrição.' });
     } finally {
@@ -430,7 +430,7 @@ export default function Dashboard() {
       {/* MODAL OFICIAL DE DETALHES DA ATIVIDADE */}
       {selectedActivity && (
         <ActivityModal
-          activity={selectedActivity}
+          activity={activities.find((a) => a.id === selectedActivity.id) || selectedActivity}
           status={calculateActivityStatus(selectedActivity.id, bookings, checkins, pointEvents)}
           isReserving={reservingId === selectedActivity.id}
           isCancelling={cancellingId === selectedActivity.id}
@@ -508,14 +508,57 @@ function HeroNow({ item, status, now, reserving, onValidate, onReserve, onDetail
 /* ------------------------------------------------------------------ */
 /* "A seguir": tira enxuta de 236px com arrasto lateral e pontinhos    */
 /* ------------------------------------------------------------------ */
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 function UpNext({ items, now, statusOf, onOpen, onAgenda }) {
   const stripRef = useRef(null);
   const [page, setPage] = useState(0);
 
+  const drag = useRef(null);
+  const STEP = 248; // cartão 236 + gap 12
+
   const handleScroll = () => {
     const el = stripRef.current;
     if (!el) return;
-    setPage(Math.min(items.length - 1, Math.round(el.scrollLeft / 248)));
+    setPage(Math.min(items.length - 1, Math.round(el.scrollLeft / STEP)));
+  };
+
+  // Arrasto com mouse (toque já rola nativo). Só captura o ponteiro depois de mover,
+  // pra não engolir o clique no cartão.
+  const onPointerDown = (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    drag.current = { x: e.clientX, left: stripRef.current.scrollLeft, moved: false };
+  };
+  const onPointerMove = (e) => {
+    const d = drag.current;
+    if (!d) return;
+    const el = stripRef.current;
+    if (!d.moved && Math.abs(e.clientX - d.x) > 5) {
+      d.moved = true;
+      el.setPointerCapture(e.pointerId);
+      el.classList.add('is-dragging');
+    }
+    if (d.moved) el.scrollLeft = d.left - (e.clientX - d.x);
+  };
+  const endDrag = () => {
+    const d = drag.current;
+    const el = stripRef.current;
+    if (!d || !el) return;
+    if (d.moved) {
+      el.classList.remove('is-dragging');
+      el.scrollTo({ left: Math.round(el.scrollLeft / STEP) * STEP, behavior: reducedMotion() ? 'auto' : 'smooth' });
+      setTimeout(() => { drag.current = null; }, 0); // deixa o click pós-arrasto ser descartado
+    } else {
+      drag.current = null;
+    }
+  };
+  const onClickCapture = (e) => {
+    if (drag.current?.moved) { e.preventDefault(); e.stopPropagation(); }
+  };
+  const onKeyDown = (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    stripRef.current.scrollBy({ left: e.key === 'ArrowRight' ? STEP : -STEP, behavior: reducedMotion() ? 'auto' : 'smooth' });
   };
 
   return (
@@ -526,7 +569,17 @@ function UpNext({ items, now, statusOf, onOpen, onAgenda }) {
           Ver agenda
         </button>
       </div>
-      <ul ref={stripRef} onScroll={handleScroll} className="inicio-strip m-0 mt-1 list-none">
+      <ul
+        ref={stripRef}
+        onScroll={handleScroll}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onClickCapture={onClickCapture}
+        onKeyDown={onKeyDown}
+        className="inicio-strip m-0 mt-1 list-none"
+      >
         {items.map(({ a, w }) => {
           const cat = categoryOf(a.type);
           const st = statusOf(a);

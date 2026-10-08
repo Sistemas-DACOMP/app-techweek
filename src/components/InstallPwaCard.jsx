@@ -28,32 +28,19 @@ export function usePwaInstall() {
       localStorage.removeItem('tw_pwa_install_dismissed_time');
     } catch {}
 
-    const isSpecialAccount =
-      user?.email === 'sam03amorim@gmail.com' ||
-      (typeof localStorage !== 'undefined' && localStorage.getItem('facom_test_session')?.includes('sam03amorim@gmail.com'));
-
-    // Conta de desenvolvimento / admin: limpa bloqueios e força exibição
-    if (isSpecialAccount) {
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-      } catch {}
-    }
-
     // 1. Já está rodando como App instalado (Standalone)
     const isStandalone =
       (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)')?.matches) ||
       (typeof window !== 'undefined' && window.navigator?.standalone === true) ||
       (typeof document !== 'undefined' && document.referrer?.includes('android-app://'));
-    setIsInstalled(Boolean(isStandalone && !isSpecialAccount));
+    setIsInstalled(Boolean(isStandalone));
 
-    // 2. Dispensou nas últimas 24h (ignorado para a conta especial)
+    // 2. Dispensou nas últimas 24h
     let recentlyDismissed = false;
-    if (!isSpecialAccount) {
-      try {
-        const dismissedTime = localStorage.getItem(STORAGE_KEY);
-        recentlyDismissed = Boolean(dismissedTime && Date.now() - Number(dismissedTime) < DISMISS_DURATION_MS);
-      } catch {}
-    }
+    try {
+      const dismissedTime = localStorage.getItem(STORAGE_KEY);
+      recentlyDismissed = Boolean(dismissedTime && Date.now() - Number(dismissedTime) < DISMISS_DURATION_MS);
+    } catch {}
     setDismissed(recentlyDismissed);
 
     // 3. Sistema operacional

@@ -130,6 +130,14 @@ export async function verifySymplaTicket({ email, ticketNumber }) {
     if (response.ok) {
       const json = await response.json();
       if (json && json.verified) return json;
+    } else if (response.status === 409) {
+      // Ingresso já vinculado a outra conta (KAN-108): não tenta o fallback direto
+      const json = await response.json().catch(() => ({}));
+      return {
+        status: 'conflict',
+        verified: false,
+        message: json?.message || 'Este ingresso já está vinculado a outra conta.'
+      };
     }
   } catch (_backendErr) {
     // Backend offline, timeout ou 404 - fallback direto garantido

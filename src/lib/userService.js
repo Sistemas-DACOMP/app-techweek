@@ -13,9 +13,10 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile, updateEmail } from 'firebase/auth';
+import { updateProfile, updateEmail, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { db, storage, auth } from './firebase';
 import { validateAvatarFile } from './validators';
+import { apiRequest } from './api';
 
 function fileToDataUrl(file) {
   return new Promise((resolve) => {
@@ -32,48 +33,15 @@ function fileToDataUrl(file) {
 
 /**
  * Lê o perfil do usuário de forma 100% síncrona do cache local (zero layout flash).
+ * O papel (role) vem do perfil gravado pelo servidor; nenhum papel é inferido no cliente.
  */
-export function resolveRoleByEmail(email, existingRole = 'PARTICIPANT') {
-  const clean = (email || '').trim().toLowerCase();
-  if (clean === 'admin@admin.com' || clean === 'sam03amorim@gmail.com') {
-    return { role: 'ADMIN', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
-  }
-  if (clean === 'staff@techweek.com') {
-    return { role: 'STAFF', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
-  }
-  if (clean === 'aluno@ufu.br') {
-    return { role: 'PARTICIPANT', participantType: 'Aluno da UFU', participant_type: 'Aluno da UFU', hasSymplaTicket: true };
-  }
-  if (existingRole === 'ADMIN') {
-    return { role: 'ADMIN', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
-  }
-  if (existingRole === 'STAFF') {
-    return { role: 'STAFF', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
-  }
-  return null;
-}
-
 export function getCachedUserProfile(uid) {
   try {
     let targetUid = uid || auth?.currentUser?.uid;
-    if (!targetUid && typeof localStorage !== 'undefined') {
-      const testSessionStr = localStorage.getItem('facom_test_session');
-      if (testSessionStr) {
-        try {
-          const testSession = JSON.parse(testSessionStr);
-          if (testSession.uid) targetUid = testSession.uid;
-        } catch (_e) {}
-      }
-    }
     if (targetUid) {
       const cached = localStorage.getItem(`facom_profile_${targetUid}`);
       if (cached) {
-        const parsed = JSON.parse(cached);
-        const resolved = resolveRoleByEmail(parsed.email, parsed.role);
-        if (resolved) {
-          Object.assign(parsed, resolved);
-        }
-        return parsed;
+        return JSON.parse(cached);
       }
     }
     // Procura em qualquer chave de perfil em cache caso o uid ainda não tenha sido emitido
@@ -83,12 +51,7 @@ export function getCachedUserProfile(uid) {
         if (key && key.startsWith('facom_profile_')) {
           const item = localStorage.getItem(key);
           if (item) {
-            const parsed = JSON.parse(item);
-            const resolved = resolveRoleByEmail(parsed.email, parsed.role);
-            if (resolved) {
-              Object.assign(parsed, resolved);
-            }
-            return parsed;
+            return JSON.parse(item);
           }
         }
       }
@@ -141,7 +104,6 @@ export async function createUserProfile(uid, data) {
   const now = serverTimestamp();
 
   const cleanEmail = data.email ? data.email.trim().toLowerCase() : '';
-  const resolved = resolveRoleByEmail(cleanEmail, data.role);
 
   const profileData = {
     uid,
@@ -150,16 +112,16 @@ export async function createUserProfile(uid, data) {
     lastName: data.lastName || '',
     username: data.username ? data.username.trim().toLowerCase() : '',
     phone: data.phone || '',
-    participantType: resolved ? resolved.participantType : (data.participantType || 'Aluno da UFU'),
-    participant_type: resolved ? resolved.participantType : (data.participantType || 'Aluno da UFU'),
+    participantType: data.participantType || 'Aluno da UFU',
+    participant_type: data.participantType || 'Aluno da UFU',
     course: data.course || '',
     period: data.period ? Number(data.period) : null,
     linkedin: data.linkedin || '',
     instagram: data.instagram || '',
     github: data.github || '',
     avatarUrl: data.avatarUrl || null,
-    hasSymplaTicket: resolved ? resolved.hasSymplaTicket : Boolean(data.hasSymplaTicket || data.symplaTicket),
-    role: resolved ? resolved.role : (data.role || 'PARTICIPANT'),
+    hasSymplaTicket: Boolean(data.hasSymplaTicket || data.symplaTicket),
+    role: 'PARTICIPANT', // papel nunca vem do cliente; promoção é feita pelo backend (custom claims)
     totalPoints: 0,
     pontuacaoTotal: 0,
     ticketId: data.ticketId || data.symplaTicket?.ticketNumber || null,
@@ -217,8 +179,6 @@ export async function getUserProfile(uid) {
 
     if (snap.exists()) {
       const data = snap.data();
-      const cleanEmail = (data.email || localData?.email || '').trim().toLowerCase();
-      const resolved = resolveRoleByEmail(cleanEmail, data.role || localData?.role);
 
       // Fusão segura: nunca substitui um avatarUrl ou symplaTicket preenchido localmente por null/indefinido do Firestore
       const merged = {
@@ -229,10 +189,6 @@ export async function getUserProfile(uid) {
         hasSymplaTicket: !!(data.hasSymplaTicket || data.symplaTicket || localData?.hasSymplaTicket || localData?.symplaTicket)
       };
 
-      if (resolved) {
-        Object.assign(merged, resolved);
-      }
-
       try {
         localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(merged));
       } catch (_e) {}
@@ -241,14 +197,6 @@ export async function getUserProfile(uid) {
   } catch (err) {
     if (err?.code !== 'permission-denied') {
       console.warn('[userService] Aviso: Leitura do Firestore falhou, utilizando cache local:', err);
-    }
-  }
-
-  if (localData) {
-    const cleanEmail = (localData.email || '').trim().toLowerCase();
-    const resolved = resolveRoleByEmail(cleanEmail, localData.role);
-    if (resolved) {
-      Object.assign(localData, resolved);
     }
   }
 
@@ -307,21 +255,24 @@ export async function updateUserProfile(uid, updates) {
 /**
  * Atualiza o e-mail do usuário no Firestore e no Firebase Auth.
  */
-export async function updateUserEmail(uid, newEmail) {
+export async function updateUserEmail(uid, newEmail, currentPassword) {
   if (!uid || !newEmail) throw new Error('UID e novo e-mail são obrigatórios.');
   const trimmedEmail = newEmail.trim().toLowerCase();
 
-  // 1. Atualiza no Firestore
-  await updateUserProfile(uid, { email: trimmedEmail });
-
-  // 2. Tenta atualizar no Firebase Auth (se a sessão for recente)
-  try {
-    if (auth.currentUser && auth.currentUser.uid === uid) {
-      await updateEmail(auth.currentUser, trimmedEmail);
-    }
-  } catch (authErr) {
-    console.warn('Aviso: E-mail atualizado no Firestore, mas não no Auth:', authErr);
+  const user = auth.currentUser;
+  if (!user || user.uid !== uid) {
+    throw new Error('Sessão inválida. Faça login novamente para trocar o e-mail.');
   }
+
+  // 1. Auth primeiro: se falhar (ex.: auth/requires-recent-login), o erro sobe pra UI
+  //    e o Firestore não é tocado, então perfil e login nunca ficam com e-mails diferentes.
+  if (currentPassword) {
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword));
+  }
+  await updateEmail(user, trimmedEmail);
+
+  // 2. Só depois de o Auth aceitar, grava no Firestore
+  await updateUserProfile(uid, { email: trimmedEmail });
 
   return true;
 }
@@ -590,40 +541,31 @@ export function subscribeToAllUsers(callback) {
 }
 
 /**
- * Atualiza o papel do usuário no Firestore a partir do painel de administração.
+ * Troca o papel do usuário pelo backend (PUT /api/admin/users/:uid/role), que grava
+ * o custom claim e o Firestore juntos. As regras do Firestore bloqueiam escrita
+ * direta de `role` pelo client (KAN-60), então updateDoc aqui nunca funcionaria.
  */
 export async function updateUserRoleInFirestore(uid, newRole) {
   if (!uid || !newRole) return { success: false, error: 'UID e role são obrigatórios.' };
   try {
-    const userRef = doc(db, 'users', uid);
+    await apiRequest(`/api/admin/users/${encodeURIComponent(uid)}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role: newRole })
+    });
     const participantType = newRole === 'ADMIN' || newRole === 'STAFF' ? 'Organizador' : (newRole === 'SPONSOR' ? 'Patrocinador' : 'Aluno da UFU');
-    
-    // Atualiza imediatamente cache local do perfil
     try {
       if (typeof localStorage !== 'undefined') {
         const cachedKey = `facom_profile_${uid}`;
         const currentCached = localStorage.getItem(cachedKey);
         const parsed = currentCached ? JSON.parse(currentCached) : {};
-        localStorage.setItem(cachedKey, JSON.stringify({
-          ...parsed,
-          role: newRole,
-          participantType,
-          participant_type: participantType
-        }));
+        localStorage.setItem(cachedKey, JSON.stringify({ ...parsed, role: newRole, participantType, participant_type: participantType }));
         window.dispatchEvent(new Event('facom_profile_updated'));
       }
     } catch (_e) {}
-
-    await updateDoc(userRef, {
-      role: newRole,
-      participantType,
-      participant_type: participantType,
-      updatedAt: new Date().toISOString()
-    });
     return { success: true };
   } catch (err) {
     console.error('Erro ao atualizar papel do usuário:', err);
-    return { success: false, error: err.message };
+    return { success: false, error: err.data?.message || err.message };
   }
 }
 

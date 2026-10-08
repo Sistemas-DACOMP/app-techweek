@@ -9,16 +9,13 @@ import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityServic
 import { getMyProfile } from '../lib/gameplay';
 import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
 import { auth } from '../lib/firebase';
+import { useAuth } from '../contexts/AuthContext';
+import { decideAccess } from '../lib/accessGuard';
 import { stopAllMediaTracks } from '../lib/cameraUtils';
 import Mascot from '../components/Mascot';
 import RoleSwitcher from '../components/RoleSwitcher';
 import iconeTw from '../assets/icone.png';
 import '../styles/staff.css';
-
-// Atalho de login de teste e fallback simulado só existem fora de produção (mesmo padrão do Scanner.jsx).
-const isDevMode = typeof window !== 'undefined' && (
-  import.meta.env.DEV || window.location.search.includes('demo=true')
-);
 
 const RESULT_MS = 3000;
 
@@ -90,19 +87,9 @@ function RoundButton({ label, onClick, children, ...rest }) {
 
 export default function Staff() {
   const navigate = useNavigate();
+  const { user: authUser, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [authorized, setAuthorized] = useState(() => {
-    if (typeof localStorage !== 'undefined') {
-      const testSessionStr = localStorage.getItem('facom_test_session');
-      if (testSessionStr) {
-        try {
-          const s = JSON.parse(testSessionStr);
-          if (s.role === 'STAFF' || s.role === 'ADMIN' || s.email === 'staff@techweek.com' || s.email === 'admin@admin.com') return true;
-        } catch (_e) {}
-      }
-    }
-    return false;
-  });
+  const [authorized, setAuthorized] = useState(false);
   const [profile, setProfile] = useState(null);
   const [activities, setActivities] = useState([]);
   const [selectedActivity, setSelectedActivity] = useState('');
@@ -130,25 +117,34 @@ export default function Staff() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
 
+  // Só decide painel x login depois que o Firebase restaurou a sessão (senão o reload pisca o login).
   useEffect(() => {
+    if (authLoading) return;
+    if (!authUser) {
+      setProfile(null);
+      setAuthorized(false);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
     async function checkAuth() {
       try {
         const profile = await getMyProfile();
+        if (cancelled) return;
         setProfile(profile);
-        if (profile?.role === 'STAFF' || profile?.role === 'ADMIN' || profile?.participant_type === 'Organizador' || profile?.participantType === 'Organizador') {
-          setAuthorized(true);
-          fetchActivities();
-        } else if (!authorized) {
-          setAuthorized(false);
-        }
+        // Papel vem só do perfil/claims do servidor; a UI não é autorização (o backend barra /api/staff/*).
+        const ok = decideAccess({ authLoading: false, user: authUser, profileReady: !!profile, role: profile?.role, allowed: ['STAFF', 'ADMIN'] }) === 'allowed';
+        setAuthorized(ok);
+        if (ok) fetchActivities();
       } catch (error) {
         console.error('Auth error', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     checkAuth();
-  }, [authorized]);
+    return () => { cancelled = true; };
+  }, [authLoading, authUser]);
 
   const handleStaffLogin = async (e) => {
     if (e) e.preventDefault();
@@ -159,29 +155,6 @@ export default function Staff() {
       const res = await loginWithEmailAndPassword(staffEmail, staffPassword);
       if (!res.success) {
         setLoginError(res.error || 'Credenciais inválidas.');
-      } else {
-        setAuthorized(true);
-        fetchActivities();
-      }
-    } catch (err) {
-      setLoginError(err.message || 'Falha ao autenticar.');
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  const handleQuickStaff = async (email = 'staff@techweek.com', pass = 'StaffPassword123!') => {
-    setStaffEmail(email);
-    setStaffPassword(pass);
-    setLoginLoading(true);
-    setLoginError('');
-    try {
-      const res = await loginWithEmailAndPassword(email, pass);
-      if (!res.success) {
-        setLoginError(res.error || 'Credenciais inválidas.');
-      } else {
-        setAuthorized(true);
-        fetchActivities();
       }
     } catch (err) {
       setLoginError(err.message || 'Falha ao autenticar.');
@@ -280,7 +253,7 @@ export default function Staff() {
   };
 
   const handleScan = async (data) => {
-    if (processing || busyRef.current) return;
+    if (busyRef.current) return;
     busyRef.current = true;
     setProcessing(true);
 
@@ -305,6 +278,7 @@ export default function Staff() {
       return;
     }
 
+    let failed = false;
     try {
       // Chamada para `POST /api/checkin/entrance` enviando `{ participantUid, activityId }`.
       const headers = { 'Content-Type': 'application/json' };
@@ -329,8 +303,9 @@ export default function Staff() {
           showResult({ status: 'yellow', kind: 'warn', message: 'Não encontramos inscrição dessa pessoa nesta atividade.' }, participantUid);
           playSound('warn');
         } else {
-          showResult({ status: 'red', kind: 'err', message: errorData.message || 'Erro ao registrar check-in.' }, participantUid);
+          showResult({ status: 'red', kind: 'err', message: errorData.message || 'Erro ao registrar check-in.', retryUid: participantUid }, participantUid);
           playSound('error');
+          failed = true;
         }
       } else {
         // Sucesso
@@ -338,26 +313,12 @@ export default function Staff() {
         playSound('success');
       }
     } catch (err) {
-      if (isDevMode) {
-        // Simulação só em dev/demo, para testar a UI sem backend local rodando.
-        console.warn("Backend call failed, simulating response for test", err);
-        const rand = Math.random();
-        if (rand > 0.6) {
-          showResult({ status: 'green', kind: 'ok', message: '[TESTE] Entrada confirmada com sucesso.' }, participantUid);
-          playSound('success');
-        } else if (rand > 0.3) {
-          showResult({ status: 'yellow', kind: 'warn', message: '[TESTE] Aluno não inscrito previamente.' }, participantUid);
-          playSound('warn');
-        } else {
-          showResult({ status: 'red', kind: 'dup', message: '[TESTE] Entrada duplicada.' }, participantUid);
-          playSound('error');
-        }
-      } else {
-        showResult({ status: 'red', kind: 'err', message: 'A conexão falhou e a entrada não foi registrada. Leia o crachá de novo.' }, participantUid);
-        playSound('error');
-      }
+      // Falha de rede/backend: erro real, nunca uma entrada simulada. Fica na tela até a pessoa tentar de novo ou voltar.
+      showResult({ status: 'red', kind: 'err', message: 'A conexão falhou e a entrada não foi registrada. Tente de novo ou leia o crachá outra vez.', retryUid: participantUid }, participantUid);
+      playSound('error');
+      failed = true;
     } finally {
-      resetTimer.current = setTimeout(dismissResult, RESULT_MS);
+      if (!failed) resetTimer.current = setTimeout(dismissResult, RESULT_MS);
     }
   };
   handleScanRef.current = handleScan;
@@ -481,11 +442,6 @@ export default function Staff() {
             {loginLoading ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={18} aria-hidden="true" />}
             {loginLoading ? 'Entrando' : 'Entrar na portaria'}
           </button>
-          {isDevMode && (
-            <button type="button" onClick={() => handleQuickStaff('staff@techweek.com', 'StaffPassword123!')} className="btn btn-secondary btn-sm">
-              Entrar como staff de teste
-            </button>
-          )}
         </form>
       </main>
     );
@@ -875,12 +831,19 @@ export default function Staff() {
           )}
           <div className="mt-auto w-full max-w-[430px]">
             <div className="flex justify-between text-[13px] font-bold text-[#C3C9DE]">
-              <span>{resultKind === 'ok' ? 'Próxima leitura' : 'Volta ao leitor'} em {RESULT_MS / 1000} s</span>
-              <span>ou toque abaixo</span>
+              <span>{scanResult.retryUid ? 'Nada foi registrado' : `${resultKind === 'ok' ? 'Próxima leitura' : 'Volta ao leitor'} em ${RESULT_MS / 1000} s`}</span>
+              <span>{scanResult.retryUid ? 'escolha abaixo' : 'ou toque abaixo'}</span>
             </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-[3px]" style={{ background: 'rgba(255,255,255,.12)' }}>
-              <div key={reads[0]?.id} className="staff-countdown h-1.5 rounded-[3px]" style={{ '--t': `${RESULT_MS}ms` }} />
-            </div>
+            {!scanResult.retryUid && (
+              <div className="mt-2 h-1.5 overflow-hidden rounded-[3px]" style={{ background: 'rgba(255,255,255,.12)' }}>
+                <div key={reads[0]?.id} className="staff-countdown h-1.5 rounded-[3px]" style={{ '--t': `${RESULT_MS}ms` }} />
+              </div>
+            )}
+            {scanResult.retryUid && (
+              <button type="button" onClick={() => { const uid = scanResult.retryUid; dismissResult(); handleScanRef.current(uid); }} className="btn btn-action btn-block mt-4 text-[16px]" style={{ minHeight: 54 }}>
+                Tentar de novo
+              </button>
+            )}
             <button type="button" onClick={dismissResult} className="press mt-4 flex h-[54px] w-full items-center justify-center rounded-2xl text-[16px] font-extrabold text-white" style={{ background: 'rgba(255,255,255,.12)' }}>
               {resultKind === 'ok' ? 'Ler próximo' : 'Voltar ao leitor'}
             </button>

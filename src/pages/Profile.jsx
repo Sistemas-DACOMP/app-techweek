@@ -116,6 +116,8 @@ export default function Profile() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [verifyingTicket, setVerifyingTicket] = useState(false);
   const [editFeedback, setEditFeedback] = useState(null);
+  const [needsPassword, setNeedsPassword] = useState(false); // troca de e-mail pede a senha (re-autenticação)
+  const [reauthPassword, setReauthPassword] = useState('');
   const [ticketSheetOpen, setTicketSheetOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState(null);
   const [feedbackModal, setFeedbackModal] = useState(null);
@@ -357,22 +359,37 @@ export default function Profile() {
         github: cleanGithub
       };
 
-      // Se o ingresso ainda NÃO estava confirmado, permite persistir o novo e-mail
+      // Troca de e-mail: Auth primeiro. Se falhar, nada é gravado (nem o resto do perfil),
+      // pra o e-mail do perfil nunca divergir do e-mail de login.
+      if (!isTicketConfirmed && cleanEmail && auth.currentUser && auth.currentUser.email !== cleanEmail) {
+        try {
+          await updateUserEmail(uid, cleanEmail, reauthPassword || undefined);
+          setNeedsPassword(false);
+          setReauthPassword('');
+        } catch (authErr) {
+          const code = authErr?.code;
+          if (code === 'auth/requires-recent-login') {
+            setNeedsPassword(true);
+            setEditFeedback({ type: 'error', text: 'Por segurança, informe sua senha atual para trocar o e-mail.' });
+          } else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+            setNeedsPassword(true);
+            setEditFeedback({ type: 'error', text: 'Senha incorreta. Tente de novo.' });
+          } else if (code === 'auth/email-already-in-use') {
+            setEditFeedback({ type: 'error', text: 'Este e-mail já está em uso por outra conta.' });
+          } else {
+            setEditFeedback({ type: 'error', text: 'Não foi possível trocar o e-mail agora. Nada foi alterado.' });
+          }
+          return;
+        }
+      }
+
+      // Se o ingresso ainda NÃO estava confirmado, o e-mail (já aceito pelo Auth) vai junto
       if (!isTicketConfirmed && cleanEmail) {
         updates.email = cleanEmail;
       }
 
       // 1. Atualiza documento no Firestore
       await updateUserProfile(uid, updates);
-
-      // 2. Se e-mail foi alterado E o ingresso não estava bloqueado, tenta atualizar no Firebase Auth
-      if (!isTicketConfirmed && cleanEmail && auth.currentUser && auth.currentUser.email !== cleanEmail) {
-        try {
-          await updateUserEmail(uid, cleanEmail);
-        } catch (authErr) {
-          console.warn('Aviso: E-mail atualizado no Firestore mas precisa de re-login no Auth:', authErr);
-        }
-      }
 
       // 3. Logística Sympla: apenas se o ingresso AINDA NÃO foi confirmado
       let symplaMessage = '';
@@ -397,19 +414,8 @@ export default function Profile() {
                 console.warn('[Profile] Atualização client-side secundária (já salvo pelo backend):', updateErr);
               }
               symplaMessage = ` Ingresso Sympla vinculado: ${ticketObj.ticketName || p?.ticketName || 'Oficial'}!`;
-            } else if (cleanTicketNum && cleanTicketNum.length >= 4) {
-              const manualTicket = {
-                ticketNumber: cleanTicketNum,
-                ticketName: 'Ingresso Oficial Sympla',
-                qrCodeData: `SYMPLA:${cleanTicketNum}`,
-                orderId: `MANUAL_${Date.now()}`
-              };
-              updates.symplaTicket = manualTicket;
-              updates.hasSymplaTicket = true;
-              try {
-                await updateUserProfile(uid, { symplaTicket: manualTicket, hasSymplaTicket: true });
-              } catch (_e) {}
-              symplaMessage = ` Ingresso Sympla vinculado (#${cleanTicketNum})!`;
+            } else if (symplaRes?.status === 'conflict') {
+              symplaMessage = ` (${symplaRes.message})`;
             } else if (cleanEmail !== profile.email) {
               symplaMessage = ' (Ingresso não localizado com este e-mail).';
             }
@@ -478,23 +484,8 @@ export default function Profile() {
           }
         }
         setEditFeedback({ type: 'success', text: `Ingresso confirmado com sucesso: ${ticketObj.ticketName || p?.ticketName || 'Oficial'}!` });
-      } else if (cleanTicket && cleanTicket.length >= 4) {
-        const manualTicket = {
-          ticketNumber: cleanTicket,
-          ticketName: 'Ingresso Oficial Sympla',
-          qrCodeData: `SYMPLA:${cleanTicket}`,
-          orderId: `MANUAL_${Date.now()}`
-        };
-        setProfile(prev => ({ ...prev, symplaTicket: manualTicket, hasSymplaTicket: true }));
-        const uid = profile.id || auth.currentUser?.uid;
-        if (uid) {
-          try {
-            await updateUserProfile(uid, { symplaTicket: manualTicket, hasSymplaTicket: true });
-          } catch (_e) {}
-        }
-        setEditFeedback({ type: 'success', text: `Ingresso (#${cleanTicket}) vinculado com sucesso!` });
       } else {
-        setEditFeedback({ type: 'warning', text: res?.message || 'Ingresso não encontrado no Sympla. Verifique se o e-mail cadastrado ou código do ingresso está correto.' });
+        setEditFeedback({ type: res?.status === 'conflict' ? 'error' : 'warning', text: res?.message || 'Ingresso não encontrado no Sympla. Verifique se o e-mail cadastrado ou código do ingresso está correto.' });
       }
     } catch (err) {
       console.error('[Profile] Erro ao verificar ingresso no modal:', err);
@@ -866,6 +857,14 @@ export default function Profile() {
                     onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
                 </Field>
                 <p className="mt-1.5 text-[12.5px] text-text-3">Usado para entrar e para achar seu ingresso no Sympla.</p>
+                {needsPassword && (
+                  <div className="mt-3">
+                    <Field id="pf-reauth" label="Senha atual (para confirmar a troca de e-mail)">
+                      <input id="pf-reauth" type="password" autoComplete="current-password" className="field pf-field" value={reauthPassword}
+                        onChange={(e) => setReauthPassword(e.target.value)} />
+                    </Field>
+                  </div>
+                )}
               </div>
             )}
             <button type="button" onClick={handleDeleteAccount} className="flex min-h-14 w-full items-center gap-3 text-left text-err">

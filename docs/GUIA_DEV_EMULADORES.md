@@ -100,6 +100,21 @@ Este painel é o seu console de superpoderes local:
 
 ---
 
+### Perfis de teste (admin, staff, participante)
+
+`npm run seed:test-accounts` grava 3 perfis em `/users` do Firestore (só o perfil, não cria login no Auth; crie o usuário na aba Authentication se precisar logar). É **exclusivo do emulador**: o script recusa rodar se `FIRESTORE_EMULATOR_HOST` e `FIREBASE_AUTH_EMULATOR_HOST` não estiverem definidos, pra nunca escrever em Firebase real. Com `npm run emulators` rodando:
+
+```bash
+# Git Bash / Linux / Mac
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 npm run seed:test-accounts
+# PowerShell
+$env:FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"; $env:FIREBASE_AUTH_EMULATOR_HOST="127.0.0.1:9099"; npm run seed:test-accounts
+```
+
+Não há senha no script. Se for criar login no Auth, use a senha que quiser, só no emulador, e não commite.
+
+---
+
 ## 🌿 6. Fluxo de Git e Integração com o Jira
 
 Nosso repositório está integrado ao Jira do projeto (`APP_TechWeek`). Siga sempre este fluxo:

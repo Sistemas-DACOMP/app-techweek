@@ -20,7 +20,7 @@ import BottomNavigation from './components/BottomNavigation';
 import logoTw from './assets/logo-tw.png';
 import Mascot from './components/Mascot';
 import './styles/entrada.css';
-import { getAppSubdomain } from './lib/subdomain';
+import { getAppSubdomain, isRouteAllowedOnSubdomain } from './lib/subdomain';
 import { stopAllMediaTracks } from './lib/cameraUtils';
 
 function AppContent() {
@@ -35,10 +35,8 @@ function AppContent() {
   // Detecção de subdomínio: admin.* ou staff.*
   useEffect(() => {
     const sub = getAppSubdomain();
-    if (sub === 'admin' && location.pathname !== '/admin') {
-      navigate('/admin', { replace: true });
-    } else if (sub === 'staff' && location.pathname !== '/staff') {
-      navigate('/staff', { replace: true });
+    if (sub && !isRouteAllowedOnSubdomain(sub, location.pathname)) {
+      navigate(sub === 'admin' ? '/admin' : '/staff', { replace: true });
     }
   }, [location.pathname, navigate]);
 

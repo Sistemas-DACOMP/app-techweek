@@ -55,6 +55,8 @@ import {
 import { LinkedinIcon, GithubIcon, InstagramIcon } from './admin/SocialIcons';
 import { QRCodeSVG } from 'qrcode.react';
 import { useUser } from '../hooks/useUser';
+import { useAuth } from '../contexts/AuthContext';
+import { decideAccess } from '../lib/accessGuard';
 import { 
   createActivity, 
   deleteActivity, 
@@ -218,37 +220,13 @@ const MISSION_PRESETS = [
 
 export default function Admin() {
   const navigate = useNavigate();
-  const { profile, role, participantType, refreshProfile } = useUser();
+  const { profile, role, refreshProfile, profileReady } = useUser();
+  const { user: authUser, loading: authLoading } = useAuth();
 
-  // Guard de autorização Admin
-  const [sessionAdmin, setSessionAdmin] = useState(() => {
-    if (typeof localStorage !== 'undefined') {
-      const testSessionStr = localStorage.getItem('facom_test_session');
-      if (testSessionStr) {
-        try {
-          const s = JSON.parse(testSessionStr);
-          if (s.role === 'ADMIN' || s.email === 'admin@admin.com' || s.email === 'sam03amorim@gmail.com') return true;
-        } catch (_e) {}
-      }
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('facom_profile_')) {
-          try {
-            const p = JSON.parse(localStorage.getItem(key));
-            if (p.role === 'ADMIN' || p.email === 'admin@admin.com' || p.email === 'sam03amorim@gmail.com') return true;
-          } catch (_e) {}
-        }
-      }
-    }
-    return false;
-  });
-
-  const isAuthorized = sessionAdmin || 
-    role === 'ADMIN' || 
-    participantType === 'Organizador' || 
-    profile?.role === 'ADMIN' || 
-    profile?.email === 'admin@admin.com' || 
-    profile?.email === 'sam03amorim@gmail.com';
+  // Guard de autorização Admin: só o papel vindo do perfil/claims do servidor libera a tela.
+  // A UI não é autorização; o backend barra /api/admin/* por papel de qualquer forma.
+  const access = decideAccess({ authLoading, user: authUser, profileReady, role: profile?.role || role, allowed: ['ADMIN'] });
+  const isAuthorized = access === 'allowed';
 
   // Login de contingência
   const [adminEmail, setAdminEmail] = useState('');
@@ -857,29 +835,6 @@ export default function Admin() {
       if (!res.success) {
         setLoginError(res.error || 'Credenciais inválidas.');
       } else {
-        setSessionAdmin(true);
-        if (typeof refreshProfile === 'function') {
-          try { await refreshProfile(); } catch (_e) {}
-        }
-      }
-    } catch (err) {
-      setLoginError(err.message || 'Falha ao autenticar.');
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  const handleQuickAdmin = async (targetEmail = 'admin@admin.com', targetPass = 'AdminPassword123!') => {
-    setAdminEmail(targetEmail);
-    setAdminPassword(targetPass);
-    setLoginLoading(true);
-    setLoginError('');
-    try {
-      const res = await loginWithEmailAndPassword(targetEmail, targetPass);
-      if (!res.success) {
-        setLoginError(res.error || 'Credenciais inválidas.');
-      } else {
-        setSessionAdmin(true);
         if (typeof refreshProfile === 'function') {
           try { await refreshProfile(); } catch (_e) {}
         }
@@ -892,7 +847,6 @@ export default function Admin() {
   };
 
   const handleAdminLogout = async () => {
-    setSessionAdmin(false);
     await logoutUser();
     if (typeof refreshProfile === 'function') {
       try { await refreshProfile(); } catch (_e) {}
@@ -1153,7 +1107,7 @@ export default function Admin() {
     const who = u.username ? `@${u.username}` : (u.fullName || u.email);
     const res = await updateUserRoleInFirestore(uid, newRole);
     if (res && res.success === false) {
-      setFeedback({ type: 'error', title: 'Não deu para trocar o papel', message: 'Confira a conexão e tente de novo.' });
+      setFeedback({ type: 'error', title: 'Não deu para trocar o papel', message: res.error || 'Confira a conexão e tente de novo.' });
       return;
     }
     setFeedback({
@@ -1212,6 +1166,9 @@ export default function Admin() {
   }, [missionsList, missionCategoryFilter, missionStatusFilter, missionSearch]);
 
   // Se não autorizado, tela de login corporativo
+  if (access === 'loading') {
+    return <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)' }} aria-busy="true" aria-label="Carregando" />;
+  }
   if (!isAuthorized) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: "inherit" }}>
@@ -1279,15 +1236,6 @@ export default function Admin() {
             </button>
           </form>
 
-          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--line-2)', textAlign: 'center' }}>
-            <button
-              type="button"
-              onClick={() => handleQuickAdmin('admin@admin.com', 'AdminPassword123!')}
-              style={{ background: 'none', border: 'none', color: 'var(--link)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', padding: '4px 8px' }}
-            >
-              Acesso Rápido de Homologação (Admin)
-            </button>
-          </div>
         </div>
       </div>
     );

@@ -6,11 +6,13 @@ import {
   uploadUserAvatar,
   updateUserEmail,
   getLeaderboardUsers,
-  subscribeToLeaderboardUsers
+  subscribeToLeaderboardUsers,
+  updateUserRoleInFirestore
 } from './userService';
+import { apiRequest } from './api';
 import { doc, setDoc, getDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile, updateEmail } from 'firebase/auth';
+import { updateProfile, updateEmail, reauthenticateWithCredential } from 'firebase/auth';
 
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(() => ({ id: 'mockDocRef' })),
@@ -36,13 +38,17 @@ vi.mock('firebase/storage', () => ({
 
 vi.mock('firebase/auth', () => ({
   updateProfile: vi.fn(),
-  updateEmail: vi.fn(() => Promise.resolve())
+  updateEmail: vi.fn(() => Promise.resolve()),
+  reauthenticateWithCredential: vi.fn(() => Promise.resolve()),
+  EmailAuthProvider: { credential: vi.fn((email, pass) => ({ email, pass })) }
 }));
+
+vi.mock('./api', () => ({ apiRequest: vi.fn() }));
 
 vi.mock('./firebase', () => ({
   db: {},
   storage: {},
-  auth: { currentUser: { uid: 'user-123' } }
+  auth: { currentUser: { uid: 'user-123', email: 'atual@exemplo.com' } }
 }));
 
 describe('userService', () => {
@@ -68,12 +74,27 @@ describe('userService', () => {
       expect(result.firstName).toBe('Samuel');
     });
 
+    it('nunca grava papel elevado vindo do cliente nem infere papel por e-mail', async () => {
+      vi.mocked(setDoc).mockResolvedValueOnce(undefined);
+      const result = await createUserProfile('user-123', { email: 'conta.qualquer@exemplo.com', role: 'ADMIN' });
+      expect(result.role).toBe('PARTICIPANT');
+    });
+
     it('lança erro se uid não for informado', async () => {
       await expect(createUserProfile(null, {})).rejects.toThrow('UID do usuário é obrigatório');
     });
   });
 
   describe('getUserProfile', () => {
+    it('mantém o papel do servidor independente do e-mail', async () => {
+      vi.mocked(getDoc).mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ email: 'conta.qualquer@exemplo.com', role: 'PARTICIPANT' })
+      });
+      const profile = await getUserProfile('user-999');
+      expect(profile.role).toBe('PARTICIPANT');
+    });
+
     it('retorna os dados do documento quando ele existe', async () => {
       vi.mocked(getDoc).mockResolvedValueOnce({
         exists: () => true,
@@ -122,20 +143,36 @@ describe('userService', () => {
       await expect(updateUserEmail('123', '')).rejects.toThrow('UID e novo e-mail são obrigatórios.');
     });
 
-    it('atualiza o documento do usuário no Firestore e tenta no Auth', async () => {
+    it('troca no Auth primeiro e só então grava no Firestore', async () => {
       const result = await updateUserEmail('user-123', 'Novo.Email@ufu.br ');
 
       expect(result).toBe(true);
-      expect(updateDoc).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          email: 'novo.email@ufu.br'
-        })
-      );
-      expect(updateEmail).toHaveBeenCalledWith(
-        expect.anything(),
-        'novo.email@ufu.br'
-      );
+      expect(updateEmail).toHaveBeenCalledWith(expect.anything(), 'novo.email@ufu.br');
+      expect(updateDoc).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ email: 'novo.email@ufu.br' }));
+      expect(vi.mocked(updateEmail).mock.invocationCallOrder[0])
+        .toBeLessThan(vi.mocked(updateDoc).mock.invocationCallOrder[0]);
+    });
+
+    it('se o Auth recusar (login recente), propaga o erro e NÃO grava no Firestore (KAN-117)', async () => {
+      const err = Object.assign(new Error('recent'), { code: 'auth/requires-recent-login' });
+      vi.mocked(updateEmail).mockRejectedValueOnce(err);
+
+      await expect(updateUserEmail('user-123', 'novo@ufu.br')).rejects.toMatchObject({ code: 'auth/requires-recent-login' });
+      expect(updateDoc).not.toHaveBeenCalled();
+    });
+
+    it('com a senha informada, re-autentica antes de trocar o e-mail', async () => {
+      await updateUserEmail('user-123', 'novo@ufu.br', 'senha-atual');
+
+      expect(reauthenticateWithCredential).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(reauthenticateWithCredential).mock.invocationCallOrder[0])
+        .toBeLessThan(vi.mocked(updateEmail).mock.invocationCallOrder[0]);
+    });
+
+    it('recusa se a sessão do Auth não for do uid informado', async () => {
+      await expect(updateUserEmail('outro-uid', 'novo@ufu.br')).rejects.toThrow('Sessão inválida');
+      expect(updateEmail).not.toHaveBeenCalled();
+      expect(updateDoc).not.toHaveBeenCalled();
     });
   });
 
@@ -302,5 +339,20 @@ describe('userService', () => {
       expect(mockUnsubscribe).toHaveBeenCalled();
     });
   });
-});
 
+  describe('updateUserRoleInFirestore (KAN-120)', () => {
+    it('troca o papel pelo backend, sem escrever no Firestore pelo client', async () => {
+      apiRequest.mockResolvedValue({ success: true });
+      const res = await updateUserRoleInFirestore('u1', 'STAFF');
+      expect(res).toEqual({ success: true });
+      expect(apiRequest).toHaveBeenCalledWith('/api/admin/users/u1/role', { method: 'PUT', body: JSON.stringify({ role: 'STAFF' }) });
+      expect(updateDoc).not.toHaveBeenCalled();
+    });
+
+    it('devolve a mensagem do backend quando a troca falha', async () => {
+      apiRequest.mockRejectedValue(Object.assign(new Error('FORBIDDEN'), { data: { message: 'Sem permissão.' } }));
+      const res = await updateUserRoleInFirestore('u1', 'STAFF');
+      expect(res).toEqual({ success: false, error: 'Sem permissão.' });
+    });
+  });
+});

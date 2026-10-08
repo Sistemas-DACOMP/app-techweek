@@ -210,7 +210,7 @@ export default function Agenda() {
         const bActId = b.activityId || b.activity_id;
         return bActId !== activityId && b.id !== activityId && !b.id?.endsWith(`_${activityId}`);
       }));
-      setToastMessage({ type: 'info', message: 'Vaga liberada.' });
+      setToastMessage({ type: 'info', message: 'Inscrição cancelada. A vaga foi liberada.' });
     } catch (err) {
       setToastMessage({ type: 'error', message: err.data?.message || err.message || 'Erro ao cancelar inscrição.' });
     } finally {
@@ -507,7 +507,7 @@ export default function Agenda() {
       {/* Painel da atividade, leitura do telão e leitura de QR */}
       {selectedActivity && (
         <ActivityModal
-          activity={selectedActivity}
+          activity={activities.find((a) => a.id === selectedActivity.id) || selectedActivity}
           status={activityStatuses[selectedActivity.id] || 'NONE'}
           isReserving={reservingId === selectedActivity.id}
           isCancelling={cancellingId === selectedActivity.id}
