@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, Loader2, ScanLine, User } from 'lucide-react';
 import { useScrollLock } from '../hooks/useScrollLock';
+import ConfirmModal from './ConfirmModal';
 import { CATEGORY_STYLES } from './Badge';
 import '../styles/agenda.css';
 
@@ -93,6 +94,7 @@ export default function ActivityModal({
   const [isBioExpanded, setIsBioExpanded] = useState(false);
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   const touchStartY = useRef(0);
   const isDragging = useRef(false);
@@ -172,6 +174,20 @@ export default function ActivityModal({
 
   const primaryClass = 'btn btn-primary btn-block min-h-[54px]! text-base! font-bold! shadow-[0_10px_24px_rgba(79,70,229,0.35)]';
 
+  // Mesma ação, texto e confirmação para quem tem vaga e para quem está na lista de espera
+  const isWaiting = status === 'WAITING_LIST';
+  const cancelButton = onCancelReserve && (status === 'BOOKED' || isWaiting) ? (
+    <button
+      type="button"
+      onClick={() => setConfirmingCancel(true)}
+      disabled={isCancelling}
+      className="btn btn-danger btn-sm btn-block"
+    >
+      {isCancelling && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+      {isCancelling ? 'Cancelando' : 'Cancelar inscrição'}
+    </button>
+  ) : null;
+
   let footer;
   if (status === 'COMPLETED') {
     footer = (
@@ -189,10 +205,13 @@ export default function ActivityModal({
     );
   } else if (status === 'BOOKED' && activity.attendanceMode === 'SELF_SCAN') {
     footer = (
-      <button type="button" onClick={() => { onClose(); if (onOpenSelfScanner) onOpenSelfScanner(activity); }} className={primaryClass}>
-        <ScanLine size={20} aria-hidden="true" />
-        Validar presença
-      </button>
+      <div className="flex flex-col gap-2">
+        <button type="button" onClick={() => { onClose(); if (onOpenSelfScanner) onOpenSelfScanner(activity); }} className={primaryClass}>
+          <ScanLine size={20} aria-hidden="true" />
+          Validar presença
+        </button>
+        {cancelButton}
+      </div>
     );
   } else if (status === 'BOOKED') {
     footer = (
@@ -201,24 +220,17 @@ export default function ActivityModal({
           <Check size={18} strokeWidth={3} aria-hidden="true" />
           Vaga reservada
         </p>
-        {onCancelReserve && (
-          <button
-            type="button"
-            onClick={() => onCancelReserve(activity.id)}
-            disabled={isCancelling}
-            className="btn btn-danger btn-sm btn-block"
-          >
-            {isCancelling && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-            {isCancelling ? 'Liberando vaga' : 'Liberar minha vaga'}
-          </button>
-        )}
+        {cancelButton}
       </div>
     );
   } else if (status === 'WAITING_LIST') {
     footer = (
-      <p className="flex min-h-[54px] items-center justify-center rounded-[14px] bg-surface-raised text-[15px] font-extrabold text-warn" role="status">
-        Você está na lista de espera
-      </p>
+      <div className="flex flex-col gap-2">
+        <p className="flex min-h-[54px] items-center justify-center rounded-[14px] bg-surface-raised text-[15px] font-extrabold text-warn" role="status">
+          Você está na lista de espera
+        </p>
+        {cancelButton}
+      </div>
     );
   } else {
     footer = (
@@ -372,6 +384,19 @@ export default function ActivityModal({
 
         <div className="shrink-0 px-5 pb-7 pt-4">{footer}</div>
       </div>
+      <ConfirmModal
+        isOpen={confirmingCancel}
+        title="Cancelar inscrição?"
+        message={isWaiting ? 'Você sai da lista de espera desta atividade.' : 'Sua vaga volta para outros participantes e você precisa reservar de novo se mudar de ideia.'}
+        confirmLabel="Cancelar inscrição"
+        cancelLabel="Manter"
+        isLoading={isCancelling}
+        onCancel={() => setConfirmingCancel(false)}
+        onConfirm={async () => {
+          await onCancelReserve(activity.id);
+          setConfirmingCancel(false);
+        }}
+      />
     </>,
     document.body
   );

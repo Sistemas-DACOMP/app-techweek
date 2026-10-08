@@ -210,7 +210,7 @@ export default function Agenda() {
         const bActId = b.activityId || b.activity_id;
         return bActId !== activityId && b.id !== activityId && !b.id?.endsWith(`_${activityId}`);
       }));
-      setToastMessage({ type: 'info', message: 'Vaga liberada.' });
+      setToastMessage({ type: 'info', message: 'Inscrição cancelada. A vaga foi liberada.' });
     } catch (err) {
       setToastMessage({ type: 'error', message: err.data?.message || err.message || 'Erro ao cancelar inscrição.' });
     } finally {
