@@ -85,6 +85,21 @@ describe('userService', () => {
     });
   });
 
+  describe('createUserProfile e os campos de ingresso Sympla (KAN-108)', () => {
+    it('não manda symplaTicket, hasSymplaTicket nem ticketId pro Firestore (as regras bloqueiam), mas mantém no cache local', async () => {
+      vi.mocked(setDoc).mockResolvedValueOnce(undefined);
+      const ticket = { ticketNumber: 'ABC-123' };
+      const result = await createUserProfile('user-9', { email: 'a@b.com', symplaTicket: ticket, hasSymplaTicket: true });
+
+      const payload = vi.mocked(setDoc).mock.calls.at(-1)[1];
+      expect(payload).not.toHaveProperty('symplaTicket');
+      expect(payload).not.toHaveProperty('hasSymplaTicket');
+      expect(payload).not.toHaveProperty('ticketId');
+      expect(payload.role).toBe('PARTICIPANT');
+      expect(result.symplaTicket).toEqual(ticket);
+    });
+  });
+
   describe('getUserProfile', () => {
     it('mantém o papel do servidor independente do e-mail', async () => {
       vi.mocked(getDoc).mockResolvedValueOnce({

@@ -153,7 +153,11 @@ export async function createUserProfile(uid, data) {
 
   // Tenta salvar no Firestore (sem lançar exceção bloqueante se as regras da nuvem ainda rejeitarem)
   try {
-    await setDoc(userRef, profileData, { merge: true });
+    // Campos de ingresso Sympla são do backend (firestore.rules os bloqueia no cliente, KAN-108):
+    // ficam só no cache local, nunca no payload do Firestore.
+    // eslint-disable-next-line no-unused-vars
+    const { hasSymplaTicket, symplaTicket, ticketId, ...firestoreData } = profileData;
+    await setDoc(userRef, firestoreData, { merge: true });
   } catch (err) {
     console.warn('[userService] Aviso: Gravação do perfil no Firestore rejeitada por regras, dados preservados no cache local:', err);
   }
