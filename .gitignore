@@ -46,3 +46,6 @@ claude-context/
 *.sw?
 .vercel
 .env*
+test-results/
+docs/redesign/screens/
+.playwright-mcp/

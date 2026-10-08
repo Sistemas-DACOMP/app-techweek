@@ -15,8 +15,8 @@ inputs:
   - task
   - spec
   - relevant_rules
-  - DESIGN.md            # Design System aprovado (se existir)
-  - DESIGN-AUDIT.md      # histórico de auditoria/evolução visual (se existir)
+  - DESIGN.md            # Design System aprovado (existe desde 2026-10-04)
+  - DESIGN-AUDIT.md      # histórico de auditoria/evolução visual (existe desde 2026-10-03)
 
 outputs:
   - findings
@@ -401,6 +401,9 @@ Nunca promover INFERENCE/ASSUMPTION a FACT silenciosamente (`rules/evidence-mode
 - Figma MCP é conector da conta Claude, não do repo — checar se está na sessão e qual arquivo
   Figma é o do produto (existe `FIGMA_PROMPT_TECHWEEK.md` na raiz; não confirmado se há arquivo
   Figma de produção).
-- **`DESIGN.md` e `DESIGN-AUDIT.md` ainda não existem** (2026-10-02) — só tokens soltos em
-  `src/index.css` + `components.json`. A primeira missão relevante deste agente é a
-  auditoria + redesign global (seção "Redesign inicial") que cria os dois.
+- **Resolvido 2026-10-04**: `DESIGN.md` (Design System aprovado pelo Fabio no canvas de design) e
+  `DESIGN-AUDIT.md` (auditoria 2026-10-03 + seção 0 com a evolução do redesign) existem na raiz.
+  Implementação no código ainda não começou: ordem tokens (DESIGN.md §2-4) → primitivos → telas,
+  validando com Playwright contra o canvas. Regras que o design assume estão em DESIGN.md §12 com
+  classificação - INFERIDA/NÃO DEFINIDA nunca viram regra sem o Fabio.
+- Ainda sem design: telas do Patrocinador (refazer) e momento do Bilhete Dourado.

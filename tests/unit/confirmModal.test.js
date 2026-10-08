@@ -51,7 +51,7 @@ describe('ConfirmModal Component (KAN-101)', () => {
       })
     );
 
-    expect(html).toContain('background:#dc2626');
+    expect(html).toContain('btn-danger');
   });
 
   it('aplica cores da variante warning para logout', () => {
@@ -67,7 +67,7 @@ describe('ConfirmModal Component (KAN-101)', () => {
       })
     );
 
-    expect(html).toContain('background:#d97706');
+    expect(html).toContain('btn-warn');
   });
 
   it('exibe estado de carregamento quando isLoading é true', () => {

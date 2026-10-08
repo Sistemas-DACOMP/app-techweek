@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard,
@@ -47,35 +47,13 @@ import {
   Tv,
   Maximize2,
   Minimize2,
-  Radio,
   Layers,
-  Award
+  Award,
+  RefreshCw
 } from 'lucide-react';
 
-const LinkedinIcon = ({ size = 15, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
-    <rect x="2" y="9" width="4" height="12" />
-    <circle cx="4" cy="4" r="2" />
-  </svg>
-);
-
-const GithubIcon = ({ size = 15, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
-    <path d="M9 18c-4.51 2-5-2-7-2" />
-  </svg>
-);
-
-const InstagramIcon = ({ size = 15, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
-    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
-  </svg>
-);
+import { LinkedinIcon, GithubIcon, InstagramIcon } from './admin/SocialIcons';
 import { QRCodeSVG } from 'qrcode.react';
-import logoTw from '../assets/logo-tw.png';
 import { useUser } from '../hooks/useUser';
 import { 
   createActivity, 
@@ -106,11 +84,24 @@ import {
   deleteMission, 
   toggleMissionStatus, 
   triggerFlashMission, 
+  seedDefaultMissions,
   DEFAULT_MISSIONS 
 } from '../lib/missionService';
 import { subscribeToAllUsers, updateUserRoleInFirestore } from '../lib/userService';
 import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
-import FeedbackModal from '../components/FeedbackModal';
+import AdminShell from './admin/AdminShell';
+import AdminInicio from './admin/AdminInicio';
+import AdminProgramacao from './admin/AdminProgramacao';
+import ActivityForm from './admin/ActivityForm';
+import AdminPessoas from './admin/AdminPessoas';
+import { ROLE_LABELS } from '../components/RoleSwitcher';
+import { Toast } from './admin/ui';
+import MissionForm from './admin/MissionForm';
+import AdminMissoes from './admin/AdminMissoes';
+import AdminConta from './admin/AdminConta';
+import Telao from './admin/Telao';
+import { styleOfMission } from './admin/MissionPreview';
+import '../styles/admin.css';
 
 const DURATION_OPTIONS = [
   'A definir',
@@ -158,9 +149,9 @@ const FEED_TEMPLATES = [
 ];
 
 const MISSION_CATEGORIES = [
-  { id: 'ALL', label: 'Todas as Categorias', color: '#9CA3AF' },
+  { id: 'ALL', label: 'Todas as Categorias', color: 'var(--text-2)' },
   { id: 'sponsors', label: 'Patrocinadores', color: '#10B981' },
-  { id: 'networking', label: 'Networking', color: '#3B82F6' },
+  { id: 'networking', label: 'Networking', color: 'var(--link)' },
   { id: 'social', label: 'Social & Mídia', color: '#EC4899' },
   { id: 'activities', label: 'Palestras', color: '#8B5CF6' },
   { id: 'flash', label: 'Relâmpago', color: '#F59E0B' },
@@ -173,6 +164,17 @@ const MISSION_TRIGGER_MODES = [
   { id: 'quiz', label: 'Quiz / Pergunta', desc: 'Pergunta com opções e gabarito automático' },
   { id: 'auto', label: 'Automático pelo App', desc: 'Concluído por ações do usuário (escanear, check-in)' }
 ];
+
+const VIEW_KEYS = ['inicio', 'programacao', 'feed', 'pessoas', 'missoes', 'config', 'conta'];
+const MOBILE_TITLES = {
+  inicio: 'Visão geral',
+  programacao: 'Programação',
+  feed: 'Feed e avisos',
+  pessoas: 'Pessoas',
+  missoes: 'Missões',
+  config: 'Configurações',
+  conta: 'Sua conta',
+};
 
 const MISSION_PRESETS = [
   {
@@ -272,7 +274,6 @@ export default function Admin() {
   const [feedMediaPreview, setFeedMediaPreview] = useState(null);
   const [isUploadingFeedMedia, setIsUploadingFeedMedia] = useState(false);
   const adminFeedFileInputRef = useRef(null);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [feedIsPinned, setFeedIsPinned] = useState(false);
   const [feedChannel, setFeedChannel] = useState('feed');
   const [feedSubmitting, setFeedSubmitting] = useState(false);
@@ -281,6 +282,8 @@ export default function Admin() {
   const currentAdminName = profile?.displayName || profile?.fullName || [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || (profile?.email ? profile.email.split('@')[0] : 'Samuel Amorim');
   const currentAdminInitials = currentAdminName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() || 'SA';
   const currentAdminAvatar = profile?.avatarUrl || profile?.photoURL || null;
+  const currentAdminFirstName = profile?.firstName || currentAdminName.split(' ')[0];
+  const me = { name: currentAdminName, initials: currentAdminInitials, avatar: currentAdminAvatar };
 
   // Filtros e busca
   const [activitySearch, setActivitySearch] = useState('');
@@ -303,9 +306,6 @@ export default function Admin() {
 
   // Estados do Modo Projeção de Telão (Projector Mode)
   const [projectorActivity, setProjectorActivity] = useState(null);
-  const [projectorCountdown, setProjectorCountdown] = useState(30);
-  const [projectorToken, setProjectorToken] = useState(() => Math.random().toString(36).substring(2, 9));
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Form Atividade
   const initialActivityForm = {
@@ -332,7 +332,8 @@ export default function Admin() {
     location: 'Anfiteatro FACOM',
     tags: 'Computação, Tecnologia, Geral',
     hidden: false,
-    value: 'Grátis'
+    value: 'Grátis',
+    attendanceMode: 'SELF_SCAN'
   };
   const [activityForm, setActivityForm] = useState(initialActivityForm);
 
@@ -359,7 +360,9 @@ export default function Admin() {
   const [locationForm, setLocationForm] = useState({ name: '', capacity: 100, description: '' });
 
   // Gestão de Missões & Desafios (KAN-104)
-  const [missionsList, setMissionsList] = useState(DEFAULT_MISSIONS);
+  const [missionsList, setMissionsList] = useState([]);
+  const [loadingMissions, setLoadingMissions] = useState(true);
+  const [isSeedingMissions, setIsSeedingMissions] = useState(false);
   const [missionCategoryFilter, setMissionCategoryFilter] = useState('ALL');
   const [missionStatusFilter, setMissionStatusFilter] = useState('ALL');
   const [missionSearch, setMissionSearch] = useState('');
@@ -391,7 +394,9 @@ export default function Admin() {
     isFlash: false,
     flashDuration: 5,
     flashMaxWinners: '',
-    flashMascotDialogue: '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!'
+    flashMascotDialogue: '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!',
+    cardStyle: 'padrao',
+    cardStyleOptions: {}
   };
   const [missionForm, setMissionForm] = useState(initialMissionForm);
 
@@ -420,7 +425,8 @@ export default function Admin() {
     });
 
     const unsubMissions = subscribeToMissions((missions) => {
-      setMissionsList(missions && missions.length > 0 ? missions : DEFAULT_MISSIONS);
+      setMissionsList(missions || []);
+      setLoadingMissions(false);
     });
 
     return () => {
@@ -447,34 +453,60 @@ export default function Admin() {
     } else if (tabParam === 'locations' || tabParam === 'locais') {
       setActiveMenu('programacao');
       setProgTab('locais');
+    } else if (VIEW_KEYS.includes(tabParam)) {
+      setActiveMenu(tabParam);
     }
   }, [location.search]);
 
-  // Efeito do Contador e Rotação de Token do Modo Telão
+  // Navegação do painel (lateral no desktop, barra inferior no celular)
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [progSearchOpen, setProgSearchOpen] = useState(false);
+  const goTo = useCallback((key) => {
+    setIsActivityModalOpen(false);
+    setIsMissionModalOpen(false);
+    setActiveMenu(key);
+    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+  }, []);
   useEffect(() => {
-    if (!projectorActivity) return;
-    const interval = setInterval(() => {
-      setProjectorCountdown((prev) => {
-        if (prev <= 1) {
-          setProjectorToken(Math.random().toString(36).substring(2, 9));
-          return 30;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [projectorActivity]);
+    if ((isActivityModalOpen || isMissionModalOpen) && typeof window !== 'undefined') window.scrollTo(0, 0);
+  }, [isActivityModalOpen, isMissionModalOpen]);
+  const closeFeedback = useCallback(() => setFeedback(null), []);
+  const sectionSearch = {
+    programacao: [activitySearch, setActivitySearch],
+    pessoas: [userSearch, setUserSearch],
+    missoes: [missionSearch, setMissionSearch],
+  }[activeMenu];
+  const submitGlobalSearch = () => {
+    if (sectionSearch) return;
+    setActivitySearch(globalSearch);
+    setGlobalSearch('');
+    goTo('programacao');
+  };
+  const openNewActivity = () => {
+    setEditingActivityId(null);
+    setActivityForm(initialActivityForm);
+    setIsActivityModalOpen(true);
+    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+  };
+  const openFlashModal = (mission) => {
+    setFlashTargetMission(mission || missionsList[0] || null);
+    setFlashQuickDuration(5);
+    setFlashQuickMascotText(mission
+      ? `🚨 MISSÃO RELÂMPAGO: ${mission.title || mission.name}! Corra antes que termine!`
+      : '🚨 MISSÃO RELÂMPAGO: Uma nova missão foi liberada! Corra antes que o tempo termine!');
+    setIsFlashQuickModalOpen(true);
+  };
 
-  // QR Code payload estável que só muda quando o token de segurança rotaciona (a cada 30s)
+  // QR fixo por atividade (sem rotação): o token da sessão é o próprio id da atividade
   const projectorQrValue = useMemo(() => {
     if (!projectorActivity) return '';
     return JSON.stringify({
       lectureId: projectorActivity.id,
       activityId: projectorActivity.id,
       title: projectorActivity.title,
-      sessionToken: projectorToken
+      sessionToken: projectorActivity.id
     });
-  }, [projectorActivity, projectorToken]);
+  }, [projectorActivity]);
 
   const handleOpenNewMissionModal = () => {
     setEditingMissionId(null);
@@ -502,7 +534,9 @@ export default function Admin() {
       isFlash: !!mission.isFlash,
       flashDuration: mission.flashConfig?.durationMinutes || 5,
       flashMaxWinners: mission.flashConfig?.maxWinners || '',
-      flashMascotDialogue: mission.flashConfig?.mascotDialogue || '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!'
+      flashMascotDialogue: mission.flashConfig?.mascotDialogue || '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!',
+      cardStyle: styleOfMission(mission),
+      cardStyleOptions: mission.cardStyleOptions || {}
     });
     setIsMissionModalOpen(true);
   };
@@ -520,7 +554,9 @@ export default function Admin() {
         icon: missionForm.icon || 'Sparkles',
         status: 'active',
         triggerMode: missionForm.triggerMode,
-        type: missionForm.triggerMode === 'auto' ? 'auto' : 'manual'
+        type: missionForm.triggerMode === 'auto' ? 'auto' : 'manual',
+        cardStyle: missionForm.cardStyle || 'padrao',
+        cardStyleOptions: missionForm.cardStyleOptions || {}
       };
 
       if (missionForm.triggerMode === 'secret') {
@@ -561,7 +597,9 @@ export default function Admin() {
           message: `A missão "${payload.title}" foi atualizada com sucesso.`
         });
       } else {
-        await createMission(payload);
+        // createMission grava só campos conhecidos: o estilo do card vai num update logo depois.
+        const created = await createMission(payload);
+        if (created?.id) await updateMission(created.id, { cardStyle: payload.cardStyle, cardStyleOptions: payload.cardStyleOptions });
         setFeedback({
           type: 'success',
           title: 'Missão Cadastrada',
@@ -605,6 +643,28 @@ export default function Admin() {
       });
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleSeedDefaultMissions = async () => {
+    if (!window.confirm('Deseja popular ou sincronizar todas as missões padrão da TechWeek no Firestore? Missões existentes serão preservadas e atualizadas.')) return;
+    setIsSeedingMissions(true);
+    try {
+      const count = await seedDefaultMissions();
+      setFeedback({
+        type: 'success',
+        title: 'Missões Sincronizadas!',
+        message: `${count} missões padrão foram gravadas com sucesso no Firestore.`
+      });
+    } catch (err) {
+      console.error('Erro ao popular missões padrão:', err);
+      setFeedback({
+        type: 'error',
+        title: 'Falha na Sincronização',
+        message: err.message || 'Ocorreu um erro ao gravar as missões padrão no Firestore.'
+      });
+    } finally {
+      setIsSeedingMissions(false);
     }
   };
 
@@ -894,7 +954,8 @@ export default function Admin() {
       location: firstSchedule.location || activityForm.location || 'Anfiteatro FACOM',
       tags: activityForm.tags,
       hidden: activityForm.hidden,
-      value: activityForm.value || 'Grátis'
+      value: activityForm.value || 'Grátis',
+      attendanceMode: activityForm.attendanceMode === 'DOUBLE_CHECK' ? 'DOUBLE_CHECK' : 'SELF_SCAN'
     };
 
     try {
@@ -957,7 +1018,8 @@ export default function Admin() {
       location: act.location || 'Anfiteatro FACOM',
       tags: Array.isArray(act.tags) ? act.tags.join(', ') : (act.tags || 'Computação, Tecnologia, Geral'),
       hidden: Boolean(act.hidden),
-      value: act.value || 'Grátis'
+      value: act.value || 'Grátis',
+      attendanceMode: act.attendanceMode === 'DOUBLE_CHECK' ? 'DOUBLE_CHECK' : 'SELF_SCAN'
     });
     setIsActivityModalOpen(true);
   };
@@ -1084,6 +1146,33 @@ export default function Admin() {
     }
   };
 
+  // Troca de papel: mesma chamada de antes; o toast oferece desfazer com a mesma chamada.
+  const handleChangeRole = async (u, newRole) => {
+    const uid = u.uid || u.id;
+    const prevRole = u.role || 'PARTICIPANT';
+    const who = u.username ? `@${u.username}` : (u.fullName || u.email);
+    const res = await updateUserRoleInFirestore(uid, newRole);
+    if (res && res.success === false) {
+      setFeedback({ type: 'error', title: 'Não deu para trocar o papel', message: 'Confira a conexão e tente de novo.' });
+      return;
+    }
+    setFeedback({
+      type: 'success',
+      title: `${who} agora é ${ROLE_LABELS[newRole] || newRole}.`,
+      action: { label: 'Desfazer', run: () => updateUserRoleInFirestore(uid, prevRole) }
+    });
+  };
+
+  const handleExportGrade = () => {
+    const json = JSON.stringify(activities, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'programacao-techweek.json';
+    a.click();
+  };
+
   // Filtros de Atividades
   const filteredActivities = useMemo(() => {
     return activities.filter((act) => {
@@ -1106,19 +1195,35 @@ export default function Admin() {
     });
   }, [speakers, speakerSearch, speakerClassificationFilter]);
 
+  // Filtros de Missões & Desafios (KAN-106)
+  const filteredMissions = useMemo(() => {
+    return (missionsList || []).filter((m) => {
+      if (missionCategoryFilter !== 'ALL' && m.category !== missionCategoryFilter) return false;
+      if (missionStatusFilter !== 'ALL' && m.status !== missionStatusFilter) return false;
+      if (missionSearch) {
+        const q = missionSearch.toLowerCase();
+        const titleMatch = (m.title || m.name || '').toLowerCase().includes(q);
+        const descMatch = (m.description || '').toLowerCase().includes(q);
+        const secretMatch = (m.secretConfig?.secretWord || '').toLowerCase().includes(q);
+        return titleMatch || descMatch || secretMatch;
+      }
+      return true;
+    });
+  }, [missionsList, missionCategoryFilter, missionStatusFilter, missionSearch]);
+
   // Se não autorizado, tela de login corporativo
   if (!isAuthorized) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#0B0F17', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: "'Inter', system-ui, sans-serif" }}>
-        <div style={{ width: '100%', maxWidth: '420px', backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '12px', padding: '32px', color: '#F9FAFB', boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: "inherit" }}>
+        <div style={{ width: '100%', maxWidth: '420px', backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '12px', padding: '32px', color: 'var(--text)', boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)' }}>
           <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-            <div style={{ width: '48px', height: '48px', backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-              <Lock size={22} color="#3B82F6" />
+            <div style={{ width: '48px', height: '48px', backgroundColor: 'var(--surface-raised)', border: '1px solid var(--line-2)', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+              <Lock size={22} color="var(--link)" />
             </div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 6px', color: '#F9FAFB' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 6px', color: 'var(--text)' }}>
               Acesso Administrativo
             </h2>
-            <p style={{ fontSize: '0.82rem', color: '#9CA3AF', margin: 0 }}>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-2)', margin: 0 }}>
               Painel de Gestão Oficial • FACOM TechWeek 2026
             </p>
           </div>
@@ -1132,7 +1237,7 @@ export default function Admin() {
 
           <form onSubmit={handleAdminLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#D1D5DB', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '6px' }}>
                 E-mail Corporativo
               </label>
               <div style={{ position: 'relative' }}>
@@ -1143,13 +1248,13 @@ export default function Admin() {
                   placeholder="admin@facom.ufu.br"
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px 10px 38px', backgroundColor: '#0B0F17', border: '1px solid #374151', borderRadius: '8px', color: '#F9FAFB', fontSize: '0.86rem', boxSizing: 'border-box', outline: 'none' }}
+                  style={{ width: '100%', padding: '10px 12px 10px 38px', backgroundColor: 'var(--bg)', border: '1px solid var(--line-2)', borderRadius: '8px', color: 'var(--text)', fontSize: '0.86rem', boxSizing: 'border-box', outline: 'none' }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#D1D5DB', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '6px' }}>
                 Senha de Acesso
               </label>
               <div style={{ position: 'relative' }}>
@@ -1160,7 +1265,7 @@ export default function Admin() {
                   placeholder="••••••••"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px 10px 38px', backgroundColor: '#0B0F17', border: '1px solid #374151', borderRadius: '8px', color: '#F9FAFB', fontSize: '0.86rem', boxSizing: 'border-box', outline: 'none' }}
+                  style={{ width: '100%', padding: '10px 12px 10px 38px', backgroundColor: 'var(--bg)', border: '1px solid var(--line-2)', borderRadius: '8px', color: 'var(--text)', fontSize: '0.86rem', boxSizing: 'border-box', outline: 'none' }}
                 />
               </div>
             </div>
@@ -1168,17 +1273,17 @@ export default function Admin() {
             <button
               type="submit"
               disabled={loginLoading}
-              style={{ width: '100%', padding: '11px', backgroundColor: '#2563EB', border: 'none', borderRadius: '8px', color: '#FFFFFF', fontSize: '0.88rem', fontWeight: 600, cursor: loginLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '4px' }}
+              style={{ width: '100%', padding: '11px', backgroundColor: 'var(--action)', border: 'none', borderRadius: '8px', color: '#FFFFFF', fontSize: '0.88rem', fontWeight: 600, cursor: loginLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '4px' }}
             >
               {loginLoading ? <Loader2 size={18} className="animate-spin" /> : 'Entrar no Sistema'}
             </button>
           </form>
 
-          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #1F2937', textAlign: 'center' }}>
+          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--line-2)', textAlign: 'center' }}>
             <button
               type="button"
               onClick={() => handleQuickAdmin('admin@admin.com', 'AdminPassword123!')}
-              style={{ background: 'none', border: 'none', color: '#3B82F6', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', padding: '4px 8px' }}
+              style={{ background: 'none', border: 'none', color: 'var(--link)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', padding: '4px 8px' }}
             >
               Acesso Rápido de Homologação (Admin)
             </button>
@@ -1188,918 +1293,98 @@ export default function Admin() {
     );
   }
 
+  const view = isActivityModalOpen ? 'nova-atividade' : isMissionModalOpen ? 'nova-missao' : activeMenu;
+  const mobileBack = view === 'nova-atividade' ? () => setIsActivityModalOpen(false)
+    : view === 'nova-missao' ? () => setIsMissionModalOpen(false)
+    : ['conta', 'feed', 'config'].includes(view) ? () => goTo('inicio') : null;
+  const mobileAction = {
+    programacao: (
+      <button type="button" aria-label="Buscar atividade" aria-expanded={progSearchOpen} onClick={() => setProgSearchOpen((o) => !o)} className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-text">
+        <Search size={20} aria-hidden="true" />
+      </button>
+    ),
+    missoes: (
+      <button type="button" aria-label="Nova missão" onClick={handleOpenNewMissionModal} className="flex h-11 w-11 items-center justify-center rounded-full bg-action text-white">
+        <Plus size={22} aria-hidden="true" />
+      </button>
+    ),
+    'nova-atividade': null,
+    'nova-missao': null,
+    conta: null,
+  }[view];
+
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0B0F17', color: '#F9FAFB', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", display: 'flex', flexDirection: 'column' }}>
-      
-      {/* 1. TOPBAR CORPORATIVA */}
-      <header style={{ height: '56px', backgroundColor: '#0F172A', borderBottom: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', flexShrink: 0, zIndex: 50 }}>
-        
-        {/* Esquerda: Identidade do Evento */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setActiveMenu('inicio')}>
-            <img src={logoTw} alt="FACOM TechWeek" style={{ height: '24px', objectFit: 'contain' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '0.92rem', fontWeight: 700, color: '#F9FAFB', letterSpacing: '-0.01em' }}>
-                TechWeek 2026
-              </span>
-              <span style={{ fontSize: '0.68rem', backgroundColor: '#1E3A8A', border: '1px solid #3B82F6', color: '#93C5FD', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, letterSpacing: '0.04em' }}>
-                ADMINISTRAÇÃO
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Direita: Ações Rápidas, Perfil Corporativo e Menu */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            title="Abrir aplicativo do participante"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#1E293B', border: '1px solid #334155', color: '#D1D5DB', borderRadius: '6px', padding: '6px 12px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
-          >
-            <ExternalLink size={13} color="#9CA3AF" />
-            <span>Ver App do Usuário</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/staff')}
-            title="Acessar Portaria & Check-in"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#1E293B', border: '1px solid #334155', color: '#D1D5DB', borderRadius: '6px', padding: '6px 12px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
-          >
-            <QrCode size={13} color="#9CA3AF" />
-            <span>Portaria & Scanner</span>
-          </button>
-
-          <div style={{ width: '1px', height: '20px', backgroundColor: '#1E293B' }} />
-
-          {/* Avatar Dropdown */}
-          <div style={{ position: 'relative' }}>
-            <div 
-              onClick={() => setUserMenuOpen(!userMenuOpen)}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px', backgroundColor: userMenuOpen ? '#1E293B' : 'transparent', transition: 'background 0.15s' }}
-            >
-              {currentAdminAvatar ? (
-                <img 
-                  src={currentAdminAvatar} 
-                  alt="" 
-                  style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #3B82F6' }} 
-                />
-              ) : (
-                <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontWeight: 700, fontSize: '0.75rem' }}>
-                  {currentAdminInitials}
-                </div>
-              )}
-              <div style={{ textAlign: 'left', lineHeight: '1.2' }}>
-                <span style={{ display: 'block', color: '#F9FAFB', fontWeight: 600, fontSize: '0.80rem' }}>{currentAdminName}</span>
-                <span style={{ display: 'block', color: '#9CA3AF', fontSize: '0.68rem' }}>Organizador Geral</span>
-              </div>
-              <ChevronDown size={14} color="#9CA3AF" />
-            </div>
-
-            {userMenuOpen && (
-              <div 
-                style={{ 
-                  position: 'absolute', 
-                  right: 0, 
-                  top: '100%', 
-                  marginTop: '6px', 
-                  width: '210px', 
-                  backgroundColor: '#111827', 
-                  border: '1px solid #1F2937', 
-                  borderRadius: '8px', 
-                  padding: '6px', 
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.5)', 
-                  zIndex: 1000 
-                }}
-              >
-                <button 
-                  type="button"
-                  onClick={() => { setUserMenuOpen(false); navigate('/profile'); }}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'none', border: 'none', color: '#E5E7EB', fontSize: '0.80rem', borderRadius: '6px', cursor: 'pointer', textAlign: 'left' }}
-                >
-                  <User size={14} color="#9CA3AF" />
-                  <span>Perfil Pessoal</span>
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => { setUserMenuOpen(false); navigate('/'); }}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'none', border: 'none', color: '#E5E7EB', fontSize: '0.80rem', borderRadius: '6px', cursor: 'pointer', textAlign: 'left' }}
-                >
-                  <ExternalLink size={14} color="#9CA3AF" />
-                  <span>Visão do Participante</span>
-                </button>
-                <div style={{ height: '1px', backgroundColor: '#1F2937', margin: '4px 0' }} />
-                <button 
-                  type="button"
-                  onClick={() => { setUserMenuOpen(false); handleAdminLogout(); }}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: 'none', border: 'none', color: '#EF4444', fontSize: '0.80rem', borderRadius: '6px', cursor: 'pointer', textAlign: 'left' }}
-                >
-                  <LogOut size={14} />
-                  <span>Encerrar Sessão</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* 2. CORPO PRINCIPAL: SIDEBAR + CONTEÚDO */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 'calc(100vh - 56px)' }}>
-        
-        {/* SIDEBAR CORPORATIVA */}
-        <aside style={{ width: '220px', backgroundColor: '#0F172A', borderRight: '1px solid #1E293B', padding: '16px 0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-          
-          <div style={{ padding: '0 18px 8px' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              MENU PRINCIPAL
-            </span>
-          </div>
-
-          {/* Início / Dashboard */}
-          <button
-            type="button"
-            onClick={() => setActiveMenu('inicio')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '9px 18px',
-              border: 'none',
-              backgroundColor: activeMenu === 'inicio' ? '#1E293B' : 'transparent',
-              borderLeft: activeMenu === 'inicio' ? '3px solid #3B82F6' : '3px solid transparent',
-              color: activeMenu === 'inicio' ? '#F9FAFB' : '#94A3B8',
-              fontWeight: activeMenu === 'inicio' ? 600 : 500,
-              fontSize: '0.84rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              width: '100%',
-              transition: 'background 0.15s, color 0.15s'
-            }}
-          >
-            <LayoutDashboard size={16} color={activeMenu === 'inicio' ? '#3B82F6' : '#64748B'} />
-            <span>Visão Geral</span>
-          </button>
-
-          {/* Programação */}
-          <button
-            type="button"
-            onClick={() => setActiveMenu('programacao')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '9px 18px',
-              border: 'none',
-              backgroundColor: activeMenu === 'programacao' ? '#1E293B' : 'transparent',
-              borderLeft: activeMenu === 'programacao' ? '3px solid #3B82F6' : '3px solid transparent',
-              color: activeMenu === 'programacao' ? '#F9FAFB' : '#94A3B8',
-              fontWeight: activeMenu === 'programacao' ? 600 : 500,
-              fontSize: '0.84rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              width: '100%',
-              transition: 'background 0.15s, color 0.15s'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Calendar size={16} color={activeMenu === 'programacao' ? '#3B82F6' : '#64748B'} />
-              <span>Programação</span>
-            </div>
-            <span style={{ fontSize: '0.70rem', backgroundColor: '#1E293B', color: '#94A3B8', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-              {activities.length}
-            </span>
-          </button>
-
-          {/* Feed & Comunicados */}
-          <button
-            type="button"
-            onClick={() => setActiveMenu('feed')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '9px 18px',
-              border: 'none',
-              backgroundColor: activeMenu === 'feed' ? '#1E293B' : 'transparent',
-              borderLeft: activeMenu === 'feed' ? '3px solid #3B82F6' : '3px solid transparent',
-              color: activeMenu === 'feed' ? '#F9FAFB' : '#94A3B8',
-              fontWeight: activeMenu === 'feed' ? 600 : 500,
-              fontSize: '0.84rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              width: '100%',
-              transition: 'background 0.15s, color 0.15s'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <MessageSquare size={16} color={activeMenu === 'feed' ? '#3B82F6' : '#64748B'} />
-              <span>Feed & Avisos</span>
-            </div>
-            <span style={{ fontSize: '0.70rem', backgroundColor: '#1E293B', color: '#94A3B8', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-              {feedPosts.length}
-            </span>
-          </button>
-
-          {/* Pessoas & Permissões */}
-          <button
-            type="button"
-            onClick={() => setActiveMenu('pessoas')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '9px 18px',
-              border: 'none',
-              backgroundColor: activeMenu === 'pessoas' ? '#1E293B' : 'transparent',
-              borderLeft: activeMenu === 'pessoas' ? '3px solid #3B82F6' : '3px solid transparent',
-              color: activeMenu === 'pessoas' ? '#F9FAFB' : '#94A3B8',
-              fontWeight: activeMenu === 'pessoas' ? 600 : 500,
-              fontSize: '0.84rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              width: '100%',
-              transition: 'background 0.15s, color 0.15s'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Users size={16} color={activeMenu === 'pessoas' ? '#3B82F6' : '#64748B'} />
-              <span>Participantes</span>
-            </div>
-            <span style={{ fontSize: '0.70rem', backgroundColor: '#1E293B', color: '#94A3B8', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-              {usersList.length}
-            </span>
-          </button>
-
-          {/* Missões & Desafios (KAN-104) */}
-          <button
-            type="button"
-            onClick={() => setActiveMenu('missoes')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '9px 18px',
-              border: 'none',
-              backgroundColor: activeMenu === 'missoes' ? '#1E293B' : 'transparent',
-              borderLeft: activeMenu === 'missoes' ? '3px solid #3B82F6' : '3px solid transparent',
-              color: activeMenu === 'missoes' ? '#F9FAFB' : '#94A3B8',
-              fontWeight: activeMenu === 'missoes' ? 600 : 500,
-              fontSize: '0.84rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              width: '100%',
-              transition: 'background 0.15s, color 0.15s'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Sparkles size={16} color={activeMenu === 'missoes' ? '#3B82F6' : '#64748B'} />
-              <span>Missões & Desafios</span>
-            </div>
-            <span style={{ fontSize: '0.70rem', backgroundColor: '#1E293B', color: '#94A3B8', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-              {missionsList.length}
-            </span>
-          </button>
-
-          <div style={{ padding: '16px 18px 8px' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              OPERAÇÃO EM TEMPO REAL
-            </span>
-          </div>
-
-          {/* Credenciamento & Scanner */}
-          <button
-            type="button"
-            onClick={() => navigate('/staff')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '9px 18px',
-              border: 'none',
-              backgroundColor: 'transparent',
-              color: '#94A3B8',
-              fontWeight: 500,
-              fontSize: '0.84rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              width: '100%'
-            }}
-          >
-            <UserCheck size={16} color="#64748B" />
-            <span>Portaria & Check-in</span>
-          </button>
-
-          {/* Configurações do Evento */}
-          <button
-            type="button"
-            onClick={() => setActiveMenu('config')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '9px 18px',
-              border: 'none',
-              backgroundColor: activeMenu === 'config' ? '#1E293B' : 'transparent',
-              borderLeft: activeMenu === 'config' ? '3px solid #3B82F6' : '3px solid transparent',
-              color: activeMenu === 'config' ? '#F9FAFB' : '#94A3B8',
-              fontWeight: activeMenu === 'config' ? 600 : 500,
-              fontSize: '0.84rem',
-              cursor: 'pointer',
-              textAlign: 'left',
-              width: '100%',
-              marginTop: 'auto'
-            }}
-          >
-            <Sliders size={16} color={activeMenu === 'config' ? '#3B82F6' : '#64748B'} />
-            <span>Configurações</span>
-          </button>
-        </aside>
-
-        {/* 3. CONTEÚDO PRINCIPAL (CORPORATE DARK MODE) */}
-        <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto', backgroundColor: '#0B0F17' }}>
-
-          {/* SEÇÃO: INÍCIO / VISÃO GERAL */}
-          {activeMenu === 'inicio' && (
-            <div style={{ maxWidth: '1120px' }}>
-              
-              {/* Header da Aba */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-                <div>
-                  <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#F9FAFB', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-                    Visão Geral do Evento
-                  </h1>
-                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#9CA3AF' }}>
-                    Acompanhamento em tempo real das métricas e operações da FACOM TechWeek 2026
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => { setEditingActivityId(null); setActivityForm(initialActivityForm); setIsActivityModalOpen(true); }}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', backgroundColor: '#2563EB', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    <Plus size={14} />
-                    <span>Nova Atividade</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveMenu('feed')}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '6px', color: '#F9FAFB', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    <Send size={13} color="#9CA3AF" />
-                    <span>Publicar Aviso</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Grid de KPIs Corporativos */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
-                
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF' }}>Total de Participantes</span>
-                    <Users size={16} color="#3B82F6" />
-                  </div>
-                  <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#F9FAFB' }}>
-                    {usersList.length}
-                  </div>
-                  <span style={{ fontSize: '0.72rem', color: '#10B981', fontWeight: 600, marginTop: '4px', display: 'block' }}>
-                    Sincronizado com Firestore
-                  </span>
-                </div>
-
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF' }}>Atividades na Grade</span>
-                    <Calendar size={16} color="#3B82F6" />
-                  </div>
-                  <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#F9FAFB' }}>
-                    {activities.length}
-                  </div>
-                  <span style={{ fontSize: '0.72rem', color: '#9CA3AF', marginTop: '4px', display: 'block' }}>
-                    Palestras, workshops e cursos
-                  </span>
-                </div>
-
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF' }}>Palestrantes & Convidados</span>
-                    <Building2 size={16} color="#3B82F6" />
-                  </div>
-                  <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#F9FAFB' }}>
-                    {speakers.length}
-                  </div>
-                  <span style={{ fontSize: '0.72rem', color: '#9CA3AF', marginTop: '4px', display: 'block' }}>
-                    Especialistas confirmados
-                  </span>
-                </div>
-
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF' }}>Feed & Avisos Ativos</span>
-                    <MessageSquare size={16} color="#3B82F6" />
-                  </div>
-                  <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#F9FAFB' }}>
-                    {feedPosts.length}
-                  </div>
-                  <span style={{ fontSize: '0.72rem', color: '#9CA3AF', marginTop: '4px', display: 'block' }}>
-                    Comunicados na timeline
-                  </span>
-                </div>
-              </div>
-
-              {/* Seções em 2 Colunas: Próximas Atividades & Últimos Avisos */}
-              <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '20px' }}>
-                
-                {/* Tabela Resumida da Programação */}
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', overflow: 'hidden' }}>
-                  <div style={{ padding: '14px 18px', borderBottom: '1px solid #1F2937', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#F9FAFB' }}>Próximas Atividades da Grade</span>
-                    <button 
-                      type="button" 
-                      onClick={() => setActiveMenu('programacao')}
-                      style={{ background: 'none', border: 'none', color: '#3B82F6', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer' }}
-                    >
-                      Gerenciar Grade →
-                    </button>
-                  </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.80rem' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#0F172A', borderBottom: '1px solid #1F2937' }}>
-                        <th style={{ padding: '10px 16px', color: '#9CA3AF', fontWeight: 600 }}>TÍTULO</th>
-                        <th style={{ padding: '10px 16px', color: '#9CA3AF', fontWeight: 600 }}>TIPO</th>
-                        <th style={{ padding: '10px 16px', color: '#9CA3AF', fontWeight: 600 }}>LOCAL</th>
-                        <th style={{ padding: '10px 16px', color: '#9CA3AF', fontWeight: 600, textAlign: 'right' }}>VAGAS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activities.slice(0, 5).map((act) => (
-                        <tr key={act.id} style={{ borderBottom: '1px solid #1F2937' }}>
-                          <td style={{ padding: '10px 16px', color: '#F9FAFB', fontWeight: 600 }}>{act.title}</td>
-                          <td style={{ padding: '10px 16px' }}>
-                            <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', backgroundColor: '#1E293B', color: '#93C5FD', fontWeight: 600 }}>
-                              {act.type}
-                            </span>
-                          </td>
-                          <td style={{ padding: '10px 16px', color: '#9CA3AF' }}>{act.location || 'Anfiteatro FACOM'}</td>
-                          <td style={{ padding: '10px 16px', color: '#9CA3AF', textAlign: 'right' }}>{act.vagas_totais || 100}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Card de Último Aviso Transmitido */}
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '18px 20px', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                    <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#F9FAFB' }}>Último Comunicado</span>
-                    <button 
-                      type="button" 
-                      onClick={() => setActiveMenu('feed')}
-                      style={{ background: 'none', border: 'none', color: '#3B82F6', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer' }}
-                    >
-                      Ver Feed Completo →
-                    </button>
-                  </div>
-
-                  {feedPosts[0] ? (
-                    <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '6px', padding: '14px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#F9FAFB' }}>{feedPosts[0].author}</span>
-                          {feedPosts[0].pinned && (
-                            <span style={{ fontSize: '0.68rem', backgroundColor: '#1E3A8A', color: '#93C5FD', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                              Fixado
-                            </span>
-                          )}
-                        </div>
-                        <p style={{ margin: 0, fontSize: '0.80rem', color: '#D1D5DB', lineHeight: '1.4' }}>
-                          {feedPosts[0].content}
-                        </p>
-                      </div>
-                      <span style={{ fontSize: '0.72rem', color: '#6B7280', marginTop: '12px', display: 'block' }}>
-                        {feedPosts[0].formattedTime || 'Recente'}
-                      </span>
-                    </div>
-                  ) : (
-                    <p style={{ color: '#9CA3AF', fontSize: '0.82rem' }}>Nenhum comunicado ativo no momento.</p>
-                  )}
-                </div>
-              </div>
-            </div>
+    <div className="adm-root">
+      <AdminShell
+        active={view}
+        onNavigate={goTo}
+        navigate={navigate}
+        me={me}
+        search={sectionSearch ? sectionSearch[0] : globalSearch}
+        onSearch={sectionSearch ? sectionSearch[1] : setGlobalSearch}
+        onSearchSubmit={submitGlobalSearch}
+        mobileTitle={view === 'nova-atividade' ? (editingActivityId ? 'Editar atividade' : 'Nova atividade') : view === 'nova-missao' ? (editingMissionId ? 'Editar missão' : 'Nova missão') : MOBILE_TITLES[view] || 'Painel'}
+        mobileBack={mobileBack}
+        mobileAction={mobileAction}
+        hideMobileNav={view === 'nova-atividade' || view === 'nova-missao'}
+      >
+          {view === 'inicio' && (
+            <AdminInicio
+              firstName={currentAdminFirstName}
+              activities={activities}
+              usersList={usersList}
+              missionsList={missionsList}
+              feedPosts={feedPosts}
+              onNavigate={goTo}
+              onNewActivity={openNewActivity}
+              onOpenFlash={() => openFlashModal(null)}
+              onOpenTelao={setProjectorActivity}
+              onEditActivity={handleOpenEditActivity}
+            />
           )}
 
-          {/* SEÇÃO: PROGRAMAÇÃO */}
-          {activeMenu === 'programacao' && (
-            <div>
-              {/* Header com Subabas */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                <div>
-                  <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#F9FAFB', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-                    Gestão de Programação
-                  </h1>
-                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#9CA3AF' }}>
-                    Controle de atividades, horários, palestrantes e locais de apresentação
-                  </p>
-                </div>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const json = JSON.stringify(activities, null, 2);
-                      const blob = new Blob([json], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'programacao-techweek.json';
-                      a.click();
-                    }}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '6px', color: '#D1D5DB', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    <Download size={13} />
-                    <span>Exportar Grade</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingActivityId(null);
-                      setActivityForm(initialActivityForm);
-                      setIsActivityModalOpen(true);
-                    }}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', backgroundColor: '#2563EB', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    <Plus size={14} />
-                    <span>Adicionar Atividade</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Sub-abas Corporativas */}
-              <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #1F2937', paddingBottom: '12px', marginBottom: '20px' }}>
-                <button
-                  type="button"
-                  onClick={() => setProgTab('atividades')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    backgroundColor: progTab === 'atividades' ? '#2563EB' : 'transparent',
-                    color: progTab === 'atividades' ? '#FFFFFF' : '#9CA3AF',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Atividades ({activities.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setProgTab('convidados')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    backgroundColor: progTab === 'convidados' ? '#2563EB' : 'transparent',
-                    color: progTab === 'convidados' ? '#FFFFFF' : '#9CA3AF',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Convidados & Palestrantes ({speakers.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setProgTab('locais')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    backgroundColor: progTab === 'locais' ? '#2563EB' : 'transparent',
-                    color: progTab === 'locais' ? '#FFFFFF' : '#9CA3AF',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Locais & Salas ({locations.length})
-                </button>
-              </div>
-
-              {/* Subaba: Atividades */}
-              {progTab === 'atividades' && (
-                <div>
-                  {/* Barra de Filtros */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <select
-                        value={activityFilter}
-                        onChange={(e) => setActivityFilter(e.target.value)}
-                        style={{ padding: '7px 12px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem' }}
-                      >
-                        <option value="ALL">Todos os tipos</option>
-                        {ACTIVITY_TYPES.map(type => (
-                          <option key={type} value={type.toLowerCase()}>{type}</option>
-                        ))}
-                      </select>
-
-                      <div style={{ position: 'relative' }}>
-                        <Search size={14} color="#6B7280" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-                        <input
-                          type="text"
-                          placeholder="Buscar atividade ou palestrante..."
-                          value={activitySearch}
-                          onChange={(e) => setActivitySearch(e.target.value)}
-                          style={{ padding: '7px 10px 7px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem', width: '240px' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Tabela de Atividades */}
-                  <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#0F172A', borderBottom: '1px solid #1F2937' }}>
-                          <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>TIPO</th>
-                          <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>TÍTULO & CRONOGRAMA</th>
-                          <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>PALESTRANTE(S)</th>
-                          <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>LOCAL</th>
-                          <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>LOTAÇÃO & PONTOS</th>
-                          <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem', textAlign: 'right' }}>AÇÕES</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredActivities.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: '#6B7280' }}>
-                              Nenhuma atividade encontrada com os filtros aplicados.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredActivities.map((act) => {
-                            const formattedType = (act.type || 'Palestra').charAt(0).toUpperCase() + (act.type || 'Palestra').slice(1);
-                            const schedules = act.schedule && act.schedule.length > 0 
-                              ? act.schedule 
-                              : [{ date: act.date || '2026-10-21', startTime: act.time || '14:00', endTime: act.endTime || '15:30', location: act.location || 'Anfiteatro FACOM' }];
-
-                            const spkName = act.speaker || (Array.isArray(act.speakers) && act.speakers.length > 0 ? act.speakers.map(s => s.name).join(', ') : 'Comissão FACOM');
-
-                            return (
-                              <tr key={act.id} style={{ borderBottom: '1px solid #1F2937' }}>
-                                <td style={{ padding: '12px 16px' }}>
-                                  <span style={{ fontSize: '0.72rem', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', backgroundColor: '#1E293B', color: '#93C5FD', display: 'inline-block' }}>
-                                    {formattedType}
-                                  </span>
-                                  {act.isMultiSession && (
-                                    <span style={{ display: 'block', marginTop: '4px', fontSize: '0.66rem', color: '#A855F7', fontWeight: 600 }}>
-                                      Múltiplos Dias
-                                    </span>
-                                  )}
-                                </td>
-                                <td style={{ padding: '12px 16px' }}>
-                                  <div onClick={() => handleOpenEditActivity(act)} style={{ color: '#F9FAFB', fontWeight: 600, fontSize: '0.84rem', cursor: 'pointer', marginBottom: '2px' }}>
-                                    {act.title}
-                                  </div>
-                                  {schedules.map((sch, idx) => (
-                                    <div key={idx} style={{ fontSize: '0.74rem', color: '#9CA3AF' }}>
-                                      {sch.date && sch.date.includes('-') 
-                                        ? `${sch.date.split('-')[2]}/${sch.date.split('-')[1]}/${sch.date.split('-')[0]} • ${sch.startTime || sch.time || ''}${sch.endTime ? ` às ${sch.endTime}` : ''}`
-                                        : `${sch.date || '21/10'} • ${sch.startTime || sch.time || ''}`}
-                                    </div>
-                                  ))}
-                                </td>
-                                <td style={{ padding: '12px 16px', color: '#D1D5DB' }}>
-                                  <div style={{ fontSize: '0.80rem', fontWeight: 500 }}>{spkName}</div>
-                                </td>
-                                <td style={{ padding: '12px 16px', color: '#D1D5DB' }}>
-                                  {schedules.length > 1 ? (
-                                    <span style={{ fontSize: '0.76rem', color: '#9CA3AF' }}>
-                                      {schedules.map(s => s.location || act.location || 'Anfiteatro FACOM').filter((v, i, a) => a.indexOf(v) === i).join(' / ')}
-                                    </span>
-                                  ) : (
-                                    act.location || 'Anfiteatro FACOM'
-                                  )}
-                                </td>
-                                <td style={{ padding: '12px 16px' }}>
-                                  <div style={{ fontSize: '0.76rem', color: '#9CA3AF' }}>
-                                    {!act.hasCapacityLimit || Number(act.vagas_totais) >= 900 ? 'Sem limite' : `${act.vagas_totais || 100} vagas`}
-                                  </div>
-                                  <span style={{ fontSize: '0.70rem', fontWeight: 700, color: '#10B981', display: 'inline-block', marginTop: '2px' }}>
-                                    +{act.points || 50} pts
-                                  </span>
-                                </td>
-                                <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => setQrModalActivity(act)}
-                                      title="Gerar QR Code de Check-in"
-                                      style={{ padding: '6px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', cursor: 'pointer' }}
-                                    >
-                                      <QrCode size={13} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setProjectorActivity(act)}
-                                      title="Modo Projeção / Telão"
-                                      style={{ padding: '6px', borderRadius: '6px', border: '1px solid #1D4ED8', backgroundColor: 'rgba(37, 99, 235, 0.2)', color: '#60A5FA', cursor: 'pointer' }}
-                                    >
-                                      <Tv size={13} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenEditActivity(act)}
-                                      title="Editar Atividade"
-                                      style={{ padding: '6px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', cursor: 'pointer' }}
-                                    >
-                                      <Edit3 size={13} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteActivity(act.id, act.title)}
-                                      title="Excluir Atividade"
-                                      style={{ padding: '6px', borderRadius: '6px', border: '1px solid #7F1D1D', backgroundColor: '#1F2937', color: '#EF4444', cursor: 'pointer' }}
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Subaba: Convidados & Palestrantes */}
-              {progTab === 'convidados' && (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <select
-                        value={speakerClassificationFilter}
-                        onChange={(e) => setSpeakerClassificationFilter(e.target.value)}
-                        style={{ padding: '7px 12px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem' }}
-                      >
-                        <option value="ALL">Todas as classificações</option>
-                        {SPEAKER_CLASSIFICATIONS.map(cls => (
-                          <option key={cls.id} value={cls.id}>{cls.label}</option>
-                        ))}
-                      </select>
-
-                      <div style={{ position: 'relative' }}>
-                        <Search size={14} color="#6B7280" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-                        <input
-                          type="text"
-                          placeholder="Buscar palestrante..."
-                          value={speakerSearch}
-                          onChange={(e) => setSpeakerSearch(e.target.value)}
-                          style={{ padding: '7px 10px 7px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem', width: '220px' }}
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => { setEditingSpeakerId(null); setGuestForm(initialGuestForm); setIsGuestModalOpen(true); }}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', backgroundColor: '#2563EB', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer' }}
-                    >
-                      <Plus size={14} />
-                      <span>Novo Palestrante</span>
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: '14px' }}>
-                    {filteredSpeakers.map((spk) => {
-                      const classObj = SPEAKER_CLASSIFICATIONS.find(c => c.id === spk.classification) || SPEAKER_CLASSIFICATIONS[0];
-                      const social = typeof spk.socialLinks === 'object' && spk.socialLinks !== null && !Array.isArray(spk.socialLinks)
-                        ? spk.socialLinks
-                        : { linkedin: Array.isArray(spk.socialLinks) ? spk.socialLinks[0] : '', github: Array.isArray(spk.socialLinks) ? spk.socialLinks[1] : '', instagram: Array.isArray(spk.socialLinks) ? spk.socialLinks[2] : '' };
-
-                      return (
-                        <div key={spk.id} style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '10px' }}>
-                              <img
-                                src={spk.photo || SAMPLE_SPEAKER_PHOTOS[0].url}
-                                alt={spk.name}
-                                style={{ width: '52px', height: '52px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #374151' }}
-                              />
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                  <span style={{ fontSize: '0.90rem', fontWeight: 700, color: '#F9FAFB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{spk.name}</span>
-                                </div>
-                                <span style={{ fontSize: '0.76rem', color: '#9CA3AF', display: 'block', marginTop: '2px' }}>
-                                  {spk.role || spk.institution}
-                                </span>
-                                <div style={{ marginTop: '6px' }}>
-                                  <span style={{ fontSize: '0.68rem', fontWeight: 600, padding: '2px 7px', borderRadius: '4px', backgroundColor: classObj.bg, color: classObj.color, border: `1px solid ${classObj.border}` }}>
-                                    {classObj.label}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {spk.bio && (
-                              <p style={{ margin: '0 0 10px', fontSize: '0.76rem', color: '#9CA3AF', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                {spk.bio}
-                              </p>
-                            )}
-                          </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1F2937', paddingTop: '10px' }}>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              {social.linkedin && (
-                                <a href={social.linkedin} target="_blank" rel="noreferrer" style={{ color: '#00D2FF' }}>
-                                  <LinkedinIcon size={15} />
-                                </a>
-                              )}
-                              {social.github && (
-                                <a href={social.github} target="_blank" rel="noreferrer" style={{ color: '#D1D5DB' }}>
-                                  <GithubIcon size={15} />
-                                </a>
-                              )}
-                              {social.instagram && (
-                                <a href={social.instagram} target="_blank" rel="noreferrer" style={{ color: '#E1306C' }}>
-                                  <InstagramIcon size={15} />
-                                </a>
-                              )}
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '6px' }}>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditGuest(spk)}
-                                style={{ padding: '5px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                              >
-                                <Edit3 size={12} />
-                                <span>Editar</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteSpeaker(spk.id, spk.name)}
-                                style={{ padding: '5px 8px', borderRadius: '4px', border: '1px solid #7F1D1D', backgroundColor: '#1F2937', color: '#EF4444', fontSize: '0.74rem', cursor: 'pointer' }}
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Subaba: Locais */}
-              {progTab === 'locais' && (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                    <span style={{ fontSize: '0.86rem', fontWeight: 600, color: '#D1D5DB' }}>Locais & Espaços Físicos</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsLocationModalOpen(true)}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 12px', backgroundColor: '#2563EB', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer' }}
-                    >
-                      <Plus size={14} />
-                      <span>Novo Local</span>
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '14px' }}>
-                    {locations.map((loc) => (
-                      <div key={loc.id} style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                          <MapPin size={15} color="#3B82F6" />
-                          <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#F9FAFB' }}>{loc.name}</span>
-                        </div>
-                        <div style={{ fontSize: '0.78rem', color: '#9CA3AF' }}>
-                          Capacidade: <strong style={{ color: '#F9FAFB' }}>{loc.capacity}</strong> lugares
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+          {view === 'programacao' && (
+            <AdminProgramacao
+              progTab={progTab}
+              setProgTab={setProgTab}
+              activities={activities}
+              filteredActivities={filteredActivities}
+              activityFilter={activityFilter}
+              setActivityFilter={setActivityFilter}
+              activitySearch={activitySearch}
+              setActivitySearch={setActivitySearch}
+              mobileSearchOpen={progSearchOpen}
+              speakers={speakers}
+              filteredSpeakers={filteredSpeakers}
+              speakerSearch={speakerSearch}
+              setSpeakerSearch={setSpeakerSearch}
+              speakerClassificationFilter={speakerClassificationFilter}
+              setSpeakerClassificationFilter={setSpeakerClassificationFilter}
+              classifications={SPEAKER_CLASSIFICATIONS}
+              locations={locations}
+              photoFallback={SAMPLE_SPEAKER_PHOTOS[0].url}
+              onNew={openNewActivity}
+              onEdit={handleOpenEditActivity}
+              onDelete={handleDeleteActivity}
+              onTelao={setProjectorActivity}
+              onQr={setQrModalActivity}
+              onExport={handleExportGrade}
+              onNewSpeaker={() => { setEditingSpeakerId(null); setGuestForm(initialGuestForm); setIsGuestModalOpen(true); }}
+              onEditSpeaker={handleOpenEditGuest}
+              onDeleteSpeaker={handleDeleteSpeaker}
+              onNewLocation={() => setIsLocationModalOpen(true)}
+            />
           )}
 
           {/* SEÇÃO: FEED & AVISOS */}
-          {activeMenu === 'feed' && (
+          {view === 'feed' && (
             <div style={{ maxWidth: '1080px' }}>
               <div style={{ marginBottom: '20px' }}>
-                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#F9FAFB', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
                   Comunicação & Avisos
                 </h1>
-                <p style={{ margin: 0, fontSize: '0.82rem', color: '#9CA3AF' }}>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-2)' }}>
                   Transmita avisos oficiais, fotos e vídeos para o feed do evento e dispare alertas push
                 </p>
               </div>
@@ -2107,18 +1392,18 @@ export default function Admin() {
               <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '20px', alignItems: 'start' }}>
                 
                 {/* Form Publicar */}
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '20px' }}>
-                  <h3 style={{ margin: '0 0 14px', fontSize: '0.90rem', fontWeight: 700, color: '#F9FAFB' }}>
+                <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '8px', padding: '20px' }}>
+                  <h3 style={{ margin: '0 0 14px', fontSize: '0.90rem', fontWeight: 700, color: 'var(--text)' }}>
                     Criar Publicação Oficial
                   </h3>
 
                   <form onSubmit={handlePublishFeed} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Canal de Destino</label>
+                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Canal de Destino</label>
                       <select
                         value={feedChannel}
                         onChange={(e) => setFeedChannel(e.target.value)}
-                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem' }}
                       >
                         <option value="feed">Apenas Feed do App</option>
                         <option value="broadcast">Notificação Push Geral</option>
@@ -2127,14 +1412,14 @@ export default function Admin() {
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Modelos Rápidos</label>
+                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Modelos Rápidos</label>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                         {FEED_TEMPLATES.map((tpl, idx) => (
                           <button
                             key={idx}
                             type="button"
                             onClick={() => setFeedInput(tpl.text)}
-                            style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.72rem', cursor: 'pointer' }}
+                            style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid var(--line-2)', backgroundColor: 'var(--surface-raised)', color: 'var(--text-2)', fontSize: '0.72rem', cursor: 'pointer' }}
                           >
                             {tpl.label}
                           </button>
@@ -2143,20 +1428,20 @@ export default function Admin() {
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Conteúdo da Mensagem</label>
+                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Conteúdo da Mensagem</label>
                       <textarea
                         rows={4}
                         required
                         placeholder="Escreva a mensagem que os participantes visualizarão..."
                         value={feedInput}
                         onChange={(e) => setFeedInput(e.target.value)}
-                        style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box', resize: 'vertical' }}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box', resize: 'vertical' }}
                       />
                     </div>
 
                     {/* Mídia Anexa */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Anexar Mídia (Foto até 50MB ou Vídeo até 250MB)</label>
+                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Anexar Mídia (Foto até 50MB ou Vídeo até 250MB)</label>
                       <input
                         type="file"
                         ref={adminFeedFileInputRef}
@@ -2168,7 +1453,7 @@ export default function Admin() {
                         <button
                           type="button"
                           onClick={() => adminFeedFileInputRef.current?.click()}
-                          style={{ flex: 1, padding: '7px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                          style={{ flex: 1, padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--surface-raised)', color: 'var(--text-2)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                         >
                           <ImageIcon size={14} />
                           <span>Selecionar Arquivo</span>
@@ -2176,8 +1461,8 @@ export default function Admin() {
                       </div>
 
                       {feedMediaPreview && (
-                        <div style={{ marginTop: '8px', padding: '8px', backgroundColor: '#0B0F17', border: '1px solid #374151', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '0.74rem', color: '#D1D5DB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ marginTop: '8px', padding: '8px', backgroundColor: 'var(--bg)', border: '1px solid var(--line-2)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '0.74rem', color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {feedMediaPreview.name}
                           </span>
                           <button
@@ -2198,7 +1483,7 @@ export default function Admin() {
                         checked={feedIsPinned}
                         onChange={(e) => setFeedIsPinned(e.target.checked)}
                       />
-                      <label htmlFor="pinCheck" style={{ fontSize: '0.78rem', color: '#D1D5DB', cursor: 'pointer' }}>
+                      <label htmlFor="pinCheck" style={{ fontSize: '0.78rem', color: 'var(--text-2)', cursor: 'pointer' }}>
                         Fixar este aviso no topo do Feed
                       </label>
                     </div>
@@ -2206,7 +1491,7 @@ export default function Admin() {
                     <button
                       type="submit"
                       disabled={feedSubmitting || isUploadingFeedMedia}
-                      style={{ padding: '9px', backgroundColor: '#2563EB', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600, cursor: (feedSubmitting || isUploadingFeedMedia) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '4px' }}
+                      style={{ padding: '9px', backgroundColor: 'var(--action)', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600, cursor: (feedSubmitting || isUploadingFeedMedia) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '4px' }}
                     >
                       {(feedSubmitting || isUploadingFeedMedia) ? <Loader2 size={16} className="animate-spin" /> : <Send size={14} />}
                       <span>Publicar Transmissão</span>
@@ -2215,19 +1500,19 @@ export default function Admin() {
                 </div>
 
                 {/* Lista de Publicações */}
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '20px' }}>
-                  <h3 style={{ margin: '0 0 14px', fontSize: '0.90rem', fontWeight: 700, color: '#F9FAFB' }}>
+                <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '8px', padding: '20px' }}>
+                  <h3 style={{ margin: '0 0 14px', fontSize: '0.90rem', fontWeight: 700, color: 'var(--text)' }}>
                     Publicações Ativas ({feedPosts.length})
                   </h3>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {feedPosts.map((post) => (
-                      <div key={post.id} style={{ backgroundColor: '#0B0F17', border: '1px solid #1F2937', borderRadius: '6px', padding: '14px' }}>
+                      <div key={post.id} style={{ backgroundColor: 'var(--bg)', border: '1px solid var(--line-2)', borderRadius: '6px', padding: '14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#F9FAFB' }}>{post.author}</span>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text)' }}>{post.author}</span>
                             {post.pinned && (
-                              <span style={{ fontSize: '0.68rem', backgroundColor: '#1E3A8A', color: '#93C5FD', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                              <span style={{ fontSize: '0.68rem', backgroundColor: '#1E3A8A', color: 'var(--link)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
                                 Fixado 📌
                               </span>
                             )}
@@ -2237,7 +1522,7 @@ export default function Admin() {
                               type="button"
                               onClick={() => handleTogglePinPost(post.id, post.pinned)}
                               title={post.pinned ? 'Desafixar' : 'Fixar no Topo'}
-                              style={{ background: 'none', border: 'none', color: post.pinned ? '#3B82F6' : '#6B7280', cursor: 'pointer', padding: '4px' }}
+                              style={{ background: 'none', border: 'none', color: post.pinned ? 'var(--link)' : '#6B7280', cursor: 'pointer', padding: '4px' }}
                             >
                               <Pin size={14} />
                             </button>
@@ -2252,7 +1537,7 @@ export default function Admin() {
                           </div>
                         </div>
 
-                        <p style={{ margin: '0 0 8px', fontSize: '0.80rem', color: '#D1D5DB', lineHeight: '1.4' }}>
+                        <p style={{ margin: '0 0 8px', fontSize: '0.80rem', color: 'var(--text-2)', lineHeight: '1.4' }}>
                           {post.content}
                         </p>
 
@@ -2278,455 +1563,75 @@ export default function Admin() {
           )}
 
           {/* SEÇÃO: PARTICIPANTES & PERMISSÕES */}
-          {activeMenu === 'pessoas' && (
-            <div style={{ maxWidth: '1080px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-                <div>
-                  <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#F9FAFB', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-                    Gestão de Participantes
-                  </h1>
-                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#9CA3AF' }}>
-                    Controle de acessos, permissões (Staff/Admin) e dados cadastrais dos usuários
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <select
-                    value={userRoleFilter}
-                    onChange={(e) => setUserRoleFilter(e.target.value)}
-                    style={{ padding: '7px 12px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem' }}
-                  >
-                    <option value="ALL">Todos os papéis</option>
-                    <option value="ADMIN">ADMIN (Organizador)</option>
-                    <option value="STAFF">STAFF (Portaria)</option>
-                    <option value="SPONSOR">SPONSOR (Patrocinador)</option>
-                    <option value="PARTICIPANT">PARTICIPANT (Aluno)</option>
-                  </select>
-
-                  <div style={{ position: 'relative' }}>
-                    <Search size={14} color="#6B7280" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-                    <input
-                      type="text"
-                      placeholder="Buscar por nome ou e-mail..."
-                      value={userSearch}
-                      onChange={(e) => setUserSearch(e.target.value)}
-                      style={{ padding: '7px 10px 7px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem', width: '240px' }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#0F172A', borderBottom: '1px solid #1F2937' }}>
-                      <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>PARTICIPANTE</th>
-                      <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>E-MAIL</th>
-                      <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem' }}>PAPEL ATUAL</th>
-                      <th style={{ padding: '12px 16px', color: '#9CA3AF', fontWeight: 600, fontSize: '0.74rem', textAlign: 'right' }}>ALTERAR PERMISSÃO</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usersList
-                      .filter(u => {
-                        const match = (u.fullName || u.displayName || '').toLowerCase().includes(userSearch.toLowerCase()) ||
-                                      (u.email || '').toLowerCase().includes(userSearch.toLowerCase());
-                        const roleMatch = userRoleFilter === 'ALL' || (u.role || 'PARTICIPANT') === userRoleFilter;
-                        return match && roleMatch;
-                      })
-                      .map(u => (
-                        <tr key={u.uid || u.id} style={{ borderBottom: '1px solid #1F2937' }}>
-                          <td style={{ padding: '12px 16px', color: '#F9FAFB', fontWeight: 600 }}>
-                            {u.fullName || u.displayName || 'Participante TechWeek'}
-                          </td>
-                          <td style={{ padding: '12px 16px', color: '#9CA3AF' }}>{u.email}</td>
-                          <td style={{ padding: '12px 16px' }}>
-                            <span style={{
-                              fontSize: '0.72rem',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              fontWeight: 600,
-                              backgroundColor: u.role === 'ADMIN' ? '#1E3A8A' : (u.role === 'STAFF' ? '#1E293B' : (u.role === 'SPONSOR' ? '#78350F' : '#111827')),
-                              color: u.role === 'ADMIN' ? '#93C5FD' : (u.role === 'STAFF' ? '#E5E7EB' : (u.role === 'SPONSOR' ? '#FDE68A' : '#9CA3AF')),
-                              border: '1px solid #374151'
-                            }}>
-                              {u.role || 'PARTICIPANT'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                            <select
-                              value={u.role || 'PARTICIPANT'}
-                              onChange={async (e) => {
-                                const newRole = e.target.value;
-                                await updateUserRoleInFirestore(u.uid || u.id, newRole);
-                                setFeedback({
-                                  type: 'success',
-                                  title: 'Permissão Atualizada',
-                                  message: `O papel de ${u.fullName || u.email} foi alterado para ${newRole}.`
-                                });
-                              }}
-                              style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
-                            >
-                              <option value="PARTICIPANT">PARTICIPANT (Aluno)</option>
-                              <option value="STAFF">STAFF (Portaria)</option>
-                              <option value="SPONSOR">SPONSOR (Patrocinador)</option>
-                              <option value="ADMIN">ADMIN (Organizador)</option>
-                            </select>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          {view === 'pessoas' && (
+            <AdminPessoas
+              usersList={usersList}
+              userSearch={userSearch}
+              setUserSearch={setUserSearch}
+              userRoleFilter={userRoleFilter}
+              setUserRoleFilter={setUserRoleFilter}
+              onChangeRole={handleChangeRole}
+            />
           )}
 
           {/* SEÇÃO: GESTÃO DE MISSÕES & DESAFIOS (KAN-104) */}
-          {activeMenu === 'missoes' && (
-            <div style={{ maxWidth: '1120px' }}>
-              {/* Header da Seção */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
-                <div>
-                  <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#F9FAFB', margin: '0 0 4px', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span>Gestão de Missões & Desafios</span>
-                    <span style={{ fontSize: '0.72rem', backgroundColor: '#1E3A8A', color: '#93C5FD', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
-                      KAN-104
-                    </span>
-                  </h1>
-                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#9CA3AF' }}>
-                    Crie missões com gatilhos dinâmicos, configure perguntas, segredos e dispare missões relâmpago ao vivo.
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFlashTargetMission(missionsList[0] || null);
-                      setFlashQuickDuration(5);
-                      setFlashQuickMascotText('🚨 MISSÃO RELÂMPAGO: Uma nova missão foi liberada! Corra antes que o tempo termine!');
-                      setIsFlashQuickModalOpen(true);
-                    }}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '8px 14px',
-                      backgroundColor: '#78350F',
-                      border: '1px solid #B45309',
-                      borderRadius: '6px',
-                      color: '#FDE68A',
-                      fontSize: '0.82rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s'
-                    }}
-                  >
-                    <Zap size={14} color="#FDE68A" />
-                    <span>Disparador Relâmpago</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleOpenNewMissionModal}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '8px 14px',
-                      backgroundColor: '#2563EB',
-                      border: 'none',
-                      borderRadius: '6px',
-                      color: '#FFFFFF',
-                      fontSize: '0.82rem',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Plus size={14} />
-                    <span>Nova Missão</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Cards de Métricas */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '24px' }}>
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '16px 20px' }}>
-                  <span style={{ fontSize: '0.74rem', color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>TOTAL DE MISSÕES</span>
-                  <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#F9FAFB', marginTop: '4px' }}>
-                    {missionsList.length}
-                  </div>
-                </div>
-
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '16px 20px' }}>
-                  <span style={{ fontSize: '0.74rem', color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>MISSÕES ATIVAS</span>
-                  <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#10B981', marginTop: '4px' }}>
-                    {missionsList.filter(m => m.status === 'active').length}
-                  </div>
-                </div>
-
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '16px 20px' }}>
-                  <span style={{ fontSize: '0.74rem', color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>MISSÕES RELÂMPAGO</span>
-                  <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#F59E0B', marginTop: '4px' }}>
-                    {missionsList.filter(m => m.isFlash).length}
-                  </div>
-                </div>
-
-                <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '16px 20px' }}>
-                  <span style={{ fontSize: '0.74rem', color: '#9CA3AF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>XP TOTAL DISPONÍVEL</span>
-                  <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#3B82F6', marginTop: '4px' }}>
-                    +{missionsList.reduce((acc, m) => acc + (Number(m.points) || 0), 0)} XP
-                  </div>
-                </div>
-              </div>
-
-              {/* Filtros por Categoria */}
-              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '16px' }}>
-                {MISSION_CATEGORIES.map(cat => {
-                  const isActive = missionCategoryFilter === cat.id;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setMissionCategoryFilter(cat.id)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '6px',
-                        border: '1px solid',
-                        borderColor: isActive ? cat.color : '#374151',
-                        backgroundColor: isActive ? 'rgba(59, 130, 246, 0.15)' : '#111827',
-                        color: isActive ? '#F9FAFB' : '#9CA3AF',
-                        fontSize: '0.78rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {cat.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Barra de Busca e Filtro de Status */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
-                  <Search size={14} color="#6B7280" style={{ position: 'absolute', left: '10px', top: '10px' }} />
-                  <input
-                    type="text"
-                    placeholder="Buscar por título, descrição ou palavra-chave..."
-                    value={missionSearch}
-                    onChange={(e) => setMissionSearch(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px 8px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
-                  />
-                </div>
-
-                <select
-                  value={missionStatusFilter}
-                  onChange={(e) => setMissionStatusFilter(e.target.value)}
-                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem' }}
-                >
-                  <option value="ALL">Todos os Status</option>
-                  <option value="active">Apenas Ativas</option>
-                  <option value="paused">Apenas Pausadas</option>
-                </select>
-              </div>
-
-              {/* Tabela / Grid Corporativo de Missões */}
-              <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#1E293B', borderBottom: '1px solid #334155', color: '#9CA3AF', textTransform: 'uppercase', fontSize: '0.70rem', letterSpacing: '0.04em' }}>
-                      <th style={{ padding: '12px 16px' }}>Missão</th>
-                      <th style={{ padding: '12px 16px' }}>Categoria</th>
-                      <th style={{ padding: '12px 16px' }}>Gatilho / Validação</th>
-                      <th style={{ padding: '12px 16px' }}>Pontuação</th>
-                      <th style={{ padding: '12px 16px' }}>Status</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'right' }}>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {missionsList
-                      .filter(m => {
-                        if (missionCategoryFilter !== 'ALL' && m.category !== missionCategoryFilter) return false;
-                        if (missionStatusFilter !== 'ALL' && m.status !== missionStatusFilter) return false;
-                        if (missionSearch) {
-                          const q = missionSearch.toLowerCase();
-                          const titleMatch = (m.title || m.name || '').toLowerCase().includes(q);
-                          const descMatch = (m.description || '').toLowerCase().includes(q);
-                          const secretMatch = (m.secretConfig?.secretWord || '').toLowerCase().includes(q);
-                          return titleMatch || descMatch || secretMatch;
-                        }
-                        return true;
-                      })
-                      .map((m) => {
-                        const isFlash = !!m.isFlash;
-                        const triggerModeLabel = 
-                          m.triggerMode === 'secret' ? 'Palavra Secreta' :
-                          m.triggerMode === 'quiz' ? 'Quiz / Pergunta' :
-                          m.triggerMode === 'auto' ? 'Automático' : 'Formulário / Foto';
-
-                        const triggerModeBadgeColor = 
-                          m.triggerMode === 'secret' ? '#8B5CF6' :
-                          m.triggerMode === 'quiz' ? '#F59E0B' :
-                          m.triggerMode === 'auto' ? '#3B82F6' : '#10B981';
-
-                        return (
-                          <tr key={m.id} style={{ borderBottom: '1px solid #1F2937' }}>
-                            <td style={{ padding: '12px 16px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <div style={{
-                                  width: '32px',
-                                  height: '32px',
-                                  borderRadius: '8px',
-                                  backgroundColor: isFlash ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.12)',
-                                  border: isFlash ? '1px solid #F59E0B' : '1px solid rgba(59, 130, 246, 0.3)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  flexShrink: 0
-                                }}>
-                                  {isFlash ? <Zap size={16} color="#F59E0B" /> : <Sparkles size={16} color="#3B82F6" />}
-                                </div>
-                                <div>
-                                  <div style={{ fontWeight: 600, color: '#F9FAFB', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span>{m.title || m.name}</span>
-                                    {isFlash && (
-                                      <span style={{ fontSize: '0.65rem', backgroundColor: '#78350F', color: '#FDE68A', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
-                                        ⚡ RELÂMPAGO
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div style={{ fontSize: '0.74rem', color: '#9CA3AF', maxWidth: '340px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {m.description}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-
-                            <td style={{ padding: '12px 16px' }}>
-                              <span style={{ fontSize: '0.72rem', color: '#D1D5DB', backgroundColor: '#1E293B', padding: '2px 8px', borderRadius: '4px', border: '1px solid #334155' }}>
-                                {m.category || 'Geral'}
-                              </span>
-                            </td>
-
-                            <td style={{ padding: '12px 16px' }}>
-                              <span style={{ fontSize: '0.72rem', color: triggerModeBadgeColor, backgroundColor: 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: '4px', border: `1px solid ${triggerModeBadgeColor}44`, fontWeight: 600 }}>
-                                {triggerModeLabel}
-                              </span>
-                              {m.triggerMode === 'secret' && m.secretConfig?.secretWord && (
-                                <span style={{ display: 'block', fontSize: '0.68rem', color: '#9CA3AF', marginTop: '2px' }}>
-                                  Código: <code style={{ color: '#F472B6' }}>{m.secretConfig.secretWord}</code>
-                                </span>
-                              )}
-                            </td>
-
-                            <td style={{ padding: '12px 16px' }}>
-                              <span style={{ fontWeight: 700, color: '#60A5FA', fontSize: '0.84rem' }}>
-                                +{m.points} XP
-                              </span>
-                            </td>
-
-                            <td style={{ padding: '12px 16px' }}>
-                              <button
-                                type="button"
-                                onClick={() => handleToggleMission(m)}
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  padding: '3px 8px',
-                                  borderRadius: '4px',
-                                  border: 'none',
-                                  fontSize: '0.72rem',
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  backgroundColor: m.status === 'active' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                                  color: m.status === 'active' ? '#34D399' : '#F87171'
-                                }}
-                              >
-                                {m.status === 'active' ? <Check size={11} /> : <X size={11} />}
-                                <span>{m.status === 'active' ? 'Ativa' : 'Pausada'}</span>
-                              </button>
-                            </td>
-
-                            <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                                <button
-                                  type="button"
-                                  title="Disparar como Missão Relâmpago"
-                                  onClick={() => {
-                                    setFlashTargetMission(m);
-                                    setFlashQuickDuration(5);
-                                    setFlashQuickMascotText(`🚨 MISSÃO RELÂMPAGO: ${m.title || m.name}! Corra antes que termine!`);
-                                    setIsFlashQuickModalOpen(true);
-                                  }}
-                                  style={{ padding: '6px', background: 'none', border: '1px solid #78350F', borderRadius: '4px', color: '#FDE68A', cursor: 'pointer' }}
-                                >
-                                  <Zap size={13} />
-                                </button>
-                                <button
-                                  type="button"
-                                  title="Editar Missão"
-                                  onClick={() => handleEditMission(m)}
-                                  style={{ padding: '6px', background: 'none', border: '1px solid #374151', borderRadius: '4px', color: '#9CA3AF', cursor: 'pointer' }}
-                                >
-                                  <Edit3 size={13} />
-                                </button>
-                                <button
-                                  type="button"
-                                  title="Excluir Missão"
-                                  onClick={() => handleDeleteMission(m)}
-                                  style={{ padding: '6px', background: 'none', border: '1px solid #374151', borderRadius: '4px', color: '#EF4444', cursor: 'pointer' }}
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          {view === 'missoes' && (
+            <AdminMissoes
+              missions={filteredMissions}
+              all={missionsList}
+              loading={loadingMissions}
+              categories={MISSION_CATEGORIES}
+              category={missionCategoryFilter}
+              onCategory={setMissionCategoryFilter}
+              status={missionStatusFilter}
+              onStatus={setMissionStatusFilter}
+              search={missionSearch}
+              onSearch={setMissionSearch}
+              seeding={isSeedingMissions}
+              onSeed={handleSeedDefaultMissions}
+              onNew={handleOpenNewMissionModal}
+              onFlash={openFlashModal}
+              onEdit={handleEditMission}
+              onToggle={handleToggleMission}
+              onDelete={handleDeleteMission}
+            />
           )}
 
           {/* SEÇÃO: CONFIGURAÇÕES DO EVENTO */}
-          {activeMenu === 'config' && (
+          {view === 'config' && (
             <div style={{ maxWidth: '780px' }}>
               <div style={{ marginBottom: '20px' }}>
-                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: '#F9FAFB', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
                   Configurações do Evento
                 </h1>
-                <p style={{ margin: 0, fontSize: '0.82rem', color: '#9CA3AF' }}>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-2)' }}>
                   Parâmetros gerais da edição FACOM TechWeek 2026
                 </p>
               </div>
 
-              <div style={{ backgroundColor: '#111827', border: '1px solid #1F2937', borderRadius: '8px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '8px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div>
-                  <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#9CA3AF', display: 'block', marginBottom: '4px' }}>NOME OFICIAL</span>
-                  <div style={{ fontSize: '0.90rem', fontWeight: 600, color: '#F9FAFB' }}>FACOM TechWeek 2026 • Universidade Federal de Uberlândia</div>
+                  <span style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>NOME OFICIAL</span>
+                  <div style={{ fontSize: '0.90rem', fontWeight: 600, color: 'var(--text)' }}>FACOM TechWeek 2026 • Universidade Federal de Uberlândia</div>
                 </div>
 
-                <div style={{ height: '1px', backgroundColor: '#1F2937' }} />
+                <div style={{ height: '1px', backgroundColor: 'var(--line-2)' }} />
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div>
-                    <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#9CA3AF', display: 'block', marginBottom: '4px' }}>PERÍODO OFICIAL</span>
-                    <div style={{ fontSize: '0.86rem', color: '#F9FAFB' }}>21 de Outubro a 27 de Outubro de 2026</div>
+                    <span style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>PERÍODO OFICIAL</span>
+                    <div style={{ fontSize: '0.86rem', color: 'var(--text)' }}>21 de Outubro a 27 de Outubro de 2026</div>
                   </div>
                   <div>
-                    <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#9CA3AF', display: 'block', marginBottom: '4px' }}>LOCAL PRINCIPAL</span>
-                    <div style={{ fontSize: '0.86rem', color: '#F9FAFB' }}>Campus Santa Mônica • Bloco 5R (FACOM / UFU)</div>
+                    <span style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>LOCAL PRINCIPAL</span>
+                    <div style={{ fontSize: '0.86rem', color: 'var(--text)' }}>Campus Santa Mônica • Bloco 5R (FACOM / UFU)</div>
                   </div>
                 </div>
 
-                <div style={{ height: '1px', backgroundColor: '#1F2937' }} />
+                <div style={{ height: '1px', backgroundColor: 'var(--line-2)' }} />
 
                 <div>
-                  <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#9CA3AF', display: 'block', marginBottom: '4px' }}>STATUS DE SINCRONIZAÇÃO</span>
+                  <span style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>STATUS DE SINCRONIZAÇÃO</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10B981', fontSize: '0.84rem', fontWeight: 600 }}>
                     <CheckCircle2 size={16} />
                     <span>Conectado em tempo real ao Firebase Firestore</span>
@@ -2735,344 +1640,55 @@ export default function Admin() {
               </div>
             </div>
           )}
-        </main>
-      </div>
-
-      {/* MODAL: ADICIONAR / EDITAR ATIVIDADE */}
-      {isActivityModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '620px', maxHeight: '90vh', backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#F9FAFB', boxShadow: '0 12px 40px rgba(0, 0, 0, 0.7)' }}>
-            
-            <div style={{ backgroundColor: '#1E293B', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #334155' }}>
-              <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700 }}>
-                {editingActivityId ? 'Editar Atividade' : 'Cadastrar Nova Atividade'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsActivityModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: '2px' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveActivity} style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                  Título da Atividade *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Minicurso de Arquitetura Serverless na AWS"
-                  value={activityForm.title}
-                  onChange={(e) => setActivityForm(prev => ({ ...prev, title: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.84rem', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                  Descrição / Resumo
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Descreva o conteúdo e objetivos da atividade..."
-                  value={activityForm.description}
-                  onChange={(e) => setActivityForm(prev => ({ ...prev, description: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.84rem', boxSizing: 'border-box', resize: 'vertical' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                    Tipo de Atividade
-                  </label>
-                  <select
-                    value={activityForm.type}
-                    onChange={(e) => setActivityForm(prev => ({ ...prev, type: e.target.value }))}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
-                  >
-                    {ACTIVITY_TYPES.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                    Vínculo de Palestrantes (Multi-select)
-                  </label>
-                  <div style={{ maxHeight: '100px', overflowY: 'auto', backgroundColor: '#0B0F17', border: '1px solid #374151', borderRadius: '6px', padding: '6px 10px' }}>
-                    {speakers.map(s => {
-                      const isSelected = (activityForm.selectedSpeakerIds || []).includes(s.id);
-                      return (
-                        <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', fontSize: '0.78rem', cursor: 'pointer', color: isSelected ? '#38BDF8' : '#D1D5DB' }}>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              setActivityForm(prev => {
-                                const current = prev.selectedSpeakerIds || [];
-                                const updated = checked ? [...current, s.id] : current.filter(id => id !== s.id);
-                                return { ...prev, selectedSpeakerIds: updated };
-                              });
-                            }}
-                          />
-                          <span>{s.name} ({s.institution || s.role})</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Agenda Flexível: Sessão Única vs Múltiplos Dias/Horários */}
-              <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#F9FAFB' }}>
-                    Agenda & Horários
-                  </label>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <label style={{ fontSize: '0.76rem', color: '#D1D5DB', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="sessionMode"
-                        checked={!activityForm.isMultiSession}
-                        onChange={() => setActivityForm(prev => ({
-                          ...prev,
-                          isMultiSession: false,
-                          scheduleRows: [prev.scheduleRows[0] || { date: '2026-10-21', startTime: '14:00', endTime: '15:30', location: prev.location || 'Anfiteatro FACOM' }]
-                        }))}
-                      />
-                      <span>Sessão Única</span>
-                    </label>
-                    <label style={{ fontSize: '0.76rem', color: '#D1D5DB', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="sessionMode"
-                        checked={activityForm.isMultiSession}
-                        onChange={() => setActivityForm(prev => ({
-                          ...prev,
-                          isMultiSession: true,
-                          scheduleRows: prev.scheduleRows.length > 1 ? prev.scheduleRows : [
-                            prev.scheduleRows[0] || { date: '2026-10-21', startTime: '14:00', endTime: '15:30', location: 'Anfiteatro FACOM' },
-                            { date: '2026-10-22', startTime: '14:00', endTime: '15:30', location: 'Sala 5R' }
-                          ]
-                        }))}
-                      />
-                      <span>Múltiplas Sessões / Dias</span>
-                    </label>
-                  </div>
-                </div>
-
-                {activityForm.scheduleRows.map((row, idx) => (
-                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1.5fr auto', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
-                    <input
-                      type="date"
-                      value={row.date}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setActivityForm(prev => {
-                          const newRows = [...prev.scheduleRows];
-                          newRows[idx].date = val;
-                          return { ...prev, scheduleRows: newRows };
-                        });
-                      }}
-                      style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
-                    />
-                    <input
-                      type="time"
-                      value={row.startTime}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setActivityForm(prev => {
-                          const newRows = [...prev.scheduleRows];
-                          newRows[idx].startTime = val;
-                          return { ...prev, scheduleRows: newRows };
-                        });
-                      }}
-                      style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
-                    />
-                    <input
-                      type="time"
-                      value={row.endTime}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setActivityForm(prev => {
-                          const newRows = [...prev.scheduleRows];
-                          newRows[idx].endTime = val;
-                          return { ...prev, scheduleRows: newRows };
-                        });
-                      }}
-                      style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
-                    />
-                    <select
-                      value={row.location || activityForm.location || 'Anfiteatro FACOM'}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setActivityForm(prev => {
-                          const newRows = [...prev.scheduleRows];
-                          newRows[idx].location = val;
-                          return { ...prev, scheduleRows: newRows, location: idx === 0 ? val : prev.location };
-                        });
-                      }}
-                      style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
-                    >
-                      {locations.map(loc => (
-                        <option key={loc.id} value={loc.name}>{loc.name}</option>
-                      ))}
-                    </select>
-
-                    {activityForm.isMultiSession && activityForm.scheduleRows.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActivityForm(prev => ({
-                            ...prev,
-                            scheduleRows: prev.scheduleRows.filter((_, i) => i !== idx)
-                          }));
-                        }}
-                        style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px' }}
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-
-                {activityForm.isMultiSession && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActivityForm(prev => ({
-                        ...prev,
-                        scheduleRows: [
-                          ...prev.scheduleRows,
-                          { date: '2026-10-23', startTime: '14:00', endTime: '15:30', location: 'Anfiteatro FACOM' }
-                        ]
-                      }));
-                    }}
-                    style={{ background: 'none', border: 'none', color: '#38BDF8', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer', padding: 0, marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    <Plus size={12} />
-                    <span>Adicionar Novo Dia / Horário</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Controle de Acesso & Gamificação */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#F9FAFB', display: 'block', marginBottom: '8px' }}>
-                    Acesso & Lotação
-                  </span>
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.76rem', color: '#D1D5DB', marginBottom: '8px', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={activityForm.requiresRegistration}
-                      onChange={(e) => setActivityForm(prev => ({ ...prev, requiresRegistration: e.target.checked }))}
-                    />
-                    <span>Requer inscrição prévia no app</span>
-                  </label>
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.76rem', color: '#D1D5DB', marginBottom: '8px', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={activityForm.hasCapacityLimit}
-                      onChange={(e) => setActivityForm(prev => ({ ...prev, hasCapacityLimit: e.target.checked }))}
-                    />
-                    <span>Possui limite de vagas</span>
-                  </label>
-
-                  {activityForm.hasCapacityLimit && (
-                    <div>
-                      <span style={{ fontSize: '0.72rem', color: '#9CA3AF' }}>Capacidade máxima:</span>
-                      <input
-                        type="number"
-                        min="1"
-                        value={activityForm.capacity}
-                        onChange={(e) => setActivityForm(prev => ({ ...prev, capacity: e.target.value }))}
-                        style={{ width: '100%', padding: '5px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.80rem', marginTop: '4px', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#F9FAFB', display: 'block', marginBottom: '8px' }}>
-                    Gamificação (Pontos de Presença)
-                  </span>
-
-                  <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                    {[25, 50, 100, 150].map(pts => (
-                      <button
-                        key={pts}
-                        type="button"
-                        onClick={() => setActivityForm(prev => ({ ...prev, points: pts }))}
-                        style={{
-                          flex: 1,
-                          padding: '4px 0',
-                          borderRadius: '4px',
-                          border: Number(activityForm.points) === pts ? '1px solid #10B981' : '1px solid #374151',
-                          backgroundColor: Number(activityForm.points) === pts ? 'rgba(16, 185, 129, 0.15)' : '#111827',
-                          color: Number(activityForm.points) === pts ? '#34D399' : '#9CA3AF',
-                          fontSize: '0.74rem',
-                          fontWeight: 600,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        +{pts}
-                      </button>
-                    ))}
-                  </div>
-
-                  <input
-                    type="number"
-                    value={activityForm.points}
-                    onChange={(e) => setActivityForm(prev => ({ ...prev, points: e.target.value }))}
-                    placeholder="Pontos customizados"
-                    style={{ width: '100%', padding: '5px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.80rem', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #1F2937', paddingTop: '14px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsActivityModalOpen(false)}
-                  style={{ padding: '7px 14px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.80rem', cursor: 'pointer' }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  style={{ padding: '7px 16px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                >
-                  <Check size={14} />
-                  <span>Salvar Atividade</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+          {view === 'nova-atividade' && (
+            <ActivityForm
+              form={activityForm}
+              setForm={setActivityForm}
+              editingId={editingActivityId}
+              types={ACTIVITY_TYPES}
+              speakers={speakers}
+              locations={locations}
+              activities={activities}
+              onSubmit={handleSaveActivity}
+              onCancel={() => setIsActivityModalOpen(false)}
+              onNewSpeaker={() => { setEditingSpeakerId(null); setGuestForm(initialGuestForm); setIsGuestModalOpen(true); }}
+            />
+          )}
+          {view === 'conta' && (
+            <AdminConta
+              me={me}
+              handle={profile?.username ? `@${profile.username}` : profile?.email ? `@${profile.email.split('@')[0]}` : ''}
+              role={profile?.role || 'ADMIN'}
+              onProfile={() => navigate('/profile?edit=true')}
+              onLogout={handleAdminLogout}
+            />
+          )}
+          {view === 'nova-missao' && (
+            <MissionForm
+              form={missionForm}
+              setForm={setMissionForm}
+              editingId={editingMissionId}
+              saving={isSavingMission}
+              triggerModes={MISSION_TRIGGER_MODES}
+              categories={MISSION_CATEGORIES}
+              onSubmit={handleSaveMission}
+              onCancel={() => setIsMissionModalOpen(false)}
+            />
+          )}
+      </AdminShell>
 
       {/* MODAL: CONVIDADO / PALESTRANTE */}
       {isGuestModalOpen && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '520px', backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#F9FAFB' }}>
-            <div style={{ backgroundColor: '#1E293B', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #334155' }}>
+          <div style={{ width: '100%', maxWidth: '520px', backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: 'var(--text)' }}>
+            <div style={{ backgroundColor: 'var(--surface-raised)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--line-2)' }}>
               <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700 }}>
                 {editingSpeakerId ? 'Editar Palestrante' : 'Cadastrar Convidado / Palestrante'}
               </h3>
               <button
                 type="button"
                 onClick={() => setIsGuestModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: '2px' }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-2)', cursor: 'pointer', padding: '2px' }}
               >
                 <X size={18} />
               </button>
@@ -3081,35 +1697,35 @@ export default function Admin() {
             <form onSubmit={handleSaveGuest} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Nome Completo *</label>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Nome Completo *</label>
                   <input
                     type="text"
                     required
                     placeholder="Ex: Dra. Maria Santos"
                     value={guestForm.name}
                     onChange={(e) => setGuestForm(prev => ({ ...prev, name: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>E-mail</label>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>E-mail</label>
                   <input
                     type="email"
                     placeholder="maria@ufu.br"
                     value={guestForm.email}
                     onChange={(e) => setGuestForm(prev => ({ ...prev, email: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box' }}
                   />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Classificação do Palestrante</label>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Classificação do Palestrante</label>
                   <select
                     value={guestForm.classification}
                     onChange={(e) => setGuestForm(prev => ({ ...prev, classification: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
+                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem' }}
                   >
                     {SPEAKER_CLASSIFICATIONS.map(cls => (
                       <option key={cls.id} value={cls.id}>{cls.label}</option>
@@ -3117,36 +1733,36 @@ export default function Admin() {
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Cargo / Função</label>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Cargo / Função</label>
                   <input
                     type="text"
                     placeholder="Ex: Professora Associada"
                     value={guestForm.role}
                     onChange={(e) => setGuestForm(prev => ({ ...prev, role: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box' }}
                   />
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Empresa / Instituição</label>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Empresa / Instituição</label>
                 <input
                   type="text"
                   placeholder="Ex: FACOM / UFU"
                   value={guestForm.institution}
                   onChange={(e) => setGuestForm(prev => ({ ...prev, institution: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Foto / Avatar URL</label>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Foto / Avatar URL</label>
                 <input
                   type="url"
                   placeholder="https://..."
                   value={guestForm.photo}
                   onChange={(e) => setGuestForm(prev => ({ ...prev, photo: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box', marginBottom: '6px' }}
+                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box', marginBottom: '6px' }}
                 />
                 <div style={{ display: 'flex', gap: '6px' }}>
                   {SAMPLE_SPEAKER_PHOTOS.map((pic, idx) => (
@@ -3154,7 +1770,7 @@ export default function Admin() {
                       key={idx}
                       type="button"
                       onClick={() => setGuestForm(prev => ({ ...prev, photo: pic.url }))}
-                      style={{ padding: '3px 6px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#9CA3AF', fontSize: '0.70rem', cursor: 'pointer' }}
+                      style={{ padding: '3px 6px', borderRadius: '4px', border: '1px solid var(--line-2)', backgroundColor: 'var(--surface-raised)', color: 'var(--text-2)', fontSize: '0.70rem', cursor: 'pointer' }}
                     >
                       {pic.label}
                     </button>
@@ -3163,8 +1779,8 @@ export default function Admin() {
               </div>
 
               {/* Redes Sociais */}
-              <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#F9FAFB', display: 'block', marginBottom: '8px' }}>
+              <div style={{ backgroundColor: 'var(--surface-raised)', border: '1px solid var(--surface-raised)', borderRadius: '8px', padding: '12px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)', display: 'block', marginBottom: '8px' }}>
                   Redes Sociais
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -3178,11 +1794,11 @@ export default function Admin() {
                         const val = e.target.value;
                         setGuestForm(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, linkedin: val } }));
                       }}
-                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem', boxSizing: 'border-box' }}
+                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.78rem', boxSizing: 'border-box' }}
                     />
                   </div>
                   <div style={{ position: 'relative' }}>
-                    <GithubIcon size={14} color="#D1D5DB" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <GithubIcon size={14} color="var(--text-2)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                     <input
                       type="url"
                       placeholder="GitHub URL..."
@@ -3191,7 +1807,7 @@ export default function Admin() {
                         const val = e.target.value;
                         setGuestForm(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, github: val } }));
                       }}
-                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem', boxSizing: 'border-box' }}
+                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.78rem', boxSizing: 'border-box' }}
                     />
                   </div>
                   <div style={{ position: 'relative' }}>
@@ -3204,34 +1820,34 @@ export default function Admin() {
                         const val = e.target.value;
                         setGuestForm(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, instagram: val } }));
                       }}
-                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem', boxSizing: 'border-box' }}
+                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.78rem', boxSizing: 'border-box' }}
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Mini Biografia</label>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Mini Biografia</label>
                 <textarea
                   rows={2}
                   placeholder="Breve resumo da trajetória ou especialidades..."
                   value={guestForm.bio}
                   onChange={(e) => setGuestForm(prev => ({ ...prev, bio: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box' }}
                 />
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #1F2937', paddingTop: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--line-2)', paddingTop: '12px' }}>
                 <button
                   type="button"
                   onClick={() => setIsGuestModalOpen(false)}
-                  style={{ padding: '7px 14px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.80rem', cursor: 'pointer' }}
+                  style={{ padding: '7px 14px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--surface-raised)', color: 'var(--text-2)', fontSize: '0.80rem', cursor: 'pointer' }}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '7px 16px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  style={{ padding: '7px 16px', borderRadius: '6px', border: 'none', backgroundColor: 'var(--action)', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
                   <Check size={14} />
                   <span>Salvar Palestrante</span>
@@ -3242,192 +1858,16 @@ export default function Admin() {
         </div>
       )}
 
-      {/* OVERLAY: MODO PROJEÇÃO DE TELÃO (PROJECTOR MODE) */}
-      {projectorActivity && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: '#050811', zIndex: 9999, display: 'flex', flexDirection: 'column', color: '#FFFFFF', padding: '32px 48px', fontFamily: "'Inter', sans-serif" }}>
-          {/* Header do Telão */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1E293B', paddingBottom: '20px', marginBottom: '32px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <img src={logoTw} alt="FACOM TechWeek" style={{ height: '48px', objectFit: 'contain' }} />
-              <div>
-                <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                  FACOM TECHWEEK 2026 • PROJEÇÃO OFICIAL
-                </span>
-                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#F9FAFB' }}>
-                  Presença & Check-in no Telão
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!document.fullscreenElement) {
-                    document.documentElement.requestFullscreen().catch(() => {});
-                    setIsFullscreen(true);
-                  } else {
-                    document.exitFullscreen().catch(() => {});
-                    setIsFullscreen(false);
-                  }
-                }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#1E293B', color: '#F9FAFB', fontWeight: 700, fontSize: '0.90rem', cursor: 'pointer' }}
-              >
-                {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                <span>{isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setProjectorActivity(null)}
-                style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid #991B1B', backgroundColor: '#7F1D1D', color: '#FFFFFF', fontWeight: 700, fontSize: '0.90rem', cursor: 'pointer' }}
-              >
-                Fechar Projeção
-              </button>
-            </div>
-          </div>
-
-          {/* Conteúdo Principal do Telão */}
-          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '48px', alignItems: 'center' }}>
-            {/* Informações da Atividade */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div>
-                <span style={{ fontSize: '1.0rem', fontWeight: 700, color: '#A855F7', padding: '6px 14px', borderRadius: '20px', backgroundColor: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', display: 'inline-block', marginBottom: '16px' }}>
-                  {(projectorActivity.type || 'Palestra').toUpperCase()}
-                </span>
-                <h1 style={{ fontSize: '2.8rem', fontWeight: 900, lineHeight: '1.15', color: '#FFFFFF', margin: 0, letterSpacing: '-0.02em' }}>
-                  {projectorActivity.title}
-                </h1>
-              </div>
-
-              {/* Informações dos Palestrantes */}
-              <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '16px', padding: '24px' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: '12px' }}>
-                  PALESTRANTE(S) / CONVIDADO(S)
-                </span>
-                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#38BDF8' }}>
-                  {projectorActivity.speaker || (Array.isArray(projectorActivity.speakers) && projectorActivity.speakers.length > 0 ? projectorActivity.speakers.map(s => s.name).join(', ') : 'Comissão FACOM')}
-                </div>
-                {projectorActivity.speakerRole && (
-                  <div style={{ fontSize: '1.05rem', color: '#D1D5DB', marginTop: '4px' }}>
-                    {projectorActivity.speakerRole}
-                  </div>
-                )}
-              </div>
-
-              {/* Local & Pontuação */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '16px', padding: '20px' }}>
-                  <span style={{ fontSize: '0.80rem', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase' }}>LOCAL / SALA</span>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#F9FAFB', marginTop: '4px' }}>
-                    {projectorActivity.location || 'Anfiteatro FACOM'}
-                  </div>
-                </div>
-
-                <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', border: '2px solid #10B981', borderRadius: '16px', padding: '20px' }}>
-                  <span style={{ fontSize: '0.80rem', fontWeight: 800, color: '#34D399', textTransform: 'uppercase' }}>PONTOS DE PRESENÇA</span>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#34D399', marginTop: '2px' }}>
-                    +{projectorActivity.points || 50} PTS
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* QR Code de Projeção em Tela Cheia */}
-            <div style={{ backgroundColor: '#0F172A', border: '2px solid #2563EB', borderRadius: '24px', padding: '36px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 50px rgba(37, 99, 235, 0.25)' }}>
-              <div style={{ backgroundColor: '#FFFFFF', padding: '20px', borderRadius: '16px', boxShadow: '0 8px 30px rgba(0,0,0,0.5)' }}>
-                <QRCodeSVG
-                  value={projectorQrValue}
-                  size={320}
-                  level="H"
-                  includeMargin={true}
-                />
-              </div>
-
-              <div style={{ marginTop: '24px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#F9FAFB', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <Radio size={20} color="#38BDF8" className="animate-pulse" />
-                  <span>Abra a Câmera do App e Escaneie</span>
-                </div>
-                <div style={{ fontSize: '0.90rem', color: '#9CA3AF' }}>
-                  Código rotativo de segurança atualiza em <strong style={{ color: '#38BDF8' }}>{projectorCountdown}s</strong>
-                </div>
-
-                {/* Barra de Progresso */}
-                <div style={{ width: '280px', height: '6px', backgroundColor: '#1E293B', borderRadius: '3px', marginTop: '14px', overflow: 'hidden', margin: '14px auto 0' }}>
-                  <div style={{ width: `${(projectorCountdown / 30) * 100}%`, height: '100%', backgroundColor: '#2563EB', transition: 'width 1s linear' }} />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: LOCAL */}
-      {isLocationModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px', overflow: 'hidden', color: '#F9FAFB' }}>
-            <div style={{ backgroundColor: '#1E293B', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #334155' }}>
-              <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700 }}>Cadastrar Local / Sala</h3>
-              <button
-                type="button"
-                onClick={() => setIsLocationModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleSaveLocation} style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Nome do Local</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Anfiteatro 5R"
-                  value={locationForm.name}
-                  onChange={(e) => setLocationForm(prev => ({ ...prev, name: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>Capacidade de Vagas</label>
-                <input
-                  type="number"
-                  required
-                  placeholder="120"
-                  value={locationForm.capacity}
-                  onChange={(e) => setLocationForm(prev => ({ ...prev, capacity: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
-                />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsLocationModalOpen(false)}
-                  style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.80rem' }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 600 }}
-                >
-                  Salvar Local
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {projectorActivity && <Telao activity={projectorActivity} qrValue={projectorQrValue} onClose={() => setProjectorActivity(null)} />}
 
       {/* MODAL: QR CODE DE PRESENÇA */}
       {qrModalActivity && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '380px', backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '10px', padding: '24px', textAlign: 'center', color: '#F9FAFB' }}>
-            <span style={{ fontSize: '0.72rem', color: '#3B82F6', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          <div style={{ width: '100%', maxWidth: '380px', backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '10px', padding: '24px', textAlign: 'center', color: 'var(--text)' }}>
+            <span style={{ fontSize: '0.72rem', color: 'var(--link)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Validação de Presença
             </span>
-            <h3 style={{ margin: '6px 0 16px', fontSize: '1.05rem', fontWeight: 700, color: '#F9FAFB' }}>
+            <h3 style={{ margin: '6px 0 16px', fontSize: '1.05rem', fontWeight: 700, color: 'var(--text)' }}>
               {qrModalActivity.title}
             </h3>
 
@@ -3440,14 +1880,14 @@ export default function Admin() {
               />
             </div>
 
-            <p style={{ margin: '0 0 16px', fontSize: '0.78rem', color: '#9CA3AF' }}>
+            <p style={{ margin: '0 0 16px', fontSize: '0.78rem', color: 'var(--text-2)' }}>
               Projete este código no telão da sala para os participantes realizarem o check-in presencial.
             </p>
 
             <button
               type="button"
               onClick={() => setQrModalActivity(null)}
-              style={{ width: '100%', padding: '9px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontWeight: 600, fontSize: '0.84rem', cursor: 'pointer' }}
+              style={{ width: '100%', padding: '9px', borderRadius: '6px', border: 'none', backgroundColor: 'var(--action)', color: '#FFFFFF', fontWeight: 600, fontSize: '0.84rem', cursor: 'pointer' }}
             >
               Fechar
             </button>
@@ -3456,418 +1896,11 @@ export default function Admin() {
       )}
 
       {/* MODAL: ADICIONAR / EDITAR MISSÃO (KAN-104) */}
-      {isMissionModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '620px', maxHeight: '90vh', backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: '#F9FAFB', boxShadow: '0 12px 36px rgba(0,0,0,0.7)' }}>
-            
-            <div style={{ backgroundColor: '#1E293B', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #334155' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Sparkles size={18} color="#3B82F6" />
-                <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700 }}>
-                  {editingMissionId ? 'Editar Missão' : 'Cadastrar Nova Missão'}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsMissionModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: '2px' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveMission} style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Título e Pontuação */}
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                    Título da Missão *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Conheça o Stand da Kanastra"
-                    value={missionForm.title}
-                    onChange={(e) => setMissionForm(prev => ({ ...prev, title: e.target.value }))}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.84rem', boxSizing: 'border-box' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                    Pontuação (XP) *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={missionForm.points}
-                    onChange={(e) => setMissionForm(prev => ({ ...prev, points: e.target.value }))}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#60A5FA', fontWeight: 700, fontSize: '0.84rem', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-
-              {/* Descrição */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                  Descrição e Instruções *
-                </label>
-                <textarea
-                  rows={2}
-                  required
-                  placeholder="Explique o que o participante precisa fazer para concluir..."
-                  value={missionForm.description}
-                  onChange={(e) => setMissionForm(prev => ({ ...prev, description: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.84rem', boxSizing: 'border-box', resize: 'vertical' }}
-                />
-              </div>
-
-              {/* Categoria e Ícone */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                    Categoria
-                  </label>
-                  <select
-                    value={missionForm.category}
-                    onChange={(e) => setMissionForm(prev => ({ ...prev, category: e.target.value }))}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
-                  >
-                    <option value="sponsors">Patrocinadores</option>
-                    <option value="networking">Networking</option>
-                    <option value="social">Social & Mídia</option>
-                    <option value="activities">Palestras & Trilhas</option>
-                    <option value="flash">Missão Relâmpago</option>
-                    <option value="special">Missões Especiais</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
-                    Ícone Representativo
-                  </label>
-                  <select
-                    value={missionForm.icon}
-                    onChange={(e) => setMissionForm(prev => ({ ...prev, icon: e.target.value }))}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
-                  >
-                    <option value="Sparkles">✨ Sparkles (Padrão)</option>
-                    <option value="Zap">⚡ Zap (Relâmpago)</option>
-                    <option value="Camera">📷 Câmera / Stories</option>
-                    <option value="MapPin">📍 Localização / Stand</option>
-                    <option value="Users">👥 Networking / Conexões</option>
-                    <option value="Lock">🔒 Palavra Secreta / Cadeado</option>
-                    <option value="MessageCircle">💬 Conversa / Depoimento</option>
-                    <option value="HelpCircle">❓ Quiz / Pergunta</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* SELETOR DE MODO DE GATILHO */}
-              <div style={{ backgroundColor: '#1A2234', border: '1px solid #2D3748', borderRadius: '8px', padding: '14px' }}>
-                <span style={{ fontSize: '0.76rem', fontWeight: 700, color: '#93C5FD', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Modo de Validação / Gatilho da Missão
-                </span>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px' }}>
-                  {MISSION_TRIGGER_MODES.map(mode => (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      onClick={() => setMissionForm(prev => ({ ...prev, triggerMode: mode.id }))}
-                      style={{
-                        padding: '10px 12px',
-                        borderRadius: '6px',
-                        border: '1px solid',
-                        borderColor: missionForm.triggerMode === mode.id ? '#3B82F6' : '#374151',
-                        backgroundColor: missionForm.triggerMode === mode.id ? 'rgba(59, 130, 246, 0.18)' : '#0B0F17',
-                        color: missionForm.triggerMode === mode.id ? '#FFFFFF' : '#9CA3AF',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        fontSize: '0.80rem'
-                      }}
-                    >
-                      <div style={{ fontWeight: 600 }}>{mode.label}</div>
-                      <div style={{ fontSize: '0.70rem', color: '#94A3B8', marginTop: '2px' }}>{mode.desc}</div>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Sub-painel: Palavra Secreta */}
-                {missionForm.triggerMode === 'secret' && (
-                  <div style={{ backgroundColor: '#0B0F17', padding: '12px', borderRadius: '6px', border: '1px solid #374151' }}>
-                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#D1D5DB', marginBottom: '4px' }}>
-                      Palavra-chave Secreta Obrigatória (Validação Case-Insensitive) *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ex: OPORTUNIDADES"
-                      value={missionForm.secretWord}
-                      onChange={(e) => setMissionForm(prev => ({ ...prev, secretWord: e.target.value.toUpperCase() }))}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F472B6', fontWeight: 700, fontSize: '0.84rem', letterSpacing: '0.05em', boxSizing: 'border-box' }}
-                    />
-                    <span style={{ fontSize: '0.70rem', color: '#9CA3AF', display: 'block', marginTop: '4px' }}>
-                      O aluno precisará digitar exatamente essa palavra para desbloquear o XP.
-                    </span>
-                  </div>
-                )}
-
-                {/* Sub-painel: Quiz / Pergunta */}
-                {missionForm.triggerMode === 'quiz' && (
-                  <div style={{ backgroundColor: '#0B0F17', padding: '12px', borderRadius: '6px', border: '1px solid #374151', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#D1D5DB', marginBottom: '4px' }}>
-                        Pergunta do Quiz *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ex: Qual tecnologia é amplamente utilizada pela empresa?"
-                        value={missionForm.quizQuestion}
-                        onChange={(e) => setMissionForm(prev => ({ ...prev, quizQuestion: e.target.value }))}
-                        style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem', boxSizing: 'border-box' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#D1D5DB', marginBottom: '6px' }}>
-                        Alternativas (Selecione a correta) *
-                      </label>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {missionForm.quizOptions.map((opt, idx) => (
-                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <input
-                              type="radio"
-                              name="correctOption"
-                              checked={missionForm.quizCorrectIndex === idx}
-                              onChange={() => setMissionForm(prev => ({ ...prev, quizCorrectIndex: idx }))}
-                            />
-                            <input
-                              type="text"
-                              required
-                              placeholder={`Alternativa ${idx + 1}`}
-                              value={opt}
-                              onChange={(e) => {
-                                const newOpts = [...missionForm.quizOptions];
-                                newOpts[idx] = e.target.value;
-                                setMissionForm(prev => ({ ...prev, quizOptions: newOpts }));
-                              }}
-                              style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.80rem' }}
-                            />
-                            {missionForm.quizOptions.length > 2 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newOpts = missionForm.quizOptions.filter((_, i) => i !== idx);
-                                  setMissionForm(prev => ({ ...prev, quizOptions: newOpts, quizCorrectIndex: 0 }));
-                                }}
-                                style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px' }}
-                              >
-                                <X size={14} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      {missionForm.quizOptions.length < 5 && (
-                        <button
-                          type="button"
-                          onClick={() => setMissionForm(prev => ({ ...prev, quizOptions: [...prev.quizOptions, ''] }))}
-                          style={{ marginTop: '8px', padding: '4px 8px', backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '4px', color: '#93C5FD', fontSize: '0.74rem', cursor: 'pointer' }}
-                        >
-                          + Adicionar Alternativa
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sub-painel: Formulário & Mídia */}
-                {missionForm.triggerMode === 'form' && (
-                  <div style={{ backgroundColor: '#0B0F17', padding: '12px', borderRadius: '6px', border: '1px solid #374151', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#D1D5DB' }}>
-                        Campos do Formulário de Conclusão ({missionForm.fields.length})
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newField = {
-                            id: `f_${Date.now()}`,
-                            label: 'Nova Pergunta',
-                            type: 'text',
-                            required: true
-                          };
-                          setMissionForm(prev => ({ ...prev, fields: [...prev.fields, newField] }));
-                        }}
-                        style={{ padding: '3px 8px', backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '4px', color: '#93C5FD', fontSize: '0.72rem', cursor: 'pointer' }}
-                      >
-                        + Adicionar Campo
-                      </button>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {missionForm.fields.map((field, fIdx) => (
-                        <div key={field.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#111827', padding: '8px', borderRadius: '6px', border: '1px solid #1F2937' }}>
-                          <input
-                            type="text"
-                            required
-                            placeholder="Pergunta / Rótulo"
-                            value={field.label}
-                            onChange={(e) => {
-                              const newF = [...missionForm.fields];
-                              newF[fIdx].label = e.target.value;
-                              setMissionForm(prev => ({ ...prev, fields: newF }));
-                            }}
-                            style={{ flex: 2, padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
-                          />
-
-                          <select
-                            value={field.type}
-                            onChange={(e) => {
-                              const newF = [...missionForm.fields];
-                              newF[fIdx].type = e.target.value;
-                              if (e.target.value === 'select' && !newF[fIdx].options) {
-                                newF[fIdx].options = ['Opção 1', 'Opção 2'];
-                              }
-                              setMissionForm(prev => ({ ...prev, fields: newF }));
-                            }}
-                            style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.78rem' }}
-                          >
-                            <option value="text">Texto Curto</option>
-                            <option value="textarea">Texto Longo</option>
-                            <option value="photo">Foto / Comprovante</option>
-                            <option value="select">Múltipla Escolha</option>
-                          </select>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const newF = missionForm.fields.filter((_, i) => i !== fIdx);
-                              setMissionForm(prev => ({ ...prev, fields: newF }));
-                            }}
-                            style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '2px' }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sub-painel: Automático pelo App */}
-                {missionForm.triggerMode === 'auto' && (
-                  <div style={{ backgroundColor: '#0B0F17', padding: '12px', borderRadius: '6px', border: '1px solid #374151' }}>
-                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#D1D5DB', marginBottom: '4px' }}>
-                      Evento Disparador do App *
-                    </label>
-                    <select
-                      value={missionForm.autoEventType}
-                      onChange={(e) => setMissionForm(prev => ({ ...prev, autoEventType: e.target.value }))}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: '#F9FAFB', fontSize: '0.82rem' }}
-                    >
-                      <option value="sponsor_visit">Escanear Stand de Patrocinador</option>
-                      <option value="lecture_checkin">Check-in Presencial em Atividade</option>
-                      <option value="network_first">Primeira Conexão no App</option>
-                      <option value="network_course">Conectar com Aluno de Outro Curso</option>
-                      <option value="network_external">Conectar com Aluno de Outra Instituição/Empresa</option>
-                      <option value="network_freshman">Conectar com Calouro (1º Período)</option>
-                      <option value="passport_complete">Completar Passaporte de Patrocinadores</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-
-              {/* MODIFICADOR RELÂMPAGO */}
-              <div style={{ backgroundColor: '#1C1917', border: '1px solid #78350F', borderRadius: '8px', padding: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Zap size={16} color="#F59E0B" />
-                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#FDE68A' }}>
-                      Ativar como Missão Relâmpago (Flash Mission)
-                    </span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={missionForm.isFlash}
-                    onChange={(e) => setMissionForm(prev => ({ ...prev, isFlash: e.target.checked }))}
-                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                  />
-                </div>
-
-                {missionForm.isFlash && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.74rem', color: '#D1D5DB', marginBottom: '4px' }}>
-                        Duração (Minutos)
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="60"
-                        value={missionForm.flashDuration}
-                        onChange={(e) => setMissionForm(prev => ({ ...prev, flashDuration: e.target.value }))}
-                        style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#FDE68A', fontWeight: 700, fontSize: '0.82rem', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.74rem', color: '#D1D5DB', marginBottom: '4px' }}>
-                        Limite de Vencedores (Opcional)
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Ilimitado se vazio"
-                        value={missionForm.flashMaxWinners}
-                        onChange={(e) => setMissionForm(prev => ({ ...prev, flashMaxWinners: e.target.value }))}
-                        style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#FDE68A', fontSize: '0.82rem', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                    <div style={{ gridColumn: 'span 2' }}>
-                      <label style={{ display: 'block', fontSize: '0.74rem', color: '#D1D5DB', marginBottom: '4px' }}>
-                        Frase de Chamada do Mascote (Teko / Weeka)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ex: WEEKA: A TechWeek inteira tem uma missão relâmpago!"
-                        value={missionForm.flashMascotDialogue}
-                        onChange={(e) => setMissionForm(prev => ({ ...prev, flashMascotDialogue: e.target.value }))}
-                        style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#FDE68A', fontSize: '0.80rem', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Botões do Rodapé */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsMissionModalOpen(false)}
-                  style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.82rem', cursor: 'pointer' }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingMission}
-                  style={{ padding: '8px 18px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                  {isSavingMission ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                  <span>{editingMissionId ? 'Salvar Alterações' : 'Criar Missão'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* MODAL: DISPARO RELÂMPAGO RÁPIDO (KAN-104) */}
       {isFlashQuickModalOpen && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '520px', backgroundColor: '#111827', border: '1px solid #B45309', borderRadius: '10px', overflow: 'hidden', color: '#F9FAFB', boxShadow: '0 12px 36px rgba(0,0,0,0.8)' }}>
+          <div style={{ width: '100%', maxWidth: '520px', backgroundColor: 'var(--surface)', border: '1px solid #B45309', borderRadius: '10px', overflow: 'hidden', color: 'var(--text)', boxShadow: '0 12px 36px rgba(0,0,0,0.8)' }}>
             
             <div style={{ backgroundColor: '#78350F', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #92400E' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -3887,7 +1920,7 @@ export default function Admin() {
 
             <form onSubmit={handleTriggerQuickFlash} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
-                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#9CA3AF', display: 'block', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '8px' }}>
                   PRESETS RÁPIDOS DO EVENTO (CLIQUE PARA APLICAR)
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -3899,17 +1932,17 @@ export default function Admin() {
                         setFlashQuickDuration(preset.flashDuration || 5);
                         setFlashQuickMascotText(preset.flashMascotDialogue || '');
                       }}
-                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#F9FAFB', textAlign: 'left', fontSize: '0.78rem', cursor: 'pointer' }}
+                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--surface-raised)', color: 'var(--text)', textAlign: 'left', fontSize: '0.78rem', cursor: 'pointer' }}
                     >
                       <div style={{ fontWeight: 600, color: '#FDE68A' }}>{preset.title}</div>
-                      <div style={{ fontSize: '0.70rem', color: '#9CA3AF' }}>{preset.description}</div>
+                      <div style={{ fontSize: '0.70rem', color: 'var(--text-2)' }}>{preset.description}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>
                   Missão Alvo no App *
                 </label>
                 <select
@@ -3918,7 +1951,7 @@ export default function Admin() {
                     const found = missionsList.find(m => m.id === e.target.value);
                     setFlashTargetMission(found || null);
                   }}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.82rem' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem' }}
                 >
                   {missionsList.map(m => (
                     <option key={m.id} value={m.id}>
@@ -3930,7 +1963,7 @@ export default function Admin() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>
                     Duração (Minutos) *
                   </label>
                   <input
@@ -3940,18 +1973,18 @@ export default function Admin() {
                     required
                     value={flashQuickDuration}
                     onChange={(e) => setFlashQuickDuration(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#FDE68A', fontWeight: 700, fontSize: '0.84rem', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: '#FDE68A', fontWeight: 700, fontSize: '0.84rem', boxSizing: 'border-box' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#9CA3AF', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>
                     Fala do Mascote (Alerta em Tempo Real)
                   </label>
                   <input
                     type="text"
                     value={flashQuickMascotText}
                     onChange={(e) => setFlashQuickMascotText(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#0B0F17', color: '#F9FAFB', fontSize: '0.80rem', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.80rem', boxSizing: 'border-box' }}
                   />
                 </div>
               </div>
@@ -3960,7 +1993,7 @@ export default function Admin() {
                 <button
                   type="button"
                   onClick={() => setIsFlashQuickModalOpen(false)}
-                  style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#1E293B', color: '#D1D5DB', fontSize: '0.82rem', cursor: 'pointer' }}
+                  style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--surface-raised)', color: 'var(--text-2)', fontSize: '0.82rem', cursor: 'pointer' }}
                 >
                   Cancelar
                 </button>
@@ -3977,16 +2010,7 @@ export default function Admin() {
         </div>
       )}
 
-      {/* MODAL DE FEEDBACK */}
-      {feedback && (
-        <FeedbackModal
-          isOpen={true}
-          type={feedback.type}
-          title={feedback.title}
-          message={feedback.message}
-          onClose={() => setFeedback(null)}
-        />
-      )}
+      <Toast feedback={feedback} onClose={closeFeedback} />
     </div>
   );
 }

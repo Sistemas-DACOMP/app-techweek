@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
-import { CheckCircle, MapPin, Camera, Users, MessageCircle, X, Search, Lock, ArrowLeft, Loader2, Trash2, QrCode, Sparkles, Zap, HelpCircle } from 'lucide-react';
-import { getMyProfile, uploadMissionPhoto } from '../lib/gameplay';
+import { Check, MapPin, Camera, Users, MessageSquare, X, Search, Lock, Loader2, Trash2, QrCode, Sparkles, Zap, CircleHelp } from 'lucide-react';
+import { uploadMissionPhoto } from '../lib/gameplay';
 import { onAuthChange } from '../lib/auth';
 import { getUserProfile, getCachedUserProfile } from '../lib/userService';
 import { validateMissionPhoto } from '../lib/validators';
@@ -17,30 +17,70 @@ import {
 import FeedbackModal from '../components/FeedbackModal';
 import SymplaRequirementModal from '../components/SymplaRequirementModal';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
-import PassportTab from '../components/PassportTab';
+import PassportTab, { SPONSORS_CONFIG, TIER_STYLE } from '../components/PassportTab';
+import ConquistasTabs from '../components/ConquistasTabs';
+import Mascot from '../components/Mascot';
 import { useScrollLock } from '../hooks/useScrollLock';
+import '../styles/conquistas.css';
+
+/* ---------- Estilo do cartão de missão (DESIGN.md §6 Missões) ---------- */
+
+const CARD_STYLES = ['padrao', 'secreta', 'caca-qr', 'relampago', 'patrocinador', 'quiz', 'stories'];
+const STYLE_ALIASES = { default: 'padrao', secret: 'secreta', 'caca-ao-qr': 'caca-qr', 'caca-ao-qr-code': 'caca-qr', qr: 'caca-qr', flash: 'relampago', sponsor: 'patrocinador', story: 'stories', instagram: 'stories' };
+const normalizeStyle = (s) => {
+  const k = String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().replace(/[\s_]+/g, '-');
+  return CARD_STYLES.includes(k) ? k : STYLE_ALIASES[k] || null;
+};
+
+/** Patrocinador da missão, se ela aponta para um dos estandes do passaporte. */
+function missionSponsor(m) {
+  const key = String(m?.sponsorId || m?.autoConfig?.targetId || (m?.id || '').replace(/^sponsor_/, '')).toLowerCase();
+  return SPONSORS_CONFIG[key] || null;
+}
+
+/**
+ * Estilo visual do cartão. Respeita `m.cardStyle` (escolhido no admin) e, sem ele,
+ * deriva dos campos que a missão já tem.
+ */
+export function missionStyle(m) {
+  const explicit = m?.cardStyle && normalizeStyle(m.cardStyle);
+  if (explicit) return explicit;
+  const id = m?.id || '';
+  if (m?.isFlash) return 'relampago';
+  if (id === 'secret_qr' || m?.autoConfig?.eventType === 'secret_qr') return 'caca-qr';
+  if (id === 'secret_password' || m?.triggerMode === 'secret') return 'secreta';
+  if (id === 'instagram_story') return 'stories';
+  if (m?.triggerMode === 'quiz' || m?.quizConfig || id.includes('quiz')) return 'quiz';
+  if (missionSponsor(m)) return 'patrocinador';
+  return 'padrao';
+}
+
+const isPassportMission = (c) => c.autoConfig?.eventType === 'passport_complete' || c.id?.includes('passport') || c.id === 'sponsor_colecao';
+
+const ctaLabel = (c) => {
+  if (c.id === 'instagram_story') return 'Criar story';
+  if (c.isAction) return 'Começar';
+  if (c.triggerMode === 'quiz') return 'Fazer quiz';
+  if (c.triggerMode === 'secret') return 'Desvendar';
+  if (c.triggerMode === 'auto' || c.type === 'auto') return isPassportMission(c) ? 'Ver passaporte' : 'Escanear';
+  return 'Responder';
+};
+
+const toDate = (v) => (v?.toDate ? v.toDate() : v ? new Date(v) : null);
+const formatDeadline = (v) => {
+  const d = toDate(v);
+  if (!d || isNaN(d.getTime())) return null;
+  return `termina às ${d.getHours()}h${d.getMinutes() ? String(d.getMinutes()).padStart(2, '0') : ''}`;
+};
+
+const CATEGORY_TINT = { sponsors: '#67D4E8', networking: '#B9A6F5', social: '#F59AC0' };
 
 export default function Challenges() {
   const { completedChallenges, completeChallenge, hasCompletedChallenge, hasSymplaTicket } = useUser();
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState(() => {
-    try {
-      const searchParams = new URLSearchParams(window?.location?.search || '');
-      return searchParams.get('tab') === 'passport' ? 'passport' : 'missions';
-    } catch {
-      return 'missions';
-    }
-  });
-
-  useEffect(() => {
-    try {
-      const searchParams = new URLSearchParams(location?.search || '');
-      const tab = searchParams.get('tab');
-      if (tab === 'passport') setActiveTab('passport');
-      else if (tab === 'missions') setActiveTab('missions');
-    } catch {}
-  }, [location?.search]);
+  // Aba interna vem da URL (?tab=passport), assim o cabeçalho compartilhado com /ranking navega por link.
+  const activeTab = new URLSearchParams(location?.search || '').get('tab') === 'passport' ? 'passport' : 'missions';
 
   const [activeManualChallenge, setActiveManualChallenge] = useState(null);
   const [selectedAutoChallenge, setSelectedAutoChallenge] = useState(null);
@@ -97,13 +137,16 @@ export default function Challenges() {
     return () => unsubscribe();
   }, []);
 
-  // Inscrição em tempo real de missões dinâmicas (KAN-104)
-  const [missions, setMissions] = useState(DEFAULT_MISSIONS);
+  // Inscrição em tempo real de missões dinâmicas (KAN-104 e KAN-106)
+  const [missions, setMissions] = useState([]);
+  const [loadingMissions, setLoadingMissions] = useState(true);
   const [activeFlashCountdown, setActiveFlashCountdown] = useState(null);
+  const [flashFraction, setFlashFraction] = useState(1);
 
   useEffect(() => {
     const unsub = subscribeToMissions((list) => {
-      setMissions(list && list.length > 0 ? list : DEFAULT_MISSIONS);
+      setMissions(list || []);
+      setLoadingMissions(false);
     });
     return () => unsub();
   }, []);
@@ -117,11 +160,13 @@ export default function Challenges() {
       return;
     }
 
-    const interval = setInterval(() => {
-      const exp = activeFlashMission.flashConfig.expiresAt.toDate 
-        ? activeFlashMission.flashConfig.expiresAt.toDate() 
+    const totalMs = (Number(activeFlashMission.flashConfig.durationMinutes) || 0) * 60000;
+    const tick = () => {
+      const exp = activeFlashMission.flashConfig.expiresAt.toDate
+        ? activeFlashMission.flashConfig.expiresAt.toDate()
         : new Date(activeFlashMission.flashConfig.expiresAt);
       const diffMs = exp.getTime() - Date.now();
+      setFlashFraction(totalMs > 0 ? Math.min(1, Math.max(0, diffMs / totalMs)) : 1);
       if (diffMs <= 0) {
         setActiveFlashCountdown('00:00');
         clearInterval(interval);
@@ -130,7 +175,9 @@ export default function Challenges() {
         const secs = Math.floor((diffMs % 60000) / 1000);
         setActiveFlashCountdown(`${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`);
       }
-    }, 1000);
+    };
+    const interval = setInterval(tick, 1000);
+    tick();
 
     return () => clearInterval(interval);
   }, [activeFlashMission]);
@@ -143,9 +190,10 @@ export default function Challenges() {
       case 'Users': return Users;
       case 'Lock': return Lock;
       case 'Search': return Search;
-      case 'MessageCircle': return MessageCircle;
+      case 'MessageCircle': return MessageSquare;
       case 'Zap': return Zap;
-      case 'HelpCircle': return HelpCircle;
+      case 'HelpCircle': return CircleHelp;
+      case 'QrCode': return QrCode;
       case 'Sparkles':
       default:
         return Sparkles;
@@ -309,440 +357,150 @@ export default function Challenges() {
     }
   };
 
+
+  const closeManual = () => {
+    setActiveManualChallenge(null);
+    setManualForm({});
+    setPhotoFiles({});
+    setPhotoPreviews({});
+  };
+
+  const isDone = (c) => (hasCompletedChallenge && hasCompletedChallenge(c.id)) || completedChallenges.includes(c.id);
+  const visibleMissions = missions.filter(m => m.status !== 'paused');
+  const doneMissions = visibleMissions.filter(isDone);
+  const flashInBanner = activeFlashMission && isFlashMissionActive(activeFlashMission) && !isDone(activeFlashMission) ? activeFlashMission : null;
+  const availableMissions = visibleMissions.filter(m => !isDone(m) && m !== flashInBanner);
+  const earnedPts = doneMissions.reduce((s, m) => s + (Number(m.points) || 0), 0);
+  const openPts = visibleMissions.filter(m => !isDone(m)).reduce((s, m) => s + (Number(m.points) || 0), 0);
+
   return (
-    <div className="page-container animate-fade-in" style={{ paddingBottom: '120px' }}>
+    <div className="page-container conq-page animate-fade-in">
       <SymplaStickyBanner />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-              fontSize: '1.75rem',
-              fontWeight: 800,
-              color: '#F8FAFC',
-              margin: 0,
-              letterSpacing: '-0.03em',
-              lineHeight: 1.15
-            }}
-          >
-            Missões
-          </h1>
-          <p
-            style={{
-              fontSize: '0.80rem',
-              color: '#94A3B8',
-              margin: '3px 0 0',
-              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
-            }}
-          >
-            Complete desafios e acumule pontos
-          </p>
-        </div>
-        <div
-          style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '12px',
-            backgroundColor: '#0F141F',
-            border: '1px solid #1E293B',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 'bold',
-            fontSize: '1rem',
-            overflow: 'hidden',
-            position: 'relative'
-          }}
-        >
-          {profile.avatarUrl ? (
-            <img
-              src={profile.avatarUrl}
-              alt="Avatar"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          ) : (
-            profile.firstName
-              ? profile.firstName.charAt(0).toUpperCase()
-              : 'V'
-          )}
-        </div>
+      <div className="px-5">
+        <ConquistasTabs active={activeTab === 'passport' ? 'passport' : 'missions'} />
+
+        {activeTab === 'passport' ? (
+          <PassportTab userProfile={profile} />
+        ) : loadingMissions ? (
+          <div className="mt-[18px] flex flex-col gap-2.5" aria-busy="true" aria-label="Carregando missões">
+            <div className="skeleton h-[80px] rounded-[18px]" />
+            {[1, 2, 3].map((i) => <div key={i} className="skeleton h-[132px] rounded-[18px]" />)}
+          </div>
+        ) : visibleMissions.length === 0 ? (
+          <div className="mt-10 flex flex-col items-center px-4 text-center">
+            <Mascot color="purple" style={{ width: 112, height: 112 }} />
+            <p className="mt-4 text-[15px] font-bold text-text">Nenhuma missão no ar agora</p>
+            <p className="mt-1 text-[13px] text-text-2">Novas missões aparecem aqui durante o evento. Enquanto isso, visite os estandes.</p>
+            <button type="button" className="btn btn-secondary btn-sm mt-5" onClick={() => navigate('/challenges?tab=passport', { replace: true })}>
+              Ver passaporte
+            </button>
+          </div>
+        ) : (
+          <>
+            <SummaryRing done={doneMissions.length} total={visibleMissions.length} earned={earnedPts} open={openPts} />
+
+            {flashInBanner && (
+              <FlashBanner
+                mission={flashInBanner}
+                countdown={activeFlashCountdown}
+                fraction={flashFraction}
+                onJoin={() => handleSimulateChallenge(flashInBanner)}
+              />
+            )}
+
+            {availableMissions.length > 0 && (
+              <section aria-labelledby="missoes-disponiveis">
+                <div className="mb-2.5 mt-[22px] flex items-baseline justify-between">
+                  <h2 id="missoes-disponiveis" className="m-0 text-base font-extrabold">Disponíveis</h2>
+                  <span className="text-xs font-bold text-text-3">
+                    {availableMissions.length} {availableMissions.length === 1 ? 'missão' : 'missões'}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2.5">
+                  {availableMissions.map((m) => (
+                    <MissionCard key={m.id} mission={m} getIcon={getMissionIcon} onStart={() => handleSimulateChallenge(m)} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {doneMissions.length > 0 && (
+              <section aria-labelledby="missoes-feitas">
+                <div className="mb-2.5 mt-[22px] flex items-baseline justify-between">
+                  <h2 id="missoes-feitas" className="m-0 text-base font-extrabold">Feitas</h2>
+                  <span className="text-xs font-bold text-text-3">{doneMissions.length}</span>
+                </div>
+                <div className="flex flex-col gap-2.5">
+                  {doneMissions.map((m) => (
+                    <MissionCard key={m.id} mission={m} getIcon={getMissionIcon} done />
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
+        )}
       </div>
-
-      {/* Abas de Navegação: [ Missões ] | [ Passaporte ] */}
-      <div
-        style={{
-          display: 'flex',
-          backgroundColor: '#0F141F',
-          padding: '4px',
-          borderRadius: '14px',
-          border: '1px solid #1E293B',
-          marginBottom: '20px',
-          gap: '6px'
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setActiveTab('missions')}
-          style={{
-            flex: 1,
-            padding: '10px 14px',
-            borderRadius: '10px',
-            border: 'none',
-            fontSize: '0.85rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            backgroundColor: activeTab === 'missions' ? '#2563EB' : 'transparent',
-            color: activeTab === 'missions' ? '#FFFFFF' : '#94A3B8',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px'
-          }}
-        >
-          <span>Missões</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('passport')}
-          style={{
-            flex: 1,
-            padding: '10px 14px',
-            borderRadius: '10px',
-            border: 'none',
-            fontSize: '0.85rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            backgroundColor: activeTab === 'passport' ? '#2563EB' : 'transparent',
-            color: activeTab === 'passport' ? '#FFFFFF' : '#94A3B8',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px'
-          }}
-        >
-          <span>Passaporte</span>
-        </button>
-      </div>
-
-      {activeTab === 'passport' ? (
-        <PassportTab userProfile={profile} />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {!hasSymplaTicket && (
-            <div
-              style={{
-                padding: '16px 18px',
-                borderRadius: '16px',
-                background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(161, 98, 7, 0.08))',
-                border: '1px solid rgba(234, 179, 8, 0.35)',
-                color: '#fef08a',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', fontSize: '0.95rem' }}>
-                <span>⚠️</span>
-                <span>Ingresso Sympla Pendente</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: '1.4' }}>
-                Vincule seu ingresso oficial do Sympla para desbloquear o envio de missões, fotos e acumular pontos no ranking da TechWeek.
-              </p>
-              <button
-                onClick={() => navigate('/profile')}
-                style={{
-                  alignSelf: 'flex-start',
-                  marginTop: '4px',
-                  padding: '6px 14px',
-                  borderRadius: '10px',
-                  background: '#eab308',
-                  color: '#0f172a',
-                  border: 'none',
-                  fontWeight: '700',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer'
-                }}
-              >
-                Vincular Ingresso no Perfil →
-              </button>
-            </div>
-          )}
-
-          {/* BANNER DE MISSÃO RELÂMPAGO AO VIVO (KAN-104) */}
-          {activeFlashMission && isFlashMissionActive(activeFlashMission) && (
-            <div style={{
-              margin: '6px 0 16px',
-              padding: '16px 18px',
-              borderRadius: '16px',
-              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(180, 83, 9, 0.2) 100%)',
-              border: '1px solid #F59E0B',
-              boxShadow: '0 8px 24px rgba(245, 158, 11, 0.25)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '12px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
-                <div style={{ width: '42px', height: '42px', borderRadius: '12px', backgroundColor: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 0 16px rgba(245,158,11,0.6)' }}>
-                  <Zap size={22} color="#000000" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.66rem', fontWeight: 800, backgroundColor: '#F59E0B', color: '#000', padding: '1px 6px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      ⚡ MISSÃO RELÂMPAGO
-                    </span>
-                    {activeFlashCountdown && (
-                      <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#FDE68A', fontFamily: 'monospace' }}>
-                        ⏱️ {activeFlashCountdown}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#FFFFFF', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {activeFlashMission.title || activeFlashMission.name}
-                  </div>
-                  {activeFlashMission.flashConfig?.mascotDialogue && (
-                    <div style={{ fontSize: '0.75rem', color: '#FDE68A', marginTop: '2px', fontStyle: 'italic', lineHeight: 1.3 }}>
-                      {activeFlashMission.flashConfig.mascotDialogue}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleSimulateChallenge(activeFlashMission)}
-                style={{
-                  padding: '9px 16px',
-                  backgroundColor: '#F59E0B',
-                  color: '#000000',
-                  fontWeight: 800,
-                  fontSize: '0.80rem',
-                  borderRadius: '10px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                  boxShadow: '0 4px 12px rgba(245,158,11,0.4)'
-                }}
-              >
-                PARTICIPAR
-              </button>
-            </div>
-          )}
-
-          {missions.filter(m => m.status !== 'paused').map((challenge) => {
-            const isCompleted = (hasCompletedChallenge && hasCompletedChallenge(challenge.id)) || completedChallenges.includes(challenge.id);
-            const isHighlighted = (challenge.id === 'instagram_story' || challenge.isFlash) && !isCompleted;
-            const isSecret = (challenge.isSecret || challenge.triggerMode === 'secret') && !isCompleted;
-            const IconComponent = getMissionIcon(challenge.icon || MapPin);
-
-            return (
-              <div 
-                key={challenge.id} 
-                className={`card ${isHighlighted || isSecret ? 'card-highlight' : ''}`} 
-                onClick={() => !isCompleted && handleSimulateChallenge(challenge)}
-                style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
-                  gap: '16px',
-                  padding: '16px 18px',
-                  opacity: isCompleted ? 0.8 : 1, 
-                  backgroundColor: isSecret ? 'rgba(37, 99, 235, 0.12)' : (challenge.isFlash ? 'rgba(245, 158, 11, 0.08)' : '#0F141F'), 
-                  borderColor: isCompleted ? 'rgba(16, 185, 129, 0.3)' : isSecret ? 'rgba(59, 130, 246, 0.35)' : (challenge.isFlash ? 'rgba(245, 158, 11, 0.4)' : '#1E293B'),
-                  borderRadius: '14px',
-                  cursor: isCompleted ? 'default' : 'pointer'
-                }}
-              >
-                <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flex: 1, minWidth: 0 }}>
-                  <div 
-                    style={{ 
-                      width: '46px',
-                      height: '46px',
-                      borderRadius: '12px',
-                      background: isCompleted ? 'rgba(16, 185, 129, 0.12)' : isHighlighted || isSecret ? 'rgba(37, 99, 235, 0.22)' : 'rgba(255,255,255,0.05)', 
-                      border: `1px solid ${isCompleted ? 'rgba(16, 185, 129, 0.25)' : isHighlighted || isSecret ? 'rgba(59, 130, 246, 0.35)' : 'rgba(255,255,255,0.08)'}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      color: isCompleted ? '#34D399' : isHighlighted || isSecret ? '#93C5FD' : '#60A5FA' 
-                    }}
-                  >
-                    <IconComponent size={22} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <h3 style={{ fontSize: '0.92rem', fontWeight: 700, margin: 0, lineHeight: 1.3, color: '#F8FAFC' }}>
-                        {challenge.title || challenge.name}
-                      </h3>
-                      {challenge.isFlash && (
-                        <span style={{ fontSize: '0.62rem', backgroundColor: '#78350F', color: '#FDE68A', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
-                          ⚡ RELÂMPAGO
-                        </span>
-                      )}
-                    </div>
-                    <p style={{ fontSize: '0.76rem', color: isHighlighted || isSecret ? 'rgba(255,255,255,0.85)' : '#94A3B8', margin: '4px 0 0', lineHeight: 1.35 }}>
-                      {challenge.description}
-                    </p>
-                    <div style={{ marginTop: '5px', fontSize: '0.74rem', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: isCompleted ? '#34D399' : isHighlighted || isSecret ? '#93C5FD' : '#60A5FA' }}>
-                      +{challenge.points} pts
-                    </div>
-                  </div>
-                </div>
-
-                {!isCompleted ? (
-                  <button
-                    type="button"
-                    style={{
-                      padding: '8px 16px',
-                      fontSize: '0.78rem',
-                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontWeight: 700,
-                      letterSpacing: '0.01em',
-                      background: challenge.isFlash ? 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' : 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
-                      color: challenge.isFlash ? '#000000' : '#FFFFFF',
-                      border: challenge.isFlash ? '1px solid rgba(245, 158, 11, 0.6)' : '1px solid rgba(96, 165, 250, 0.45)',
-                      boxShadow: challenge.isFlash ? '0 2px 10px rgba(245, 158, 11, 0.35)' : '0 2px 10px rgba(37, 99, 235, 0.35)',
-                      borderRadius: '10px',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSimulateChallenge(challenge);
-                    }}
-                  >
-                    {challenge.id === 'instagram_story' ? 'Criar Story' : challenge.isAction ? 'Começar' : (challenge.triggerMode === 'quiz' ? 'Fazer Quiz' : challenge.triggerMode === 'secret' ? 'Desvendar' : challenge.triggerMode === 'auto' || challenge.type === 'auto' ? ((challenge.autoConfig?.eventType === 'passport_complete' || challenge.id?.includes('passport') || challenge.id === 'sponsor_colecao') ? 'Ver Passaporte' : 'Escanear') : 'Responder')}
-                  </button>
-                ) : (
-                  <div
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      color: '#34D399',
-                      fontSize: '0.78rem',
-                      fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                      fontWeight: 700,
-                      letterSpacing: '0.02em',
-                      padding: '7px 14px',
-                      backgroundColor: 'rgba(16, 185, 129, 0.10)',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(16, 185, 129, 0.32)',
-                      boxShadow: '0 0 10px rgba(16, 185, 129, 0.12)',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0
-                    }}
-                  >
-                    <CheckCircle size={15} color="#34D399" />
-                    <span>Feito</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       {activeManualChallenge && typeof document !== 'undefined' && createPortal(
-        <div 
-          className="modal-overlay-fixed"
-          onClick={() => {
-            setActiveManualChallenge(null);
-            setManualForm({});
-            setPhotoFiles({});
-            setPhotoPreviews({});
-          }}
-          style={{ 
-            background: 'rgba(0,0,0,0.82)', 
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            padding: '20px'
-          }}
-        >
-          <div 
-            className="card modal-card-fixed" 
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: '420px', background: 'var(--card-bg)' }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.2rem', color: 'white' }}>{activeManualChallenge.title || activeManualChallenge.name}</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveManualChallenge(null);
-                  setManualForm({});
-                  setPhotoFiles({});
-                  setPhotoPreviews({});
-                }}
-                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
-              >
-                <X size={24} />
+        <>
+          <div className="ds-scrim" onClick={closeManual} aria-hidden="true" />
+          <div className="ds-sheet" role="dialog" aria-modal="true" aria-labelledby="mission-sheet-title">
+            <div className="flex items-start justify-between gap-3">
+              <h2 id="mission-sheet-title" className="m-0 text-lg font-extrabold text-text">
+                {activeManualChallenge.title || activeManualChallenge.name}
+              </h2>
+              <button type="button" onClick={closeManual} aria-label="Fechar" className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-0 bg-transparent text-text-2">
+                <X size={22} aria-hidden="true" />
               </button>
             </div>
 
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '24px' }}>
+            <p className="mb-5 mt-1 text-sm leading-relaxed text-text-2">
               {activeManualChallenge.description}
             </p>
 
-            <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <form onSubmit={handleManualSubmit} className="flex flex-col gap-4">
               {/* QUIZ DINÂMICO (KAN-104) */}
               {activeManualChallenge.quizConfig && (
-                <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '14px' }}>
-                  <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 600, color: 'white', marginBottom: '10px' }}>
-                    ❓ {activeManualChallenge.quizConfig.question}
-                  </label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {activeManualChallenge.quizConfig.options?.map((opt, oIdx) => (
-                      <label key={oIdx} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid',
-                        borderColor: manualForm['quizAnswer'] === oIdx ? '#3B82F6' : 'rgba(255,255,255,0.1)',
-                        backgroundColor: manualForm['quizAnswer'] === oIdx ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                        cursor: 'pointer',
-                        color: 'white',
-                        fontSize: '0.82rem'
-                      }}>
-                        <input
-                          type="radio"
-                          name="quizOption"
-                          checked={manualForm['quizAnswer'] === oIdx}
-                          onChange={() => setManualForm(prev => ({ ...prev, quizAnswer: oIdx }))}
-                          required
-                        />
-                        <span>{opt}</span>
-                      </label>
-                    ))}
+                <fieldset className="m-0 border-0 p-0">
+                  <legend className="mb-2.5 text-[15px] font-bold text-text">
+                    {activeManualChallenge.quizConfig.question}
+                  </legend>
+                  <div className="flex flex-col gap-2">
+                    {activeManualChallenge.quizConfig.options?.map((opt, oIdx) => {
+                      const selected = manualForm['quizAnswer'] === oIdx;
+                      return (
+                        <label
+                          key={oIdx}
+                          className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border-[1.5px] px-3.5 text-sm text-text ${selected ? 'border-link bg-[rgba(143,160,255,0.12)]' : 'border-field-line bg-field'}`}
+                        >
+                          <input
+                            type="radio"
+                            name="quizOption"
+                            className="accent-[#3D50E6]"
+                            checked={selected}
+                            onChange={() => setManualForm(prev => ({ ...prev, quizAnswer: oIdx }))}
+                            required
+                          />
+                          <span>{opt}</span>
+                        </label>
+                      );
+                    })}
                   </div>
-                </div>
+                </fieldset>
               )}
 
               {/* PALAVRA SECRETA (SE NÃO ESTIVER EM FIELDS) */}
               {(activeManualChallenge.triggerMode === 'secret' || activeManualChallenge.isSecret) && (!activeManualChallenge.fields || activeManualChallenge.fields.length === 0) && (
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                    Palavra-chave Secreta
-                  </label>
+                  <label htmlFor="mf-secretWord" className="field-label">Palavra-chave</label>
                   <input
+                    id="mf-secretWord"
                     type="text"
                     value={manualForm['secretWord'] || ''}
                     onChange={(e) => setManualForm(prev => ({ ...prev, secretWord: e.target.value }))}
-                    className="login-input"
+                    className="field"
                     required
-                    placeholder="Digite a palavra secreta encontrada..."
+                    placeholder="Digite a palavra que você encontrou"
                     autoFocus
                   />
                 </div>
@@ -751,14 +509,13 @@ export default function Challenges() {
               {/* CAMPOS DINÂMICOS */}
               {activeManualChallenge.fields && activeManualChallenge.fields.map(field => (
                 <div key={field.id}>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                    {field.label}
-                  </label>
+                  <label htmlFor={`mf-${field.id}`} className="field-label">{field.label}</label>
                   {field.type === 'select' && (
                     <select
+                      id={`mf-${field.id}`}
                       value={manualForm[field.id] || ''}
                       onChange={(e) => setManualForm({ ...manualForm, [field.id]: e.target.value })}
-                      className="login-input"
+                      className="field"
                       required
                     >
                       <option value="" disabled>Selecione...</option>
@@ -767,30 +524,33 @@ export default function Challenges() {
                   )}
                   {field.type === 'text' && (
                     <input
+                      id={`mf-${field.id}`}
                       type="text"
                       value={manualForm[field.id] || ''}
                       onChange={(e) => setManualForm({ ...manualForm, [field.id]: e.target.value })}
-                      className="login-input"
+                      className="field"
                       required
                     />
                   )}
                   {field.type === 'password' && (
                     <input
+                      id={`mf-${field.id}`}
                       type="text"
                       value={manualForm[field.id] || ''}
                       onChange={(e) => setManualForm({ ...manualForm, [field.id]: e.target.value })}
-                      className="login-input"
+                      className="field"
                       required
                       placeholder="Palavra-chave"
                     />
                   )}
                   {field.type === 'textarea' && (
                     <textarea
+                      id={`mf-${field.id}`}
                       value={manualForm[field.id] || ''}
                       onChange={(e) => setManualForm({ ...manualForm, [field.id]: e.target.value })}
-                      className="login-input"
+                      className="field"
                       rows="3"
-                      style={{ resize: 'none', fontFamily: "'Inter', sans-serif" }}
+                      style={{ resize: 'none', padding: '12px 14px' }}
                       required
                       minLength={activeManualChallenge.id === 'sponsor_tecnologia' ? 15 : undefined}
                     />
@@ -799,6 +559,7 @@ export default function Challenges() {
                     <div>
                       {!photoPreviews[field.id] ? (
                         <input
+                          id={`mf-${field.id}`}
                           type="file"
                           accept="image/png,image/jpeg,image/webp,image/gif"
                           capture="environment"
@@ -832,16 +593,16 @@ export default function Challenges() {
                             setPhotoFiles(prev => ({ ...prev, [field.id]: file }));
                             setPhotoPreviews(prev => ({ ...prev, [field.id]: URL.createObjectURL(file) }));
                           }}
-                          className="login-input"
-                          style={{ padding: '8px' }}
+                          className="field"
+                          style={{ padding: '12px 14px' }}
                           required
                         />
                       ) : (
-                        <div style={{ position: 'relative', marginTop: '8px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)' }}>
+                        <div className="relative mt-2 overflow-hidden rounded-xl border border-line-2">
                           <img
                             src={photoPreviews[field.id]}
                             alt="Pré-visualização da missão"
-                            style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', display: 'block' }}
+                            className="block max-h-[200px] w-full object-cover"
                           />
                           <button
                             type="button"
@@ -857,24 +618,10 @@ export default function Challenges() {
                                 return copy;
                               });
                             }}
-                            style={{
-                              position: 'absolute',
-                              top: '8px',
-                              right: '8px',
-                              background: 'rgba(0,0,0,0.7)',
-                              border: 'none',
-                              color: '#ef4444',
-                              borderRadius: '50%',
-                              width: '32px',
-                              height: '32px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer'
-                            }}
-                            title="Remover foto"
+                            aria-label="Remover foto"
+                            className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full border-0 bg-[rgba(5,8,20,0.7)] text-err"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={18} aria-hidden="true" />
                           </button>
                         </div>
                       )}
@@ -883,186 +630,89 @@ export default function Challenges() {
                 </div>
               ))}
 
-              <button
-                type="submit"
-                className="login-btn"
-                disabled={isSubmitting}
-                style={{
-                  marginTop: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  opacity: isSubmitting ? 0.7 : 1,
-                  cursor: isSubmitting ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {isSubmitting && <Loader2 size={18} className="animate-spin" />}
-                {isSubmitting ? 'Enviando comprovação...' : 'Completar Missão'}
+              <button type="submit" className="btn btn-primary btn-block mt-2" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
+                {isSubmitting ? 'Enviando...' : 'Concluir missão'}
               </button>
             </form>
           </div>
-        </div>,
+        </>,
         document.body
       )}
 
       {selectedAutoChallenge && typeof document !== 'undefined' && createPortal(
-        <div 
-          className="modal-overlay-fixed"
-          onClick={() => setSelectedAutoChallenge(null)}
-          style={{ 
-            background: 'rgba(0,0,0,0.82)', 
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            padding: '20px'
-          }}
-        >
-          <div 
-            className="card modal-card-fixed" 
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: '400px', background: 'var(--card-bg)', border: '1px solid #1E293B', borderRadius: '16px', padding: '24px' }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ background: 'rgba(37, 99, 235, 0.2)', padding: '10px', borderRadius: '12px', color: '#60A5FA' }}>
-                  <QrCode size={22} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '1.1rem', color: 'white', margin: 0 }}>{selectedAutoChallenge.title || selectedAutoChallenge.name}</h3>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#38BDF8' }}>+{selectedAutoChallenge.points} XP / Pontos</span>
-                </div>
+        <>
+          <div className="ds-scrim" onClick={() => setSelectedAutoChallenge(null)} aria-hidden="true" />
+          <div className="ds-sheet" role="dialog" aria-modal="true" aria-labelledby="auto-sheet-title">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[rgba(143,160,255,0.13)] text-link">
+                <QrCode size={20} aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 id="auto-sheet-title" className="m-0 text-lg font-extrabold text-text">
+                  {selectedAutoChallenge.title || selectedAutoChallenge.name}
+                </h2>
+                <span className="pts-chip mt-1">+{selectedAutoChallenge.points} pts</span>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedAutoChallenge(null)}
-                style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
-              >
-                <X size={22} />
+              <button type="button" onClick={() => setSelectedAutoChallenge(null)} aria-label="Fechar" className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-0 bg-transparent text-text-2">
+                <X size={22} aria-hidden="true" />
               </button>
             </div>
 
-            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.4', marginBottom: '20px' }}>
+            <p className="mb-4 mt-3 text-sm leading-relaxed text-text-2">
               {selectedAutoChallenge.description}
             </p>
 
-            {/* AVISO DE VALIDAÇÃO AUTOMÁTICA */}
-            <div style={{
-              padding: '12px 14px',
-              borderRadius: '12px',
-              background: 'rgba(56, 189, 248, 0.08)',
-              border: '1px solid rgba(56, 189, 248, 0.25)',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '10px',
-              marginBottom: '20px'
-            }}>
-              <Zap size={18} color="#38BDF8" style={{ flexShrink: 0, marginTop: '2px' }} />
-              <div style={{ fontSize: '0.80rem', color: '#E2E8F0', lineHeight: 1.4 }}>
-                <strong style={{ color: '#38BDF8', display: 'block', marginBottom: '2px' }}>Validação Automática pelo App</strong>
-                Esta missão não precisa de envio manual. O app computa seus pontos automaticamente assim que você realizar a ação correspondente no evento.
-              </div>
+            <div className="mb-5 flex items-start gap-2.5 rounded-xl bg-surface-raised p-3.5">
+              <Zap size={18} className="mt-0.5 shrink-0 text-link" aria-hidden="true" />
+              <p className="m-0 text-[13px] leading-snug text-text-2">
+                <b className="text-text">Os pontos entram sozinhos.</b> Não precisa enviar nada: o app registra assim que você fizer a ação no evento.
+              </p>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="flex flex-col gap-2.5">
               {(selectedAutoChallenge.autoConfig?.eventType === 'lecture_checkin' || selectedAutoChallenge.id?.includes('lecture')) ? (
                 <button
                   type="button"
+                  className="btn btn-primary btn-block"
                   onClick={() => {
                     setSelectedAutoChallenge(null);
-                    navigate('/schedule');
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    backgroundColor: '#2563EB',
-                    border: '1px solid #3B82F6',
-                    color: 'white',
-                    height: '46px',
-                    borderRadius: '12px',
-                    fontWeight: 700,
-                    fontSize: '0.88rem',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+                    navigate('/agenda');
                   }}
                 >
-                  <span>Ver Grade de Palestras</span>
+                  Ver programação
                 </button>
-              ) : (selectedAutoChallenge.autoConfig?.eventType === 'passport_complete' || selectedAutoChallenge.id?.includes('passport') || selectedAutoChallenge.id === 'sponsor_colecao') ? (
+              ) : isPassportMission(selectedAutoChallenge) ? (
                 <button
                   type="button"
+                  className="btn btn-primary btn-block"
                   onClick={() => {
                     setSelectedAutoChallenge(null);
-                    setActiveTab('passport');
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    backgroundColor: '#2563EB',
-                    border: '1px solid #3B82F6',
-                    color: 'white',
-                    height: '46px',
-                    borderRadius: '12px',
-                    fontWeight: 700,
-                    fontSize: '0.88rem',
-                    cursor: 'pointer'
+                    navigate('/challenges?tab=passport', { replace: true });
                   }}
                 >
-                  <span>Ver Passaporte de Stands</span>
+                  Ver passaporte
                 </button>
               ) : (
                 <button
                   type="button"
+                  className="btn btn-primary btn-block"
                   onClick={() => {
                     setSelectedAutoChallenge(null);
                     navigate('/scanner');
                   }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    backgroundColor: '#2563EB',
-                    border: '1px solid #3B82F6',
-                    color: 'white',
-                    height: '46px',
-                    borderRadius: '12px',
-                    fontWeight: 700,
-                    fontSize: '0.88rem',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
-                  }}
                 >
-                  <Camera size={18} />
-                  <span>Escanear QR Code com Câmera</span>
+                  <Camera size={18} aria-hidden="true" />
+                  Abrir câmera e escanear
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={() => setSelectedAutoChallenge(null)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  color: '#94A3B8',
-                  height: '40px',
-                  borderRadius: '10px',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
+              <button type="button" className="btn btn-secondary btn-block" onClick={() => setSelectedAutoChallenge(null)}>
                 Voltar
               </button>
             </div>
           </div>
-        </div>,
+        </>,
         document.body
       )}
 
@@ -1082,5 +732,203 @@ export default function Challenges() {
         featureName="o envio de missões e pontuação"
       />
     </div>
+  );
+}
+
+/* ---------- Peças visuais ---------- */
+
+function SummaryRing({ done, total, earned, open }) {
+  const C = 126; // 2πr, r = 20
+  const offset = total > 0 ? C * (1 - done / total) : C;
+  return (
+    <div className="mt-[18px] flex items-center gap-3.5 rounded-[18px] bg-surface px-4 py-3.5">
+      <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true" className="shrink-0">
+        <defs>
+          <linearGradient id="conq-ring-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#2563EB" />
+            <stop offset="1" stopColor="#9B7BFF" />
+          </linearGradient>
+        </defs>
+        <circle cx="26" cy="26" r="20" fill="none" stroke="var(--surface-raised)" strokeWidth="6" />
+        <circle
+          className="conq-ring-fill"
+          cx="26" cy="26" r="20" fill="none" stroke="url(#conq-ring-grad)" strokeWidth="6" strokeLinecap="round"
+          strokeDasharray={C} strokeDashoffset={offset} transform="rotate(-90 26 26)"
+        />
+        <text x="26" y="30" textAnchor="middle" fontFamily="Montserrat" fontSize="12" fontWeight="900" fill="var(--text)">{done}/{total}</text>
+      </svg>
+      <span className="flex-1">
+        <span className="block text-[15px] font-extrabold">{done} de {total} {total === 1 ? 'missão feita' : 'missões feitas'}</span>
+        <span className="mt-0.5 block text-[13px] text-text-2">
+          <b className="text-you-text">+{earned} pts</b> até agora · <b className="text-text">{open} pts</b> em jogo
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function FlashBanner({ mission, countdown, fraction, onJoin }) {
+  return (
+    <div className="relative mt-3 overflow-hidden rounded-[18px] border border-[rgba(245,158,11,0.28)] bg-surface px-4 py-3.5">
+      <div className="flex items-center gap-3">
+        <span className="relative flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-[rgba(245,158,11,0.16)]">
+          <span className="conq-wave absolute inset-0 rounded-full border-2 border-[rgba(245,158,11,0.5)]" aria-hidden="true" />
+          <span className="conq-bolt flex">
+            <Zap size={20} color="var(--gold)" strokeWidth={2.2} aria-hidden="true" />
+          </span>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-extrabold text-gold">
+            Relâmpago{countdown ? ` · ${countdown} restantes` : ''}
+          </span>
+          <span className="mt-0.5 block text-[15px] font-extrabold">
+            {mission.title || mission.name} <span className="text-you-text">+{mission.points}</span>
+          </span>
+        </span>
+        <button type="button" className="btn btn-action btn-sm press shrink-0" onClick={onJoin}>
+          Participar
+        </button>
+      </div>
+      <div className="relative mt-3 h-1 overflow-hidden rounded-sm bg-surface-raised" aria-hidden="true">
+        <span className="conq-drain block h-1 rounded-sm bg-gold" style={{ transform: `scaleX(${fraction})` }} />
+      </div>
+    </div>
+  );
+}
+
+const TWINKLES = [
+  { left: 30, top: 8, size: 9, delay: '0s' },
+  { left: 250, top: 14, size: 7, delay: '0.8s' },
+  { left: 200, top: 78, size: 8, delay: '1.6s' },
+];
+
+function MissionIcon({ style, mission, sponsor, done, getIcon }) {
+  const base = 'relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl';
+  if (done) {
+    const Icon = getIcon(mission.icon || MapPin);
+    return <span className={`${base} bg-[rgba(111,216,166,0.13)] text-ok`}><Icon size={20} aria-hidden="true" /></span>;
+  }
+  switch (style) {
+    case 'secreta':
+      return (
+        <span className={base} style={{ background: 'linear-gradient(135deg, #7C3AED, #4C1D95)', boxShadow: '0 0 18px rgba(124,58,237,0.55)', overflow: 'visible' }}>
+          <Lock size={20} color="#fff" aria-hidden="true" />
+        </span>
+      );
+    case 'caca-qr':
+      return (
+        <span className={`${base} bg-[rgba(245,158,11,0.13)]`}>
+          <span className="conq-radar absolute -inset-2.5" aria-hidden="true" />
+          <QrCode size={20} color="var(--gold)" className="relative" aria-hidden="true" />
+        </span>
+      );
+    case 'relampago':
+      return <span className={`${base} bg-[rgba(245,158,11,0.16)]`}><Zap size={20} color="var(--gold)" aria-hidden="true" /></span>;
+    case 'stories':
+      return (
+        <span className="h-11 w-11 rounded-xl p-0.5" style={{ background: 'linear-gradient(45deg, #F58529, #DD2A7B, #8134AF)' }}>
+          <span className="flex h-full w-full items-center justify-center rounded-[10px] bg-surface">
+            <Camera size={20} color="#F59AC0" aria-hidden="true" />
+          </span>
+        </span>
+      );
+    case 'quiz':
+      return <span className={`${base} bg-[rgba(143,160,255,0.13)] text-link`}><CircleHelp size={20} aria-hidden="true" /></span>;
+    case 'patrocinador':
+      if (sponsor) {
+        return (
+          <span className={`${base} bg-[#F4F5FA]`}>
+            <img src={sponsor.logo} alt={sponsor.name} className="max-h-5 max-w-9 object-contain" />
+          </span>
+        );
+      }
+    // fallthrough: sem logo conhecido, usa o ícone padrão
+    default: {
+      const Icon = getIcon(mission.icon || MapPin);
+      const tint = CATEGORY_TINT[mission.category] || '#8FA0FF';
+      return <span className={base} style={{ background: `${tint}22`, color: tint }}><Icon size={20} aria-hidden="true" /></span>;
+    }
+  }
+}
+
+function MissionCard({ mission, getIcon, onStart, done = false }) {
+  const style = missionStyle(mission);
+  const sponsor = style === 'patrocinador' ? missionSponsor(mission) : null;
+  const tier = sponsor ? TIER_STYLE[sponsor.tier] : null;
+  const secret = style === 'secreta' && !done;
+  const hint = mission.secretConfig?.hint || mission.hint;
+  const deadline = style === 'caca-qr' ? formatDeadline(mission.endsAt || mission.availableUntil || mission.deadline) : null;
+  const quizCount = mission.quizConfig?.questions?.length || (mission.quizConfig?.question ? 1 : 0);
+  const quizMinutes = mission.quizConfig?.minutes || mission.quizConfig?.durationMinutes;
+
+  let cardStyle;
+  if (done) cardStyle = { background: '#0F1530', borderColor: 'var(--line)', opacity: 0.75 };
+  else if (secret) cardStyle = { background: 'linear-gradient(135deg, #1D1347, #0E0B26)', borderColor: 'rgba(167,139,250,0.45)', boxShadow: '0 10px 26px -14px rgba(124,58,237,0.8)' };
+  else if (tier?.tint) cardStyle = { background: `linear-gradient(160deg, ${tier.tint}, var(--surface) 45%)`, borderColor: tier.cardLine };
+  else if (style === 'relampago') cardStyle = { borderColor: 'rgba(245,158,11,0.28)' };
+
+  return (
+    <article className="relative overflow-hidden rounded-[18px] border border-line bg-surface p-3.5" style={cardStyle}>
+      {secret && (
+        <>
+          <span className="conq-dots absolute inset-0" aria-hidden="true" />
+          <span className="conq-float absolute -top-3.5 right-[92px] text-[92px] font-black leading-none text-[rgba(167,139,250,0.10)]" aria-hidden="true">?</span>
+          {TWINKLES.map((t) => (
+            <svg key={t.left} className="conq-twinkle absolute" aria-hidden="true" width={t.size} height={t.size} viewBox="0 0 10 10" style={{ left: t.left, top: t.top, animationDelay: t.delay }}>
+              <path d="M5 0 6 4 10 5 6 6 5 10 4 6 0 5 4 4z" fill="#E9DDFF" />
+            </svg>
+          ))}
+        </>
+      )}
+
+      <div className="relative grid grid-cols-[44px_1fr] items-start gap-3">
+        <MissionIcon style={style} mission={mission} sponsor={sponsor} done={done} getIcon={getIcon} />
+        <span className="min-w-0">
+          <h3 className={`m-0 text-[15px] font-extrabold ${secret ? 'text-[#E9DDFF]' : 'text-text'}`}>{mission.title || mission.name}</h3>
+          {mission.description && <p className="m-0 mt-[3px] text-[13px] leading-[1.4] text-text-2">{mission.description}</p>}
+        </span>
+      </div>
+
+      <div className="relative mt-3 flex items-center gap-2 border-t border-white/[.06] pt-3">
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          <span
+            className="pts-chip"
+            style={done ? { background: 'rgba(111,216,166,0.14)', color: 'var(--ok)' } : secret ? { background: 'rgba(124,58,237,0.5)', color: '#fff' } : undefined}
+          >
+            +{mission.points} pts
+          </span>
+          {!done && secret && hint && (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/[.06] px-2 py-0.5 text-xs font-bold text-[#C4B5FD]">
+              Dica:<span className="tracking-[2px] text-white blur-[3.5px]">{hint}</span>
+            </span>
+          )}
+          {!done && deadline && <span className="text-xs font-bold text-gold">{deadline}</span>}
+          {!done && style === 'relampago' && <span className="text-xs font-bold text-gold">Relâmpago</span>}
+          {!done && style === 'quiz' && quizCount > 0 && (
+            <span className="text-xs font-bold text-text-3">
+              {quizCount} {quizCount === 1 ? 'pergunta' : 'perguntas'}{quizMinutes ? ` · ${quizMinutes} min` : ''}
+            </span>
+          )}
+          {!done && tier && (
+            <span className="rounded-lg px-2 py-0.5 text-xs font-extrabold" style={{ background: tier.soft, color: tier.text }}>{tier.label}</span>
+          )}
+        </span>
+        {done ? (
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-[rgba(111,216,166,0.14)] px-3 text-[13px] font-extrabold text-ok">
+            <Check size={15} strokeWidth={2.6} aria-hidden="true" />
+            Feita
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-action btn-sm press shrink-0"
+            style={secret ? { background: 'linear-gradient(135deg, #7C3AED, #A855F7)' } : undefined}
+            onClick={onStart}
+          >
+            {ctaLabel(mission)}
+          </button>
+        )}
+      </div>
+    </article>
   );
 }

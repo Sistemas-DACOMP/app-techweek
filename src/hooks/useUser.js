@@ -178,8 +178,19 @@ export function useUser() {
 
     // Networking missions automated validation
     if (scannedProfile) {
+      const targetMeta = {
+        targetUid: scannedProfile.uid || scannedProfile.participantUid || null,
+        targetUsername: scannedProfile.username || null,
+        scannedProfile: {
+          username: scannedProfile.username,
+          course: scannedProfile.course,
+          participantType: scannedProfile.participantType || scannedProfile.participant_type,
+          period: scannedProfile.period
+        }
+      };
+
       if (!hasCompletedChallenge('network_first')) {
-        if (await recordEvent('challenge', 'network_first', 10)) {
+        if (await recordEvent('challenge', 'network_first', 10, targetMeta)) {
           unlockedChallenges.push('network_first');
         }
       }
@@ -187,7 +198,7 @@ export function useUser() {
       if (profile) {
         if (profile.course && scannedProfile.course && profile.course.toLowerCase() !== scannedProfile.course.toLowerCase()) {
           if (!hasCompletedChallenge('network_course')) {
-            if (await recordEvent('challenge', 'network_course', 15)) {
+            if (await recordEvent('challenge', 'network_course', 15, targetMeta)) {
               unlockedChallenges.push('network_course');
             }
           }
@@ -195,7 +206,7 @@ export function useUser() {
 
         if (scannedProfile.participantType && scannedProfile.participantType !== 'Aluno da UFU') {
           if (!hasCompletedChallenge('network_type')) {
-            if (await recordEvent('challenge', 'network_type', 15)) {
+            if (await recordEvent('challenge', 'network_type', 15, targetMeta)) {
               unlockedChallenges.push('network_type');
             }
           }
@@ -203,7 +214,7 @@ export function useUser() {
 
         if (scannedProfile.period === 1) {
           if (!hasCompletedChallenge('network_period')) {
-            if (await recordEvent('challenge', 'network_period', 15)) {
+            if (await recordEvent('challenge', 'network_period', 15, targetMeta)) {
               unlockedChallenges.push('network_period');
             }
           }
@@ -214,7 +225,7 @@ export function useUser() {
     // Check for specific hardcoded mission QR codes
     if (data === 'kanastra_code' || data === 'sponsor_visit') {
       if (!hasCompletedChallenge('sponsor_visit')) {
-        if (await recordEvent('challenge', 'sponsor_visit', 15)) {
+        if (await recordEvent('challenge', 'sponsor_visit', 15, { scannedCode: data })) {
           unlockedChallenges.push('sponsor_visit');
         }
       }
@@ -222,7 +233,7 @@ export function useUser() {
 
     if (data === 'secret_qr_code') {
       if (!hasCompletedChallenge('secret_qr')) {
-        if (await recordEvent('challenge', 'secret_qr', 40)) {
+        if (await recordEvent('challenge', 'secret_qr', 40, { scannedCode: data })) {
           unlockedChallenges.push('secret_qr');
         }
       }

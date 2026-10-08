@@ -105,7 +105,7 @@ export default function SponsorLeadModal({
           background: 'linear-gradient(145deg, rgba(20, 27, 45, 0.95), rgba(10, 15, 30, 0.98))',
           border: '1px solid rgba(255, 255, 255, 0.12)',
           boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(56, 189, 248, 0.1)',
-          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+          fontFamily: "Montserrat, sans-serif",
           position: 'relative'
         }}
       >
@@ -141,7 +141,7 @@ export default function SponsorLeadModal({
               borderRadius: '20px',
               background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.15), rgba(56, 189, 248, 0.2))',
               border: '1px solid rgba(56, 189, 248, 0.4)',
-              color: '#38BDF8',
+              color: 'var(--link)',
               fontSize: '11px',
               fontWeight: '800',
               textTransform: 'uppercase',
@@ -179,7 +179,7 @@ export default function SponsorLeadModal({
               width: '54px',
               height: '54px',
               borderRadius: '16px',
-              background: 'linear-gradient(135deg, #2563EB, #38BDF8)',
+              background: 'linear-gradient(135deg, #2563EB, var(--link))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -202,11 +202,11 @@ export default function SponsorLeadModal({
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.1rem', fontWeight: '800', color: '#ffffff', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <h3 style={{ fontFamily: 'Montserrat, sans-serif', fontSize: '1.1rem', fontWeight: '800', color: '#ffffff', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {participant.name}
             </h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-              <GraduationCap size={14} color="#38BDF8" />
+              <GraduationCap size={14} color="var(--link)" />
               <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {participant.course} {participant.period ? `• ${participant.period}º Período` : ''}
               </span>
@@ -334,7 +334,7 @@ export default function SponsorLeadModal({
                 rows={4}
                 style={{
                   width: '100%',
-                  fontFamily: "'Inter', sans-serif",
+                  fontFamily: 'Montserrat, sans-serif',
                   background: 'rgba(255, 255, 255, 0.04)',
                   border: '1px solid rgba(255, 255, 255, 0.1)',
                   borderRadius: '14px',
@@ -345,7 +345,7 @@ export default function SponsorLeadModal({
                   outline: 'none',
                   transition: 'border-color 0.2s ease'
                 }}
-                onFocus={(e) => { e.target.style.borderColor = '#38BDF8'; }}
+                onFocus={(e) => { e.target.style.borderColor = 'var(--link)'; }}
                 onBlur={(e) => { e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'; }}
               />
             </div>

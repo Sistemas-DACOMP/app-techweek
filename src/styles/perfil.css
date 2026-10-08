@@ -1,0 +1,42 @@
+/* Perfil e Editar perfil (DESIGN.md §6). O resto é Tailwind + primitivos de src/index.css. */
+
+/* Arte fixa do perfil: mascotes parados (fundo em movimento contínuo é proibido, §9). */
+.pf-still,
+.pf-still * { animation: none !important; cursor: default; }
+
+.perfil-scroll { scrollbar-width: none; }
+.perfil-scroll::-webkit-scrollbar { display: none; }
+
+/* Campos do board 1.34: 52px, raio 14, Montserrat 15/600 */
+.pf-field { min-height: 52px; border-radius: 14px; font-size: 16px; font-weight: 600; }
+
+/* Campo composto (prefixo/@ + input + status): o foco vai pro grupo inteiro */
+.pf-group {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 52px; padding: 0 14px;
+  border-radius: 14px; background: var(--field-bg); border: 1.5px solid var(--field-line);
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.pf-group.pf-social { min-height: 56px; gap: 10px; padding: 0 14px 0 8px; border-radius: 16px; }
+.pf-group.is-valid { border-color: #2E4A5A; }
+.pf-group[aria-invalid="true"] { border-color: var(--err); }
+.pf-group:focus-within { border-color: var(--link); box-shadow: 0 0 0 4px rgba(143, 160, 255, .18); }
+.pf-group-input {
+  flex: 1; min-width: 0; height: 100%; min-height: 48px; padding: 0;
+  border: 0; outline: 0; background: transparent; color: var(--text);
+  font-family: 'Montserrat', sans-serif; font-size: 16px;
+}
+.pf-group-input::placeholder { color: var(--text-4); font-weight: 600; }
+.pf-group-input:focus-visible { outline: none; }
+
+/* "Salvar alterações" fixo acima da barra inferior */
+.pf-save-bar {
+  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(10, 15, 36, 0), var(--bg) 35%);
+}
+
+/* Diálogos compartilhados (ConfirmModal, FeedbackModal, AvatarCropperModal) — DESIGN.md §6.
+   Mora aqui porque os 3 modais vieram junto com o Perfil; .modal-overlay-fixed (index.css) faz o posicionamento. */
+.ds-dialog-scrim { background: rgba(5, 8, 20, .6); animation: dsFade 200ms var(--ease-out); }
+.ds-dialog { animation: dsFadeUp 250ms var(--ease-out); }
+.btn.btn-warn { background: rgba(242, 196, 106, .14); color: var(--warn); }

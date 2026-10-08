@@ -1,9 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Crown, Medal, Award, User as UserIcon, Ticket, ArrowLeft } from 'lucide-react';
+import { Crown, Ticket } from 'lucide-react';
 import { subscribeToLeaderboardUsers, getLeaderboardUsers, getUserProfile, getCachedUserProfile } from '../lib/userService';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
+import ConquistasTabs from '../components/ConquistasTabs';
+import SymplaStickyBanner from '../components/SymplaStickyBanner';
+import Mascot from '../components/Mascot';
+import '../styles/conquistas.css';
 
 export default function Ranking() {
   const navigate = useNavigate();
@@ -132,446 +136,211 @@ export default function Ranking() {
   const myRankingEntry = displayedRanking.find((u) => u.id === myUserId);
   const myRank = myRankingEntry ? myRankingEntry.rank : 1;
   const myPoints = effectivePoints;
-  const rawMyName = myRankingEntry?.username || myProfileData?.username || myProfileData?.firstName || 'Você';
-  const myDisplayName = rawMyName.startsWith('@') ? rawMyName : `@${rawMyName}`;
-  const myAvatar = myRankingEntry?.avatar_url || myProfileData?.avatarUrl || authUser?.photoURL || null;
 
-  const footerCardStyle = {
-    position: 'absolute',
-    bottom: '92px',
-    left: '16px',
-    right: '16px',
-    background: 'rgba(15, 23, 42, 0.94)',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
-    border: isTicketVerified ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(234, 179, 8, 0.45)',
-    borderRadius: '16px',
-    padding: '10px 14px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    boxShadow: isTicketVerified
-      ? '0 8px 32px rgba(0, 0, 0, 0.6), 0 0 15px rgba(59, 130, 246, 0.25)'
-      : '0 8px 32px rgba(0, 0, 0, 0.6), 0 0 15px rgba(234, 179, 8, 0.2)',
-    zIndex: 900
-  };
-
-  const badgeBoxStyle = {
-    width: '32px',
-    height: '32px',
-    borderRadius: '8px',
-    background: isTicketVerified ? 'rgba(59, 130, 246, 0.2)' : 'rgba(234, 179, 8, 0.15)',
-    border: isTicketVerified ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(234, 179, 8, 0.5)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: '800',
-    fontSize: '0.85rem',
-    color: isTicketVerified ? 'var(--primary)' : '#eab308'
-  };
-
-  // Organização visual das colunas do pódio: [2º lugar, 1º lugar, 3º lugar]
-  const first = top3[0];
-  const second = top3[1];
-  const third = top3[2];
-
-  const renderPodiumItem = (user, position, height, borderColor, badgeBg, badgeColor, icon) => {
-    if (!user) {
-      return (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', opacity: 0.3 }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', marginBottom: '8px' }} />
-          <div style={{ width: '100%', height: `${height}px`, background: 'rgba(255,255,255,0.02)', borderRadius: '12px 12px 0 0' }} />
-        </div>
-      );
-    }
-
-    const isMe = user.id === myUserId;
-    const rawName = user.username || user.first_name || 'Participante';
-    const displayName = rawName.startsWith('@') ? rawName : `@${rawName}`;
-    const initialChar = rawName.replace(/^@/, '').charAt(0).toUpperCase() || 'U';
-
-    return (
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          position: 'relative',
-          zIndex: position === 1 ? 2 : 1
-        }}
-      >
-        {/* Ícone de destaque sobre o 1º lugar */}
-        <div style={{ height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>
-          {icon}
-        </div>
-
-        {/* Avatar */}
-        <div
-          style={{
-            width: position === 1 ? '62px' : '52px',
-            height: position === 1 ? '62px' : '52px',
-            borderRadius: '50%',
-            border: `2px solid ${borderColor}`,
-            boxShadow: position === 1 ? `0 0 20px ${borderColor}66` : 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-            background: 'rgba(255,255,255,0.08)',
-            marginBottom: '6px',
-            position: 'relative'
-          }}
-        >
-          {user.avatar_url ? (
-            <img src={user.avatar_url} alt={displayName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          ) : (
-            <span style={{ fontWeight: 'bold', fontSize: position === 1 ? '1.2rem' : '1rem', color: borderColor }}>
-              {initialChar}
-            </span>
-          )}
-        </div>
-
-        {/* Nome e pontos */}
-        <span
-          style={{
-            fontSize: '0.75rem',
-            fontWeight: isMe ? '700' : '500',
-            color: isMe ? 'var(--primary)' : 'var(--text-primary)',
-            maxWidth: '90px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            textAlign: 'center',
-            marginBottom: '2px'
-          }}
-        >
-          {displayName}
-        </span>
-        <span
-          style={{
-            fontSize: '0.8rem',
-            fontWeight: '700',
-            color: borderColor,
-            marginBottom: '8px'
-          }}
-        >
-          {user.points} pts
-        </span>
-
-        {/* Pedestal */}
-        <div
-          style={{
-            width: '100%',
-            height: `${height}px`,
-            background: `linear-gradient(180deg, ${borderColor}22 0%, rgba(255,255,255,0.02) 100%)`,
-            border: `1px solid ${borderColor}55`,
-            borderBottom: 'none',
-            borderRadius: '12px 12px 0 0',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'flex-start',
-            paddingTop: '8px',
-            boxShadow: position === 1 ? `inset 0 10px 20px ${borderColor}22` : 'none'
-          }}
-        >
-          <div
-            style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '50%',
-              background: badgeBg,
-              color: badgeColor,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: '800',
-              fontSize: '0.85rem'
-            }}
-          >
-            {position}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // "N pts para passar @fulano": quem está logo acima de você na lista.
+  const above = myRankingEntry && myRankingEntry.rank > 1 ? displayedRanking[myRankingEntry.rank - 2] : null;
+  const toPass = above ? Math.max(1, (above.points || 0) - myPoints + 1) : 0;
 
   return (
     <>
-      <div className="page-container animate-fade-in" style={{ paddingBottom: '170px' }}>
-        {/* Cabeçalho Padronizado */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
-          <div>
-            <h1
-              style={{
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontSize: '1.75rem',
-                fontWeight: 800,
-                color: '#F8FAFC',
-                margin: 0,
-                letterSpacing: '-0.03em',
-                lineHeight: 1.15
-              }}
-            >
-              Ranking
-            </h1>
-            <p
-              style={{
-                color: '#94A3B8',
-                fontSize: '0.80rem',
-                fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-                margin: '3px 0 0'
-              }}
-            >
-              Top 50 competidores da FACOM TechWeek
-            </p>
-          </div>
+      <div className={`page-container conq-page animate-fade-in ${authUser ? 'conq-page--footer' : ''}`}>
+        <SymplaStickyBanner />
+        <div className="px-5">
+          <ConquistasTabs active="ranking" />
 
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#F59E0B',
-              flexShrink: 0
-            }}
-          >
-            <Trophy size={18} />
-          </div>
-        </div>
-
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-secondary)' }}>
-            <div style={{ fontSize: '0.9rem', marginBottom: '8px' }}>Carregando classificação em tempo real...</div>
-          </div>
-        ) : displayedRanking.length === 0 ? (
-          <div className="glass-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            Nenhum participante pontuou ainda. Seja o primeiro participando das atividades!
-          </div>
-        ) : (
-          <>
-            {/* Pódio estilizado para os 3 primeiros colocados */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'flex-end',
-                justifyContent: 'center',
-                gap: '8px',
-                padding: '0 8px',
-                marginBottom: '24px'
-              }}
-            >
-              {/* 2º Lugar (Prata) */}
-              {renderPodiumItem(
-                second,
-                2,
-                80,
-                '#94a3b8',
-                '#94a3b8',
-                '#000',
-                <Medal size={16} style={{ color: '#94a3b8' }} />
-              )}
-
-              {/* 1º Lugar (Ouro) */}
-              {renderPodiumItem(
-                first,
-                1,
-                110,
-                '#fbbf24',
-                '#fbbf24',
-                '#000',
-                <Crown size={20} style={{ color: '#fbbf24' }} />
-              )}
-
-              {/* 3º Lugar (Bronze) */}
-              {renderPodiumItem(
-                third,
-                3,
-                60,
-                '#b45309',
-                '#b45309',
-                '#fff',
-                <Award size={16} style={{ color: '#b45309' }} />
-              )}
+          {loading ? (
+            <div className="mt-[22px] flex flex-col gap-2.5" aria-busy="true" aria-label="Carregando ranking">
+              <div className="skeleton h-[230px] rounded-[18px]" />
+              {[1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-14" />)}
             </div>
-
-            {/* Lista elegante para as demais posições (4 a 50) */}
-            {restOfRanking.length > 0 && (
-              <div
-                style={{
-                  padding: '12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                  backgroundColor: '#0F141F',
-                  border: '1px solid #1E293B',
-                  borderRadius: '16px'
-                }}
-              >
-                {restOfRanking.map((user) => {
-                  const isMe = user.id === myUserId;
-                  const rawName = user.username || user.first_name || 'Participante';
-                  const displayName = rawName.startsWith('@') ? rawName : `@${rawName}`;
-                  const initialChar = rawName.replace(/^@/, '').charAt(0).toUpperCase() || 'U';
-
-                  return (
-                    <div
-                      key={user.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '10px 12px',
-                        borderRadius: '10px',
-                        background: isMe ? 'rgba(37, 99, 235, 0.15)' : 'rgba(255, 255, 255, 0.02)',
-                        border: isMe ? '1px solid #2563EB' : '1px solid rgba(255, 255, 255, 0.04)',
-                        transition: 'background 0.2s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        {/* Posição */}
-                        <div
-                          style={{
-                            width: '28px',
-                            fontWeight: '700',
-                            fontSize: '0.85rem',
-                            fontFamily: "'JetBrains Mono', monospace",
-                            color: isMe ? '#38BDF8' : '#94A3B8',
-                            textAlign: 'center'
-                          }}
-                        >
-                          #{user.rank}
-                        </div>
-
-                        {/* Avatar */}
-                        <div
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            background: 'rgba(255, 255, 255, 0.08)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            overflow: 'hidden',
-                            fontSize: '0.8rem',
-                            fontWeight: 'bold',
-                            border: '1px solid rgba(255, 255, 255, 0.1)'
-                          }}
-                        >
-                          {user.avatar_url ? (
-                            <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            initialChar
-                          )}
-                        </div>
-
-                        {/* Nome */}
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: isMe ? '700' : '500', fontSize: '0.9rem' }}>
-                            {displayName} {isMe && <span style={{ color: 'var(--primary)', fontSize: '0.75rem' }}>(Você)</span>}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Pontos */}
-                      <div style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '0.9rem' }}>
-                        {user.points} pts
-                      </div>
-                    </div>
-                  );
-                })}
+          ) : displayedRanking.length === 0 ? (
+            <div className="mt-10 flex flex-col items-center px-4 text-center">
+              <Mascot color="purple" style={{ width: 112, height: 112 }} />
+              <p className="mt-4 text-[15px] font-bold">Ninguém pontuou ainda</p>
+              <p className="mt-1 text-[13px] text-text-2">Faça uma missão e seja o primeiro do ranking.</p>
+              <button type="button" className="btn btn-secondary btn-sm mt-5" onClick={() => navigate('/challenges')}>
+                Ver missões
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="mt-[22px] flex items-end gap-2" role="list" aria-label="Pódio">
+                <PodiumColumn user={top3[1]} place={2} myUserId={myUserId} />
+                <PodiumColumn user={top3[0]} place={1} myUserId={myUserId} />
+                <PodiumColumn user={top3[2]} place={3} myUserId={myUserId} />
               </div>
-            )}
-          </>
-        )}
+
+              {restOfRanking.length > 0 && (
+                <ol aria-label="Classificação" className="m-0 flex list-none flex-col gap-1.5 rounded-2xl border border-line bg-[#0F1530] p-2.5">
+                  {restOfRanking.map((user) => {
+                    const isMe = user.id === myUserId;
+                    return (
+                      <li
+                        key={user.id}
+                        aria-current={isMe ? 'true' : undefined}
+                        className={`grid grid-cols-[38px_34px_1fr_auto] items-center gap-3 rounded-xl border px-3 py-2.5 ${
+                          isMe ? 'border-[rgba(155,123,255,0.5)] bg-[rgba(124,58,237,0.2)]' : 'border-white/[.04] bg-white/[.02]'
+                        }`}
+                      >
+                        <RankMark rank={user.rank} isMe={isMe} />
+                        <Avatar user={user} size={34} />
+                        <span className={`min-w-0 truncate text-sm ${isMe ? 'font-extrabold' : 'font-semibold'}`}>
+                          {handle(user)} {isMe && <span className="text-xs text-[#C4B5FD]">(você)</span>}
+                        </span>
+                        <span className={`text-sm font-extrabold ${isMe ? 'text-text' : 'text-link'}`}>{user.points || 0} pts</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Barra fixa no rodapé mostrando a pontuação do próprio usuário logado (KAN-55 / KAN-84) */}
+      {/* Rodapé fixo com a sua posição (KAN-55 / KAN-84) */}
       {authUser && (
-        <div style={footerCardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={badgeBoxStyle}>
-              {!isTicketVerified ? (
-                <Ticket size={16} />
-              ) : (
-                myRank ? `#${myRank}` : '-'
-              )}
-            </div>
-
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: 'rgba(255, 255, 255, 0.08)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-                fontSize: '0.8rem',
-                fontWeight: 'bold',
-                border: '1px solid rgba(255, 255, 255, 0.15)'
-              }}
-            >
-              {myAvatar ? (
-                <img src={myAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <UserIcon size={16} />
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>
-                {myDisplayName} <span style={{ color: !isTicketVerified ? '#eab308' : 'var(--primary)', fontSize: '0.75rem' }}>(Você)</span>
+        <div
+          role="status"
+          className="conq-me-footer absolute inset-x-4 z-[900] flex items-center gap-3 rounded-[18px] px-3.5 py-3"
+          style={{ background: 'linear-gradient(135deg, #5B21B6, #7C3AED)', boxShadow: '0 10px 30px rgba(0,0,0,0.45)' }}
+        >
+          {isTicketVerified ? (
+            <>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[.18] text-base font-black">
+                {myRank}º
               </span>
-              <span style={{ fontSize: '0.7rem', color: !isTicketVerified ? '#fde047' : 'var(--text-secondary)' }}>
-                {!isTicketVerified
-                  ? 'Conta não verificada (Ingresso pendente)'
-                  : (myRank ? `${myRank}º lugar no Ranking` : 'Fora do Top 50')}
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-extrabold">Você · {myPoints} pts</span>
+                <span className="block truncate text-xs text-[#E9DDFF]">
+                  {above ? `${toPass} ${toPass === 1 ? 'pt' : 'pts'} para passar ${handle(above)}` : 'Você está na liderança'}
+                </span>
               </span>
-            </div>
-          </div>
-
-          {!isTicketVerified ? (
-            <button
-              onClick={() => navigate('/profile')}
-              style={{
-                background: 'linear-gradient(135deg, #eab308, #ca8a04)',
-                color: '#0f172a',
-                border: 'none',
-                borderRadius: '10px',
-                padding: '6px 12px',
-                fontSize: '0.75rem',
-                fontWeight: '700',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 2px 8px rgba(234, 179, 8, 0.3)'
-              }}
-            >
-              <Ticket size={14} />
-              Vincular
-            </button>
+              <Mascot color="purple" className="animate-none! h-11! w-11! shrink-0" />
+            </>
           ) : (
-            <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Pontuação
+            <>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[.18]">
+                <Ticket size={20} aria-hidden="true" />
               </span>
-              <span style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '1rem' }}>
-                {myPoints} pts
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-extrabold">Fora do ranking</span>
+                <span className="block text-xs text-[#E9DDFF]">Vincule o ingresso para entrar no ranking</span>
               </span>
-            </div>
+              <button type="button" className="btn btn-on-gradient btn-sm shrink-0" onClick={() => navigate('/profile')}>
+                Vincular
+              </button>
+            </>
           )}
         </div>
       )}
     </>
+  );
+}
+
+/* ---------- Peças visuais ---------- */
+
+const AVATAR_BG = ['#5B2B8C', '#2D3A8C', '#1E5F74', '#2F6B4F', '#6B2D5C', '#3B4A9E', '#7A3E2B'];
+
+const rawName = (u) => String(u?.username || u?.first_name || 'Participante').replace(/^@/, '');
+const handle = (u) => `@${rawName(u)}`;
+
+function initials(u) {
+  if (u?.first_name && u?.last_name) return (u.first_name[0] + u.last_name[0]).toUpperCase();
+  const parts = rawName(u).split(/[._\-\s]+/).filter(Boolean);
+  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || parts[0]?.[1] || '')).toUpperCase() || 'U';
+}
+
+function avatarBg(u) {
+  const s = String(u?.id || rawName(u));
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return AVATAR_BG[h % AVATAR_BG.length];
+}
+
+function Avatar({ user, size }) {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-full font-extrabold"
+      style={{ width: size, height: size, background: avatarBg(user), fontSize: Math.round(size * 0.35) }}
+    >
+      {user.avatar_url ? <img src={user.avatar_url} alt="" className="h-full w-full object-cover" /> : initials(user)}
+    </span>
+  );
+}
+
+function RankMark({ rank, isMe }) {
+  if (rank <= 5 && !isMe) {
+    return (
+      <span
+        aria-label={`${rank}º lugar`}
+        className="flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-black text-[#D6DCFF]"
+        style={{ background: 'linear-gradient(160deg, #2A3570, #1A2347)', boxShadow: 'inset 0 0 0 1.5px #8FA0FF80' }}
+      >
+        {rank}º
+      </span>
+    );
+  }
+  return <span className={`text-[13px] font-extrabold ${isMe ? 'text-you-text' : 'text-text-3'}`}>{rank}º</span>;
+}
+
+// Medalhas da develop (DESIGN.md §2.7): Medal e Award do lucide com o número da posição desenhado.
+function PlaceIcon({ place }) {
+  if (place === 1) return <Crown size={22} color="var(--podium-1)" strokeWidth={2.2} aria-label="Coroa de 1º lugar" role="img" />;
+  if (place === 2) {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--podium-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="Medalha de 2º lugar">
+        <path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15" />
+        <path d="M11 12 5.12 2.2" />
+        <path d="m13 12 5.88-9.8" />
+        <path d="M8 7h8" />
+        <circle cx="12" cy="17" r="5" />
+        <path d="M10.5 15.8a1.5 1.5 0 1 1 2.7.9l-2.7 2.6h3" strokeWidth="1.6" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--podium-3-text)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="Medalha de 3º lugar">
+      <path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526" />
+      <circle cx="12" cy="8" r="6" />
+      <path d="M10.6 5.9h2.7l-1.5 1.8a1.4 1.4 0 1 1-1.3 2.1" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
+const PODIUM = {
+  1: { color: 'var(--podium-1)', hex: '#FBBF24', text: 'var(--podium-1)', avatar: 72, base: 116, num: 30 },
+  2: { color: 'var(--podium-2)', hex: '#94A3B8', text: 'var(--podium-2)', avatar: 58, base: 84, num: 24 },
+  3: { color: 'var(--podium-3)', hex: '#B45309', text: 'var(--podium-3-text)', avatar: 58, base: 64, num: 24 },
+};
+
+function PodiumColumn({ user, place, myUserId }) {
+  const p = PODIUM[place];
+  const pedestal = (
+    <span
+      className="mt-2 box-border flex w-full items-start justify-center rounded-[14px_14px_4px_4px] border border-b-0 pt-2.5 font-black"
+      style={{ height: p.base, fontSize: p.num, color: p.text, background: `linear-gradient(180deg, ${p.hex}55, ${p.hex}10)`, borderColor: `${p.hex}66` }}
+      aria-hidden="true"
+    >
+      {place}
+    </span>
+  );
+  if (!user) {
+    return <div className="flex flex-1 flex-col items-center opacity-30" role="listitem" aria-label={`${place}º lugar vago`}>{pedestal}</div>;
+  }
+  const isMe = user.id === myUserId;
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center" role="listitem" aria-label={`${place}º lugar: ${handle(user)}, ${user.points || 0} pts`}>
+      <span className="flex h-6 items-center"><PlaceIcon place={place} /></span>
+      <span
+        className="box-border rounded-full p-[3px]"
+        style={{ width: p.avatar, height: p.avatar, background: p.color, boxShadow: place === 1 ? `0 0 22px ${p.hex}66` : 'none' }}
+      >
+        <Avatar user={user} size={p.avatar - 6} />
+      </span>
+      <span className={`mt-1.5 max-w-full truncate text-[13px] font-extrabold ${isMe ? 'text-you-text' : ''}`}>{handle(user)}</span>
+      <span className="text-xs font-bold" style={{ color: p.text }}>{user.points || 0} pts</span>
+      {pedestal}
+    </div>
   );
 }

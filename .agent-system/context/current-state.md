@@ -15,6 +15,19 @@ Jira before trusting it for anything older than a couple of days back.
   several `fix/resolve-conflito-*`/`feature/agent-*` branches of unconfirmed merge status. Needs
   Fabio's confirmation before deleting anything (destructive).
 
+## Product redesign (CONFIRMED, 2026-10-04)
+
+- Approved by Fabio in the design canvas (claude.ai). Source of truth for the visual dimension:
+  `DESIGN.md`; audit + redesign history: `DESIGN-AUDIT.md` §0.
+- Work branch: `feature/product-redesign-2026-10-03` (worktree `.claude/worktrees/redesign`).
+  Holds `DESIGN.md`, `DESIGN-AUDIT.md`, develop screenshots (`docs/redesign/screens/`) and
+  Playwright capture scripts (`e2e/`, `playwright.config.js`, system Chrome channel).
+- **Implementation not started** — `src/` still renders the old design. Planned order: tokens
+  (DESIGN.md §2-4) → primitives → screens, each validated with Playwright against the canvas.
+- Open: Sponsor screens and Golden Ticket moment not designed; INFERIDA/NÃO DEFINIDA rules in
+  DESIGN.md §12 (vacancy traffic-light threshold, waitlist position, social-links toggle, staff
+  admitting non-registered people, offline scan queue, mascot names).
+
 ## Firebase migration (CONFIRMED)
 
 Done in `src/` and `backend/` of this same repo (in-place, not a repo split — see
