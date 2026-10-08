@@ -397,19 +397,8 @@ export default function Profile() {
                 console.warn('[Profile] Atualização client-side secundária (já salvo pelo backend):', updateErr);
               }
               symplaMessage = ` Ingresso Sympla vinculado: ${ticketObj.ticketName || p?.ticketName || 'Oficial'}!`;
-            } else if (cleanTicketNum && cleanTicketNum.length >= 4) {
-              const manualTicket = {
-                ticketNumber: cleanTicketNum,
-                ticketName: 'Ingresso Oficial Sympla',
-                qrCodeData: `SYMPLA:${cleanTicketNum}`,
-                orderId: `MANUAL_${Date.now()}`
-              };
-              updates.symplaTicket = manualTicket;
-              updates.hasSymplaTicket = true;
-              try {
-                await updateUserProfile(uid, { symplaTicket: manualTicket, hasSymplaTicket: true });
-              } catch (_e) {}
-              symplaMessage = ` Ingresso Sympla vinculado (#${cleanTicketNum})!`;
+            } else if (symplaRes?.status === 'conflict') {
+              symplaMessage = ` (${symplaRes.message})`;
             } else if (cleanEmail !== profile.email) {
               symplaMessage = ' (Ingresso não localizado com este e-mail).';
             }
@@ -478,23 +467,8 @@ export default function Profile() {
           }
         }
         setEditFeedback({ type: 'success', text: `Ingresso confirmado com sucesso: ${ticketObj.ticketName || p?.ticketName || 'Oficial'}!` });
-      } else if (cleanTicket && cleanTicket.length >= 4) {
-        const manualTicket = {
-          ticketNumber: cleanTicket,
-          ticketName: 'Ingresso Oficial Sympla',
-          qrCodeData: `SYMPLA:${cleanTicket}`,
-          orderId: `MANUAL_${Date.now()}`
-        };
-        setProfile(prev => ({ ...prev, symplaTicket: manualTicket, hasSymplaTicket: true }));
-        const uid = profile.id || auth.currentUser?.uid;
-        if (uid) {
-          try {
-            await updateUserProfile(uid, { symplaTicket: manualTicket, hasSymplaTicket: true });
-          } catch (_e) {}
-        }
-        setEditFeedback({ type: 'success', text: `Ingresso (#${cleanTicket}) vinculado com sucesso!` });
       } else {
-        setEditFeedback({ type: 'warning', text: res?.message || 'Ingresso não encontrado no Sympla. Verifique se o e-mail cadastrado ou código do ingresso está correto.' });
+        setEditFeedback({ type: res?.status === 'conflict' ? 'error' : 'warning', text: res?.message || 'Ingresso não encontrado no Sympla. Verifique se o e-mail cadastrado ou código do ingresso está correto.' });
       }
     } catch (err) {
       console.error('[Profile] Erro ao verificar ingresso no modal:', err);

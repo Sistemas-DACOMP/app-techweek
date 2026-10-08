@@ -24,11 +24,11 @@ service cloud.firestore {
     // Regras de Usuários: Todos autenticados leem; só o próprio dono cria/atualiza dados pessoais
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && 
+      allow create: if isOwner(userId) && !('symplaTicket' in request.resource.data) && !('hasSymplaTicket' in request.resource.data) &&
         (!('role' in request.resource.data) || request.resource.data.role == 'PARTICIPANT') &&
         (!('totalPoints' in request.resource.data) || request.resource.data.totalPoints == 0) &&
         (!('pontuacaoTotal' in request.resource.data) || request.resource.data.pontuacaoTotal == 0);
-      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'createdAt', 'totalPoints', 'pontuacaoTotal']));
+      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'createdAt', 'totalPoints', 'pontuacaoTotal', 'symplaTicket', 'hasSymplaTicket']));
       allow delete: if isOwner(userId);
       // Achado do security review (KAN-60): "allow write: if isAdmin()" deixava
       // qualquer sessão ADMIN escrever QUALQUER campo (inclusive role) direto
@@ -44,6 +44,11 @@ service cloud.firestore {
         allow read: if isOwner(userId) || isAdmin();
         allow write: if false; // Apenas backend via Firebase Admin SDK
       }
+    }
+
+    // Índice de unicidade de ingresso Sympla (KAN-108): só o backend (Admin SDK) escreve/lê.
+    match /symplaTickets/{ticketId} {
+      allow read, write: if false;
     }
 
     // Regras de Atividades: Leitura pública autenticada; escrita apenas para ADMIN
