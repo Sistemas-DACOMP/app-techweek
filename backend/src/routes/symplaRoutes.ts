@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { symplaService } from '../services/symplaService';
-import { db } from '../config/firebaseAdmin';
+import { linkSymplaTicket, TicketInUseError, TICKET_IN_USE_MESSAGE } from '../services/symplaLink';
 import { requireAuth, requireRole } from '../middlewares/authMiddleware';
 
 const router = Router();
@@ -68,20 +68,17 @@ router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) =
       syncedAt: new Date().toISOString()
     };
 
-    // Vincula o ingresso diretamente ao documento do participante no Firestore (Admin SDK)
+    // Vincula o ingresso ao participante (unicidade garantida no servidor, KAN-108)
     const uid = req.user?.uid;
     if (uid && (!isAdmin || !email || email.toLowerCase() === userEmail?.toLowerCase())) {
       try {
-        const userDocRef = db.collection('users')?.doc?.(uid);
-        if (userDocRef?.set) {
-          await userDocRef.set({
-            symplaTicket: ticketObj,
-            hasSymplaTicket: true,
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
+        await linkSymplaTicket(uid, ticketObj);
+      } catch (linkErr) {
+        if (linkErr instanceof TicketInUseError) {
+          res.status(409).json({ status: 'conflict', verified: false, message: TICKET_IN_USE_MESSAGE });
+          return;
         }
-      } catch (dbErr) {
-        console.warn('[symplaRoutes] Aviso ao persistir ingresso no Firestore:', dbErr);
+        throw linkErr;
       }
     }
 
@@ -148,14 +145,14 @@ router.post('/sync-user', requireAuth, async (req: Request, res: Response) => {
       syncedAt: new Date().toISOString()
     };
 
-    // Atualiza o perfil no Cloud Firestore
-    const userDocRef = db.collection('users')?.doc?.(uid);
-    if (userDocRef?.set) {
-      await userDocRef.set({
-        symplaTicket: ticketObj,
-        hasSymplaTicket: true,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+    try {
+      await linkSymplaTicket(uid, ticketObj);
+    } catch (linkErr) {
+      if (linkErr instanceof TicketInUseError) {
+        res.status(409).json({ status: 'conflict', synced: false, message: TICKET_IN_USE_MESSAGE });
+        return;
+      }
+      throw linkErr;
     }
 
     res.status(200).json({

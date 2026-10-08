@@ -1,13 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response } from 'express';
 
-const mockSet = vi.fn().mockResolvedValue({});
-const mockDoc = vi.fn().mockReturnValue({ set: mockSet });
-const mockCollection = vi.fn().mockReturnValue({ doc: mockDoc });
+// Firestore fake mínimo: refs com id/path, transação com get/set/delete (índice symplaTickets, KAN-108)
+const store = new Map<string, any>();
+const mockSet = vi.fn((ref: any, data: any) => { store.set(ref.path, { ...(store.get(ref.path) || {}), ...data }); });
+const mockDelete = vi.fn((ref: any) => { store.delete(ref.path); });
+const mockDoc = vi.fn();
+const mockCollection = vi.fn((name: string) => ({
+  doc: (id: string) => {
+    mockDoc(id);
+    return { id, path: `${name}/${id}` };
+  }
+}));
 
 vi.mock('../config/firebaseAdmin', () => ({
   db: {
-    collection: (name: string) => mockCollection(name)
+    collection: (name: string) => mockCollection(name),
+    runTransaction: async (fn: any) =>
+      fn({
+        get: async (ref: any) => ({ exists: store.has(ref.path), data: () => store.get(ref.path) }),
+        set: (ref: any, data: any) => mockSet(ref, data),
+        delete: (ref: any) => mockDelete(ref)
+      })
   }
 }));
 
@@ -52,6 +66,7 @@ async function runChain(handlers: Array<(req: Request, res: Response, next: () =
 describe('POST /verify-ticket (SEC-002: Proteção de PII e Ingressos Sympla)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    store.clear();
   });
 
   const verifyHandlers = getRouteHandlers('/verify-ticket', 'post');
@@ -110,14 +125,14 @@ describe('POST /verify-ticket (SEC-002: Proteção de PII e Ingressos Sympla)', 
 
     expect(mockDoc).toHaveBeenCalledWith('user-1');
     expect(mockSet).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
         hasSymplaTicket: true,
         symplaTicket: expect.objectContaining({
           ticketNumber: 'TCK-101',
           ticketName: 'Geral'
         })
-      }),
-      { merge: true }
+      })
     );
   });
 
@@ -189,6 +204,7 @@ describe('POST /verify-ticket (SEC-002: Proteção de PII e Ingressos Sympla)', 
 describe('POST /sync-user', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    store.clear();
   });
 
   const syncHandlers = getRouteHandlers('/sync-user', 'post');
@@ -217,13 +233,68 @@ describe('POST /sync-user', () => {
     expect(res.status).toHaveBeenCalledWith(200);
     expect(mockDoc).toHaveBeenCalledWith('user-2');
     expect(mockSet).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
         hasSymplaTicket: true,
         symplaTicket: expect.objectContaining({
           ticketNumber: 'TCK-555'
         })
-      }),
-      { merge: true }
+      })
     );
+  });
+});
+
+describe('KAN-108: ingresso Sympla único por conta', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    store.clear();
+  });
+
+  const participant = {
+    id: 7, order_id: 'ORD-7', ticket_number: 'TCK-7', ticket_name: 'Geral',
+    first_name: 'A', last_name: 'B', email: 'a@ufu.br', ticket_num_qr_code: 'QR-7'
+  } as any;
+  const run = async (path: string, uid: string) => {
+    const hs = getRouteHandlers(path, 'post');
+    const res = makeRes();
+    await hs[hs.length - 1](
+      { user: { uid, email: 'a@ufu.br', role: 'PARTICIPANT' }, body: { email: 'a@ufu.br' } } as unknown as Request,
+      res,
+      () => {}
+    );
+    return res;
+  };
+
+  it.each(['/verify-ticket', '/sync-user'])('%s: segunda conta com o mesmo ingresso recebe 409 e nada é gravado', async (path) => {
+    vi.mocked(symplaService.findParticipantByEmail).mockResolvedValue(participant);
+
+    const first = await run(path, 'uid-1');
+    expect(first.status).toHaveBeenCalledWith(200);
+    expect(store.get('symplaTickets/TCK-7')).toMatchObject({ uid: 'uid-1' });
+
+    mockSet.mockClear();
+    const second = await run(path, 'uid-2');
+    expect(second.status).toHaveBeenCalledWith(409);
+    expect(second.json).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'conflict', message: expect.stringContaining('já está vinculado') })
+    );
+    expect(mockSet).not.toHaveBeenCalled();
+    expect(store.has('users/uid-2')).toBe(false);
+  });
+
+  it('a mesma conta pode revincular o próprio ingresso (idempotente)', async () => {
+    vi.mocked(symplaService.findParticipantByEmail).mockResolvedValue(participant);
+    await run('/verify-ticket', 'uid-1');
+    const again = await run('/verify-ticket', 'uid-1');
+    expect(again.status).toHaveBeenCalledWith(200);
+  });
+
+  it('trocar de ingresso libera o índice do anterior', async () => {
+    vi.mocked(symplaService.findParticipantByEmail).mockResolvedValueOnce(participant);
+    await run('/verify-ticket', 'uid-1');
+    vi.mocked(symplaService.findParticipantByEmail).mockResolvedValueOnce({ ...participant, ticket_number: 'TCK-8' });
+    await run('/verify-ticket', 'uid-1');
+    expect(store.has('symplaTickets/TCK-7')).toBe(false);
+    expect(store.get('symplaTickets/TCK-8')).toMatchObject({ uid: 'uid-1' });
   });
 });

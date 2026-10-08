@@ -27,6 +27,20 @@ describe('Sympla Integration Client', () => {
     expect(result.participant.ticketNumber).toBe('T999999');
   });
 
+  it('devolve conflito (sem fallback direto) quando o ingresso já está em outra conta (KAN-108)', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ status: 'conflict', message: 'Este ingresso já está vinculado a outra conta.' })
+    });
+
+    const result = await verifySymplaTicket({ email: 'a@ufu.br', ticketNumber: 'T1' });
+    expect(result.verified).toBe(false);
+    expect(result.status).toBe('conflict');
+    expect(result.message).toMatch(/outra conta/);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('trata erros de conexão sem quebrar o fluxo', async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
 
