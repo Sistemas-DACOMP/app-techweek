@@ -12,6 +12,7 @@
     "load-test:booking": "node scripts/load-test-booking.mjs",
     "seed:missions": "node scripts/seed-missions.mjs",
     "seed:activities": "node scripts/seed-activities.mjs",
+    "seed:test-accounts": "node scripts/seed-test-accounts.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "npx vitest run src scripts tests/unit",

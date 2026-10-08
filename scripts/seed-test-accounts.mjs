@@ -1,11 +1,21 @@
+// Seed de perfis de teste (admin/staff/participante) em /users — EXCLUSIVO do
+// emulador (KAN-123). Recusa rodar sem as duas variáveis de emulador, então
+// nunca escreve em Firebase real. Uso: ver docs/GUIA_DEV_EMULADORES.md.
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { missingEmulatorVars } from './seed-guard.mjs';
 
-const backendNodeModules = '/Users/samuelamorim/Documents/Projetos/app-techweek/backend/node_modules';
-const require = createRequire(path.join(backendNodeModules, 'package.json'));
+const missing = missingEmulatorVars();
+if (missing.length > 0) {
+  console.error(`Recusado: este seed só roda no emulador. Defina ${missing.join(' e ')} (ex: 127.0.0.1:8080 / 127.0.0.1:9099) com os emuladores rodando (npm run emulators).`);
+  process.exit(1);
+}
+
+const backendDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'backend');
+const require = createRequire(path.join(backendDir, 'package.json'));
 const admin = require('firebase-admin');
 
-process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
 const PROJECT_ID = 'facom-techweek-layerx';
 
 if (admin.apps.length === 0) {
