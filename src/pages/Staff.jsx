@@ -17,11 +17,6 @@ import RoleSwitcher from '../components/RoleSwitcher';
 import iconeTw from '../assets/icone.png';
 import '../styles/staff.css';
 
-// Fallback simulado de leitura só existe fora de produção (mesmo padrão do Scanner.jsx).
-const isDevMode = typeof window !== 'undefined' && (
-  import.meta.env.DEV || window.location.search.includes('demo=true')
-);
-
 const RESULT_MS = 3000;
 
 // Tipo de atividade → rótulo e cor (DESIGN.md §2.3: só ponto ou faixa)
@@ -258,7 +253,7 @@ export default function Staff() {
   };
 
   const handleScan = async (data) => {
-    if (processing || busyRef.current) return;
+    if (busyRef.current) return;
     busyRef.current = true;
     setProcessing(true);
 
@@ -283,6 +278,7 @@ export default function Staff() {
       return;
     }
 
+    let failed = false;
     try {
       // Chamada para `POST /api/checkin/entrance` enviando `{ participantUid, activityId }`.
       const headers = { 'Content-Type': 'application/json' };
@@ -307,8 +303,9 @@ export default function Staff() {
           showResult({ status: 'yellow', kind: 'warn', message: 'Não encontramos inscrição dessa pessoa nesta atividade.' }, participantUid);
           playSound('warn');
         } else {
-          showResult({ status: 'red', kind: 'err', message: errorData.message || 'Erro ao registrar check-in.' }, participantUid);
+          showResult({ status: 'red', kind: 'err', message: errorData.message || 'Erro ao registrar check-in.', retryUid: participantUid }, participantUid);
           playSound('error');
+          failed = true;
         }
       } else {
         // Sucesso
@@ -316,26 +313,12 @@ export default function Staff() {
         playSound('success');
       }
     } catch (err) {
-      if (isDevMode) {
-        // Simulação só em dev/demo, para testar a UI sem backend local rodando.
-        console.warn("Backend call failed, simulating response for test", err);
-        const rand = Math.random();
-        if (rand > 0.6) {
-          showResult({ status: 'green', kind: 'ok', message: '[TESTE] Entrada confirmada com sucesso.' }, participantUid);
-          playSound('success');
-        } else if (rand > 0.3) {
-          showResult({ status: 'yellow', kind: 'warn', message: '[TESTE] Aluno não inscrito previamente.' }, participantUid);
-          playSound('warn');
-        } else {
-          showResult({ status: 'red', kind: 'dup', message: '[TESTE] Entrada duplicada.' }, participantUid);
-          playSound('error');
-        }
-      } else {
-        showResult({ status: 'red', kind: 'err', message: 'A conexão falhou e a entrada não foi registrada. Leia o crachá de novo.' }, participantUid);
-        playSound('error');
-      }
+      // Falha de rede/backend: erro real, nunca uma entrada simulada. Fica na tela até a pessoa tentar de novo ou voltar.
+      showResult({ status: 'red', kind: 'err', message: 'A conexão falhou e a entrada não foi registrada. Tente de novo ou leia o crachá outra vez.', retryUid: participantUid }, participantUid);
+      playSound('error');
+      failed = true;
     } finally {
-      resetTimer.current = setTimeout(dismissResult, RESULT_MS);
+      if (!failed) resetTimer.current = setTimeout(dismissResult, RESULT_MS);
     }
   };
   handleScanRef.current = handleScan;
@@ -848,12 +831,19 @@ export default function Staff() {
           )}
           <div className="mt-auto w-full max-w-[430px]">
             <div className="flex justify-between text-[13px] font-bold text-[#C3C9DE]">
-              <span>{resultKind === 'ok' ? 'Próxima leitura' : 'Volta ao leitor'} em {RESULT_MS / 1000} s</span>
-              <span>ou toque abaixo</span>
+              <span>{scanResult.retryUid ? 'Nada foi registrado' : `${resultKind === 'ok' ? 'Próxima leitura' : 'Volta ao leitor'} em ${RESULT_MS / 1000} s`}</span>
+              <span>{scanResult.retryUid ? 'escolha abaixo' : 'ou toque abaixo'}</span>
             </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-[3px]" style={{ background: 'rgba(255,255,255,.12)' }}>
-              <div key={reads[0]?.id} className="staff-countdown h-1.5 rounded-[3px]" style={{ '--t': `${RESULT_MS}ms` }} />
-            </div>
+            {!scanResult.retryUid && (
+              <div className="mt-2 h-1.5 overflow-hidden rounded-[3px]" style={{ background: 'rgba(255,255,255,.12)' }}>
+                <div key={reads[0]?.id} className="staff-countdown h-1.5 rounded-[3px]" style={{ '--t': `${RESULT_MS}ms` }} />
+              </div>
+            )}
+            {scanResult.retryUid && (
+              <button type="button" onClick={() => { const uid = scanResult.retryUid; dismissResult(); handleScanRef.current(uid); }} className="btn btn-action btn-block mt-4 text-[16px]" style={{ minHeight: 54 }}>
+                Tentar de novo
+              </button>
+            )}
             <button type="button" onClick={dismissResult} className="press mt-4 flex h-[54px] w-full items-center justify-center rounded-2xl text-[16px] font-extrabold text-white" style={{ background: 'rgba(255,255,255,.12)' }}>
               {resultKind === 'ok' ? 'Ler próximo' : 'Voltar ao leitor'}
             </button>
