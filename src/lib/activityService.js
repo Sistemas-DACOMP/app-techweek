@@ -261,7 +261,16 @@ export function subscribeToActivities(onUpdate, onError) {
     const customLocal = getLocalCustomActivities();
     const map = new Map();
     baseList.forEach(item => map.set(item.id, item));
-    customLocal.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+    customLocal.forEach(item => {
+      const live = map.get(item.id);
+      const merged = { ...live, ...item };
+      // Contadores de vaga são do servidor: a cópia salva no localStorage do admin
+      // ficou congelada no valor de quando a atividade foi criada/editada.
+      if (live) {
+        ['vagas_disponiveis', 'total_inscritos', 'total_espera'].forEach((k) => { merged[k] = live[k]; });
+      }
+      map.set(item.id, merged);
+    });
     const combined = Array.from(map.values());
     combined.sort((a, b) => {
       const dayCompare = (a.date || a.day || '').localeCompare(b.date || b.day || '');
@@ -793,7 +802,16 @@ export async function createActivity(activityData) {
   const id = activityData.id || `act_${Date.now()}`;
   const docRef = doc(db, 'activities', id);
   const vagasTotais = Number(activityData.vagas_totais || activityData.capacity || 100);
-  const inscritos = Number(activityData.total_inscritos || 0);
+  // Edição pelo admin não manda os contadores: preserva o que já está no Firestore
+  // em vez de zerar inscritos e devolver todas as vagas.
+  let existing = {};
+  if (activityData.total_inscritos === undefined) {
+    try {
+      const snap = await getDoc(docRef);
+      if (snap.exists()) existing = snap.data() || {};
+    } catch (_e) {}
+  }
+  const inscritos = Number(activityData.total_inscritos ?? existing.total_inscritos ?? 0);
   const generatedNumber = activityData.number || String(Math.floor(1588000 + Math.random() * 9999));
 
   const payload = {
@@ -826,7 +844,7 @@ export async function createActivity(activityData) {
     vagas_totais: vagasTotais,
     vagas_disponiveis: Math.max(0, vagasTotais - inscritos),
     total_inscritos: inscritos,
-    total_espera: Number(activityData.total_espera || 0),
+    total_espera: Number(activityData.total_espera ?? existing.total_espera ?? 0),
     points: Number(activityData.points || 20),
     tags: Array.isArray(activityData.tags) ? activityData.tags : (activityData.tags ? String(activityData.tags).split(',').map(t => t.trim()) : []),
     attendanceMode: activityData.attendanceMode || 'SELF_SCAN',
@@ -949,7 +967,16 @@ export function subscribeToSpeakers(callback) {
     const customLocal = getLocalCustomSpeakers();
     const map = new Map();
     baseList.forEach(item => map.set(item.id, item));
-    customLocal.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+    customLocal.forEach(item => {
+      const live = map.get(item.id);
+      const merged = { ...live, ...item };
+      // Contadores de vaga são do servidor: a cópia salva no localStorage do admin
+      // ficou congelada no valor de quando a atividade foi criada/editada.
+      if (live) {
+        ['vagas_disponiveis', 'total_inscritos', 'total_espera'].forEach((k) => { merged[k] = live[k]; });
+      }
+      map.set(item.id, merged);
+    });
     callback(Array.from(map.values()));
   };
 
@@ -1089,7 +1116,16 @@ export function subscribeToLocations(callback) {
     const customLocal = getLocalCustomLocations();
     const map = new Map();
     baseList.forEach(item => map.set(item.id, item));
-    customLocal.forEach(item => map.set(item.id, { ...map.get(item.id), ...item }));
+    customLocal.forEach(item => {
+      const live = map.get(item.id);
+      const merged = { ...live, ...item };
+      // Contadores de vaga são do servidor: a cópia salva no localStorage do admin
+      // ficou congelada no valor de quando a atividade foi criada/editada.
+      if (live) {
+        ['vagas_disponiveis', 'total_inscritos', 'total_espera'].forEach((k) => { merged[k] = live[k]; });
+      }
+      map.set(item.id, merged);
+    });
     callback(Array.from(map.values()));
   };
 

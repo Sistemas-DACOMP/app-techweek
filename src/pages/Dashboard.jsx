@@ -430,7 +430,7 @@ export default function Dashboard() {
       {/* MODAL OFICIAL DE DETALHES DA ATIVIDADE */}
       {selectedActivity && (
         <ActivityModal
-          activity={selectedActivity}
+          activity={activities.find((a) => a.id === selectedActivity.id) || selectedActivity}
           status={calculateActivityStatus(selectedActivity.id, bookings, checkins, pointEvents)}
           isReserving={reservingId === selectedActivity.id}
           isCancelling={cancellingId === selectedActivity.id}
