@@ -15,7 +15,7 @@ import RoleSwitcher from '../components/RoleSwitcher';
 import iconeTw from '../assets/icone.png';
 import '../styles/staff.css';
 
-// Atalho de login de teste e fallback simulado só existem fora de produção (mesmo padrão do Scanner.jsx).
+// Fallback simulado de leitura só existe fora de produção (mesmo padrão do Scanner.jsx).
 const isDevMode = typeof window !== 'undefined' && (
   import.meta.env.DEV || window.location.search.includes('demo=true')
 );
@@ -91,18 +91,8 @@ function RoundButton({ label, onClick, children, ...rest }) {
 export default function Staff() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [authorized, setAuthorized] = useState(() => {
-    if (typeof localStorage !== 'undefined') {
-      const testSessionStr = localStorage.getItem('facom_test_session');
-      if (testSessionStr) {
-        try {
-          const s = JSON.parse(testSessionStr);
-          if (s.role === 'STAFF' || s.role === 'ADMIN' || s.email === 'staff@techweek.com' || s.email === 'admin@admin.com') return true;
-        } catch (_e) {}
-      }
-    }
-    return false;
-  });
+  const [authorized, setAuthorized] = useState(false);
+  const [authTick, setAuthTick] = useState(0); // re-checa o papel após login
   const [profile, setProfile] = useState(null);
   const [activities, setActivities] = useState([]);
   const [selectedActivity, setSelectedActivity] = useState('');
@@ -135,10 +125,11 @@ export default function Staff() {
       try {
         const profile = await getMyProfile();
         setProfile(profile);
-        if (profile?.role === 'STAFF' || profile?.role === 'ADMIN' || profile?.participant_type === 'Organizador' || profile?.participantType === 'Organizador') {
+        // Papel vem só do perfil/claims do servidor; a UI não é autorização (o backend barra /api/staff/*).
+        if (profile?.role === 'STAFF' || profile?.role === 'ADMIN') {
           setAuthorized(true);
           fetchActivities();
-        } else if (!authorized) {
+        } else {
           setAuthorized(false);
         }
       } catch (error) {
@@ -148,7 +139,7 @@ export default function Staff() {
       }
     }
     checkAuth();
-  }, [authorized]);
+  }, [authTick]);
 
   const handleStaffLogin = async (e) => {
     if (e) e.preventDefault();
@@ -160,28 +151,7 @@ export default function Staff() {
       if (!res.success) {
         setLoginError(res.error || 'Credenciais inválidas.');
       } else {
-        setAuthorized(true);
-        fetchActivities();
-      }
-    } catch (err) {
-      setLoginError(err.message || 'Falha ao autenticar.');
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  const handleQuickStaff = async (email = 'staff@techweek.com', pass = 'StaffPassword123!') => {
-    setStaffEmail(email);
-    setStaffPassword(pass);
-    setLoginLoading(true);
-    setLoginError('');
-    try {
-      const res = await loginWithEmailAndPassword(email, pass);
-      if (!res.success) {
-        setLoginError(res.error || 'Credenciais inválidas.');
-      } else {
-        setAuthorized(true);
-        fetchActivities();
+        setAuthTick((n) => n + 1);
       }
     } catch (err) {
       setLoginError(err.message || 'Falha ao autenticar.');
@@ -481,11 +451,6 @@ export default function Staff() {
             {loginLoading ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={18} aria-hidden="true" />}
             {loginLoading ? 'Entrando' : 'Entrar na portaria'}
           </button>
-          {isDevMode && (
-            <button type="button" onClick={() => handleQuickStaff('staff@techweek.com', 'StaffPassword123!')} className="btn btn-secondary btn-sm">
-              Entrar como staff de teste
-            </button>
-          )}
         </form>
       </main>
     );

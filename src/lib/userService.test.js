@@ -68,12 +68,27 @@ describe('userService', () => {
       expect(result.firstName).toBe('Samuel');
     });
 
+    it('nunca grava papel elevado vindo do cliente nem infere papel por e-mail', async () => {
+      vi.mocked(setDoc).mockResolvedValueOnce(undefined);
+      const result = await createUserProfile('user-123', { email: 'conta.qualquer@exemplo.com', role: 'ADMIN' });
+      expect(result.role).toBe('PARTICIPANT');
+    });
+
     it('lança erro se uid não for informado', async () => {
       await expect(createUserProfile(null, {})).rejects.toThrow('UID do usuário é obrigatório');
     });
   });
 
   describe('getUserProfile', () => {
+    it('mantém o papel do servidor independente do e-mail', async () => {
+      vi.mocked(getDoc).mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ email: 'conta.qualquer@exemplo.com', role: 'PARTICIPANT' })
+      });
+      const profile = await getUserProfile('user-999');
+      expect(profile.role).toBe('PARTICIPANT');
+    });
+
     it('retorna os dados do documento quando ele existe', async () => {
       vi.mocked(getDoc).mockResolvedValueOnce({
         exists: () => true,

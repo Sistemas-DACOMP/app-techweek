@@ -11,22 +11,7 @@ import {
 } from './userService';
 
 export async function getMyProfile() {
-  let firebaseUser = auth?.currentUser;
-
-  // Fallback para sessão local de teste se não houver usuário no Firebase Auth
-  if (!firebaseUser && typeof localStorage !== 'undefined') {
-    const testSessionStr = localStorage.getItem('facom_test_session');
-    if (testSessionStr) {
-      try {
-        const testSession = JSON.parse(testSessionStr);
-        firebaseUser = {
-          uid: testSession.uid,
-          email: testSession.email,
-          displayName: testSession.email === 'admin@admin.com' ? 'Administrador Geral' : (testSession.email === 'staff@techweek.com' ? 'Staff Portaria' : 'Aluno UFU')
-        };
-      } catch (_e) {}
-    }
-  }
+  const firebaseUser = auth?.currentUser;
 
   if (!firebaseUser) return null;
 
