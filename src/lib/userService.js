@@ -13,7 +13,7 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile, updateEmail } from 'firebase/auth';
+import { updateProfile, updateEmail, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { db, storage, auth } from './firebase';
 import { validateAvatarFile } from './validators';
 import { apiRequest } from './api';
@@ -255,21 +255,24 @@ export async function updateUserProfile(uid, updates) {
 /**
  * Atualiza o e-mail do usuário no Firestore e no Firebase Auth.
  */
-export async function updateUserEmail(uid, newEmail) {
+export async function updateUserEmail(uid, newEmail, currentPassword) {
   if (!uid || !newEmail) throw new Error('UID e novo e-mail são obrigatórios.');
   const trimmedEmail = newEmail.trim().toLowerCase();
 
-  // 1. Atualiza no Firestore
-  await updateUserProfile(uid, { email: trimmedEmail });
-
-  // 2. Tenta atualizar no Firebase Auth (se a sessão for recente)
-  try {
-    if (auth.currentUser && auth.currentUser.uid === uid) {
-      await updateEmail(auth.currentUser, trimmedEmail);
-    }
-  } catch (authErr) {
-    console.warn('Aviso: E-mail atualizado no Firestore, mas não no Auth:', authErr);
+  const user = auth.currentUser;
+  if (!user || user.uid !== uid) {
+    throw new Error('Sessão inválida. Faça login novamente para trocar o e-mail.');
   }
+
+  // 1. Auth primeiro: se falhar (ex.: auth/requires-recent-login), o erro sobe pra UI
+  //    e o Firestore não é tocado, então perfil e login nunca ficam com e-mails diferentes.
+  if (currentPassword) {
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword));
+  }
+  await updateEmail(user, trimmedEmail);
+
+  // 2. Só depois de o Auth aceitar, grava no Firestore
+  await updateUserProfile(uid, { email: trimmedEmail });
 
   return true;
 }
