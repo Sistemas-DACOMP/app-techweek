@@ -23,9 +23,8 @@ import SponsorLeadModal from '../components/SponsorLeadModal';
 import WhatsAppButton from '../components/WhatsAppButton';
 
 // Atalhos de simulação só existem fora de produção (mesmo padrão do Scanner.jsx).
-const isDevMode = typeof window !== 'undefined' && (
-  import.meta.env.DEV || window.location.search.includes('demo=true')
-);
+// Só no build de desenvolvimento: um ?demo=true na URL não pode liberar o modo patrocinador em produção.
+const isDevMode = import.meta.env.DEV;
 
 export default function Sponsor() {
   const navigate = useNavigate();
