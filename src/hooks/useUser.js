@@ -9,6 +9,7 @@ export function useUser() {
   const [profile, setProfile] = useState(() => getCachedUserProfile());
   const [pointEvents, setPointEvents] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [profileReady, setProfileReady] = useState(false); // true só quando há sessão e o perfil chegou
   const { addNotification } = useNotifications();
 
   const load = useCallback(async () => {
@@ -24,6 +25,7 @@ export function useUser() {
           hasSymplaTicket: !!(profileData?.hasSymplaTicket || profileData?.symplaTicket || prev.hasSymplaTicket || prev.symplaTicket)
         };
       });
+      setProfileReady(!!profileData);
       setPointEvents(events || []);
     } catch (_err) {
       // Offline fallback: mantém estado vazio sem quebrar a UI
@@ -309,6 +311,7 @@ export function useUser() {
   return {
     profile,
     role: profile?.role || 'PARTICIPANT',
+    profileReady,
     participantType: profile?.participantType || profile?.participant_type || 'Aluno da UFU',
     hasSymplaTicket,
     symplaTicket,
