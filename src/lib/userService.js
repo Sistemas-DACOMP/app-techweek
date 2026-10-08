@@ -33,48 +33,15 @@ function fileToDataUrl(file) {
 
 /**
  * Lê o perfil do usuário de forma 100% síncrona do cache local (zero layout flash).
+ * O papel (role) vem do perfil gravado pelo servidor; nenhum papel é inferido no cliente.
  */
-export function resolveRoleByEmail(email, existingRole = 'PARTICIPANT') {
-  const clean = (email || '').trim().toLowerCase();
-  if (clean === 'admin@admin.com' || clean === 'sam03amorim@gmail.com') {
-    return { role: 'ADMIN', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
-  }
-  if (clean === 'staff@techweek.com') {
-    return { role: 'STAFF', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
-  }
-  if (clean === 'aluno@ufu.br') {
-    return { role: 'PARTICIPANT', participantType: 'Aluno da UFU', participant_type: 'Aluno da UFU', hasSymplaTicket: true };
-  }
-  if (existingRole === 'ADMIN') {
-    return { role: 'ADMIN', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
-  }
-  if (existingRole === 'STAFF') {
-    return { role: 'STAFF', participantType: 'Organizador', participant_type: 'Organizador', hasSymplaTicket: true };
-  }
-  return null;
-}
-
 export function getCachedUserProfile(uid) {
   try {
     let targetUid = uid || auth?.currentUser?.uid;
-    if (!targetUid && typeof localStorage !== 'undefined') {
-      const testSessionStr = localStorage.getItem('facom_test_session');
-      if (testSessionStr) {
-        try {
-          const testSession = JSON.parse(testSessionStr);
-          if (testSession.uid) targetUid = testSession.uid;
-        } catch (_e) {}
-      }
-    }
     if (targetUid) {
       const cached = localStorage.getItem(`facom_profile_${targetUid}`);
       if (cached) {
-        const parsed = JSON.parse(cached);
-        const resolved = resolveRoleByEmail(parsed.email, parsed.role);
-        if (resolved) {
-          Object.assign(parsed, resolved);
-        }
-        return parsed;
+        return JSON.parse(cached);
       }
     }
     // Procura em qualquer chave de perfil em cache caso o uid ainda não tenha sido emitido
@@ -84,12 +51,7 @@ export function getCachedUserProfile(uid) {
         if (key && key.startsWith('facom_profile_')) {
           const item = localStorage.getItem(key);
           if (item) {
-            const parsed = JSON.parse(item);
-            const resolved = resolveRoleByEmail(parsed.email, parsed.role);
-            if (resolved) {
-              Object.assign(parsed, resolved);
-            }
-            return parsed;
+            return JSON.parse(item);
           }
         }
       }
@@ -142,7 +104,6 @@ export async function createUserProfile(uid, data) {
   const now = serverTimestamp();
 
   const cleanEmail = data.email ? data.email.trim().toLowerCase() : '';
-  const resolved = resolveRoleByEmail(cleanEmail, data.role);
 
   const profileData = {
     uid,
@@ -151,16 +112,16 @@ export async function createUserProfile(uid, data) {
     lastName: data.lastName || '',
     username: data.username ? data.username.trim().toLowerCase() : '',
     phone: data.phone || '',
-    participantType: resolved ? resolved.participantType : (data.participantType || 'Aluno da UFU'),
-    participant_type: resolved ? resolved.participantType : (data.participantType || 'Aluno da UFU'),
+    participantType: data.participantType || 'Aluno da UFU',
+    participant_type: data.participantType || 'Aluno da UFU',
     course: data.course || '',
     period: data.period ? Number(data.period) : null,
     linkedin: data.linkedin || '',
     instagram: data.instagram || '',
     github: data.github || '',
     avatarUrl: data.avatarUrl || null,
-    hasSymplaTicket: resolved ? resolved.hasSymplaTicket : Boolean(data.hasSymplaTicket || data.symplaTicket),
-    role: resolved ? resolved.role : (data.role || 'PARTICIPANT'),
+    hasSymplaTicket: Boolean(data.hasSymplaTicket || data.symplaTicket),
+    role: 'PARTICIPANT', // papel nunca vem do cliente; promoção é feita pelo backend (custom claims)
     totalPoints: 0,
     pontuacaoTotal: 0,
     ticketId: data.ticketId || data.symplaTicket?.ticketNumber || null,
@@ -218,8 +179,6 @@ export async function getUserProfile(uid) {
 
     if (snap.exists()) {
       const data = snap.data();
-      const cleanEmail = (data.email || localData?.email || '').trim().toLowerCase();
-      const resolved = resolveRoleByEmail(cleanEmail, data.role || localData?.role);
 
       // Fusão segura: nunca substitui um avatarUrl ou symplaTicket preenchido localmente por null/indefinido do Firestore
       const merged = {
@@ -230,10 +189,6 @@ export async function getUserProfile(uid) {
         hasSymplaTicket: !!(data.hasSymplaTicket || data.symplaTicket || localData?.hasSymplaTicket || localData?.symplaTicket)
       };
 
-      if (resolved) {
-        Object.assign(merged, resolved);
-      }
-
       try {
         localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(merged));
       } catch (_e) {}
@@ -242,14 +197,6 @@ export async function getUserProfile(uid) {
   } catch (err) {
     if (err?.code !== 'permission-denied') {
       console.warn('[userService] Aviso: Leitura do Firestore falhou, utilizando cache local:', err);
-    }
-  }
-
-  if (localData) {
-    const cleanEmail = (localData.email || '').trim().toLowerCase();
-    const resolved = resolveRoleByEmail(cleanEmail, localData.role);
-    if (resolved) {
-      Object.assign(localData, resolved);
     }
   }
 
