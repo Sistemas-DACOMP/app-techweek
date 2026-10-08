@@ -187,4 +187,23 @@ describe('activityService (KAN-50)', () => {
       expect(typeof unsub).toBe('function');
     });
   });
+
+  describe('contadores de vaga ao vivo (KAN-109)', () => {
+    it('cópia local da atividade não sobrescreve vagas vindas do Firestore', async () => {
+      const { onSnapshot } = await import('firebase/firestore');
+      const stale = { id: 'act_x', title: 'X', vagas_totais: 10, vagas_disponiveis: 10, total_inscritos: 0, total_espera: 0 };
+      vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() });
+      vi.stubGlobal('localStorage', { getItem: () => JSON.stringify([stale]), setItem: vi.fn() });
+      onSnapshot.mockImplementationOnce((_ref, onNext) => {
+        onNext({ empty: false, docs: [{ id: 'act_x', data: () => ({ ...stale, vagas_disponiveis: 7, total_inscritos: 3 }) }] });
+        return vi.fn();
+      });
+      const onUpdate = vi.fn();
+      subscribeToActivities(onUpdate);
+      vi.unstubAllGlobals();
+      const act = onUpdate.mock.calls.at(-1)[0].find((a) => a.id === 'act_x');
+      expect(act.vagas_disponiveis).toBe(7);
+      expect(act.total_inscritos).toBe(3);
+    });
+  });
 });

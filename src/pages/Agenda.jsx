@@ -507,7 +507,7 @@ export default function Agenda() {
       {/* Painel da atividade, leitura do telão e leitura de QR */}
       {selectedActivity && (
         <ActivityModal
-          activity={selectedActivity}
+          activity={activities.find((a) => a.id === selectedActivity.id) || selectedActivity}
           status={activityStatuses[selectedActivity.id] || 'NONE'}
           isReserving={reservingId === selectedActivity.id}
           isCancelling={cancellingId === selectedActivity.id}
