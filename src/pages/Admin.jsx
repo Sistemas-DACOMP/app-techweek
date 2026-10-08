@@ -1153,7 +1153,7 @@ export default function Admin() {
     const who = u.username ? `@${u.username}` : (u.fullName || u.email);
     const res = await updateUserRoleInFirestore(uid, newRole);
     if (res && res.success === false) {
-      setFeedback({ type: 'error', title: 'Não deu para trocar o papel', message: 'Confira a conexão e tente de novo.' });
+      setFeedback({ type: 'error', title: 'Não deu para trocar o papel', message: res.error || 'Confira a conexão e tente de novo.' });
       return;
     }
     setFeedback({

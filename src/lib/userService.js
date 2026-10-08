@@ -16,6 +16,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updateProfile, updateEmail } from 'firebase/auth';
 import { db, storage, auth } from './firebase';
 import { validateAvatarFile } from './validators';
+import { apiRequest } from './api';
 
 function fileToDataUrl(file) {
   return new Promise((resolve) => {
@@ -590,40 +591,31 @@ export function subscribeToAllUsers(callback) {
 }
 
 /**
- * Atualiza o papel do usuário no Firestore a partir do painel de administração.
+ * Troca o papel do usuário pelo backend (PUT /api/admin/users/:uid/role), que grava
+ * o custom claim e o Firestore juntos. As regras do Firestore bloqueiam escrita
+ * direta de `role` pelo client (KAN-60), então updateDoc aqui nunca funcionaria.
  */
 export async function updateUserRoleInFirestore(uid, newRole) {
   if (!uid || !newRole) return { success: false, error: 'UID e role são obrigatórios.' };
   try {
-    const userRef = doc(db, 'users', uid);
+    await apiRequest(`/api/admin/users/${encodeURIComponent(uid)}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role: newRole })
+    });
     const participantType = newRole === 'ADMIN' || newRole === 'STAFF' ? 'Organizador' : (newRole === 'SPONSOR' ? 'Patrocinador' : 'Aluno da UFU');
-    
-    // Atualiza imediatamente cache local do perfil
     try {
       if (typeof localStorage !== 'undefined') {
         const cachedKey = `facom_profile_${uid}`;
         const currentCached = localStorage.getItem(cachedKey);
         const parsed = currentCached ? JSON.parse(currentCached) : {};
-        localStorage.setItem(cachedKey, JSON.stringify({
-          ...parsed,
-          role: newRole,
-          participantType,
-          participant_type: participantType
-        }));
+        localStorage.setItem(cachedKey, JSON.stringify({ ...parsed, role: newRole, participantType, participant_type: participantType }));
         window.dispatchEvent(new Event('facom_profile_updated'));
       }
     } catch (_e) {}
-
-    await updateDoc(userRef, {
-      role: newRole,
-      participantType,
-      participant_type: participantType,
-      updatedAt: new Date().toISOString()
-    });
     return { success: true };
   } catch (err) {
     console.error('Erro ao atualizar papel do usuário:', err);
-    return { success: false, error: err.message };
+    return { success: false, error: err.data?.message || err.message };
   }
 }
 

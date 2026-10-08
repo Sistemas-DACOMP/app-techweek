@@ -6,8 +6,10 @@ import {
   uploadUserAvatar,
   updateUserEmail,
   getLeaderboardUsers,
-  subscribeToLeaderboardUsers
+  subscribeToLeaderboardUsers,
+  updateUserRoleInFirestore
 } from './userService';
+import { apiRequest } from './api';
 import { doc, setDoc, getDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updateProfile, updateEmail } from 'firebase/auth';
@@ -38,6 +40,8 @@ vi.mock('firebase/auth', () => ({
   updateProfile: vi.fn(),
   updateEmail: vi.fn(() => Promise.resolve())
 }));
+
+vi.mock('./api', () => ({ apiRequest: vi.fn() }));
 
 vi.mock('./firebase', () => ({
   db: {},
@@ -302,5 +306,20 @@ describe('userService', () => {
       expect(mockUnsubscribe).toHaveBeenCalled();
     });
   });
-});
 
+  describe('updateUserRoleInFirestore (KAN-120)', () => {
+    it('troca o papel pelo backend, sem escrever no Firestore pelo client', async () => {
+      apiRequest.mockResolvedValue({ success: true });
+      const res = await updateUserRoleInFirestore('u1', 'STAFF');
+      expect(res).toEqual({ success: true });
+      expect(apiRequest).toHaveBeenCalledWith('/api/admin/users/u1/role', { method: 'PUT', body: JSON.stringify({ role: 'STAFF' }) });
+      expect(updateDoc).not.toHaveBeenCalled();
+    });
+
+    it('devolve a mensagem do backend quando a troca falha', async () => {
+      apiRequest.mockRejectedValue(Object.assign(new Error('FORBIDDEN'), { data: { message: 'Sem permissão.' } }));
+      const res = await updateUserRoleInFirestore('u1', 'STAFF');
+      expect(res).toEqual({ success: false, error: 'Sem permissão.' });
+    });
+  });
+});
