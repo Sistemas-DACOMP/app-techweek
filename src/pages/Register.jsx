@@ -323,28 +323,6 @@ export default function Register() {
 
       const uid = authResult.data.user.uid;
 
-      // 2. Consulta automática do Sympla pelo e-mail informado (timeout resiliente de 3s)
-      let symplaTicketData = null;
-      try {
-        const symplaPromise = verifySymplaTicket({ email: formData.email });
-        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 3000));
-        const symplaRes = await Promise.race([symplaPromise, timeoutPromise]);
-        
-        if (symplaRes?.verified && (symplaRes.symplaTicket || symplaRes.participant)) {
-          const p = symplaRes.participant;
-          symplaTicketData = symplaRes.symplaTicket || {
-            participantId: p?.id,
-            orderId: p?.orderId,
-            ticketNumber: p?.ticketNumber,
-            ticketName: p?.ticketName,
-            qrCodeData: p?.qrCodeData || p?.ticketNumber,
-            syncedAt: new Date().toISOString()
-          };
-        }
-      } catch (symplaErr) {
-        console.warn('Aviso: Verificação preliminar do Sympla falhou, prosseguindo:', symplaErr);
-      }
-
       // 3. Processa a foto de perfil imediatamente antes de gravar o perfil
       let finalAvatarUrl = avatarPreview || null;
       if (avatarFile) {
@@ -369,10 +347,39 @@ export default function Register() {
         linkedin: formData.linkedin,
         instagram: formData.instagram,
         github: formData.github,
-        avatarUrl: finalAvatarUrl,
-        hasSymplaTicket: !!symplaTicketData,
-        symplaTicket: symplaTicketData
+        avatarUrl: finalAvatarUrl
       });
+
+      // 5. Consulta o Sympla DEPOIS de criar o perfil: o backend grava o vínculo do ingresso no perfil já existente
+      // (as regras do Firestore não deixam o cliente gravar esses campos). Timeout resiliente de 3s.
+      let symplaTicketData = null;
+      try {
+        const symplaPromise = verifySymplaTicket({ email: formData.email });
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 3000));
+        const symplaRes = await Promise.race([symplaPromise, timeoutPromise]);
+        
+        if (symplaRes?.verified && (symplaRes.symplaTicket || symplaRes.participant)) {
+          const p = symplaRes.participant;
+          symplaTicketData = symplaRes.symplaTicket || {
+            participantId: p?.id,
+            orderId: p?.orderId,
+            ticketNumber: p?.ticketNumber,
+            ticketName: p?.ticketName,
+            qrCodeData: p?.qrCodeData || p?.ticketNumber,
+            syncedAt: new Date().toISOString()
+          };
+        }
+      } catch (symplaErr) {
+        console.warn('Aviso: Verificação preliminar do Sympla falhou, prosseguindo:', symplaErr);
+      }
+
+      if (symplaTicketData) {
+        try {
+          const key = `facom_profile_${uid}`;
+          const cached = JSON.parse(localStorage.getItem(key) || '{}');
+          localStorage.setItem(key, JSON.stringify({ ...cached, hasSymplaTicket: true, symplaTicket: symplaTicketData, ticketId: symplaTicketData.ticketNumber || null }));
+        } catch (_e) {}
+      }
 
       try {
         localStorage.removeItem('facom_onboarding_completed');
