@@ -16,6 +16,7 @@ import {
   Calendar,
   UserCheck
 } from 'lucide-react';
+import { GitHubIcon } from './ParticipantCard';
 import WhatsAppButton from './WhatsAppButton';
 import { submitLead, updateLead } from '../lib/sponsorService';
 
@@ -112,8 +113,9 @@ export default function SponsorLeadModal({
           companyId: sponsorCompanyId
         });
 
-        const leadInfo = response?.lead || {
+        const leadInfo = {
           ...participant,
+          ...(response?.lead || {}),
           participantUid,
           notes,
           rating
@@ -304,6 +306,20 @@ export default function SponsorLeadModal({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#A9B1CC' }}>
                   <Mail size={12} color="#8FA0FF" />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{participant.email}</span>
+                </div>
+              )}
+
+              {participant.github && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#A9B1CC' }}>
+                  <GitHubIcon size={12} color="#8FA0FF" />
+                  <a
+                    href={`https://github.com/${participant.github.replace(/^@/, '').trim()}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#8FA0FF', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                  >
+                    @{participant.github.replace(/^@/, '').trim()}
+                  </a>
                 </div>
               )}
             </div>

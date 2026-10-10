@@ -24,8 +24,12 @@ import {
   ChevronRight,
   Filter,
   Heart,
-  Share2
+  Share2,
+  Camera,
+  X,
+  ArrowUpDown
 } from 'lucide-react';
+import { GitHubIcon } from '../components/ParticipantCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
 import { 
@@ -69,6 +73,7 @@ export default function Sponsor() {
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [leadsSearch, setLeadsSearch] = useState('');
   const [starFilter, setStarFilter] = useState('all'); // 'all' | '5' | '4' | '3'
+  const [leadSortBy, setLeadSortBy] = useState('recent'); // 'recent' | 'rating' | 'name'
 
   // Scanner States
   const [isScannerActive, setIsScannerActive] = useState(false);
@@ -95,6 +100,49 @@ export default function Sponsor() {
   const showToast = useCallback((message, type = 'info') => {
     setToastMessage({ message, type });
     setTimeout(() => setToastMessage(null), 3500);
+  }, []);
+
+  // Sensory Vibration helper (Ideia 3)
+  const triggerVibration = useCallback((pattern) => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(pattern);
+      } catch (_) {
+        // Safe fallback if permission is blocked
+      }
+    }
+  }, []);
+
+  // Classificação rápida de afiliação acadêmica (Ideia 2)
+  const getAffiliationBadge = useCallback((lead) => {
+    const type = (lead?.participantType || '').toLowerCase();
+    const inst = (lead?.instituicao || lead?.institution || '').toLowerCase();
+    const course = (lead?.course || '').toLowerCase();
+
+    if (type.includes('pós') || type.includes('pos') || type.includes('mestrado') || type.includes('doutorado') || lead?.postgradInst) {
+      return {
+        label: 'Pós-Graduação',
+        color: '#C084FC',
+        bg: 'rgba(192, 132, 252, 0.12)',
+        border: 'rgba(192, 132, 252, 0.3)'
+      };
+    }
+
+    if (type.includes('graduação') || type.includes('graduacao') || type.includes('aluno ufu') || inst.includes('ufu') || course.length > 0) {
+      return {
+        label: 'Graduação',
+        color: '#8FA0FF',
+        bg: 'rgba(56, 189, 248, 0.12)',
+        border: 'rgba(56, 189, 248, 0.3)'
+      };
+    }
+
+    return {
+      label: 'Externo',
+      color: '#34D399',
+      bg: 'rgba(52, 211, 153, 0.12)',
+      border: 'rgba(52, 211, 153, 0.3)'
+    };
   }, []);
 
   // 1. Carrega Leads via API
@@ -211,6 +259,7 @@ export default function Sponsor() {
     try {
       const resolved = await resolveParticipantFromQr(rawData);
       if (resolved) {
+        triggerVibration([40, 60, 40]);
         setActiveParticipant(resolved);
       } else {
         showToast('Código lido não corresponde a um participante válido.', 'warning');
@@ -241,7 +290,8 @@ export default function Sponsor() {
         period: 6,
         phone: '(34) 99123-4567',
         email: 'guilherme.mendes@ufu.br',
-        participantType: 'Aluno UFU Graduação'
+        participantType: 'Aluno UFU Graduação',
+        github: 'gmendes'
       },
       {
         participantUid: 'demo_user_2',
@@ -250,7 +300,8 @@ export default function Sponsor() {
         period: 4,
         phone: '(34) 99876-5432',
         email: 'camila.rocha@ufu.br',
-        participantType: 'Aluno UFU Graduação'
+        participantType: 'Aluno UFU Graduação',
+        github: 'camilarocha'
       },
       {
         participantUid: 'demo_user_3',
@@ -260,7 +311,8 @@ export default function Sponsor() {
         phone: '(11) 98765-4321',
         email: 'lucas.ferreira@gmail.com',
         participantType: 'Aluno UFU Pós-Graduação',
-        postgradInst: 'FACOM'
+        postgradInst: 'FACOM',
+        github: 'lucasferreira-dev'
       }
     ];
 
@@ -277,7 +329,8 @@ export default function Sponsor() {
         period: candidate.period,
         phone: candidate.phone,
         email: candidate.email,
-        participantType: candidate.participantType
+        participantType: candidate.participantType,
+        github: candidate.github
       });
     }
 
@@ -286,6 +339,7 @@ export default function Sponsor() {
 
   // Callback ao registrar um novo lead pós-leitura
   const handleLeadCaptured = (newLead) => {
+    triggerVibration([60, 40, 60]);
     setMyLeads((prev) => [newLead, ...prev.filter(l => l.participantUid !== newLead.participantUid)]);
     setCompanyLeads((prev) => [newLead, ...prev.filter(l => l.participantUid !== newLead.participantUid)]);
     showToast(`Lead de ${newLead.name} salvo (+50 pontos concedidos)!`, 'success');
@@ -293,6 +347,7 @@ export default function Sponsor() {
 
   // Callback ao atualizar um lead existente na lista
   const handleLeadUpdated = (updatedLead) => {
+    triggerVibration(50);
     setMyLeads((prev) => prev.map(l => l.participantUid === updatedLead.participantUid ? { ...l, ...updatedLead } : l));
     setCompanyLeads((prev) => prev.map(l => l.participantUid === updatedLead.participantUid ? { ...l, ...updatedLead } : l));
     showToast(`Lead de ${updatedLead.name} atualizado!`, 'success');
@@ -312,16 +367,17 @@ export default function Sponsor() {
     }
   };
 
-  // Filtros de Leads
-  const filterLeadsList = useCallback((list) => {
-    return list.filter((lead) => {
+  // Filtros e Ordenação de Leads (Ideia 1)
+  const filterAndSortLeads = useCallback((list) => {
+    const filtered = list.filter((lead) => {
       const query = leadsSearch.toLowerCase().trim();
       const matchQuery = !query || (
         (lead.name && lead.name.toLowerCase().includes(query)) ||
         (lead.course && lead.course.toLowerCase().includes(query)) ||
         (lead.phone && lead.phone.includes(query)) ||
         (lead.email && lead.email.toLowerCase().includes(query)) ||
-        (lead.notes && lead.notes.toLowerCase().includes(query))
+        (lead.notes && lead.notes.toLowerCase().includes(query)) ||
+        (lead.github && lead.github.toLowerCase().includes(query))
       );
 
       const rating = Number(lead.rating) || 0;
@@ -332,10 +388,32 @@ export default function Sponsor() {
 
       return matchQuery && matchStars;
     });
-  }, [leadsSearch, starFilter]);
 
-  const filteredMyLeads = useMemo(() => filterLeadsList(myLeads), [myLeads, filterLeadsList]);
-  const filteredCompanyLeads = useMemo(() => filterLeadsList(companyLeads), [companyLeads, filterLeadsList]);
+    return [...filtered].sort((a, b) => {
+      if (leadSortBy === 'rating') {
+        const ratingDiff = (Number(b.rating) || 0) - (Number(a.rating) || 0);
+        if (ratingDiff !== 0) return ratingDiff;
+        // Critério de desempate: mais recente primeiro
+        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        return timeB - timeA;
+      }
+
+      if (leadSortBy === 'name') {
+        const nameA = a.name || '';
+        const nameB = b.name || '';
+        return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
+      }
+
+      // Default: 'recent' (mais recentes primeiro)
+      const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+      const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+      return timeB - timeA;
+    });
+  }, [leadsSearch, starFilter, leadSortBy]);
+
+  const filteredMyLeads = useMemo(() => filterAndSortLeads(myLeads), [myLeads, filterAndSortLeads]);
+  const filteredCompanyLeads = useMemo(() => filterAndSortLeads(companyLeads), [companyLeads, filterAndSortLeads]);
 
   // Lista de dias únicos na Programação
   const availableDays = useMemo(() => {
@@ -671,15 +749,55 @@ export default function Sponsor() {
               </div>
             </div>
 
+            {/* Métrica de Conversão no Cabeçalho do Estande (Ideia 4) */}
             <div className="glass-panel" style={{ padding: '16px', background: '#121A36', borderRadius: '18px', border: '1px solid #1C2548' }}>
-              <div style={{ fontSize: '11px', color: '#A9B1CC', textTransform: 'uppercase', fontWeight: 700, marginBottom: '6px' }}>
-                Destaques (4-5 ★)
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '11px', color: '#A9B1CC', textTransform: 'uppercase', fontWeight: 700 }}>
+                  Leads Qualificados
+                </span>
+                {companyLeads.length > 0 && (
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      color: '#FBBF24',
+                      background: 'rgba(251, 191, 36, 0.15)',
+                      padding: '2px 6px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(251, 191, 36, 0.3)'
+                    }}
+                  >
+                    {Math.round((companyLeads.filter(l => (l.rating || 0) >= 4).length / companyLeads.length) * 100)}%
+                  </span>
+                )}
               </div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FBBF24' }}>
-                {companyLeads.filter(l => (l.rating || 0) >= 4).length}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FBBF24' }}>
+                  {companyLeads.filter(l => (l.rating || 0) >= 4).length}
+                </span>
+                <span style={{ fontSize: '11px', color: '#8790AE' }}>
+                  de {companyLeads.length} (4-5 ★)
+                </span>
               </div>
-              <div style={{ fontSize: '11px', color: '#8790AE', marginTop: '4px' }}>
-                Candidatos qualificados
+              <div
+                style={{
+                  width: '100%',
+                  height: '6px',
+                  background: '#1A2347',
+                  borderRadius: '3px',
+                  marginTop: '8px',
+                  overflow: 'hidden'
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${companyLeads.length > 0 ? Math.round((companyLeads.filter(l => (l.rating || 0) >= 4).length / companyLeads.length) * 100) : 0}%`,
+                    background: 'linear-gradient(90deg, #F59E0B, #FBBF24)',
+                    borderRadius: '3px',
+                    transition: 'width 0.4s ease'
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -1047,8 +1165,8 @@ export default function Sponsor() {
                   type="button"
                   onClick={() => setStarFilter(f.id)}
                   style={{
-                    minHeight: '38px',
-                    padding: '6px 12px',
+                    minHeight: '44px',
+                    padding: '0 12px',
                     borderRadius: '10px',
                     fontSize: '12px',
                     fontWeight: 700,
@@ -1057,10 +1175,52 @@ export default function Sponsor() {
                     background: starFilter === f.id ? 'rgba(251, 191, 36, 0.15)' : '#121A36',
                     color: starFilter === f.id ? '#FBBF24' : '#8790AE',
                     whiteSpace: 'nowrap',
-                    transition: 'all 0.15s ease'
+                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center'
                   }}
                 >
                   {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Ordenação Rápida dos Leads (Ideia 1) */}
+            <div
+              role="group"
+              aria-label="Opções de ordenação dos leads"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}
+            >
+              <span style={{ fontSize: '11px', color: '#8790AE', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <ArrowUpDown size={12} color="#8FA0FF" />
+                <span>Ordenar:</span>
+              </span>
+              {[
+                { id: 'recent', label: 'Mais recentes' },
+                { id: 'rating', label: 'Maior avaliação' },
+                { id: 'name', label: 'Nome (A-Z)' }
+              ].map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setLeadSortBy(s.id)}
+                  style={{
+                    minHeight: '44px',
+                    padding: '0 12px',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    border: leadSortBy === s.id ? '1px solid #2563EB' : '1px solid #1C2548',
+                    background: leadSortBy === s.id ? '#1F2A55' : '#121A36',
+                    color: leadSortBy === s.id ? '#EEF1FA' : '#8790AE',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  {s.label}
                 </button>
               ))}
             </div>
@@ -1144,7 +1304,7 @@ export default function Sponsor() {
                     setStarFilter('all');
                   }}
                   style={{
-                    minHeight: '38px',
+                    minHeight: '44px',
                     padding: '0 16px',
                     background: '#1A2347',
                     border: '1px solid #1C2548',
@@ -1207,8 +1367,53 @@ export default function Sponsor() {
                       </div>
 
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#EEF1FA', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {lead.name || 'Aluno'}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 800, color: '#EEF1FA', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {lead.name || 'Aluno'}
+                          </span>
+
+                          {/* Academic Affiliation Badge */}
+                          {(() => {
+                            const badge = getAffiliationBadge(lead);
+                            return (
+                              <span
+                                style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  color: badge.color,
+                                  background: badge.bg,
+                                  border: `1px solid ${badge.border}`,
+                                  padding: '1px 6px',
+                                  borderRadius: '6px',
+                                  lineHeight: '1.4'
+                                }}
+                              >
+                                {badge.label}
+                              </span>
+                            );
+                          })()}
+
+                          {/* GitHub Badge */}
+                          {lead.github && (
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                color: '#A9B1CC',
+                                background: '#1A2347',
+                                border: '1px solid #1C2548',
+                                padding: '1px 6px',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                lineHeight: '1.4'
+                              }}
+                            >
+                              <GitHubIcon size={10} color="#8FA0FF" />
+                              <span>@{lead.github.replace(/^@/, '').trim()}</span>
+                            </span>
+                          )}
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#A9B1CC', marginTop: '2px' }}>
