@@ -8,15 +8,15 @@ import {
   Building2, 
   GraduationCap, 
   Mail, 
-  Phone, 
   Sparkles, 
   QrCode, 
   Copy, 
   ExternalLink, 
   Calendar, 
-  UserCheck 
+  UserCheck,
+  Pencil
 } from 'lucide-react';
-import { GitHubIcon } from './ParticipantCard';
+import { GitHubIcon, LinkedInIcon, formatSocialUrl } from './ParticipantCard';
 import WhatsAppButton from './WhatsAppButton';
 import { submitLead, updateLead } from '../lib/sponsorService';
 
@@ -112,10 +112,14 @@ export const getCleanInstitution = (lead, affiliationLabel) => {
 /**
  * Modal completo de Lead para Patrocinadores (Design System TechWeek).
  * 
- * Suporta dois fluxos:
- * 1. Leitura Nova (isExistingLead = false): pós-leitura de QR Code, salva lead (+50 pts) e gera atalhos.
- * 2. Visualização e Edição de Lead (isExistingLead = true): CRM do estande, exibe dados completos,
- *    permite editar notas e estrelas (0-5), copiar/enviar e-mail e conversar no WhatsApp.
+ * Suporta dois fluxos principais:
+ * 1. Leitura Nova (isExistingLead = false): pós-leitura de QR Code, inicia em modo cadastro para qualificar e salvar.
+ * 2. Lead Existente no CRM (isExistingLead = true):
+ *    - Modo Leitura / Ficha Estratégica de CRM (padrão): Exibe o perfil qualificado, nota sem formulário,
+ *      ações estratégicas de contato (WhatsApp com mensagem personalizada de recrutador, e-mail, redes),
+ *      tags em chips estáticos, anotações em bloco executivo e botão "Editar Avaliação e Notas".
+ *    - Modo Edição (ao clicar em 'Editar Avaliação e Notas'): Abre as estrelas interativas,
+ *      chips rápidos e campo de notas, com ações "Cancelar" e "Salvar Alterações".
  */
 export default function SponsorLeadModal({
   participant,
@@ -126,6 +130,7 @@ export default function SponsorLeadModal({
   onLeadUpdated,
   onValidateOnly
 }) {
+  const [isEditing, setIsEditing] = useState(!isExistingLead);
   const [rating, setRating] = useState(participant?.rating || 0);
   const [hoverRating, setHoverRating] = useState(0);
   const [notes, setNotes] = useState(participant?.notes || '');
@@ -141,13 +146,14 @@ export default function SponsorLeadModal({
     if (participant) {
       setRating(participant.rating || 0);
       setNotes(participant.notes || '');
+      setIsEditing(!isExistingLead);
       setSavedLeadData(null);
       setErrorMsg(null);
       setEmailCopied(false);
       setUpdateSuccessToast(false);
       setNotesFocused(false);
     }
-  }, [participant]);
+  }, [participant, isExistingLead]);
 
   const isTagSelected = useCallback((tag) => {
     if (!notes) return false;
@@ -198,6 +204,22 @@ export default function SponsorLeadModal({
   const currentClassification = RATING_CLASSIFICATIONS[displayRating] || RATING_CLASSIFICATIONS[0];
   const isNotesExpanded = notesFocused || (notes && notes.length > 0);
 
+  // Lista consolidada de tags ativas para exibição de CRM
+  const activeTags = Array.from(new Set([
+    ...(Array.isArray(participant?.tags) ? participant.tags : []),
+    ...((notes || '').match(/\[([^\]]+)\]/g)?.map(m => m.slice(1, -1).trim()).filter(Boolean) || [])
+  ]));
+
+  // Anotações em texto limpo (removendo tags com colchetes para visualização executiva)
+  const cleanNotes = (notes || '').replace(/\[([^\]]+)\]/g, '').trim();
+
+  // URLs de redes sociais
+  const githubUrl = participant.github ? formatSocialUrl('github', participant.github) : null;
+  const linkedinUrl = participant.linkedin ? formatSocialUrl('linkedin', participant.linkedin) : null;
+
+  // Mensagem personalizada de recrutador para WhatsApp
+  const recruiterOutreachMessage = `Olá, ${participant.name || 'tudo bem'}! Foi ótimo conversar com você no estande da ${sponsorCompanyName} na TechWeek! Gostaríamos de marcar uma conversa rápida sobre nossas oportunidades. Qual o seu melhor horário?`;
+
   const handleCopyEmail = async () => {
     const targetEmail = savedLeadData?.email || participant.email;
     if (!targetEmail) return;
@@ -209,6 +231,14 @@ export default function SponsorLeadModal({
     } catch (err) {
       console.warn('Erro ao copiar e-mail:', err);
     }
+  };
+
+  const handleCancelEdit = () => {
+    setRating(participant.rating || 0);
+    setNotes(participant.notes || '');
+    setErrorMsg(null);
+    setIsEditing(false);
+    triggerHaptic(15);
   };
 
   const handleSaveOrSubmit = async (e) => {
@@ -238,7 +268,8 @@ export default function SponsorLeadModal({
 
         triggerHaptic(50);
         setUpdateSuccessToast(true);
-        setTimeout(() => setUpdateSuccessToast(false), 3000);
+        setIsEditing(false);
+        setTimeout(() => setUpdateSuccessToast(false), 3500);
 
         if (onLeadUpdated) {
           onLeadUpdated({
@@ -325,6 +356,13 @@ export default function SponsorLeadModal({
     }
   };
 
+  // Título e badge contextual do cabeçalho
+  const headerContextBadge = !isExistingLead
+    ? 'Novo Lead de Estande'
+    : isEditing
+      ? 'Editar Lead · CRM'
+      : 'Detalhes do Candidato · CRM';
+
   return (
     <div
       style={{
@@ -402,10 +440,10 @@ export default function SponsorLeadModal({
               }}
             >
               <Sparkles size={12} />
-              <span>{isExistingLead ? 'Detalhes do Candidato' : 'Novo Lead de Estande'}</span>
+              <span>{headerContextBadge}</span>
             </div>
 
-            {/* Nome da Empresa em pill dedicada para evitar corte */}
+            {/* Nome da Empresa em pill dedicada */}
             <div
               style={{
                 fontSize: '11px',
@@ -458,7 +496,7 @@ export default function SponsorLeadModal({
         </div>
 
         {/* ========================================================================= */}
-        {/* TELA DE SUCESSO PÓS-SALVAR COM ATALHOS PROEMINENTES DE CONTATO            */}
+        {/* TELA DE SUCESSO PÓS-SALVAR (CAPTURAS NOVAS) COM ATALHOS DE CONTATO        */}
         {/* ========================================================================= */}
         {!isExistingLead && savedLeadData ? (
           <div style={{ flex: 1, overflowY: 'auto', padding: '24px 20px', textAlign: 'center', animation: 'fadeIn 0.25s ease-in' }}>
@@ -507,6 +545,7 @@ export default function SponsorLeadModal({
                       phone={savedLeadData.phone}
                       participantName={savedLeadData.name}
                       companyName={sponsorCompanyName}
+                      customMessage={recruiterOutreachMessage}
                       label="WhatsApp"
                       size="sm"
                       fullWidth
@@ -561,9 +600,483 @@ export default function SponsorLeadModal({
               <span>Bipar Próximo Aluno</span>
             </button>
           </div>
+        ) : isExistingLead && !isEditing ? (
+          /* ========================================================================= */
+          /* MODO 1: FICHA ESTRATÉGICA DE CRM (LEITURA LIMPA & ABORDAGEM DE OUTREACH)   */
+          /* ========================================================================= */
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              minHeight: 0
+            }}
+          >
+            {/* CORPO ROLÁVEL SUAVE */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '16px 20px',
+                overscrollBehavior: 'contain'
+              }}
+            >
+              {/* Toast de Sucesso para Atualizações no CRM */}
+              {updateSuccessToast && (
+                <div
+                  role="status"
+                  style={{
+                    background: 'rgba(111, 216, 166, 0.15)',
+                    border: '1px solid #6FD8A6',
+                    borderRadius: '12px',
+                    padding: '10px 14px',
+                    color: '#6FD8A6',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: '14px',
+                    animation: 'fadeIn 0.2s ease-out'
+                  }}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>Alterações salvas com sucesso no CRM!</span>
+                </div>
+              )}
+
+              {/* CARD DE IDENTIDADE DO CANDIDATO (DOSSIÊ) */}
+              <div
+                style={{
+                  background: '#1A2347',
+                  borderRadius: '18px',
+                  padding: '16px',
+                  border: '1px solid #1C2548',
+                  marginBottom: '14px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '14px'
+                }}
+              >
+                {/* Avatar com foto ou iniciais em gradiente */}
+                <div
+                  style={{
+                    width: '52px',
+                    height: '52px',
+                    borderRadius: '16px',
+                    background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#FFFFFF',
+                    fontWeight: '800',
+                    fontSize: '20px',
+                    flexShrink: 0,
+                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
+                  }}
+                >
+                  {participant.avatarUrl ? (
+                    <img
+                      src={participant.avatarUrl}
+                      alt=""
+                      style={{ width: '100%', height: '100%', borderRadius: '16px', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    (participant.name || 'P').charAt(0).toUpperCase()
+                  )}
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                    <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#EEF1FA', margin: 0, lineHeight: 1.25 }}>
+                      {participant.name || 'Participante'}
+                    </h3>
+
+                    {affiliation && (
+                      <span
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '8px',
+                          fontSize: '10px',
+                          fontWeight: '800',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                          color: affiliation.color,
+                          background: affiliation.bg,
+                          border: `1px solid ${affiliation.border}`
+                        }}
+                      >
+                        {affiliation.label}
+                      </span>
+                    )}
+                  </div>
+
+                  {participant.course && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', color: '#A9B1CC', lineHeight: 1.35, marginTop: '2px', flexWrap: 'wrap' }}>
+                      <GraduationCap size={14} color="#8FA0FF" style={{ flexShrink: 0 }} />
+                      <span>
+                        {participant.course}
+                        {participant.period ? ` · ${participant.period}º Período` : ''}
+                        {cleanInstitution ? ` · ${cleanInstitution}` : ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CARD DE AVALIAÇÃO DE TALENTO (ESTÁTICO & EXECUTIVO) */}
+              <div
+                style={{
+                  background: '#1A2347',
+                  borderRadius: '16px',
+                  padding: '12px 14px',
+                  border: '1px solid #1C2548',
+                  marginBottom: '14px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '8px' }}>
+                  <span style={{ fontSize: '10.5px', fontWeight: '800', color: '#8FA0FF', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Avaliação no Estande
+                  </span>
+
+                  <span
+                    style={{
+                      fontSize: '11.5px',
+                      fontWeight: '700',
+                      color: currentClassification.color,
+                      background: currentClassification.bg,
+                      border: `1px solid ${currentClassification.border}`,
+                      padding: '3px 10px',
+                      borderRadius: '8px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      whiteSpace: 'nowrap',
+                      boxShadow: rating > 0 ? `0 0 10px ${currentClassification.bg}` : 'none'
+                    }}
+                  >
+                    {rating > 0 && <Star size={11} fill={currentClassification.color} color={currentClassification.color} />}
+                    <span>{rating > 0 ? `${Number(rating).toFixed(1)} ★ — ` : ''}{currentClassification.label}</span>
+                  </span>
+                </div>
+
+                {/* 5 Estrelas Estáticas Douradas */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {[1, 2, 3, 4, 5].map((starValue) => {
+                    const isFilled = rating >= starValue;
+                    return (
+                      <div
+                        key={starValue}
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          background: isFilled ? 'rgba(251, 191, 36, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                          border: isFilled ? '1px solid rgba(251, 191, 36, 0.35)' : '1px solid rgba(255, 255, 255, 0.06)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: isFilled ? '0 0 8px rgba(251, 191, 36, 0.2)' : 'none'
+                        }}
+                      >
+                        <Star
+                          size={18}
+                          fill={isFilled ? '#FBBF24' : 'none'}
+                          color={isFilled ? '#FBBF24' : 'rgba(255, 255, 255, 0.25)'}
+                          strokeWidth={1.5}
+                          style={{
+                            filter: isFilled ? 'drop-shadow(0 0 4px rgba(251, 191, 36, 0.5))' : 'none'
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* AÇÕES ESTRATÉGICAS DE CONTATO & OUTREACH (HERO SECTION) */}
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ fontSize: '10.5px', fontWeight: '800', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+                  Contato Estratégico · Outreach
+                </div>
+
+                {/* Botão de Destaque WhatsApp com mensagem de recrutador */}
+                {participant.phone && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <WhatsAppButton
+                      phone={participant.phone}
+                      participantName={participant.name}
+                      companyName={sponsorCompanyName}
+                      customMessage={recruiterOutreachMessage}
+                      label="Conversar no WhatsApp"
+                      size="md"
+                      fullWidth
+                    />
+                  </div>
+                )}
+
+                {/* Ações de E-mail: Copiar e Enviar */}
+                {participant.email && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', marginBottom: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={handleCopyEmail}
+                      style={{
+                        minHeight: '44px',
+                        background: emailCopied ? 'rgba(16, 185, 129, 0.2)' : '#1A2347',
+                        border: emailCopied ? '1px solid #10B981' : '1px solid #1C2548',
+                        borderRadius: '12px',
+                        color: emailCopied ? '#34D399' : '#EEF1FA',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {emailCopied ? <CheckCircle2 size={15} /> : <Copy size={15} />}
+                      <span>{emailCopied ? 'E-mail Copiado!' : `Copiar E-mail (${participant.email})`}</span>
+                    </button>
+
+                    <a
+                      href={`mailto:${participant.email}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        minHeight: '44px',
+                        padding: '0 14px',
+                        background: '#1A2347',
+                        border: '1px solid #1C2548',
+                        borderRadius: '12px',
+                        color: '#8FA0FF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        textDecoration: 'none'
+                      }}
+                      title="Abrir aplicativo de e-mail"
+                    >
+                      <Mail size={15} />
+                      <span>E-mail</span>
+                      <ExternalLink size={13} />
+                    </a>
+                  </div>
+                )}
+
+                {/* Links Profissionais (GitHub & LinkedIn) */}
+                {(githubUrl || linkedinUrl) && (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {githubUrl && (
+                      <a
+                        href={githubUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          flex: 1,
+                          minHeight: '38px',
+                          background: '#1A2347',
+                          border: '1px solid #1C2548',
+                          borderRadius: '10px',
+                          color: '#8FA0FF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          textDecoration: 'none',
+                          padding: '6px 12px'
+                        }}
+                      >
+                        <GitHubIcon size={14} color="#8FA0FF" />
+                        <span>GitHub (@{participant.github.replace(/^@/, '').trim()})</span>
+                        <ExternalLink size={12} />
+                      </a>
+                    )}
+
+                    {linkedinUrl && (
+                      <a
+                        href={linkedinUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          flex: 1,
+                          minHeight: '38px',
+                          background: '#1A2347',
+                          border: '1px solid #1C2548',
+                          borderRadius: '10px',
+                          color: '#60A5FA',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          textDecoration: 'none',
+                          padding: '6px 12px'
+                        }}
+                      >
+                        <LinkedInIcon size={14} color="#60A5FA" />
+                        <span>Ver LinkedIn</span>
+                        <ExternalLink size={12} />
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* COMPETÊNCIAS & TAGS (CHIPS ESTÁTICOS) */}
+              {activeTags.length > 0 && (
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ fontSize: '10.5px', fontWeight: '800', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+                    Competências & Tags
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {activeTags.map((tag) => (
+                      <span
+                        key={tag}
+                        style={{
+                          background: 'rgba(37, 99, 235, 0.15)',
+                          border: '1px solid rgba(56, 189, 248, 0.35)',
+                          color: '#8FA0FF',
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          letterSpacing: '0.02em',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <span>{tag}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ANOTAÇÕES DO ESTANDE (BLOCO EDITORIAL / EXECUTIVO) */}
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ fontSize: '10.5px', fontWeight: '800', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+                  Anotações & Observações da Equipe
+                </div>
+
+                <div
+                  style={{
+                    background: '#131B3A',
+                    borderRadius: '14px',
+                    padding: '12px 14px',
+                    border: '1px solid #1C2548'
+                  }}
+                >
+                  {cleanNotes ? (
+                    <p style={{ fontSize: '12.5px', color: '#EEF1FA', lineHeight: 1.5, margin: 0 }}>
+                      {cleanNotes}
+                    </p>
+                  ) : (
+                    <p style={{ fontSize: '12px', color: '#8790AE', fontStyle: 'italic', margin: 0 }}>
+                      Nenhuma observação textual registrada durante a conversa no estande.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* METADADOS E AUDITORIA */}
+              {(participant.createdAt || participant.collectedByEmail) && (
+                <div style={{ padding: '8px 12px', background: '#0F1424', borderRadius: '10px', border: '1px solid #1C2548', marginBottom: '10px', fontSize: '11px', color: '#8790AE' }}>
+                  {participant.collectedByEmail && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                      <UserCheck size={12} color="#8FA0FF" />
+                      <span>Coletado por: <strong>{participant.collectedByEmail}</strong></span>
+                    </div>
+                  )}
+                  {participant.createdAt && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Calendar size={12} color="#8FA0FF" />
+                      <span>Data de registro: {formatLeadDate(participant.createdAt)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* STICKY FOOTER DO MODO CRM (FECHAR + EDITAR AVALIAÇÃO E NOTAS) */}
+            <div
+              style={{
+                flexShrink: 0,
+                padding: '12px 20px 16px',
+                borderTop: '1px solid rgba(28, 37, 72, 0.6)',
+                background: 'rgba(10, 15, 36, 0.95)',
+                backdropFilter: 'blur(8px)',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1.6fr',
+                gap: '10px',
+                alignItems: 'center'
+              }}
+            >
+              {/* Botão Secundário Fechar */}
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  height: '46px',
+                  minHeight: '46px',
+                  borderRadius: '16px',
+                  border: '1px solid #1C2548',
+                  background: '#1A2347',
+                  color: '#A9B1CC',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Fechar
+              </button>
+
+              {/* Botão Ação Editar Avaliação e Notas */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing(true);
+                  triggerHaptic(20);
+                }}
+                style={{
+                  height: '46px',
+                  minHeight: '46px',
+                  borderRadius: '16px',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  background: 'rgba(37, 99, 235, 0.15)',
+                  color: '#8FA0FF',
+                  fontSize: '13px',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '7px',
+                  transition: 'all 0.15s ease',
+                  boxShadow: '0 4px 14px rgba(37, 99, 235, 0.15)'
+                }}
+              >
+                <Pencil size={15} />
+                <span>Editar Avaliação e Notas</span>
+              </button>
+            </div>
+          </div>
         ) : (
           /* ========================================================================= */
-          /* FORMULÁRIO DE QUALIFICAÇÃO (CORPO ROLÁVEL + STICKY FOOTER)                */
+          /* MODO 2: FORMULÁRIO DE EDIÇÃO / CADASTRO DE LEAD (INTERATIVO)             */
           /* ========================================================================= */
           <form
             onSubmit={handleSaveOrSubmit}
@@ -583,9 +1096,7 @@ export default function SponsorLeadModal({
                 overscrollBehavior: 'contain'
               }}
             >
-              {/* ===================================================================== */}
-              {/* 2. CARD COMPACTO DO CANDIDATO                                         */}
-              {/* ===================================================================== */}
+              {/* CARD COMPACTO DO CANDIDATO */}
               <div
                 style={{
                   background: '#1A2347',
@@ -627,7 +1138,6 @@ export default function SponsorLeadModal({
                 </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* Linha 1: Nome e Afiliação */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '2px' }}>
                     <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#EEF1FA', margin: 0, lineHeight: 1.25 }}>
                       {participant.name || 'Participante'}
@@ -652,7 +1162,6 @@ export default function SponsorLeadModal({
                     )}
                   </div>
 
-                  {/* Linha 2: Curso e Período (sem truncamento com ellipsis rígido) */}
                   {participant.course && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#A9B1CC', lineHeight: 1.35, marginTop: '2px', flexWrap: 'wrap' }}>
                       <GraduationCap size={13} color="#8FA0FF" style={{ flexShrink: 0 }} />
@@ -663,117 +1172,16 @@ export default function SponsorLeadModal({
                       </span>
                     </div>
                   )}
-
-                  {/* Linha 3: Dados de Contato em Linha Compacta */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '6px', fontSize: '11px', color: '#A9B1CC' }}>
-                    {participant.email && (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <Mail size={12} color="#8FA0FF" style={{ flexShrink: 0 }} />
-                        <span style={{ maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {participant.email}
-                        </span>
-                      </div>
-                    )}
-
-                    {participant.phone && (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <Phone size={12} color="#25D366" style={{ flexShrink: 0 }} />
-                        <span>{participant.phone}</span>
-                      </div>
-                    )}
-
-                    {participant.github && (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <GitHubIcon size={12} color="#8FA0FF" style={{ flexShrink: 0 }} />
-                        <a
-                          href={`https://github.com/${participant.github.replace(/^@/, '').trim()}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: '#8FA0FF', textDecoration: 'none' }}
-                        >
-                          @{participant.github.replace(/^@/, '').trim()}
-                        </a>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
 
-              {/* MODO CRM DETALHES (isExistingLead = true): Botões de contato proeminentes */}
-              {isExistingLead && (
-                <div style={{ display: 'grid', gridTemplateColumns: participant.email ? '1fr 1fr' : '1fr', gap: '8px', marginBottom: '14px' }}>
-                  {participant.email && (
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button
-                        type="button"
-                        onClick={handleCopyEmail}
-                        style={{
-                          flex: 1,
-                          minHeight: '44px',
-                          background: emailCopied ? 'rgba(16, 185, 129, 0.2)' : '#1A2347',
-                          border: emailCopied ? '1px solid #10B981' : '1px solid #1C2548',
-                          borderRadius: '12px',
-                          color: emailCopied ? '#34D399' : '#EEF1FA',
-                          fontSize: '12px',
-                          fontWeight: '700',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        {emailCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
-                        <span>{emailCopied ? 'Copiado!' : 'Copiar E-mail'}</span>
-                      </button>
-
-                      <a
-                        href={`mailto:${participant.email}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          width: '44px',
-                          minHeight: '44px',
-                          background: '#1A2347',
-                          border: '1px solid #1C2548',
-                          borderRadius: '12px',
-                          color: '#8FA0FF',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          textDecoration: 'none'
-                        }}
-                        title="Abrir aplicativo de e-mail"
-                      >
-                        <ExternalLink size={16} />
-                      </a>
-                    </div>
-                  )}
-
-                  {participant.phone && (
-                    <WhatsAppButton
-                      phone={participant.phone}
-                      participantName={participant.name}
-                      companyName={sponsorCompanyName}
-                      label="WhatsApp"
-                      size="sm"
-                      fullWidth
-                    />
-                  )}
-                </div>
-              )}
-
-              {/* ===================================================================== */}
-              {/* 3. AVALIAÇÃO DO CANDIDATO (ESTRELAS 0 A 5)                            */}
-              {/* ===================================================================== */}
+              {/* AVALIAÇÃO DO CANDIDATO (ESTRELAS INTERATIVAS 0 A 5) */}
               <div style={{ marginBottom: '14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', gap: '8px' }}>
                   <label style={{ fontSize: '11px', fontWeight: '700', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Avaliação
                   </label>
 
-                  {/* Rótulo dinâmico de classificação semântica com badge legível, de alto contraste e sem quebras */}
                   <span
                     style={{
                       fontSize: '11.5px',
@@ -798,7 +1206,7 @@ export default function SponsorLeadModal({
                   </span>
                 </div>
 
-                {/* Estrelas com touch target ergonômico (minWidth: 44px, minHeight: 44px), visual limpo e sem caixas escuras pesadas */}
+                {/* Estrelas interativas com touch target de 44px */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
                   {[1, 2, 3, 4, 5].map((starValue) => {
                     const isFilled = displayRating >= starValue;
@@ -855,9 +1263,7 @@ export default function SponsorLeadModal({
                 </div>
               </div>
 
-              {/* ===================================================================== */}
-              {/* 4. CHIPS RÁPIDOS DE 1 TOQUE (Compactos e sem símbolo +)               */}
-              {/* ===================================================================== */}
+              {/* CHIPS RÁPIDOS DE 1 TOQUE (8 TAGS TÉCNICAS) */}
               <div style={{ marginBottom: '14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <label style={{ fontSize: '11px', fontWeight: '700', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -913,9 +1319,7 @@ export default function SponsorLeadModal({
                 </div>
               </div>
 
-              {/* ===================================================================== */}
-              {/* 5. ANOTAÇÃO AUTO-EXPANSÍVEL                                           */}
-              {/* ===================================================================== */}
+              {/* ANOTAÇÃO AUTO-EXPANSÍVEL */}
               <div style={{ marginBottom: '8px' }}>
                 <label
                   htmlFor="lead-recruitment-notes"
@@ -957,24 +1361,6 @@ export default function SponsorLeadModal({
                 />
               </div>
 
-              {/* Metadados do Lead (quando visualizando no CRM) */}
-              {isExistingLead && (participant.createdAt || participant.collectedByEmail) && (
-                <div style={{ padding: '8px 10px', background: '#0F1424', borderRadius: '10px', border: '1px solid #1C2548', marginBottom: '10px', fontSize: '11px', color: '#8790AE' }}>
-                  {participant.collectedByEmail && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                      <UserCheck size={12} color="#8FA0FF" />
-                      <span>Coletado por: <strong>{participant.collectedByEmail}</strong></span>
-                    </div>
-                  )}
-                  {participant.createdAt && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Calendar size={12} color="#8FA0FF" />
-                      <span>Data: {formatLeadDate(participant.createdAt)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Mensagem de Erro */}
               {errorMsg && (
                 <div
@@ -996,33 +1382,9 @@ export default function SponsorLeadModal({
                   <span>{errorMsg}</span>
                 </div>
               )}
-
-              {/* Toast de Sucesso para Atualizações no CRM */}
-              {updateSuccessToast && (
-                <div
-                  role="status"
-                  style={{
-                    background: 'rgba(111, 216, 166, 0.12)',
-                    border: '1px solid #6FD8A6',
-                    borderRadius: '10px',
-                    padding: '8px 12px',
-                    color: '#6FD8A6',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    marginBottom: '10px'
-                  }}
-                >
-                  <CheckCircle2 size={15} />
-                  <span>Alterações salvas com sucesso!</span>
-                </div>
-              )}
             </div>
 
-            {/* ========================================================================= */}
-            {/* 6. RODAPÉ DE AÇÕES FIXO (Sticky Footer Lado a Lado)                       */}
-            {/* ========================================================================= */}
+            {/* STICKY FOOTER DE AÇÕES */}
             <div
               style={{
                 flexShrink: 0,
@@ -1034,7 +1396,7 @@ export default function SponsorLeadModal({
             >
               {!isExistingLead ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.35fr', gap: '8px', alignItems: 'center' }}>
-                  {/* Botão Secundário: Somente Validar Presença */}
+                  {/* Somente Validar Presença */}
                   <button
                     type="button"
                     disabled={isSubmitting || isValidatingOnly}
@@ -1073,7 +1435,7 @@ export default function SponsorLeadModal({
                     )}
                   </button>
 
-                  {/* Botão Primário com degradê */}
+                  {/* Salvar Lead */}
                   <button
                     type="submit"
                     disabled={isSubmitting || isValidatingOnly}
@@ -1114,44 +1476,73 @@ export default function SponsorLeadModal({
                   </button>
                 </div>
               ) : (
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="btn-primary"
-                  style={{
-                    width: '100%',
-                    height: '46px',
-                    minHeight: '46px',
-                    padding: '0 16px',
-                    borderRadius: '16px',
-                    border: 'none',
-                    fontSize: '14px',
-                    fontWeight: '800',
-                    fontFamily: 'Montserrat, sans-serif',
-                    color: '#FFFFFF',
-                    background: 'linear-gradient(135deg, #2563EB 0%, #5B3BE0 55%, #7C3AED 100%)',
-                    boxShadow: '0 6px 20px rgba(37, 99, 235, 0.35)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                    opacity: isSubmitting ? 0.7 : 1,
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="animate-spin" size={15} />
-                      <span>Salvando Alterações...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={16} />
-                      <span>Salvar Alterações</span>
-                    </>
-                  )}
-                </button>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.35fr', gap: '8px', alignItems: 'center' }}>
+                  {/* Cancelar Edição */}
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={handleCancelEdit}
+                    style={{
+                      height: '46px',
+                      minHeight: '46px',
+                      padding: '0 12px',
+                      borderRadius: '16px',
+                      border: '1px solid #1C2548',
+                      background: '#1A2347',
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      fontFamily: 'Montserrat, sans-serif',
+                      color: '#A9B1CC',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    Cancelar
+                  </button>
+
+                  {/* Salvar Alterações */}
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="btn-primary"
+                    style={{
+                      height: '46px',
+                      minHeight: '46px',
+                      padding: '0 16px',
+                      borderRadius: '16px',
+                      border: 'none',
+                      fontSize: '14px',
+                      fontWeight: '800',
+                      fontFamily: 'Montserrat, sans-serif',
+                      color: '#FFFFFF',
+                      background: 'linear-gradient(135deg, #2563EB 0%, #5B3BE0 55%, #7C3AED 100%)',
+                      boxShadow: '0 6px 20px rgba(37, 99, 235, 0.35)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                      opacity: isSubmitting ? 0.7 : 1,
+                      transition: 'all 0.15s ease',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="animate-spin" size={15} />
+                        <span>Salvando Alterações...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} />
+                        <span>Salvar Alterações</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
           </form>

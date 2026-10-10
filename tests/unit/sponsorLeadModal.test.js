@@ -95,7 +95,7 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
       expect(html).toContain('Somente Validar');
     });
 
-    it('no modo de visualização de lead CRM (isExistingLead = true), ações de contato são completas', () => {
+    it('no modo de visualização de lead CRM (isExistingLead = true), exibe a Ficha Estratégica com ações de contato e botão para editar', () => {
       const html = renderToStaticMarkup(
         React.createElement(SponsorLeadModal, {
           participant: mockParticipant,
@@ -107,7 +107,65 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
 
       expect(html).toContain('Detalhes do Candidato');
       expect(html).toContain('Copiar E-mail');
-      expect(html).toContain('Salvar Alterações');
+      expect(html).toContain('WhatsApp');
+      expect(html).toContain('Editar Avaliação e Notas');
+      expect(html).toContain('Fechar');
+      // No Modo 1 (Ficha Estratégica de CRM), controles de edição de formulário ficam ocultos até clique explícito
+      expect(html).not.toContain('Salvar Alterações');
+    });
+  });
+
+  describe('3.1 Modo 1: Ficha Estratégica de CRM (Visualização Executiva de Lead Existente)', () => {
+    it('renderiza dossiê executivo com estrelas fixas, tags estáticas, anotações limpas e metadados de auditoria', () => {
+      const leadData = {
+        ...mockParticipant,
+        rating: 4,
+        notes: '[Frontend] [Destaque] Desenvolvedora talentosa com projetos em React e TypeScript.',
+        tags: ['Frontend', 'Destaque'],
+        collectedByEmail: 'recrutador@kanastra.com',
+        createdAt: '2026-10-10T14:30:00Z',
+        linkedin: 'https://linkedin.com/in/anasilva'
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(SponsorLeadModal, {
+          participant: leadData,
+          sponsorProfile: mockSponsorProfile,
+          isExistingLead: true,
+          onClose: () => {}
+        })
+      );
+
+      // Card do candidato e afiliação
+      expect(html).toContain('Ana Silva');
+      expect(html).toContain('Sistemas de Informação');
+      expect(html).toContain('Graduação');
+
+      // Classificação fixa 4 estrelas
+      expect(html).toContain('4.0');
+      expect(html).toContain('Muito Bom / Fit Técnico');
+
+      // Hero Actions de Contato
+      expect(html).toContain('WhatsApp');
+      expect(html).toContain('Copiar E-mail');
+      expect(html).toContain('GitHub');
+      expect(html).toContain('LinkedIn');
+
+      // Chips estáticos de competências e anotações limpas (sem colchetes)
+      expect(html).toContain('Competências &amp; Tags');
+      expect(html).toContain('Frontend');
+      expect(html).toContain('Destaque');
+      expect(html).toContain('Desenvolvedora talentosa com projetos em React e TypeScript.');
+      expect(html).not.toContain('[Frontend]');
+
+      // Auditoria
+      expect(html).toContain('Coletado por:');
+      expect(html).toContain('recrutador@kanastra.com');
+      expect(html).toContain('Data de registro:');
+
+      // Botões do Rodapé Estratégico
+      expect(html).toContain('Fechar');
+      expect(html).toContain('Editar Avaliação e Notas');
     });
   });
 
