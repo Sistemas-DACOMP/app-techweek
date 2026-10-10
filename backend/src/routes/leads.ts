@@ -359,12 +359,12 @@ export async function getLeadsHandler(req: Request, res: Response): Promise<void
 
   try {
     const sponsorSnap = await db.collection('users').doc(sponsorUid).get().catch(() => ({ exists: false, data: () => ({}) }));
-    const sponsorData = (sponsorSnap && typeof sponsorSnap.data === 'function' ? sponsorSnap.data() : {}) || {};
+    const sponsorData = ((sponsorSnap && typeof sponsorSnap.data === 'function' ? sponsorSnap.data() : {}) || {}) as Record<string, any>;
     const companyCandidate = queryCompany || sponsorData.companyId || sponsorData.empresa || sponsorData.company || req.user?.email || '';
     const companyId = resolveCompanyId(companyCandidate) || (queryCompany ? queryCompany.toLowerCase() : null);
 
     const myLeadsSnap = await db.collection('leads').doc(sponsorUid).collection('contacts').get();
-    const myLeads = myLeadsSnap.docs ? myLeadsSnap.docs.map(d => ({ ...d.data(), id: d.id })) : [];
+    const myLeads: any[] = myLeadsSnap.docs ? myLeadsSnap.docs.map(d => ({ ...d.data(), id: d.id })) : [];
 
     let companyLeads = [...myLeads];
     if (companyId) {
@@ -431,7 +431,7 @@ export async function updateLeadHandler(req: Request, res: Response): Promise<vo
 
   try {
     const sponsorSnap = await db.collection('users').doc(sponsorUid).get().catch(() => ({ exists: false, data: () => ({}) }));
-    const sponsorData = (sponsorSnap && typeof sponsorSnap.data === 'function' ? sponsorSnap.data() : {}) || {};
+    const sponsorData = ((sponsorSnap && typeof sponsorSnap.data === 'function' ? sponsorSnap.data() : {}) || {}) as Record<string, any>;
     const companyCandidate = providedCompanyId || sponsorData?.companyId || sponsorData?.empresa || req.user?.email || '';
     const companyId = resolveCompanyId(companyCandidate);
 

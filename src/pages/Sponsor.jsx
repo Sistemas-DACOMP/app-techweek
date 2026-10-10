@@ -63,13 +63,29 @@ import {
   FILTERS as FEED_FILTERS, 
   EMPTY_TEXT as FEED_EMPTY_TEXT 
 } from './Feed';
+import { btn, Kpi, Chip, TypeTag } from './admin/ui';
 import SponsorLeadModal from '../components/SponsorLeadModal';
 import WhatsAppButton from '../components/WhatsAppButton';
 import Mascot from '../components/Mascot';
 import '../styles/cracha.css';
 import '../styles/agenda.css';
+import '../styles/admin.css';
 
 const isDevMode = import.meta.env.DEV;
+
+function greeting(now = new Date()) {
+  const h = now.getHours();
+  return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
+}
+
+function longDate(now = new Date()) {
+  const s = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(now).replace('-feira', '');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+const AVATAR_BG = ['#2A3570', '#4C2A85', '#1E5A6B', '#7A3A22', '#2C5E3F', '#6B2D5C'];
+const bgFor = (s = '') => AVATAR_BG[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_BG.length];
+const initialsOf = (n = '') => n.trim().split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase() || '?';
 
 export default function Sponsor() {
   const navigate = useNavigate();
@@ -480,6 +496,26 @@ export default function Sponsor() {
   const filteredMyLeads = useMemo(() => filterAndSortLeads(myLeads), [myLeads, filterAndSortLeads]);
   const filteredCompanyLeads = useMemo(() => filterAndSortLeads(companyLeads), [companyLeads, filterAndSortLeads]);
 
+  const now = useMemo(() => new Date(), []);
+
+  const qualifiedCount = useMemo(() => {
+    return companyLeads.filter(l => (Number(l.rating) || 0) >= 4).length;
+  }, [companyLeads]);
+
+  const qualifiedPercent = useMemo(() => {
+    return companyLeads.length > 0 ? Math.round((qualifiedCount / companyLeads.length) * 100) : 0;
+  }, [companyLeads, qualifiedCount]);
+
+  const recentLeads = useMemo(() => {
+    return [...companyLeads].sort((a, b) => {
+      const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+      const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+      return timeB - timeA;
+    }).slice(0, 4);
+  }, [companyLeads]);
+
+  const displayedLeads = leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads;
+
   // Dias do evento a partir das atividades (chips "Qua 21")
   const availableDays = useMemo(() => {
     const ids = [...new Set(activities.map((act) => act.day).filter(Boolean))];
@@ -744,7 +780,7 @@ export default function Sponsor() {
   }
 
   return (
-    <div className="page-container animate-fade-in" style={{ paddingBottom: '90px', fontFamily: 'Montserrat, sans-serif', maxWidth: '640px', margin: '0 auto', boxSizing: 'border-box' }}>
+    <div className="page-container animate-fade-in" style={{ paddingBottom: '90px', fontFamily: 'Montserrat, sans-serif', maxWidth: '720px', margin: '0 auto', boxSizing: 'border-box' }}>
       {/* Toast Alert padronizado com DESIGN.md §2.1 & §6 */}
       {toastMessage && (
         <div
@@ -899,222 +935,283 @@ export default function Sponsor() {
           </button>
         </div>
 
-        {/* Screen Title Centralizado com Traço de Gradiente (DESIGN.md §3) */}
-        <div style={{ textAlign: 'center', marginBottom: '18px' }}>
-          {activeTab === 'home' ? (
-            <>
-              <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em', lineHeight: 1.3 }}>
-                Olá, {firstName}! Esse é seu estande virtual.
-              </h1>
-              <div
-                style={{
-                  width: '28px',
-                  height: '4px',
-                  borderRadius: '2px',
-                  background: 'linear-gradient(90deg, #2563EB, #9B7BFF)',
-                  margin: '0 auto'
-                }}
-              />
-            </>
-          ) : (
-            <>
-              <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
-                {activeTab === 'leads' && 'CRM de Leads'}
-                {activeTab === 'scanner' && 'Bipar Crachá'}
-                {activeTab === 'agenda' && 'Programação da TechWeek'}
-                {activeTab === 'feed' && 'Feed da Comunidade'}
-              </h1>
-              <div
-                style={{
-                  width: '28px',
-                  height: '4px',
-                  borderRadius: '2px',
-                  background: 'linear-gradient(90deg, #2563EB, #9B7BFF)',
-                  margin: '0 auto'
-                }}
-              />
-            </>
-          )}
-        </div>
+        {/* Saudação e Contexto do Estande (Padrão AdminInicio) */}
+        {activeTab === 'home' ? (
+          <div className="mb-4 flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <Mascot style={{ width: 48, height: 48, animation: 'none', flexShrink: 0 }} isWaving={true} color="blue" />
+              <div className="min-w-0 flex-1">
+                <h1 className="m-0 text-[18px] font-extrabold tracking-[-0.01em] text-[#EEF1FA]">
+                  {greeting(now)}, {firstName}!
+                </h1>
+                <p className="m-0 mt-0.5 text-[12px] text-text-2">
+                  {longDate(now)} · {companyLeads.length} {companyLeads.length === 1 ? 'lead coletado' : 'leads coletados'} no estande
+                </p>
+              </div>
+            </div>
+
+            {/* Ações Rápidas (Padrão Admin btn) */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className={btn('action', 'flex-1 min-w-[130px] h-11 text-[13px]')}
+                onClick={() => setActiveTab('scanner')}
+              >
+                <QrCode size={17} aria-hidden="true" />
+                <span>Bipar crachá</span>
+              </button>
+              <button
+                type="button"
+                className={btn('secondary', 'flex-1 min-w-[110px] h-11 text-[13px]')}
+                onClick={() => setActiveTab('leads')}
+              >
+                <Users size={17} aria-hidden="true" />
+                <span>Leads ({companyLeads.length})</span>
+              </button>
+              <button
+                type="button"
+                className={btn('secondary', 'h-11 px-3 text-[13px]')}
+                onClick={handleExportCsv}
+                disabled={companyLeads.length === 0}
+                title="Exportar leads em CSV"
+              >
+                <Download size={16} aria-hidden="true" />
+                <span className="hidden sm:inline">CSV</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', marginBottom: '18px' }}>
+            <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+              {activeTab === 'leads' && 'CRM de Leads'}
+              {activeTab === 'scanner' && 'Bipar Crachá'}
+              {activeTab === 'agenda' && 'Programação da TechWeek'}
+              {activeTab === 'feed' && 'Feed da Comunidade'}
+            </h1>
+            <div
+              style={{
+                width: '28px',
+                height: '4px',
+                borderRadius: '2px',
+                background: 'linear-gradient(90deg, #2563EB, #9B7BFF)',
+                margin: '0 auto'
+              }}
+            />
+          </div>
+        )}
       </header>
 
       {/* ========================================================================= */}
       {/* ABA 1: HOME / ESTANDE                                                    */}
       {/* ========================================================================= */}
       {activeTab === 'home' && (
-        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Métricas Principais (4 Cards) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-            <div className="glass-panel" style={{ padding: '16px', background: '#121A36', borderRadius: '18px', border: '1px solid #1C2548' }}>
-              <div style={{ fontSize: '11px', color: '#A9B1CC', textTransform: 'uppercase', fontWeight: 700, marginBottom: '6px' }}>
-                Leads no Estande
-              </div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#EEF1FA' }}>
-                {companyLeads.length}
-              </div>
-              <div style={{ fontSize: '11px', color: '#8790AE', marginTop: '4px' }}>
-                Total da equipe {sponsorName}
-              </div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '16px', background: '#121A36', borderRadius: '18px', border: '1px solid #1C2548' }}>
-              <div style={{ fontSize: '11px', color: '#A9B1CC', textTransform: 'uppercase', fontWeight: 700, marginBottom: '6px' }}>
-                Meus Leads
-              </div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#8FA0FF' }}>
-                {myLeads.length}
-              </div>
-              <div style={{ fontSize: '11px', color: '#8790AE', marginTop: '4px' }}>
-                Coletados por você
-              </div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '16px', background: '#121A36', borderRadius: '18px', border: '1px solid #1C2548' }}>
-              <div style={{ fontSize: '11px', color: '#A9B1CC', textTransform: 'uppercase', fontWeight: 700, marginBottom: '6px' }}>
-                Visitas Validadas
-              </div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#34D399' }}>
-                {companyLeads.length + validatedCount}
-              </div>
-              <div style={{ fontSize: '11px', color: '#8790AE', marginTop: '4px' }}>
-                Passaportes carimbados
-              </div>
-            </div>
-
-            {/* Métrica de Conversão no Cabeçalho do Estande (Ideia 4) */}
-            <div className="glass-panel" style={{ padding: '16px', background: '#121A36', borderRadius: '18px', border: '1px solid #1C2548' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontSize: '11px', color: '#A9B1CC', textTransform: 'uppercase', fontWeight: 700 }}>
-                  Leads Qualificados
-                </span>
-                {companyLeads.length > 0 && (
-                  <span
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 800,
-                      color: '#FBBF24',
-                      background: 'rgba(251, 191, 36, 0.15)',
-                      padding: '2px 6px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(251, 191, 36, 0.3)'
-                    }}
-                  >
-                    {Math.round((companyLeads.filter(l => (l.rating || 0) >= 4).length / companyLeads.length) * 100)}%
-                  </span>
-                )}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FBBF24' }}>
-                  {companyLeads.filter(l => (l.rating || 0) >= 4).length}
-                </span>
-                <span style={{ fontSize: '11px', color: '#8790AE' }}>
-                  de {companyLeads.length} (4-5 ★)
-                </span>
-              </div>
-              <div
-                style={{
-                  width: '100%',
-                  height: '6px',
-                  background: '#1A2347',
-                  borderRadius: '3px',
-                  marginTop: '8px',
-                  overflow: 'hidden'
-                }}
-              >
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${companyLeads.length > 0 ? Math.round((companyLeads.filter(l => (l.rating || 0) >= 4).length / companyLeads.length) * 100) : 0}%`,
-                    background: 'linear-gradient(90deg, #F59E0B, #FBBF24)',
-                    borderRadius: '3px',
-                    transition: 'width 0.4s ease'
-                  }}
+        <div className="animate-fade-in flex flex-col gap-4">
+          {/* Métricas Principais (Padrão Kpi do Admin) */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <Kpi
+              label="Leads no Estande"
+              value={companyLeads.length}
+              hint={`Total da equipe ${sponsorName}`}
+              accent="var(--link)"
+            />
+            <Kpi
+              label="Meus Leads"
+              value={myLeads.length}
+              hint="Coletados por você"
+              accent="#C4B5FD"
+            />
+            <Kpi
+              label="Visitas Validadas"
+              value={companyLeads.length + validatedCount}
+              hint="Passaportes carimbados"
+              accent="var(--ok)"
+            />
+            <Kpi
+              label="Leads Qualificados"
+              value={qualifiedCount}
+              hint={`${qualifiedPercent}% de ${companyLeads.length} (4-5 ★)`}
+              accent="var(--warn)"
+            >
+              <span className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-surface-raised">
+                <span
+                  className="block h-full rounded-full bg-warn transition-all duration-300"
+                  style={{ width: `${qualifiedPercent}%` }}
                 />
-              </div>
-            </div>
+              </span>
+            </Kpi>
           </div>
 
           {/* Hero Action: Bipar Crachá */}
           <div
-            style={{
-              padding: '20px',
-              borderRadius: '20px',
-              background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(124, 58, 237, 0.25))',
-              border: '1.5px solid rgba(56, 189, 248, 0.35)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '14px',
-              cursor: 'pointer',
-              transition: 'transform 0.15s ease'
-            }}
+            role="button"
+            tabIndex={0}
             onClick={() => setActiveTab('scanner')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setActiveTab('scanner');
+              }
+            }}
+            className="press flex cursor-pointer items-center justify-between gap-3.5 rounded-[20px] bg-surface p-4 border border-line hover:border-link transition-colors"
           >
-            <div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, color: '#8FA0FF', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
-                <Sparkles size={13} />
+            <div className="min-w-0 flex-1">
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-link">
+                <Sparkles size={13} aria-hidden="true" />
                 <span>Escanear Visitante</span>
               </div>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 4px' }}>
+              <h2 className="m-0 mt-1 text-[16px] font-extrabold text-[#EEF1FA]">
                 Bipar Crachá de Aluno
               </h2>
-              <p style={{ fontSize: '12px', color: '#A9B1CC', margin: 0 }}>
+              <p className="m-0 mt-0.5 text-[12px] text-text-3">
                 Aponte a câmera para o QR digital ou crachá físico Sympla.
               </p>
             </div>
 
             <button
               type="button"
-              className="btn-primary"
-              style={{
-                width: '54px',
-                height: '54px',
-                borderRadius: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-action text-white shadow-lg shadow-action/25"
               aria-label="Abrir câmera de escaneamento"
             >
-              <QrCode size={26} />
+              <QrCode size={24} aria-hidden="true" />
             </button>
           </div>
 
+          {/* Leads Recentes no Estande ("À Mostra" diretamente na Home) */}
+          <div className="rounded-[20px] bg-surface p-4 border border-line">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users size={17} className="text-link" aria-hidden="true" />
+                <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
+                  Leads Recentes no Estande
+                </h2>
+              </div>
+              {companyLeads.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('leads')}
+                  className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
+                >
+                  <span>Ver todos ({companyLeads.length})</span>
+                  <ChevronRight size={14} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            {recentLeads.length === 0 ? (
+              <div className="py-6 text-center">
+                <p className="m-0 text-[13px] text-text-3">
+                  Nenhum lead coletado ainda. Aponte a câmera para os crachás no estande!
+                </p>
+                <button
+                  type="button"
+                  className={btn('action', 'mt-3 h-10 px-4 text-[12px]')}
+                  onClick={() => setActiveTab('scanner')}
+                >
+                  <QrCode size={15} aria-hidden="true" />
+                  <span>Bipar primeiro visitante</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {recentLeads.map((lead) => {
+                  const ratingNum = Number(lead.rating) || 0;
+                  const affiliation = getAffiliationBadge(lead);
+                  return (
+                    <div
+                      key={lead.participantUid || lead.uid || lead.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedLead(lead)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedLead(lead);
+                        }
+                      }}
+                      className="press flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-surface-raised p-3 border border-line hover:border-line-2 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold text-white"
+                          style={{ backgroundColor: bgFor(lead.name || lead.email || 'L') }}
+                        >
+                          {initialsOf(lead.name || 'Aluno')}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="truncate text-[14px] font-bold text-[#EEF1FA]">
+                              {lead.name || 'Aluno'}
+                            </span>
+                            {affiliation && (
+                              <span
+                                className="rounded px-1.5 py-0.5 text-[10px] font-bold"
+                                style={{ color: affiliation.color, backgroundColor: affiliation.bg, border: `1px solid ${affiliation.border}` }}
+                              >
+                                {affiliation.label}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-text-3 mt-0.5">
+                            {lead.course && <span className="truncate">{lead.course}</span>}
+                            {ratingNum > 0 && (
+                              <span className="flex items-center gap-1 font-bold text-warn">
+                                <Star size={11} fill="currentColor" /> {ratingNum}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {lead.phone ? (
+                          <WhatsAppButton
+                            phone={lead.phone}
+                            participantName={lead.name}
+                            companyName={sponsorName}
+                            label="Whats"
+                            size="sm"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className={btn('secondary', 'h-8 px-2.5 text-[11px]')}
+                            onClick={() => setSelectedLead(lead)}
+                          >
+                            Ver
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Programação de Hoje (Modo Read-Only) */}
-          <div style={{ background: '#121A36', borderRadius: '20px', padding: '18px', border: '1px solid #1C2548' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CalendarDays size={18} color="#8FA0FF" />
-                <h2 style={{ fontSize: '14px', fontWeight: 800, color: '#EEF1FA', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+          <div className="rounded-[20px] bg-surface p-4 border border-line">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarDays size={17} className="text-link" aria-hidden="true" />
+                <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
                   Acontecendo na TechWeek
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveTab('agenda')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#8FA0FF',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
+                className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
               >
                 <span>Ver tudo</span>
-                <ChevronRight size={14} />
+                <ChevronRight size={14} aria-hidden="true" />
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="flex flex-col gap-2">
               {todayActivities.length === 0 ? (
-                <div style={{ fontSize: '12px', color: '#8790AE', textAlign: 'center', padding: '12px' }}>
+                <p className="m-0 py-3 text-center text-[12px] text-text-3">
                   Nenhuma atividade programada para agora.
-                </div>
+                </p>
               ) : (
                 todayActivities.map((act) => (
                   <div
@@ -1128,50 +1225,28 @@ export default function Sponsor() {
                         setSelectedActivityModal(act);
                       }
                     }}
-                    style={{
-                      background: '#1A2347',
-                      borderRadius: '14px',
-                      padding: '12px 14px',
-                      border: '1px solid #1C2548',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '12px',
-                      cursor: 'pointer'
-                    }}
+                    className="press flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-surface-raised p-3 border border-line hover:border-line-2 transition-colors"
                   >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#EEF1FA', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-bold text-[#EEF1FA]">
                         {act.title}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: '#A9B1CC', marginTop: '4px' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Clock size={12} color="#8FA0FF" />
+                      <div className="mt-1 flex items-center gap-2.5 text-[11px] text-text-3">
+                        <span className="flex items-center gap-1">
+                          <Clock size={12} className="text-link" />
                           <span>{act.time}</span>
                         </span>
-                        {act.room && (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <MapPin size={12} color="#8FA0FF" />
-                            <span>{act.room}</span>
+                        {(act.room || act.location) && (
+                          <span className="flex items-center gap-1 truncate">
+                            <MapPin size={12} className="text-link" />
+                            <span className="truncate">{act.room || act.location}</span>
                           </span>
                         )}
                       </div>
                     </div>
-
-                    <span
-                      style={{
-                        padding: '3px 8px',
-                        borderRadius: '6px',
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        background: 'rgba(37, 99, 235, 0.15)',
-                        color: '#8FA0FF',
-                        flexShrink: 0
-                      }}
-                    >
-                      {act.type || 'Palestra'}
-                    </span>
+                    <div className="shrink-0">
+                      <TypeTag type={act.type || 'palestra'} />
+                    </div>
                   </div>
                 ))
               )}
@@ -1179,54 +1254,38 @@ export default function Sponsor() {
           </div>
 
           {/* Destaque do Feed */}
-          <div style={{ background: '#121A36', borderRadius: '20px', padding: '18px', border: '1px solid #1C2548' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <MessageSquare size={18} color="#8FA0FF" />
-                <h2 style={{ fontSize: '14px', fontWeight: 800, color: '#EEF1FA', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+          <div className="rounded-[20px] bg-surface p-4 border border-line">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare size={17} className="text-link" aria-hidden="true" />
+                <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
                   Avisos & Comunidade
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveTab('feed')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#8FA0FF',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
+                className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
               >
                 <span>Abrir feed</span>
-                <ChevronRight size={14} />
+                <ChevronRight size={14} aria-hidden="true" />
               </button>
             </div>
 
             {feedPosts.slice(0, 2).map((post) => (
               <div
                 key={post.id}
-                style={{
-                  background: '#1A2347',
-                  borderRadius: '14px',
-                  padding: '12px 14px',
-                  border: '1px solid #1C2548',
-                  marginBottom: '10px'
-                }}
+                className="mb-2 rounded-2xl bg-surface-raised p-3 border border-line last:mb-0"
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#EEF1FA' }}>{post.authorName}</span>
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="text-[12px] font-bold text-[#EEF1FA]">{post.authorName || post.author}</span>
                   {post.authorRole === 'ORGANIZATION' && (
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#8FA0FF', background: 'rgba(37, 99, 235, 0.2)', padding: '2px 6px', borderRadius: '6px' }}>
+                    <span className="rounded bg-link/15 px-1.5 py-0.5 text-[10px] font-bold text-link">
                       Organização
                     </span>
                   )}
                 </div>
-                <p style={{ fontSize: '12px', color: '#A9B1CC', margin: 0, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                <p className="m-0 text-[12px] text-text-2 line-clamp-2 leading-relaxed">
                   {post.content}
                 </p>
               </div>
@@ -1239,68 +1298,26 @@ export default function Sponsor() {
       {/* ABA 2: LEADS (CRM DO ESTANDE)                                            */}
       {/* ========================================================================= */}
       {activeTab === 'leads' && (
-        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Caixa de Alternância entre Meus Leads e Todos da Empresa */}
-          <div
-            role="tablist"
-            aria-label="Filtrar escopo dos leads"
-            style={{ display: 'flex', background: '#121A36', padding: '4px', borderRadius: '12px', border: '1px solid #1C2548', width: '100%' }}
-          >
-            <button
-              type="button"
-              role="tab"
-              id="tab-leads-mine"
-              aria-selected={leadsTab === 'mine'}
-              aria-controls="panel-leads-content"
-              onClick={() => setLeadsTab('mine')}
-              style={{
-                flex: 1,
-                minHeight: '44px',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                border: 'none',
-                fontSize: '13px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                background: leadsTab === 'mine' ? '#1F2A55' : 'transparent',
-                color: leadsTab === 'mine' ? '#EEF1FA' : '#8790AE',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              Meus Leads ({myLeads.length})
-            </button>
+        <div className="animate-fade-in flex flex-col gap-4">
+          {/* Caixa de Alternância entre Meus Leads e Todos da Empresa (Padrão Admin Chip) */}
+          <div className="flex gap-2" role="group" aria-label="Filtrar escopo dos leads">
+            <Chip selected={leadsTab === 'mine'} onClick={() => setLeadsTab('mine')}>
+              <span>Meus Leads</span>
+              <span className={leadsTab === 'mine' ? 'opacity-60' : 'text-text-3'}>{myLeads.length}</span>
+            </Chip>
 
-            <button
-              type="button"
-              role="tab"
-              id="tab-leads-company"
-              aria-selected={leadsTab === 'company'}
-              aria-controls="panel-leads-content"
-              onClick={() => setLeadsTab('company')}
-              style={{
-                flex: 1,
-                minHeight: '44px',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                border: 'none',
-                fontSize: '13px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                background: leadsTab === 'company' ? '#1F2A55' : 'transparent',
-                color: leadsTab === 'company' ? '#EEF1FA' : '#8790AE',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              Todos da Empresa ({companyLeads.length})
-            </button>
+            <Chip selected={leadsTab === 'company'} onClick={() => setLeadsTab('company')}>
+              <span>Todos da Empresa</span>
+              <span className={leadsTab === 'company' ? 'opacity-60' : 'text-text-3'}>{companyLeads.length}</span>
+            </Chip>
           </div>
 
           {/* Opção de Exportar CSV embaixo da caixa de alternância */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginTop: '-4px' }}>
-            <span style={{ fontSize: '12px', color: '#8790AE', fontWeight: 600 }}>
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <span className="text-[13px] font-medium text-text-3">
               {leadsSearch.trim() || starFilter !== 'all' ? (
                 <>
-                  Mostrando <strong style={{ color: '#EEF1FA' }}>{(leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length}</strong> de {leadsTab === 'mine' ? myLeads.length : companyLeads.length} leads
+                  Mostrando <strong className="font-bold text-text">{displayedLeads.length}</strong> de {leadsTab === 'mine' ? myLeads.length : companyLeads.length} leads
                 </>
               ) : leadsTab === 'mine' ? (
                 `${myLeads.length} ${myLeads.length === 1 ? 'contato coletado por você' : 'contatos coletados por você'}`
@@ -1312,189 +1329,105 @@ export default function Sponsor() {
             <button
               type="button"
               onClick={handleExportCsv}
-              disabled={(leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0}
+              disabled={displayedLeads.length === 0}
+              className={`${btn('secondary')} h-9 px-3.5 text-[12px] font-bold`}
               style={{
-                minHeight: '44px',
-                padding: '0 16px',
-                background: '#1A2347',
-                border: '1px solid #1C2548',
-                borderRadius: '12px',
-                color: (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0 ? '#6E779A' : '#6FD8A6',
-                fontSize: '12px',
-                fontWeight: 700,
-                cursor: (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0 ? 'not-allowed' : 'pointer',
-                opacity: (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0 ? 0.6 : 1,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '8px',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease'
+                gap: '6px',
+                color: displayedLeads.length === 0 ? 'var(--text-3)' : 'var(--ok)'
               }}
               title="Baixar lista de leads formatada para Excel / Google Sheets"
             >
-              <Download size={15} />
+              <Download size={14} />
               <span>Exportar CSV</span>
             </button>
           </div>
 
-          {/* Barra de Busca e Filtro por Estrelas */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={16} color="#8790AE" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+          {/* Campo de Busca refinado (Padrão AdminPessoas) */}
+          <div className="flex flex-col gap-2.5">
+            <label className="flex h-12 items-center gap-2.5 rounded-[14px] border-[1.5px] border-field-line bg-surface px-3.5 text-text-3">
+              <Search size={18} aria-hidden="true" />
+              <span className="sr-only">Buscar leads por nome, curso, telefone ou anotação</span>
               <input
-                type="text"
+                type="search"
                 value={leadsSearch}
                 onChange={(e) => setLeadsSearch(e.target.value)}
                 placeholder="Buscar por nome, curso, telefone ou anotação..."
-                aria-label="Buscar leads por nome, curso, telefone ou anotação"
-                style={{
-                  width: '100%',
-                  minHeight: '44px',
-                  background: '#131B3A',
-                  border: '1.5px solid #26305A',
-                  borderRadius: '12px',
-                  padding: '10px 38px 10px 38px',
-                  color: '#EEF1FA',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
+                className="min-w-0 flex-1 border-0 bg-transparent text-[14px] text-text outline-none placeholder:text-text-3"
               />
               {leadsSearch && (
                 <button
                   type="button"
                   onClick={() => setLeadsSearch('')}
                   aria-label="Limpar busca"
-                  style={{
-                    position: 'absolute',
-                    right: '10px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'transparent',
-                    border: 'none',
-                    width: '32px',
-                    height: '32px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#8790AE',
-                    cursor: 'pointer'
-                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-text-3 hover:text-text"
                 >
                   <X size={15} />
                 </button>
               )}
-            </div>
+            </label>
 
-            {/* Filtros de Estrelas */}
+            {/* Filtros de Estrelas (Chips estilo Admin) */}
             <div
+              className="adm-noscroll flex items-center gap-2 overflow-x-auto pb-1"
               role="group"
               aria-label="Filtro por avaliação de estrelas"
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}
             >
-              <span style={{ fontSize: '11px', color: '#8790AE', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span className="flex items-center gap-1 text-[11px] font-bold text-text-3 whitespace-nowrap">
                 <Filter size={12} />
                 <span>Nota:</span>
               </span>
               {[
                 { id: 'all', label: 'Todas as notas' },
                 { id: '5', label: '5 ★' },
-                { id: '4', label: '4 ★ ou +' },
-                { id: '3', label: '3 ★ ou +' }
-              ].map(f => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setStarFilter(f.id)}
-                  style={{
-                    minHeight: '44px',
-                    padding: '0 12px',
-                    borderRadius: '10px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    border: starFilter === f.id ? '1px solid #FBBF24' : '1px solid #1C2548',
-                    background: starFilter === f.id ? 'rgba(251, 191, 36, 0.15)' : '#121A36',
-                    color: starFilter === f.id ? '#FBBF24' : '#8790AE',
-                    whiteSpace: 'nowrap',
-                    transition: 'all 0.15s ease',
-                    display: 'inline-flex',
-                    alignItems: 'center'
-                  }}
-                >
-                  {f.label}
-                </button>
+                { id: '4', label: '4 ★+' },
+                { id: '3', label: '3 ★+' }
+              ].map((f) => (
+                <Chip key={f.id} selected={starFilter === f.id} onClick={() => setStarFilter(f.id)}>
+                  <span>{f.label}</span>
+                </Chip>
               ))}
             </div>
 
-            {/* Ordenação Rápida dos Leads (Ideia 1) */}
+            {/* Ordenação Rápida dos Leads */}
             <div
+              className="adm-noscroll flex items-center gap-2 overflow-x-auto pb-1"
               role="group"
               aria-label="Opções de ordenação dos leads"
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}
             >
-              <span style={{ fontSize: '11px', color: '#8790AE', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <ArrowUpDown size={12} color="#8FA0FF" />
+              <span className="flex items-center gap-1 text-[11px] font-bold text-text-3 whitespace-nowrap">
+                <ArrowUpDown size={12} color="var(--link)" />
                 <span>Ordenar:</span>
               </span>
               {[
                 { id: 'recent', label: 'Mais recentes' },
                 { id: 'rating', label: 'Maior avaliação' },
                 { id: 'name', label: 'Nome (A-Z)' }
-              ].map(s => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setLeadSortBy(s.id)}
-                  style={{
-                    minHeight: '44px',
-                    padding: '0 12px',
-                    borderRadius: '10px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    border: leadSortBy === s.id ? '1px solid #2563EB' : '1px solid #1C2548',
-                    background: leadSortBy === s.id ? '#1F2A55' : '#121A36',
-                    color: leadSortBy === s.id ? '#EEF1FA' : '#8790AE',
-                    whiteSpace: 'nowrap',
-                    transition: 'all 0.15s ease',
-                    display: 'inline-flex',
-                    alignItems: 'center'
-                  }}
-                >
-                  {s.label}
-                </button>
+              ].map((s) => (
+                <Chip key={s.id} selected={leadSortBy === s.id} onClick={() => setLeadSortBy(s.id)}>
+                  <span>{s.label}</span>
+                </Chip>
               ))}
             </div>
           </div>
 
-          {/* Lista de Leads */}
+          {/* Lista e Tabela de Leads */}
           <div
             id="panel-leads-content"
-            role="tabpanel"
-            aria-labelledby={leadsTab === 'mine' ? 'tab-leads-mine' : 'tab-leads-company'}
-            style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
+            role="region"
+            aria-label="Lista de contatos do estande"
+            className="flex flex-col gap-2.5"
           >
             {(leadsTab === 'mine' ? myLeads : companyLeads).length === 0 ? (
-              <div
-                style={{
-                  background: '#121A36',
-                  borderRadius: '20px',
-                  padding: '36px 20px',
-                  textAlign: 'center',
-                  border: '1px solid #1C2548',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center'
-                }}
-              >
-                <div style={{ marginBottom: '16px' }}>
+              <div className="flex flex-col items-center justify-center rounded-[20px] bg-surface p-8 text-center border border-line">
+                <div className="mb-4">
                   <Mascot size={72} color="blue" isWaving={true} />
                 </div>
-                <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#EEF1FA', margin: '0 0 8px' }}>
+                <h3 className="mb-2 text-[15px] font-extrabold text-text">
                   {leadsTab === 'mine' ? 'Nenhum lead coletado por você ainda' : 'Nenhum lead registrado pela empresa'}
                 </h3>
-                <p style={{ fontSize: '13px', color: '#8790AE', margin: '0 0 20px', maxWidth: '320px', lineHeight: 1.5 }}>
+                <p className="mb-5 max-w-[320px] text-[13px] leading-relaxed text-text-3">
                   {leadsTab === 'mine'
                     ? 'Aponte a câmera para o crachá dos estudantes no estande para salvar contatos, notas e avaliações.'
                     : 'Nenhum membro da sua equipe bipou participantes ainda.'}
@@ -1502,41 +1435,19 @@ export default function Sponsor() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('scanner')}
-                  style={{
-                    minHeight: '44px',
-                    padding: '0 20px',
-                    background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
-                    border: 'none',
-                    borderRadius: '12px',
-                    color: '#ffffff',
-                    fontSize: '13px',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
-                  }}
+                  className={`${btn('action')} inline-flex items-center gap-2 text-[13px] font-extrabold`}
                 >
                   <Camera size={16} />
                   <span>Bipar Primeiro Estudante</span>
                 </button>
               </div>
-            ) : (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0 ? (
-              <div
-                style={{
-                  background: '#121A36',
-                  borderRadius: '18px',
-                  padding: '32px 20px',
-                  textAlign: 'center',
-                  border: '1px solid #1C2548'
-                }}
-              >
-                <Search size={32} color="#8790AE" style={{ margin: '0 auto 12px' }} />
-                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#EEF1FA', margin: '0 0 6px' }}>
+            ) : displayedLeads.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-[18px] bg-surface p-7 text-center border border-line">
+                <Search size={32} className="mx-auto mb-3 text-text-3" />
+                <h3 className="mb-1 text-[14px] font-bold text-text">
                   Nenhum lead encontrado com estes filtros
                 </h3>
-                <p style={{ fontSize: '12px', color: '#8790AE', margin: '0 0 16px' }}>
+                <p className="mb-4 text-[12px] text-text-3">
                   Nenhum contato corresponde ao termo "{leadsSearch}" ou à nota selecionada.
                 </p>
                 <button
@@ -1545,79 +1456,165 @@ export default function Sponsor() {
                     setLeadsSearch('');
                     setStarFilter('all');
                   }}
-                  style={{
-                    minHeight: '44px',
-                    padding: '0 16px',
-                    background: '#1A2347',
-                    border: '1px solid #1C2548',
-                    borderRadius: '10px',
-                    color: '#8FA0FF',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
+                  className={`${btn('secondary')} text-[12px] font-bold`}
                 >
                   Limpar Filtros
                 </button>
               </div>
             ) : (
-              (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).map((lead) => {
-                const ratingNum = Number(lead.rating) || 0;
-                return (
-                  <div
-                    key={lead.participantUid || lead.uid || lead.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Ver detalhes do lead ${lead.name || 'Aluno'}`}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setSelectedLead(lead);
-                      }
-                    }}
-                    style={{
-                      background: '#121A36',
-                      borderRadius: '16px',
-                      padding: '14px 16px',
-                      border: '1px solid #1C2548',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '12px',
-                      cursor: 'pointer',
-                      transition: 'background 0.15s ease'
-                    }}
-                    onClick={() => setSelectedLead(lead)}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-                      <div
-                        style={{
-                          width: '44px',
-                          height: '44px',
-                          borderRadius: '14px',
-                          background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#ffffff',
-                          fontWeight: 800,
-                          fontSize: '16px',
-                          flexShrink: 0
-                        }}
-                      >
-                        {(lead.name || 'P').charAt(0).toUpperCase()}
-                      </div>
+              <>
+                {/* Tabela Desktop / Tablet (hidden md:block) */}
+                <div className="hidden overflow-x-auto rounded-[20px] bg-surface px-3 pb-2 pt-4 md:block border border-line">
+                  <table className="w-full min-w-[650px] border-collapse text-left">
+                    <thead>
+                      <tr className="text-[12px] text-text-3">
+                        <th className="px-3 pb-3 font-bold">Estudante</th>
+                        <th className="px-3 pb-3 font-bold">Vínculo / Curso</th>
+                        <th className="px-3 pb-3 font-bold">Avaliação</th>
+                        <th className="px-3 pb-3 font-bold">Anotação</th>
+                        {leadsTab === 'company' && <th className="px-3 pb-3 font-bold">Coletor</th>}
+                        <th className="px-3 pb-3 font-bold text-right">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayedLeads.map((lead) => {
+                        const ratingNum = Number(lead.rating) || 0;
+                        const badge = getAffiliationBadge(lead);
+                        const leadName = lead.name || 'Estudante';
+                        return (
+                          <tr
+                            key={lead.participantUid || lead.uid || lead.id}
+                            className="border-t border-line hover:bg-white/[0.02] cursor-pointer transition-colors"
+                            onClick={() => setSelectedLead(lead)}
+                          >
+                            <td className="px-3 py-3">
+                              <div className="flex items-center gap-3">
+                                <span
+                                  aria-hidden="true"
+                                  className="flex shrink-0 items-center justify-center rounded-full text-[13px] font-extrabold text-white"
+                                  style={{ width: 38, height: 38, background: bgFor(leadName) }}
+                                >
+                                  {initialsOf(leadName)}
+                                </span>
+                                <div className="min-w-0">
+                                  <span className="block text-[14px] font-bold text-text truncate max-w-[170px]">{leadName}</span>
+                                  {lead.github && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] text-text-3">
+                                      <GitHubIcon size={10} color="var(--link)" />
+                                      <span>@{lead.github.replace(/^@/, '').trim()}</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-3 py-3">
+                              <div className="flex flex-col gap-1 items-start">
+                                <span
+                                  style={{
+                                    fontSize: '10px',
+                                    fontWeight: 700,
+                                    color: badge.color,
+                                    background: badge.bg,
+                                    border: `1px solid ${badge.border}`,
+                                    padding: '1px 6px',
+                                    borderRadius: '6px',
+                                    lineHeight: '1.4'
+                                  }}
+                                >
+                                  {badge.label}
+                                </span>
+                                {lead.course && (
+                                  <span className="text-[12px] text-text-3 truncate max-w-[140px]">
+                                    {lead.course} {lead.period ? `(${lead.period}º)` : ''}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-3">
+                              {ratingNum > 0 ? (
+                                <div className="inline-flex items-center gap-1 text-warn font-bold text-[13px]">
+                                  <Star size={13} fill="#FBBF24" />
+                                  <span>{ratingNum}★</span>
+                                </div>
+                              ) : (
+                                <span className="text-[12px] text-text-3">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-3">
+                              {lead.notes ? (
+                                <span className="block text-[12px] text-text-2 italic truncate max-w-[150px]" title={lead.notes}>
+                                  "{lead.notes}"
+                                </span>
+                              ) : (
+                                <span className="text-[12px] text-text-3 italic">Sem notas</span>
+                              )}
+                            </td>
+                            {leadsTab === 'company' && (
+                              <td className="px-3 py-3 text-[11px] text-text-3 truncate max-w-[120px]">
+                                {lead.collectedByName || lead.collectedByEmail || '—'}
+                              </td>
+                            )}
+                            <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                              {lead.phone ? (
+                                <WhatsAppButton
+                                  phone={lead.phone}
+                                  participantName={lead.name}
+                                  companyName={sponsorName}
+                                  label="Whats"
+                                  size="sm"
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedLead(lead)}
+                                  className={`${btn('secondary')} h-8 px-2.5 text-[11px] font-bold`}
+                                >
+                                  Ver
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
 
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '14px', fontWeight: 800, color: '#EEF1FA', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {lead.name || 'Aluno'}
+                {/* Lista Mobile (md:hidden) */}
+                <div className="flex flex-col gap-2.5 md:hidden">
+                  {displayedLeads.map((lead) => {
+                    const ratingNum = Number(lead.rating) || 0;
+                    const badge = getAffiliationBadge(lead);
+                    const leadName = lead.name || 'Estudante';
+                    return (
+                      <div
+                        key={lead.participantUid || lead.uid || lead.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Ver detalhes do lead ${leadName}`}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedLead(lead);
+                          }
+                        }}
+                        className="flex items-center justify-between gap-3 rounded-[16px] bg-surface p-3.5 border border-line cursor-pointer hover:bg-white/[0.02] transition-colors"
+                        onClick={() => setSelectedLead(lead)}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span
+                            aria-hidden="true"
+                            className="flex shrink-0 items-center justify-center rounded-full text-[14px] font-extrabold text-white"
+                            style={{ width: 42, height: 42, background: bgFor(leadName) }}
+                          >
+                            {initialsOf(leadName)}
                           </span>
 
-                          {/* Academic Affiliation Badge */}
-                          {(() => {
-                            const badge = getAffiliationBadge(lead);
-                            return (
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[14px] font-bold text-text truncate max-w-[150px]">
+                                {leadName}
+                              </span>
                               <span
                                 style={{
                                   fontSize: '10px',
@@ -1632,96 +1629,68 @@ export default function Sponsor() {
                               >
                                 {badge.label}
                               </span>
-                            );
-                          })()}
-
-                          {/* GitHub Badge */}
-                          {lead.github && (
-                            <span
-                              style={{
-                                fontSize: '10px',
-                                fontWeight: 700,
-                                color: '#A9B1CC',
-                                background: '#1A2347',
-                                border: '1px solid #1C2548',
-                                padding: '1px 6px',
-                                borderRadius: '6px',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '3px',
-                                lineHeight: '1.4'
-                              }}
-                            >
-                              <GitHubIcon size={10} color="#8FA0FF" />
-                              <span>@{lead.github.replace(/^@/, '').trim()}</span>
-                            </span>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#A9B1CC', marginTop: '2px' }}>
-                          {lead.course && (
-                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {lead.course} {lead.period ? `(${lead.period}º)` : ''}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Avaliação e Notas */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                          {ratingNum > 0 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', color: '#FBBF24', fontSize: '11px', fontWeight: 700 }}>
-                              <Star size={12} fill="#FBBF24" />
-                              <span>{ratingNum}</span>
+                              {lead.github && (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-text-3">
+                                  <GitHubIcon size={10} color="var(--link)" />
+                                  <span>@{lead.github.replace(/^@/, '').trim()}</span>
+                                </span>
+                              )}
                             </div>
-                          )}
 
-                          {lead.notes && (
-                            <div style={{ fontSize: '11px', color: '#8790AE', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
-                              "{lead.notes}"
+                            <div className="flex items-center gap-2 text-[11px] text-text-3 mt-0.5">
+                              {lead.course && (
+                                <span className="truncate max-w-[160px]">
+                                  {lead.course} {lead.period ? `(${lead.period}º)` : ''}
+                                </span>
+                              )}
                             </div>
-                          )}
-                        </div>
 
-                        {leadsTab === 'company' && lead.collectedByEmail && (
-                          <div style={{ fontSize: '10px', color: '#6E779A', marginTop: '2px' }}>
-                            Bipado por: {lead.collectedByEmail}
+                            <div className="flex items-center gap-2 mt-1">
+                              {ratingNum > 0 && (
+                                <div className="inline-flex items-center gap-1 text-warn text-[11px] font-bold">
+                                  <Star size={11} fill="#FBBF24" />
+                                  <span>{ratingNum}★</span>
+                                </div>
+                              )}
+                              {lead.notes && (
+                                <div className="text-[11px] text-text-3 italic truncate max-w-[150px]">
+                                  "{lead.notes}"
+                                </div>
+                              )}
+                            </div>
+
+                            {leadsTab === 'company' && lead.collectedByEmail && (
+                              <div className="text-[10px] text-text-3 mt-1">
+                                Bipado por: {lead.collectedByName || lead.collectedByEmail}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    </div>
+                        </div>
 
-                    {/* Ação rápida de WhatsApp no card */}
-                    <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
-                      {lead.phone ? (
-                        <WhatsAppButton
-                          phone={lead.phone}
-                          participantName={lead.name}
-                          companyName={sponsorName}
-                          label="Whats"
-                          size="sm"
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedLead(lead)}
-                          style={{
-                            background: '#1A2347',
-                            border: '1px solid #1C2548',
-                            borderRadius: '10px',
-                            padding: '6px 10px',
-                            color: '#8FA0FF',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Ver
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
+                        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {lead.phone ? (
+                            <WhatsAppButton
+                              phone={lead.phone}
+                              participantName={lead.name}
+                              companyName={sponsorName}
+                              label="Whats"
+                              size="sm"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLead(lead)}
+                              className={`${btn('secondary')} h-8 px-2.5 text-[11px] font-bold`}
+                            >
+                              Ver
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>
