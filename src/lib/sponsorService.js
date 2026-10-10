@@ -140,7 +140,7 @@ function formatParticipant(uid, data) {
  * @param {number} payload.rating 1 a 5 estrelas
  * @returns {Promise<object>} Resposta com dados do lead salvo e whatsapp
  */
-export async function submitLead({ participantUid, notes, rating, companyId }) {
+export async function submitLead({ participantUid, notes, rating, companyId, validateOnly }) {
   if (!participantUid) {
     throw new Error('participantUid é obrigatório.');
   }
@@ -164,7 +164,8 @@ export async function submitLead({ participantUid, notes, rating, companyId }) {
       participantUid,
       notes: notes || '',
       rating: rating ? Number(rating) : undefined,
-      companyId: companyId || undefined
+      companyId: companyId || undefined,
+      validateOnly: validateOnly ? true : undefined
     })
   });
 

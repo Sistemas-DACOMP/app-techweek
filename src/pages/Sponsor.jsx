@@ -85,6 +85,7 @@ export default function Sponsor() {
   const [activeParticipant, setActiveParticipant] = useState(null); // Newly scanned attendee
   const [selectedLead, setSelectedLead] = useState(null); // Existing lead being viewed/edited
   const [toastMessage, setToastMessage] = useState(null);
+  const [validatedCount, setValidatedCount] = useState(0);
 
   // Read-only Agenda State
   const [activities, setActivities] = useState(DEFAULT_ACTIVITIES);
@@ -342,7 +343,14 @@ export default function Sponsor() {
     triggerVibration([60, 40, 60]);
     setMyLeads((prev) => [newLead, ...prev.filter(l => l.participantUid !== newLead.participantUid)]);
     setCompanyLeads((prev) => [newLead, ...prev.filter(l => l.participantUid !== newLead.participantUid)]);
-    showToast(`Lead de ${newLead.name} salvo (+50 pontos concedidos)!`, 'success');
+    showToast(`Lead de ${newLead.name} salvo com sucesso!`, 'success');
+  };
+
+  // Callback ao somente validar presença/passaporte (sem salvar no CRM)
+  const handleValidateOnly = (participant) => {
+    triggerVibration([40, 40]);
+    setValidatedCount((prev) => prev + 1);
+    showToast(`Presença de ${participant?.name || 'participante'} validada com sucesso!`, 'success');
   };
 
   // Callback ao atualizar um lead existente na lista
@@ -739,13 +747,13 @@ export default function Sponsor() {
 
             <div className="glass-panel" style={{ padding: '16px', background: '#121A36', borderRadius: '18px', border: '1px solid #1C2548' }}>
               <div style={{ fontSize: '11px', color: '#A9B1CC', textTransform: 'uppercase', fontWeight: 700, marginBottom: '6px' }}>
-                Pontos Concedidos
+                Visitas Validadas
               </div>
               <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#34D399' }}>
-                +{companyLeads.length * 50}
+                {companyLeads.length + validatedCount}
               </div>
               <div style={{ fontSize: '11px', color: '#8790AE', marginTop: '4px' }}>
-                50 pts por aluno bipado
+                Passaportes carimbados
               </div>
             </div>
 
@@ -2032,6 +2040,7 @@ export default function Sponsor() {
             }
           }}
           onLeadCaptured={handleLeadCaptured}
+          onValidateOnly={handleValidateOnly}
         />
       )}
 

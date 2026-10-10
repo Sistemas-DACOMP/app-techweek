@@ -114,7 +114,7 @@ export function resolveCompanyId(raw?: string | null): SponsorCompanyId | null {
  * Extraído para facilitar testes unitários isolados.
  */
 export async function leadsHandler(req: Request, res: Response): Promise<void> {
-  const { participantUid, notes, rating, companyId: providedCompanyId } = req.body ?? {};
+  const { participantUid, notes, rating, companyId: providedCompanyId, validateOnly } = req.body ?? {};
   const sponsorUid = req.user!.uid;
 
   if (typeof participantUid !== 'string' || !participantUid || !isValidFirestoreId(participantUid)) {
@@ -300,11 +300,13 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         leadContactData.createdAt = now;
       }
 
-      tx.set(leadRef, leadContactData, { merge: true });
+      if (!validateOnly) {
+        tx.set(leadRef, leadContactData, { merge: true });
 
-      if (companyId) {
-        const companyLeadRef = db.collection('company_leads').doc(companyId).collection('contacts').doc(participantUid);
-        tx.set(companyLeadRef, leadContactData, { merge: true });
+        if (companyId) {
+          const companyLeadRef = db.collection('company_leads').doc(companyId).collection('contacts').doc(participantUid);
+          tx.set(companyLeadRef, leadContactData, { merge: true });
+        }
       }
 
       const whatsapp = buildWhatsAppPayload(phone, name);
@@ -313,6 +315,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         status: alreadyAwarded ? (200 as const) : (201 as const),
         body: {
           success: true,
+          validateOnly: Boolean(validateOnly),
           lead: {
             participantUid,
             sponsorUid,

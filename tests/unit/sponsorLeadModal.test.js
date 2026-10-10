@@ -91,7 +91,7 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
       expect(html).toContain('Copiar E-mail');
       expect(html).toContain('WhatsApp');
       // O botão principal de salvar deve estar presente
-      expect(html).toContain('Salvar Lead (+50 pts)');
+      expect(html).toContain('Salvar Lead');
     });
 
     it('no modo de visualização de lead CRM (isExistingLead = true), ações de contato são completas', () => {
@@ -140,8 +140,8 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
     });
   });
 
-  describe('5. Clareza de Gamificação no Botão Salvar', () => {
-    it('exibe a micro-legenda de gamificação informando o crédito de +50 pontos no passaporte', () => {
+  describe('5. Botão Degradê com Bordas Arredondadas (16px), Somente Validar e Remoção de Pontos', () => {
+    it('exibe botão principal com gradiente, bordas arredondadas (16px) e sem menção a +50 pontos', () => {
       const html = renderToStaticMarkup(
         React.createElement(SponsorLeadModal, {
           participant: mockParticipant,
@@ -151,10 +151,31 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
         })
       );
 
-      expect(html).toContain('🎉 Concede +50 pontos no passaporte do aluno no estande Kanastra');
+      // Label limpo para o patrocinador
+      expect(html).toContain('Salvar Lead');
+      expect(html).not.toContain('+50');
+      expect(html).not.toContain('50 pts');
+      // Bordas arredondadas 16px e degradê primário
+      expect(html).toContain('border-radius:16px');
+      expect(html).toContain('linear-gradient(135deg, #2563EB 0%, #5B3BE0 55%, #7C3AED 100%)');
     });
 
-    it('não exibe micro-legenda de crédito de pontos na edição de lead já existente no CRM', () => {
+    it('renderiza o botão "Somente Validar" com bordas arredondadas (16px) no modo de captura imediata', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(SponsorLeadModal, {
+          participant: mockParticipant,
+          sponsorProfile: mockSponsorProfile,
+          isExistingLead: false,
+          onClose: () => {},
+          onValidateOnly: () => {}
+        })
+      );
+
+      expect(html).toContain('Somente Validar');
+      expect(html).toContain('border-radius:16px');
+    });
+
+    it('não exibe o botão "Somente Validar" na edição de lead já existente no CRM', () => {
       const html = renderToStaticMarkup(
         React.createElement(SponsorLeadModal, {
           participant: mockParticipant,
@@ -164,7 +185,7 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
         })
       );
 
-      expect(html).not.toContain('🎉 Concede +50 pontos no passaporte do aluno');
+      expect(html).not.toContain('Somente Validar');
     });
   });
 

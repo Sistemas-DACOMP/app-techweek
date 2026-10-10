@@ -118,6 +118,31 @@ describe('sponsorService', () => {
       expect(result.lead.rating).toBe(5);
     });
 
+    it('envia validateOnly: true quando solicitado para apenas carimbar presença sem salvar notas no CRM', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          validatedOnly: true,
+          message: 'Presença validada e passaporte carimbado com sucesso!'
+        })
+      });
+
+      const result = await submitLead({
+        participantUid: 'user_100',
+        validateOnly: true
+      });
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const callArgs = global.fetch.mock.calls[0];
+      const parsedBody = JSON.parse(callArgs[1].body);
+      expect(parsedBody.participantUid).toBe('user_100');
+      expect(parsedBody.validateOnly).toBe(true);
+      expect(result.success).toBe(true);
+      expect(result.validatedOnly).toBe(true);
+    });
+
     it('trata respostas de erro da API', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,

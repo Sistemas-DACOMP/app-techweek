@@ -105,12 +105,14 @@ export default function SponsorLeadModal({
   isExistingLead = false,
   onClose,
   onLeadCaptured,
-  onLeadUpdated
+  onLeadUpdated,
+  onValidateOnly
 }) {
   const [rating, setRating] = useState(participant?.rating || 0);
   const [hoverRating, setHoverRating] = useState(0);
   const [notes, setNotes] = useState(participant?.notes || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isValidatingOnly, setIsValidatingOnly] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [savedLeadData, setSavedLeadData] = useState(null);
   const [emailCopied, setEmailCopied] = useState(false);
@@ -248,6 +250,37 @@ export default function SponsorLeadModal({
       setErrorMsg(err.message || 'Erro ao processar dados do contato.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleValidateOnly = async () => {
+    if (!participantUid) {
+      setErrorMsg('Identificador do participante não encontrado.');
+      return;
+    }
+
+    setIsValidatingOnly(true);
+    setErrorMsg(null);
+
+    try {
+      await submitLead({
+        participantUid,
+        notes: '',
+        rating: undefined,
+        companyId: sponsorCompanyId,
+        validateOnly: true
+      });
+
+      triggerHaptic(40);
+      if (onValidateOnly) {
+        onValidateOnly(participant);
+      }
+      onClose();
+    } catch (err) {
+      console.error('Erro ao validar presença do participante:', err);
+      setErrorMsg(err.message || 'Erro ao validar presença.');
+    } finally {
+      setIsValidatingOnly(false);
     }
   };
 
@@ -680,7 +713,7 @@ export default function SponsorLeadModal({
               Lead Registrado com Sucesso!
             </h4>
             <p style={{ fontSize: '13px', color: '#a7f3d0', marginBottom: '16px' }}>
-              🎉 +50 pontos foram creditados no crachá do participante no estande {sponsorCompanyName}.
+              Lead salvo com sucesso no estande {sponsorCompanyName}.
             </p>
 
             {/* Ações de contato pós-salvamento imediato */}
@@ -742,14 +775,16 @@ export default function SponsorLeadModal({
               onClick={onClose}
               style={{
                 width: '100%',
-                minHeight: '48px',
+                minHeight: '50px',
                 padding: '12px',
+                borderRadius: '16px',
                 fontSize: '14px',
                 fontWeight: '700',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: '8px',
+                cursor: 'pointer'
               }}
             >
               <QrCode size={18} />
@@ -1004,57 +1039,88 @@ export default function SponsorLeadModal({
             )}
 
             {/* ===================================================================== */}
-            {/* 5. CLAREZA DE GAMIFICAÇÃO NO BOTÃO SALVAR                              */}
+            {/* BOTÕES DE AÇÃO: SALVAR LEAD E SOMENTE VALIDAR                         */}
             {/* ===================================================================== */}
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="btn-primary"
-              style={{
-                width: '100%',
-                minHeight: '46px',
-                padding: '12px 16px',
-                fontSize: '14px',
-                fontWeight: '700',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                cursor: 'pointer'
-              }}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="animate-spin" size={18} />
-                  <span>{isExistingLead ? 'Salvando Alterações...' : 'Salvando Lead...'}</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 size={18} />
-                  <span>{isExistingLead ? 'Salvar Alterações' : 'Salvar Lead (+50 pts)'}</span>
-                </>
-              )}
-            </button>
-
-            {/* Micro-legenda de benefício de gamificação */}
-            {!isExistingLead && (
-              <p
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* Botão Primário com degradê e bordas arredondadas (16px) */}
+              <button
+                type="submit"
+                disabled={isSubmitting || isValidatingOnly}
+                className="btn-primary"
                 style={{
-                  marginTop: '8px',
-                  marginBottom: '2px',
-                  fontSize: '11px',
-                  color: '#A9B1CC',
-                  textAlign: 'center',
+                  width: '100%',
+                  minHeight: '50px',
+                  padding: '12px 20px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  fontSize: '15px',
+                  fontWeight: '800',
+                  fontFamily: 'Montserrat, sans-serif',
+                  color: '#FFFFFF',
+                  background: 'linear-gradient(135deg, #2563EB 0%, #5B3BE0 55%, #7C3AED 100%)',
+                  boxShadow: '0 8px 24px rgba(37, 99, 235, 0.35)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '4px',
-                  lineHeight: 1.4
+                  gap: '8px',
+                  cursor: isSubmitting || isValidatingOnly ? 'not-allowed' : 'pointer',
+                  opacity: isSubmitting || isValidatingOnly ? 0.7 : 1,
+                  transition: 'all 0.15s ease'
                 }}
               >
-                <span>🎉 Concede +50 pontos no passaporte do aluno no estande {sponsorCompanyName}</span>
-              </p>
-            )}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="animate-spin" size={18} />
+                    <span>{isExistingLead ? 'Salvando Alterações...' : 'Salvando Lead...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={18} />
+                    <span>{isExistingLead ? 'Salvar Alterações' : 'Salvar Lead'}</span>
+                  </>
+                )}
+              </button>
+
+              {/* Botão Secundário: Somente Validar Presença (sem salvar notas no CRM) */}
+              {!isExistingLead && (
+                <button
+                  type="button"
+                  disabled={isSubmitting || isValidatingOnly}
+                  onClick={handleValidateOnly}
+                  style={{
+                    width: '100%',
+                    minHeight: '48px',
+                    padding: '10px 18px',
+                    borderRadius: '16px',
+                    border: '1px solid #1C2548',
+                    background: '#1A2347',
+                    fontSize: '14px',
+                    fontWeight: '700',
+                    fontFamily: 'Montserrat, sans-serif',
+                    color: '#EEF1FA',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    cursor: isSubmitting || isValidatingOnly ? 'not-allowed' : 'pointer',
+                    opacity: isSubmitting || isValidatingOnly ? 0.7 : 1,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {isValidatingOnly ? (
+                    <>
+                      <Loader2 className="animate-spin" size={18} />
+                      <span>Validando Presença...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck size={18} color="#8FA0FF" />
+                      <span>Somente Validar</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </form>
         )}
       </div>

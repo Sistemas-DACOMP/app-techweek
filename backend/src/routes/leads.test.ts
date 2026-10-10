@@ -308,6 +308,50 @@ describe('POST /api/leads handler (KAN-55)', () => {
     );
   });
 
+  it('quando validateOnly=true, credita pontos e atualiza passaporte mas NÃO grava contato em leads ou company_leads', async () => {
+    const req = makeReq(
+      { participantUid: 'part-1', companyId: 'kanastra', validateOnly: true },
+      { uid: 'sponsor-kanastra', role: 'SPONSOR', email: 'contato@kanastra.com.br' }
+    );
+    const res = makeRes();
+
+    const mockTx = {
+      get: vi.fn((ref: { path: string }) => {
+        if (ref.path === 'users/part-1') {
+          return Promise.resolve({
+            exists: true,
+            data: () => ({ name: 'Maria Aluna', visitedSponsors: {} })
+          });
+        }
+        return Promise.resolve({ exists: false, data: () => ({}) });
+      }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
+
+    await leadsHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        validateOnly: true
+      })
+    );
+    expect(mockTx.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        visitedSponsors: expect.objectContaining({
+          kanastra: expect.objectContaining({ sponsorUid: 'sponsor-kanastra' })
+        })
+      })
+    );
+    // mockTx.set é chamado apenas 1 vez (para o pointEvent) e nunca para os leads
+    expect(mockTx.set).toHaveBeenCalledTimes(1);
+  });
+
   it('libera o Bilhete Dourado (+100 pts) quando todas as 5 empresas forem visitadas', async () => {
     const req = makeReq(
       { participantUid: 'part-1', companyId: 'hyperflow' },
