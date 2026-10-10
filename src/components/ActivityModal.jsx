@@ -83,6 +83,7 @@ export default function ActivityModal({
   status = 'NONE',
   isReserving = false,
   isCancelling = false,
+  readOnly = false,
   onClose,
   onReserve,
   onCancelReserve,
@@ -124,7 +125,7 @@ export default function ActivityModal({
   const isSoldOut = seatsAvailable <= 0;
   const points = activity.points || 20;
   const isDoubleCheck = activity.attendanceMode === 'DOUBLE_CHECK';
-  const hasSeat = status === 'BOOKED' || status === 'CHECKED_IN' || status === 'COMPLETED';
+  const hasSeat = !readOnly && (status === 'BOOKED' || status === 'CHECKED_IN' || status === 'COMPLETED');
 
   const speakerName = activity.speaker || '';
   const speakerRole = activity.speaker_role || activity.speakerRole || '';
@@ -189,7 +190,25 @@ export default function ActivityModal({
   ) : null;
 
   let footer;
-  if (status === 'COMPLETED') {
+  if (readOnly) {
+    footer = (
+      <div className="flex flex-col gap-3">
+        <div className="flex justify-center">
+          <SeatsLight activity={activity} />
+        </div>
+        <p className="text-center text-xs text-text-3">
+          Modo de visualização da grade • Inscrições apenas para participantes
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="btn btn-secondary btn-block min-h-[48px] text-sm font-semibold"
+        >
+          Fechar detalhes
+        </button>
+      </div>
+    );
+  } else if (status === 'COMPLETED') {
     footer = (
       <p className="flex min-h-[54px] items-center justify-center gap-2 rounded-[14px] bg-surface-raised text-[15px] font-extrabold text-ok" role="status">
         <Check size={18} strokeWidth={3} aria-hidden="true" />

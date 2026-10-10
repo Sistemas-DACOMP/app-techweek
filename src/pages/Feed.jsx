@@ -22,7 +22,7 @@ import SymplaStickyBanner from '../components/SymplaStickyBanner';
 import Mascot from '../components/Mascot';
 import iconeTw from '../assets/icone.png';
 
-const FILTERS = [
+export const FILTERS = [
   { id: 'ALL', label: 'Todos' },
   { id: 'ORGANIZATION', label: 'Organização' },
   { id: 'SPONSOR', label: 'Patrocinadores' }
@@ -30,23 +30,23 @@ const FILTERS = [
 
 // Cota do patrocinador (DESIGN.md §2.6). O post/autor ainda não expõe esse campo no backend
 // (DESIGN.md §12) — sem `sponsorTier`/`tier`, o post cai no card normal.
-const TIERS = {
+export const TIERS = {
   DIAMOND: { label: 'Diamante', text: 'var(--tier-diamante-text)', chip: 'rgba(34,211,238,0.14)', tint: 'rgba(34,211,238,0.12)', line: 'rgba(103,232,249,0.38)' },
   GOLD: { label: 'Ouro', text: 'var(--tier-ouro-text)', chip: 'rgba(251,191,36,0.16)', tint: 'rgba(251,191,36,0.12)', line: 'rgba(251,191,36,0.4)' },
   SILVER: { label: 'Prata', text: 'var(--tier-prata-text)', chip: 'rgba(203,213,225,0.12)' }
 };
-const EMPTY_TEXT = {
+export const EMPTY_TEXT = {
   ALL: 'Nenhuma publicação ainda.',
   ORGANIZATION: 'Nenhuma publicação da organização ainda.',
   SPONSOR: 'Nenhuma publicação de patrocinadores ainda.'
 };
-const TIER_ALIASES = { DIAMANTE: 'DIAMOND', OURO: 'GOLD', PRATA: 'SILVER' };
-const tierOf = (post) => {
+export const TIER_ALIASES = { DIAMANTE: 'DIAMOND', OURO: 'GOLD', PRATA: 'SILVER' };
+export const tierOf = (post) => {
   const raw = String(post.sponsorTier || post.tier || '').toUpperCase();
   return TIERS[TIER_ALIASES[raw] || raw] || null;
 };
 
-const timeAgo = (iso) => {
+export const timeAgo = (iso) => {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (!Number.isFinite(min)) return 'Recente';
   if (min < 1) return 'agora';
@@ -56,9 +56,9 @@ const timeAgo = (iso) => {
 };
 
 // Rosa do "curtir" (DESIGN.md §6 Feed) — ainda sem token próprio no :root.
-const LIKE_PINK = '#F59AC0';
+export const LIKE_PINK = '#F59AC0';
 
-function VerifiedBadge() {
+export function VerifiedBadge() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" role="img" aria-label="verificado" className="shrink-0">
       <circle cx="12" cy="12" r="10" fill="var(--action)" />
@@ -67,7 +67,7 @@ function VerifiedBadge() {
   );
 }
 
-function PostCard({ post, featured, isLiked, popping, onLike, onPopEnd, onShare }) {
+export function PostCard({ post, featured, isLiked, popping, onLike, onPopEnd, onShare }) {
   const isOrg = post.authorRole === 'ORGANIZATION';
   const tier = isOrg ? null : tierOf(post);
   const tinted = tier && tier.tint;

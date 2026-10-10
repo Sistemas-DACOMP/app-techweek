@@ -209,7 +209,7 @@ function OfflineBadge({ badge }) {
   );
 }
 
-function CameraFrame({ live }) {
+export function CameraFrame({ live }) {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute top-1/2 left-1/2 z-[8] -mt-[120px] -ml-[110px] h-[220px] w-[220px]">
       <svg width="220" height="220" viewBox="0 0 220 220">

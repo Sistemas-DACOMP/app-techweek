@@ -279,30 +279,8 @@ export default function Agenda() {
   };
 
   // Determina o estado cronológico da atividade: 'CURRENT', 'PAST' ou 'UPCOMING'
-  const getActivityTimingState = (act) => {
-    const status = activityStatuses[act.id] || 'NONE';
-    if (status === 'COMPLETED') {
-      return 'PAST';
-    }
-
-    try {
-      if (!act.day || !act.time) return 'UPCOMING';
-      const now = new Date();
-      const [dayNum, monthNum] = act.day.split('/');
-      const [hourNum, minuteNum] = act.time.split(':');
-      const actStart = new Date(2026, parseInt(monthNum, 10) - 1, parseInt(dayNum, 10), parseInt(hourNum, 10), parseInt(minuteNum, 10));
-      const actEnd = new Date(actStart.getTime() + 90 * 60 * 1000);
-
-      if (now >= actStart && now <= actEnd) {
-        return 'CURRENT';
-      }
-      if (now > actEnd && actEnd < new Date()) {
-        return 'PAST';
-      }
-      return 'UPCOMING';
-    } catch {
-      return 'UPCOMING';
-    }
+  const getActivityTimingStateWithStatus = (act) => {
+    return getActivityTimingState(act, activityStatuses[act.id] || 'NONE');
   };
 
   // Abre direto a leitura de presença (mesma regra do painel da atividade)
@@ -473,7 +451,7 @@ export default function Agenda() {
                 <div className={`relative ${isMyTab ? '' : 'mt-[18px]'}`}>
                   <span aria-hidden="true" className="absolute bottom-3 left-[61px] top-2 w-0.5 bg-line" />
                   {slots.map(({ time, items }) => {
-                    const timings = items.map(getActivityTimingState);
+                    const timings = items.map(getActivityTimingStateWithStatus);
                     return (
                       <div key={time} className="grid grid-cols-[52px_1fr] gap-2.5">
                         <span className={`block pt-3.5 text-sm font-extrabold ${timings.includes('CURRENT') ? 'text-text' : 'text-text-2'}`}>{time}</span>
@@ -548,12 +526,12 @@ export default function Agenda() {
   );
 }
 
-function dayOrder(id) {
+export function dayOrder(id) {
   const [d, m] = String(id).split('/').map(Number);
   return (m || 0) * 100 + (d || 0);
 }
 
-const TYPE_FILTERS = [
+export const TYPE_FILTERS = [
   { id: 'all', type: 'palestra', label: 'Todos' },
   { id: 'palestra', type: 'palestra', label: 'Palestra' },
   { id: 'workshop', type: 'workshop', label: 'Workshop' },
@@ -575,7 +553,7 @@ const STATUS_TEXT = {
   WAITING_LIST: { label: 'Lista de espera', className: 'text-warn' }
 };
 
-function NowDot() {
+export function NowDot() {
   return <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full bg-ok shadow-[0_0_0_3px_rgba(111,216,166,0.25)]" />;
 }
 
@@ -583,16 +561,24 @@ function NowDot() {
  * Cartão da linha do tempo (DESIGN.md §6): faixa de 4 px na cor do tipo, rodapé com
  * seu status à esquerda e o semáforo à direita (só para quem não tem vaga). Sem barra de vagas.
  */
-function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, onPresence }) {
+export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, onPresence, readOnly = false }) {
   const category = categoryOf(act);
   const isCurrent = timing === 'CURRENT';
   const isPast = timing === 'PAST';
-  const hasSeat = status === 'BOOKED' || status === 'CHECKED_IN' || status === 'COMPLETED';
+  const hasSeat = !readOnly && (status === 'BOOKED' || status === 'CHECKED_IN' || status === 'COMPLETED');
   const showLight = !hasSeat && status !== 'WAITING_LIST' && !isPast && !compact;
   const soldOut = !(typeof act.vagas_disponiveis === 'number' && act.vagas_disponiveis > 0);
 
   let left;
-  if (status === 'COMPLETED') {
+  if (readOnly) {
+    if (isPast) {
+      left = <span className="text-text-3">Encerrada</span>;
+    } else if (isCurrent) {
+      left = <span className="flex items-center gap-1.5 text-ok"><NowDot />Acontecendo agora</span>;
+    } else {
+      left = <span className="text-link">Ver detalhes</span>;
+    }
+  } else if (status === 'COMPLETED') {
     left = <span className="flex items-center gap-1.5 text-ok"><Check size={13} strokeWidth={3} aria-hidden="true" />Presença confirmada</span>;
   } else if (isCurrent && hasSeat) {
     left = <span className="flex items-center gap-1.5 text-ok"><NowDot />{compact ? 'Agora' : 'Agora · você está inscrito'}</span>;
@@ -658,4 +644,29 @@ function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, onPresen
       </div>
     </div>
   );
+}
+
+export function getActivityTimingState(act, status = 'NONE') {
+  if (status === 'COMPLETED') {
+    return 'PAST';
+  }
+
+  try {
+    if (!act.day || !act.time) return 'UPCOMING';
+    const now = new Date();
+    const [dayNum, monthNum] = act.day.split('/');
+    const [hourNum, minuteNum] = act.time.split(':');
+    const actStart = new Date(2026, parseInt(monthNum, 10) - 1, parseInt(dayNum, 10), parseInt(hourNum, 10), parseInt(minuteNum, 10));
+    const actEnd = new Date(actStart.getTime() + 90 * 60 * 1000);
+
+    if (now >= actStart && now <= actEnd) {
+      return 'CURRENT';
+    }
+    if (now > actEnd && actEnd < new Date()) {
+      return 'PAST';
+    }
+    return 'UPCOMING';
+  } catch {
+    return 'UPCOMING';
+  }
 }
