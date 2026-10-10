@@ -52,10 +52,10 @@ export default function Sponsor() {
   const actualRole = userProfile?.role || authUser?.role || 'PARTICIPANT';
   const hasAccess = actualRole === 'SPONSOR' || actualRole === 'ADMIN' || devSponsorOverride;
 
-  // Active Company ID
-  const [activeCompanyId, setActiveCompanyId] = useState(
-    userProfile?.companyId || userProfile?.empresa || 'kanastra'
-  );
+  // Perfil e Empresa do Patrocinador (definida no cadastro, sem seletor manual de estande)
+  const rawName = userProfile?.name || userProfile?.displayName || authUser?.displayName || authUser?.email?.split('@')[0] || 'Patrocinador';
+  const firstName = rawName.trim().split(' ')[0] || rawName;
+  const activeCompanyId = userProfile?.companyId || userProfile?.empresa || 'kanastra';
   const sponsorName = userProfile?.companyName || userProfile?.empresa || (activeCompanyId ? activeCompanyId.toUpperCase() : 'Empresa Patrocinadora');
 
   // Tab State: 'home' | 'leads' | 'scanner' | 'agenda' | 'feed'
@@ -488,29 +488,26 @@ export default function Sponsor() {
               <ArrowLeft size={18} />
             </button>
 
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    color: '#FBBF24',
-                    background: 'rgba(251, 191, 36, 0.12)',
-                    border: '1px solid rgba(251, 191, 36, 0.3)',
-                    padding: '2px 8px',
-                    borderRadius: '8px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Building2 size={11} />
-                  <span>Patrocinador</span>
-                </span>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#EEF1FA' }}>{sponsorName}</span>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  color: '#FBBF24',
+                  background: 'rgba(251, 191, 36, 0.12)',
+                  border: '1px solid rgba(251, 191, 36, 0.3)',
+                  padding: '4px 10px',
+                  borderRadius: '10px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Building2 size={13} />
+                <span>{sponsorName}</span>
+              </span>
             </div>
           </div>
 
@@ -538,54 +535,42 @@ export default function Sponsor() {
         </div>
 
         {/* Screen Title Centralizado com Traço de Gradiente (DESIGN.md §3) */}
-        <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-          <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
-            {activeTab === 'home' && 'Painel do Estande'}
-            {activeTab === 'leads' && 'CRM de Leads'}
-            {activeTab === 'scanner' && 'Bipar Crachá'}
-            {activeTab === 'agenda' && 'Programação da TechWeek'}
-            {activeTab === 'feed' && 'Feed da Comunidade'}
-          </h1>
-          <div
-            style={{
-              width: '28px',
-              height: '4px',
-              borderRadius: '2px',
-              background: 'linear-gradient(90deg, #2563EB, #9B7BFF)',
-              margin: '0 auto'
-            }}
-          />
-        </div>
-
-        {/* Seletor de Estande para ADMIN ou Teste DEV */}
-        {(devSponsorOverride || actualRole === 'ADMIN') && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '12px' }}>
-            <span style={{ fontSize: '11px', color: '#8790AE', fontWeight: 700, whiteSpace: 'nowrap' }}>Estande:</span>
-            {['kanastra', 'bayer', 'aimirim', 'bip', 'hyperflow'].map(comp => (
-              <button
-                key={comp}
-                type="button"
-                onClick={() => {
-                  setActiveCompanyId(comp);
-                  loadLeads(comp);
-                }}
+        <div style={{ textAlign: 'center', marginBottom: '18px' }}>
+          {activeTab === 'home' ? (
+            <>
+              <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em', lineHeight: 1.3 }}>
+                Olá, {firstName}! Esse é seu estande virtual.
+              </h1>
+              <div
                 style={{
-                  padding: '4px 10px',
-                  borderRadius: '8px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  border: activeCompanyId === comp ? '1px solid #2563EB' : '1px solid #1C2548',
-                  backgroundColor: activeCompanyId === comp ? 'rgba(37, 99, 235, 0.25)' : '#121A36',
-                  color: activeCompanyId === comp ? '#8FA0FF' : '#A9B1CC',
-                  textTransform: 'capitalize'
+                  width: '28px',
+                  height: '4px',
+                  borderRadius: '2px',
+                  background: 'linear-gradient(90deg, #2563EB, #9B7BFF)',
+                  margin: '0 auto'
                 }}
-              >
-                {comp}
-              </button>
-            ))}
-          </div>
-        )}
+              />
+            </>
+          ) : (
+            <>
+              <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+                {activeTab === 'leads' && 'CRM de Leads'}
+                {activeTab === 'scanner' && 'Bipar Crachá'}
+                {activeTab === 'agenda' && 'Programação da TechWeek'}
+                {activeTab === 'feed' && 'Feed da Comunidade'}
+              </h1>
+              <div
+                style={{
+                  width: '28px',
+                  height: '4px',
+                  borderRadius: '2px',
+                  background: 'linear-gradient(90deg, #2563EB, #9B7BFF)',
+                  margin: '0 auto'
+                }}
+              />
+            </>
+          )}
+        </div>
       </header>
 
       {/* ========================================================================= */}
@@ -840,59 +825,64 @@ export default function Sponsor() {
       {/* ========================================================================= */}
       {activeTab === 'leads' && (
         <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Header da Aba com Botão de Exportar */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-            {/* Sub-abas Pills */}
-            <div style={{ display: 'flex', background: '#121A36', padding: '4px', borderRadius: '12px', border: '1px solid #1C2548', flex: 1 }}>
-              <button
-                type="button"
-                onClick={() => setLeadsTab('mine')}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  background: leadsTab === 'mine' ? '#1F2A55' : 'transparent',
-                  color: leadsTab === 'mine' ? '#EEF1FA' : '#8790AE',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                Meus Leads ({myLeads.length})
-              </button>
+          {/* Caixa de Alternância entre Meus Leads e Todos da Empresa */}
+          <div style={{ display: 'flex', background: '#121A36', padding: '4px', borderRadius: '12px', border: '1px solid #1C2548', width: '100%' }}>
+            <button
+              type="button"
+              onClick={() => setLeadsTab('mine')}
+              style={{
+                flex: 1,
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: leadsTab === 'mine' ? '#1F2A55' : 'transparent',
+                color: leadsTab === 'mine' ? '#EEF1FA' : '#8790AE',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Meus Leads ({myLeads.length})
+            </button>
 
-              <button
-                type="button"
-                onClick={() => setLeadsTab('company')}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  background: leadsTab === 'company' ? '#1F2A55' : 'transparent',
-                  color: leadsTab === 'company' ? '#EEF1FA' : '#8790AE',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                Todos da Empresa ({companyLeads.length})
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setLeadsTab('company')}
+              style={{
+                flex: 1,
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: leadsTab === 'company' ? '#1F2A55' : 'transparent',
+                color: leadsTab === 'company' ? '#EEF1FA' : '#8790AE',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Todos da Empresa ({companyLeads.length})
+            </button>
+          </div>
 
-            {/* Botão Exportar CSV */}
+          {/* Opção de Exportar CSV embaixo da caixa de alternância */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginTop: '-4px' }}>
+            <span style={{ fontSize: '12px', color: '#8790AE', fontWeight: 600 }}>
+              {leadsTab === 'mine'
+                ? `${myLeads.length} ${myLeads.length === 1 ? 'contato coletado por você' : 'contatos coletados por você'}`
+                : `${companyLeads.length} ${companyLeads.length === 1 ? 'contato no total da empresa' : 'contatos no total da empresa'}`}
+            </span>
+
             <button
               type="button"
               onClick={handleExportCsv}
               style={{
-                minHeight: '40px',
+                minHeight: '38px',
                 padding: '0 14px',
                 background: '#1A2347',
                 border: '1px solid #1C2548',
-                borderRadius: '12px',
+                borderRadius: '10px',
                 color: '#34D399',
                 fontSize: '12px',
                 fontWeight: 700,
@@ -900,11 +890,12 @@ export default function Sponsor() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease'
               }}
               title="Baixar lista de leads formatada para Excel / Sheets"
             >
-              <Download size={15} />
+              <Download size={14} />
               <span>Exportar CSV</span>
             </button>
           </div>
