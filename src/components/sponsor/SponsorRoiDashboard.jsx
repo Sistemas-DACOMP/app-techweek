@@ -4,8 +4,10 @@ import {
   Printer, 
   TrendingUp, 
   GraduationCap, 
-  Layers 
+  Layers,
+  Building2
 } from 'lucide-react';
+import iconeTw from '../../assets/icone.png';
 import { calculateSponsorRoi, exportLeadsToCsv } from '../../lib/sponsorService';
 
 /**
@@ -36,30 +38,42 @@ export default function SponsorRoiDashboard({
   return (
     <div className="sponsor-roi-dashboard flex flex-col gap-4 sm:gap-5">
       {/* Formal Printable Header (A4 Print / PDF only) */}
-      <div className="hidden print:flex items-center justify-between border-b border-border/80 pb-4">
-        <div>
-          <div className="flex items-center gap-2 text-[12px] font-extrabold uppercase tracking-wider text-link">
-            <span>TechWeek 2026</span>
-            <span>•</span>
-            <span>Relatório Oficial de Patrocínio</span>
-          </div>
-          <h1 className="mt-1 text-[24px] font-black tracking-tight text-text">
-            Performance de Talentos • {companyName}
-          </h1>
-          <div className="mt-1 text-[12px] text-text-3">
-            Amostra de {roi.totalLeads} conexões no estande
+      <div className="hidden print:flex items-center justify-between border-b border-border/80 pb-5 mb-3">
+        <div className="flex items-center gap-3.5">
+          <img src={iconeTw} alt="TechWeek 2026" className="h-11 w-[42px] object-contain shrink-0" />
+          <div>
+            <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-link">
+              <span>TechWeek 2026</span>
+              <span>•</span>
+              <span>Relatório Oficial de Patrocínio</span>
+            </div>
+            <h1 className="mt-0.5 text-[22px] font-black tracking-tight text-text">
+              Performance de Talentos • {companyName}
+            </h1>
+            <div className="mt-0.5 text-[11px] text-text-3">
+              Métricas consolidadas do estande • {roi.totalLeads} {roi.totalLeads === 1 ? 'conexão capturada' : 'conexões capturadas'}
+            </div>
           </div>
         </div>
 
-        {companyLogo && (
-          <div className="flex h-12 w-28 items-center justify-end">
-            <img
-              src={companyLogo}
-              alt={companyName}
-              className="max-h-10 max-w-full object-contain filter brightness-0 invert opacity-90"
-            />
-          </div>
-        )}
+        <div className="flex items-center justify-end">
+          {companyLogo ? (
+            <div className="flex h-12 max-w-[180px] items-center justify-center rounded-xl bg-surface-raised/80 px-3.5 py-1.5 border border-white/10">
+              <img
+                src={companyLogo}
+                alt={companyName}
+                className="max-h-9 max-w-full object-contain filter brightness-0 invert"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-xl bg-surface-raised/80 px-3.5 py-2 border border-white/10">
+              <Building2 size={18} className="text-link" />
+              <span className="text-[14px] font-black uppercase tracking-wider text-text">
+                {companyName}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Clean Executive Header (Screen only - mobile & desktop) */}
@@ -302,6 +316,16 @@ export default function SponsorRoiDashboard({
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Formal Printable Footer (A4 Print / PDF only) */}
+      <div className="hidden print:flex items-center justify-between border-t border-border/60 pt-4 mt-4 text-[10px] text-text-4">
+        <div>
+          <span>TechWeek 2026 • Painel do Patrocinador • Relatório emitido em {new Date().toLocaleDateString('pt-BR')}</span>
+        </div>
+        <div>
+          <span>Confidencial • {companyName}</span>
         </div>
       </div>
     </div>

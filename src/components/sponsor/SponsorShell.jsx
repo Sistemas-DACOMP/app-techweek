@@ -151,13 +151,13 @@ export default function SponsorShell({
   const contextMeta = CONTEXT_HEADERS[activeNavKey] || CONTEXT_HEADERS.home;
 
   return (
-    <div className="flex min-h-dvh bg-bg font-sans text-text">
+    <div className="sponsor-shell flex min-h-dvh bg-bg font-sans text-text print:bg-bg print:block print:min-h-0">
       {/* ========================================================================= */}
       {/* SIDEBAR LATERAL FIXA (DESKTOP: ≥1024px)                                  */}
       {/* ========================================================================= */}
       <aside
         aria-label="Menu do Patrocinador"
-        className="sticky top-0 hidden h-dvh w-[260px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-line bg-nav px-3.5 py-5 lg:flex"
+        className="sticky top-0 hidden h-dvh w-[260px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-line bg-nav px-3.5 py-5 lg:flex print:!hidden"
       >
         {/* Topo da Sidebar: Tech Week 2026 */}
         <button
@@ -320,7 +320,7 @@ export default function SponsorShell({
       {/* ========================================================================= */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Topo Desktop (≥1024px): Contexto + Atalhos Rápidos + Live Status */}
-        <header className="hidden items-center justify-between gap-4 border-b border-line/60 bg-bg/80 backdrop-blur-md px-8 py-3.5 lg:flex">
+        <header className="hidden items-center justify-between gap-4 border-b border-line/60 bg-bg/80 backdrop-blur-md px-8 py-3.5 lg:flex print:!hidden">
           <div className="min-w-0">
             <h1 className="m-0 text-[18px] font-extrabold text-text tracking-tight truncate">
               {contextMeta.title}
@@ -361,8 +361,8 @@ export default function SponsorShell({
         </header>
 
         {/* Conteúdo da Tela */}
-        <main className="min-w-0 flex-1 px-4 pt-4 pb-28 lg:px-8 lg:py-6 lg:pb-12">
-          <div className="mx-auto w-full max-w-[1440px]">
+        <main className="min-w-0 flex-1 px-4 pt-4 pb-28 lg:px-8 lg:py-6 lg:pb-12 print:p-0 print:m-0 print:w-full print:max-w-none print:pb-0">
+          <div className="mx-auto w-full max-w-[1440px] print:max-w-none print:w-full print:p-0 print:m-0">
             {children}
           </div>
         </main>
@@ -373,7 +373,7 @@ export default function SponsorShell({
         {/* ========================================================================= */}
         <nav
           aria-label="Navegação do Patrocinador"
-          className="fixed inset-x-0 bottom-0 z-40 flex justify-center pointer-events-none lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 flex justify-center pointer-events-none lg:hidden print:!hidden"
         >
           <div
             className="w-full max-w-[430px] grid grid-cols-5 border-t border-line bg-nav pt-1.5 pb-[max(10px,env(safe-area-inset-bottom))] pointer-events-auto"

@@ -162,5 +162,50 @@ describe('Sponsor Service & Innovation Features', () => {
       global.URL = OrigURL;
     });
   });
+
+  describe('Print Layout & Executive Report Styles', () => {
+    it('garante que index.css possui regras de @media print com fundo azul e ajuste de cor exato', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/index.css'), 'utf-8');
+      
+      expect(cssContent).toContain('@media print');
+      expect(cssContent).toContain('print-color-adjust: exact');
+      expect(cssContent).toContain('-webkit-print-color-adjust: exact');
+      expect(cssContent).toContain('#0A0F24');
+      expect(cssContent).toContain('aside');
+    });
+
+    it('garante que SponsorShell esconde menu lateral e navegação na impressão', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const shellContent = fs.readFileSync(path.resolve(__dirname, '../../src/components/sponsor/SponsorShell.jsx'), 'utf-8');
+      
+      expect(shellContent).toContain('print:!hidden');
+      expect(shellContent).toContain('sponsor-shell');
+      expect(shellContent).toContain('print:p-0');
+    });
+
+    it('garante que SponsorRoiDashboard possui cabeçalho formal e logo para impressão', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const dashboardContent = fs.readFileSync(path.resolve(__dirname, '../../src/components/sponsor/SponsorRoiDashboard.jsx'), 'utf-8');
+      
+      expect(dashboardContent).toContain('hidden print:flex');
+      expect(dashboardContent).toContain('TechWeek 2026');
+      expect(dashboardContent).toContain('Relatório Oficial de Patrocínio');
+      expect(dashboardContent).toContain('iconeTw');
+      expect(dashboardContent).toContain('brightness-0 invert');
+    });
+
+    it('garante que seletor CRM/ROI em Sponsor.jsx é oculto na impressão', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const sponsorContent = fs.readFileSync(path.resolve(__dirname, '../../src/pages/Sponsor.jsx'), 'utf-8');
+      
+      expect(sponsorContent).toContain('print:hidden flex items-center justify-between gap-2');
+    });
+  });
 });
+
 

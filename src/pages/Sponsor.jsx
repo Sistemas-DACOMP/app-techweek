@@ -1406,7 +1406,7 @@ export default function Sponsor() {
       {activeTab === 'leads' && (
         <div className="animate-fade-in flex flex-col gap-4">
           {/* Segmented Control Unificado: CRM de Leads vs Relatório ROI */}
-          <div className="flex items-center justify-between gap-2">
+          <div className="print:hidden flex items-center justify-between gap-2">
             <div
               role="tablist"
               aria-label="Modo de visualização de leads"
