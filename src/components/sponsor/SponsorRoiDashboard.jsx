@@ -1,21 +1,12 @@
 import { useMemo } from 'react';
 import { 
-  BarChart3, 
   Download, 
   Printer, 
   TrendingUp, 
-  Users, 
-  Star, 
   GraduationCap, 
-  CheckCircle2, 
-  Sparkles,
-  Award,
-  Layers,
-  ArrowRight
+  Layers 
 } from 'lucide-react';
-import { GitHubIcon } from '../ParticipantCard';
 import { calculateSponsorRoi, exportLeadsToCsv } from '../../lib/sponsorService';
-import Mascot from '../Mascot';
 
 /**
  * Dashboard Executivo de ROI e Talentos Pós-Evento para Patrocinadores.
@@ -43,46 +34,9 @@ export default function SponsorRoiDashboard({
   };
 
   return (
-    <div className="sponsor-roi-dashboard flex flex-col gap-6">
-      {/* Top Action Bar (hidden on print) */}
-      <div className="print:hidden flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-link/15 text-link">
-            <BarChart3 size={20} />
-          </span>
-          <div>
-            <h2 className="m-0 text-[16px] font-black text-text">
-              Relatório Executivo de ROI & Talentos
-            </h2>
-            <p className="m-0 text-[12px] text-text-3">
-              Métricas consolidadas do estande da {companyName} na FACOM TechWeek 2026
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            className="press inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-surface-raised px-4 text-[13px] font-bold text-text hover:bg-surface-selected"
-          >
-            <Download size={15} />
-            <span>Exportar CSV</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="press inline-flex min-h-11 items-center gap-2 rounded-xl bg-action px-4 text-[13px] font-bold text-white hover:brightness-110 shadow-[0_4px_16px_rgba(61,80,230,0.3)]"
-          >
-            <Printer size={15} />
-            <span>Imprimir / Salvar PDF</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Printable Report Header */}
-      <div className="flex items-center justify-between border-b border-border/80 pb-4">
+    <div className="sponsor-roi-dashboard flex flex-col gap-4 sm:gap-5">
+      {/* Formal Printable Header (A4 Print / PDF only) */}
+      <div className="hidden print:flex items-center justify-between border-b border-border/80 pb-4">
         <div>
           <div className="flex items-center gap-2 text-[12px] font-extrabold uppercase tracking-wider text-link">
             <span>TechWeek 2026</span>
@@ -108,11 +62,54 @@ export default function SponsorRoiDashboard({
         )}
       </div>
 
+      {/* Clean Executive Header (Screen only - mobile & desktop) */}
+      <div className="print:hidden flex flex-wrap items-center justify-between gap-3 pb-1">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5">
+            <h2 className="m-0 text-[18px] sm:text-[20px] font-extrabold tracking-tight text-text">
+              Performance • {companyName}
+            </h2>
+            {companyLogo && (
+              <img
+                src={companyLogo}
+                alt={companyName}
+                className="h-5 max-w-[80px] object-contain filter brightness-0 invert opacity-75 hidden sm:inline-block"
+              />
+            )}
+          </div>
+          <p className="m-0 mt-0.5 text-[12px] text-text-3">
+            {roi.totalLeads} {roi.totalLeads === 1 ? 'conexão registrada' : 'conexões registradas'} no estande • {totalEventAttendees} no evento
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-selected px-3 text-[12px] font-bold text-text hover:bg-surface-raised transition-colors"
+            title="Exportar dados de ROI em CSV"
+          >
+            <Download size={14} aria-hidden="true" />
+            <span>Exportar CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="press inline-flex h-9 items-center gap-1.5 rounded-xl bg-action px-3 text-[12px] font-bold text-white hover:brightness-110 shadow-xs transition-colors"
+            title="Imprimir relatório ou salvar em PDF"
+          >
+            <Printer size={14} aria-hidden="true" />
+            <span>Imprimir / PDF</span>
+          </button>
+        </div>
+      </div>
+
       {/* 4 Executive KPI Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-2xl border-t-[3px] border-[#8FA0FF] border border-border bg-surface p-4">
-          <div className="text-[12px] font-bold text-text-2">Leads no Estande</div>
-          <div className="mt-2 text-[28px] font-black text-text">{roi.totalLeads}</div>
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-4">
+        <div className="rounded-2xl border-t-[3px] border-[#8FA0FF] border border-border bg-surface p-3.5 sm:p-4">
+          <div className="text-[11px] sm:text-[12px] font-bold text-text-2">Leads no Estande</div>
+          <div className="mt-1.5 text-[24px] sm:text-[28px] font-extrabold tabular-nums text-text">{roi.totalLeads}</div>
           <div className="mt-1 text-[11px] text-text-3">alunos conectados</div>
         </div>
 

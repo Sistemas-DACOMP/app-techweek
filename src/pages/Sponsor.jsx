@@ -1023,7 +1023,7 @@ export default function Sponsor() {
         ) : (
           <div style={{ textAlign: 'center', marginBottom: '14px' }}>
             <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
-              {activeTab === 'leads' && (leadsViewMode === 'roi' ? 'Relatório Executivo ROI' : 'CRM de Leads')}
+              {activeTab === 'leads' && 'Leads do Estande'}
               {activeTab === 'scanner' && 'Bipar Crachá'}
               {activeTab === 'agenda' && 'Programação da TechWeek'}
               {activeTab === 'feed' && 'Feed da Comunidade'}
@@ -1405,38 +1405,58 @@ export default function Sponsor() {
       {/* ========================================================================= */}
       {activeTab === 'leads' && (
         <div className="animate-fade-in flex flex-col gap-4">
-          {/* Alternador de Modo: CRM de Coleta vs Relatório Executivo ROI */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-2">
-            <div className="flex items-center gap-2">
+          {/* Segmented Control Unificado: CRM de Leads vs Relatório ROI */}
+          <div className="flex items-center justify-between gap-2">
+            <div
+              role="tablist"
+              aria-label="Modo de visualização de leads"
+              className="inline-flex h-9 p-0.5 rounded-xl bg-surface-raised border border-border"
+            >
               <button
                 type="button"
+                role="tab"
+                aria-selected={leadsViewMode === 'crm'}
                 onClick={() => setLeadsViewMode('crm')}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-bold transition-all ${
+                className={`press inline-flex items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold transition-all ${
                   leadsViewMode === 'crm'
-                    ? 'bg-link text-white shadow-xs'
-                    : 'bg-transparent text-text-3 hover:text-text hover:bg-surface-raised/50'
+                    ? 'bg-surface-selected text-text shadow-xs'
+                    : 'text-text-3 hover:text-text'
                 }`}
               >
-                <Users size={16} />
-                <span>CRM de Coleta</span>
+                <Users size={14} aria-hidden="true" />
+                <span>CRM de Leads</span>
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={leadsViewMode === 'roi'}
                 onClick={() => setLeadsViewMode('roi')}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-bold transition-all ${
+                className={`press inline-flex items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold transition-all ${
                   leadsViewMode === 'roi'
-                    ? 'bg-link text-white shadow-xs'
-                    : 'bg-transparent text-text-3 hover:text-text hover:bg-surface-raised/50'
+                    ? 'bg-surface-selected text-text shadow-xs'
+                    : 'text-text-3 hover:text-text'
                 }`}
               >
-                <TrendingUp size={16} />
-                <span>Relatório Executivo ROI</span>
+                <TrendingUp size={14} aria-hidden="true" />
+                <span>Relatório ROI</span>
               </button>
             </div>
 
             {leadsViewMode === 'crm' && (
-              <div className="text-[12px] text-text-3 font-medium hidden sm:block pr-2">
-                {companyLeads.length} {companyLeads.length === 1 ? 'lead registrado' : 'leads registrados'}
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] text-text-3 font-medium hidden sm:inline">
+                  {companyLeads.length} {companyLeads.length === 1 ? 'lead' : 'leads'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  disabled={displayedLeads.length === 0}
+                  className="press inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold text-text-2 bg-surface-raised hover:bg-surface-selected border border-border disabled:opacity-40 transition-colors"
+                  title="Baixar lista em CSV"
+                >
+                  <Download size={13} aria-hidden="true" />
+                  <span>CSV</span>
+                </button>
               </div>
             )}
           </div>
@@ -1450,220 +1470,192 @@ export default function Sponsor() {
             />
           ) : (
             <>
-              {/* Caixa Segmentada entre Meus Leads e Toda a Empresa (Padrão Design System §5 e §9) */}
-              <div role="tablist" aria-label="Filtrar escopo dos leads" className="ds-tabs w-full border border-line bg-surface p-1 rounded-2xl">
-            <button
-              type="button"
-              role="tab"
-              id="tab-leads-mine"
-              aria-selected={leadsTab === 'mine'}
-              aria-controls="panel-leads-content"
-              onClick={() => setLeadsTab('mine')}
-              className={`ds-tab flex items-center justify-center gap-2 rounded-xl py-2 px-3 text-[13px] font-bold transition-all duration-150 ${
-                leadsTab === 'mine'
-                  ? 'bg-surface-selected text-text border border-line-2/80 shadow-xs'
-                  : 'text-text-3 hover:text-text-2 hover:bg-surface-raised/50 border border-transparent'
-              }`}
-            >
-              <span>Meus Leads</span>
-              <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
-                  leadsTab === 'mine'
-                    ? 'bg-surface-raised text-text border border-line-2/50'
-                    : 'bg-surface-raised/50 text-text-3'
-                }`}
-              >
-                {myLeads.length}
-              </span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              id="tab-leads-company"
-              aria-selected={leadsTab === 'company'}
-              aria-controls="panel-leads-content"
-              onClick={() => setLeadsTab('company')}
-              className={`ds-tab flex items-center justify-center gap-2 rounded-xl py-2 px-3 text-[13px] font-bold transition-all duration-150 ${
-                leadsTab === 'company'
-                  ? 'bg-surface-selected text-text border border-line-2/80 shadow-xs'
-                  : 'text-text-3 hover:text-text-2 hover:bg-surface-raised/50 border border-transparent'
-              }`}
-            >
-              <span>Toda a Empresa</span>
-              <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
-                  leadsTab === 'company'
-                    ? 'bg-surface-raised text-text border border-line-2/50'
-                    : 'bg-surface-raised/50 text-text-3'
-                }`}
-              >
-                {companyLeads.length}
-              </span>
-            </button>
-          </div>
-
-          {/* Desktop / Tablet Booth OS: Split-View Master-Detail (visível em telas grandes: hidden lg:block) */}
-          <div className="hidden lg:block">
-            <SponsorSplitView
-              leads={leadsTab === 'mine' ? myLeads : companyLeads}
-              selectedLead={selectedLead}
-              onSelectLead={setSelectedLead}
-              onUpdateLead={handleUpdateLeadFromSplitView}
-              companyName={sponsorName}
-              isLoading={isLoadingLeads}
-            />
-          </div>
-
-          {/* Modo Lista / Mobile (visível abaixo de lg: lg:hidden) */}
-          <div className="lg:hidden flex flex-col gap-4">
-            {/* Opção de Exportar CSV embaixo da caixa de alternância */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5">
-            <span className="text-[13px] font-medium text-text-3">
-              {leadsSearch.trim() || starFilter !== 'all' ? (
-                <>
-                  Mostrando <strong className="font-bold text-text">{displayedLeads.length}</strong> de {leadsTab === 'mine' ? myLeads.length : companyLeads.length} leads
-                </>
-              ) : leadsTab === 'mine' ? (
-                `${myLeads.length} ${myLeads.length === 1 ? 'contato coletado por você' : 'contatos coletados por você'}`
-              ) : (
-                `${companyLeads.length} ${companyLeads.length === 1 ? 'contato no total da empresa' : 'contatos no total da empresa'}`
-              )}
-            </span>
-
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              disabled={displayedLeads.length === 0}
-              className={`${btn('secondary')} h-9 px-3.5 text-[12px] font-bold`}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                color: displayedLeads.length === 0 ? 'var(--text-3)' : 'var(--ok)'
-              }}
-              title="Baixar lista de leads formatada para Excel / Google Sheets"
-            >
-              <Download size={14} />
-              <span>Exportar CSV</span>
-            </button>
-          </div>
-
-          {/* Campo de Busca refinado (Padrão AdminPessoas) */}
-          <div className="flex flex-col gap-2.5">
-            <label className="flex h-12 items-center gap-2.5 rounded-[14px] border-[1.5px] border-field-line bg-surface px-3.5 text-text-3">
-              <Search size={18} aria-hidden="true" />
-              <span className="sr-only">Buscar leads por nome, curso, telefone ou anotação</span>
-              <input
-                type="search"
-                value={leadsSearch}
-                onChange={(e) => setLeadsSearch(e.target.value)}
-                placeholder="Buscar por nome, curso, telefone ou anotação..."
-                className="min-w-0 flex-1 border-0 bg-transparent text-[14px] text-text outline-none placeholder:text-text-3"
-              />
-              {leadsSearch && (
-                <button
-                  type="button"
-                  onClick={() => setLeadsSearch('')}
-                  aria-label="Limpar busca"
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-text-3 hover:text-text"
-                >
-                  <X size={15} />
-                </button>
-              )}
-            </label>
-
-            {/* Filtros de Estrelas (Primeira linha de filtros com degradê azul e roxo padrão no selecionado) */}
-            <div
-              className="adm-noscroll flex items-center gap-2 overflow-x-auto pb-1"
-              role="group"
-              aria-label="Filtro por avaliação de estrelas"
-            >
-              <span className="flex items-center gap-1 text-[11px] font-bold text-text-3 whitespace-nowrap">
-                <Filter size={12} />
-                <span>Nota:</span>
-              </span>
-              {[
-                { id: 'all', label: 'Todas as notas' },
-                { id: '5', label: '5 ★' },
-                { id: '4', label: '4 ★+' },
-                { id: '3', label: '3 ★+' }
-              ].map((f) => {
-                const isSelected = starFilter === f.id;
-                return (
+              {/* Seletor de Escopo Discreto (Micro-pills horizontais inline) */}
+              <div className="flex items-center justify-between gap-2">
+                <div role="tablist" aria-label="Filtrar escopo dos leads" className="flex items-center gap-1.5">
                   <button
-                    key={f.id}
                     type="button"
-                    aria-pressed={isSelected}
-                    onClick={() => setStarFilter(f.id)}
-                    className={`press inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-[14px] font-bold transition-all ${
-                      isSelected
-                        ? 'border-0 text-white shadow-[0_2px_10px_rgba(37,99,235,0.35)]'
-                        : 'border border-line-2 bg-transparent text-text hover:border-text-3'
+                    role="tab"
+                    id="tab-leads-mine"
+                    aria-selected={leadsTab === 'mine'}
+                    aria-controls="panel-leads-content"
+                    onClick={() => setLeadsTab('mine')}
+                    className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
+                      leadsTab === 'mine'
+                        ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
+                        : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
                     }`}
-                    style={
-                      isSelected
-                        ? { background: 'linear-gradient(135deg, #2563EB, #7C3AED)' }
-                        : undefined
-                    }
                   >
-                    <span>{f.label}</span>
+                    <span>Meus Leads</span>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                        leadsTab === 'mine'
+                          ? 'bg-link/20 text-link'
+                          : 'bg-surface-raised text-text-4'
+                      }`}
+                    >
+                      {myLeads.length}
+                    </span>
                   </button>
-                );
-              })}
-            </div>
-
-            {/* Ordenação Rápida dos Leads */}
-            <div
-              className="adm-noscroll flex items-center gap-2 overflow-x-auto pb-1"
-              role="group"
-              aria-label="Opções de ordenação dos leads"
-            >
-              <span className="flex items-center gap-1 text-[11px] font-bold text-text-3 whitespace-nowrap">
-                <ArrowUpDown size={12} color="var(--link)" />
-                <span>Ordenar:</span>
-              </span>
-              {[
-                { id: 'recent', label: 'Mais recentes' },
-                { id: 'rating', label: 'Maior avaliação' },
-                { id: 'name', label: 'Nome (A-Z)' }
-              ].map((s) => (
-                <Chip key={s.id} selected={leadSortBy === s.id} onClick={() => setLeadSortBy(s.id)}>
-                  <span>{s.label}</span>
-                </Chip>
-              ))}
-            </div>
-          </div>
-
-          {/* Lista e Tabela de Leads */}
-          <div
-            id="panel-leads-content"
-            role="region"
-            aria-label="Lista de contatos do estande"
-            className="flex flex-col gap-2.5"
-          >
-            {(leadsTab === 'mine' ? myLeads : companyLeads).length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-[20px] bg-surface p-8 text-center border border-line">
-                <div className="mb-4">
-                  <Mascot size={72} color="blue" isWaving={true} />
+                  <button
+                    type="button"
+                    role="tab"
+                    id="tab-leads-company"
+                    aria-selected={leadsTab === 'company'}
+                    aria-controls="panel-leads-content"
+                    onClick={() => setLeadsTab('company')}
+                    className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
+                      leadsTab === 'company'
+                        ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
+                        : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
+                    }`}
+                  >
+                    <span>Toda a Empresa</span>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                        leadsTab === 'company'
+                          ? 'bg-link/20 text-link'
+                          : 'bg-surface-raised text-text-4'
+                      }`}
+                    >
+                      {companyLeads.length}
+                    </span>
+                  </button>
                 </div>
-                <h3 className="mb-2 text-[15px] font-extrabold text-text">
-                  {leadsTab === 'mine' ? 'Nenhum lead coletado por você ainda' : 'Nenhum lead registrado pela empresa'}
-                </h3>
-                <p className="mb-5 max-w-[320px] text-[13px] leading-relaxed text-text-3">
-                  {leadsTab === 'mine'
-                    ? 'Aponte a câmera para o crachá dos estudantes no estande para salvar contatos, notas e avaliações.'
-                    : 'Nenhum membro da sua equipe bipou participantes ainda.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('scanner')}
-                  className={`${btn('action')} inline-flex items-center gap-2 text-[13px] font-extrabold`}
-                >
-                  <Camera size={16} />
-                  <span>Bipar Primeiro Estudante</span>
-                </button>
+
+                <span className="text-[11px] text-text-3 font-medium">
+                  {leadsSearch.trim() || starFilter !== 'all' ? (
+                    <>Filtrando <strong>{displayedLeads.length}</strong> de {leadsTab === 'mine' ? myLeads.length : companyLeads.length}</>
+                  ) : (
+                    <>{displayedLeads.length} {displayedLeads.length === 1 ? 'contato' : 'contatos'}</>
+                  )}
+                </span>
               </div>
-            ) : displayedLeads.length === 0 ? (
+
+              {/* Desktop / Tablet Booth OS: Split-View Master-Detail (visível em telas grandes: hidden lg:block) */}
+              <div className="hidden lg:block">
+                <SponsorSplitView
+                  leads={leadsTab === 'mine' ? myLeads : companyLeads}
+                  selectedLead={selectedLead}
+                  onSelectLead={setSelectedLead}
+                  onUpdateLead={handleUpdateLeadFromSplitView}
+                  companyName={sponsorName}
+                  isLoading={isLoadingLeads}
+                />
+              </div>
+
+              {/* Modo Lista / Mobile (visível abaixo de lg: lg:hidden) */}
+              <div className="lg:hidden flex flex-col gap-3">
+                {/* Campo de Busca Compacto (h-10) */}
+                <label className="flex h-10 items-center gap-2 rounded-xl border border-field-line bg-surface px-3 text-text-3 focus-within:border-link transition-colors">
+                  <Search size={16} aria-hidden="true" />
+                  <span className="sr-only">Buscar leads por nome, curso, telefone ou anotação</span>
+                  <input
+                    type="search"
+                    value={leadsSearch}
+                    onChange={(e) => setLeadsSearch(e.target.value)}
+                    placeholder="Buscar por nome, curso, telefone..."
+                    className="min-w-0 flex-1 border-0 bg-transparent text-[13px] text-text outline-none placeholder:text-text-3"
+                  />
+                  {leadsSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setLeadsSearch('')}
+                      aria-label="Limpar busca"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-text-3 hover:text-text"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </label>
+
+                {/* Linha Única de Filtros Rápidos (Nota + Ordenação Integrada) */}
+                <div
+                  className="adm-noscroll flex items-center gap-1.5 overflow-x-auto pb-0.5"
+                  role="group"
+                  aria-label="Filtros e ordenação de leads"
+                >
+                  {[
+                    { id: 'all', label: 'Todas notas' },
+                    { id: '5', label: '5 ★' },
+                    { id: '4', label: '4 ★+' },
+                    { id: '3', label: '3 ★+' }
+                  ].map((f) => {
+                    const isSelected = starFilter === f.id;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => setStarFilter(f.id)}
+                        className={`press inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-[12px] font-bold transition-all ${
+                          isSelected
+                            ? 'bg-surface-selected text-text border border-line-2 shadow-xs'
+                            : 'border border-transparent bg-surface-raised/40 text-text-3 hover:text-text hover:bg-surface-raised/70'
+                        }`}
+                      >
+                        <span>{f.label}</span>
+                      </button>
+                    );
+                  })}
+
+                  <span className="h-3.5 w-[1px] bg-border shrink-0 mx-0.5" aria-hidden="true" />
+
+                  {/* Ordenação Rápida Integrada */}
+                  {[
+                    { id: 'recent', label: 'Recentes' },
+                    { id: 'rating', label: 'Avaliação' }
+                  ].map((s) => {
+                    const isSelected = leadSortBy === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => setLeadSortBy(s.id)}
+                        className={`press inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-[12px] font-bold transition-all ${
+                          isSelected
+                            ? 'bg-surface-selected text-link border border-link/30 shadow-xs'
+                            : 'border border-transparent bg-surface-raised/40 text-text-3 hover:text-text hover:bg-surface-raised/70'
+                        }`}
+                      >
+                        <ArrowUpDown size={11} className={isSelected ? 'text-link' : 'text-text-4'} aria-hidden="true" />
+                        <span>{s.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Lista e Tabela de Leads */}
+                <div
+                  id="panel-leads-content"
+                  role="region"
+                  aria-label="Lista de contatos do estande"
+                  className="flex flex-col gap-2.5"
+                >
+                {(leadsTab === 'mine' ? myLeads : companyLeads).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center rounded-[20px] bg-surface p-5 sm:p-7 text-center border border-line">
+                    <div className="mb-2.5">
+                      <Mascot size={56} color="blue" isWaving={true} />
+                    </div>
+                    <h3 className="mb-1 text-[14px] font-extrabold text-text">
+                      {leadsTab === 'mine' ? 'Nenhum lead coletado por você ainda' : 'Nenhum lead registrado pela empresa'}
+                    </h3>
+                    <p className="mb-3.5 max-w-[280px] text-[12px] leading-relaxed text-text-3">
+                      {leadsTab === 'mine'
+                        ? 'Aponte a câmera para o crachá dos estudantes no estande para salvar contatos, notas e avaliações.'
+                        : 'Nenhum membro da sua equipe bipou participantes ainda.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('scanner')}
+                      className={`${btn('action')} inline-flex items-center gap-1.5 h-9 px-4 text-[12px] font-extrabold`}
+                    >
+                      <Camera size={15} />
+                      <span>Bipar Primeiro Estudante</span>
+                    </button>
+                  </div>
+                ) : displayedLeads.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-[18px] bg-surface p-7 text-center border border-line">
                 <Search size={32} className="mx-auto mb-3 text-text-3" />
                 <h3 className="mb-1 text-[14px] font-bold text-text">
