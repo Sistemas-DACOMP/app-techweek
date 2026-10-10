@@ -767,25 +767,27 @@ export default function SponsorLeadModal({
               {/* 3. AVALIAÇÃO DO CANDIDATO (ESTRELAS 0 A 5)                            */}
               {/* ===================================================================== */}
               <div style={{ marginBottom: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', gap: '8px' }}>
                   <label style={{ fontSize: '11px', fontWeight: '700', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Avaliação do Candidato
+                    Avaliação
                   </label>
 
-                  {/* Rótulo dinâmico de classificação semântica com badge estilizada */}
+                  {/* Rótulo dinâmico de classificação semântica com badge legível, de alto contraste e sem quebras */}
                   <span
                     style={{
-                      fontSize: '11px',
+                      fontSize: '11.5px',
                       fontWeight: '700',
                       color: currentClassification.color,
                       background: currentClassification.bg,
                       border: `1px solid ${currentClassification.border}`,
-                      padding: '2px 8px',
-                      borderRadius: '10px',
+                      padding: '3px 10px',
+                      borderRadius: '8px',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '4px',
-                      transition: 'all 0.15s ease'
+                      gap: '5px',
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.15s ease',
+                      boxShadow: displayRating > 0 ? `0 0 10px ${currentClassification.bg}` : 'none'
                     }}
                   >
                     {displayRating > 0 && <Star size={11} fill={currentClassification.color} color={currentClassification.color} />}
@@ -795,8 +797,8 @@ export default function SponsorLeadModal({
                   </span>
                 </div>
 
-                {/* Botões das Estrelas com touch target amplo (44px) e visual limpo */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {/* Estrelas com touch target ergonômico (minWidth: 44px, minHeight: 44px), visual limpo e sem caixas escuras pesadas */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
                   {[1, 2, 3, 4, 5].map((starValue) => {
                     const isFilled = displayRating >= starValue;
                     return (
@@ -812,34 +814,35 @@ export default function SponsorLeadModal({
                         onMouseLeave={() => setHoverRating(0)}
                         style={{
                           background: isFilled
-                            ? 'rgba(251, 191, 36, 0.12)'
-                            : 'rgba(255, 255, 255, 0.03)',
+                            ? 'rgba(251, 191, 36, 0.10)'
+                            : 'rgba(255, 255, 255, 0.02)',
                           border: isFilled
-                            ? '1px solid rgba(251, 191, 36, 0.45)'
-                            : '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: '12px',
+                            ? '1px solid rgba(251, 191, 36, 0.35)'
+                            : '1px solid rgba(255, 255, 255, 0.05)',
+                          borderRadius: '10px',
                           cursor: 'pointer',
                           padding: '4px',
-                          transition: 'all 0.15s ease',
-                          transform: isFilled ? 'scale(1.05)' : 'scale(1)',
+                          flex: 1,
                           minWidth: '44px',
                           minHeight: '44px',
-                          width: '44px',
                           height: '44px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
+                          transition: 'all 0.15s ease',
+                          transform: isFilled ? 'scale(1.06)' : 'scale(1)',
                           boxShadow: isFilled
-                            ? '0 0 12px rgba(251, 191, 36, 0.25)'
-                            : 'none'
+                            ? '0 0 10px rgba(251, 191, 36, 0.22)'
+                            : 'none',
+                          WebkitTapHighlightColor: 'transparent'
                         }}
                         aria-label={`${starValue} estrelas - ${RATING_CLASSIFICATIONS[starValue].label}`}
                       >
                         <Star
-                          size={26}
+                          size={24}
                           fill={isFilled ? '#FBBF24' : 'none'}
                           color={isFilled ? '#FBBF24' : 'rgba(255, 255, 255, 0.28)'}
-                          strokeWidth={isFilled ? 1.5 : 1.5}
+                          strokeWidth={1.5}
                           style={{
                             filter: isFilled ? 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.45))' : 'none',
                             transition: 'all 0.15s ease'
