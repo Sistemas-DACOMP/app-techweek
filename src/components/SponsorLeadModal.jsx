@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   X, 
   Star, 
@@ -10,36 +10,72 @@ import {
   Mail, 
   Phone, 
   Sparkles,
-  QrCode
+  QrCode,
+  Copy,
+  ExternalLink,
+  Calendar,
+  UserCheck
 } from 'lucide-react';
 import WhatsAppButton from './WhatsAppButton';
-import { submitLead } from '../lib/sponsorService';
+import { submitLead, updateLead } from '../lib/sponsorService';
 
 /**
- * Modal pós-leitura de Lead para Patrocinadores (KAN-52).
- * Permite avaliação de 1 a 5 estrelas, notas de recrutamento, envio para POST /api/leads
- * e exibição imediata do Botão Inteligente do WhatsApp (KAN-54).
+ * Modal completo de Lead para Patrocinadores (Design System TechWeek).
+ * Suporta dois fluxos:
+ * 1. Leitura Nova (isExistingLead = false): pós-leitura de QR Code, salva lead (+50 pts) e gera atalhos.
+ * 2. Visualização e Edição de Lead (isExistingLead = true): CRM do estande, exibe dados completos,
+ *    permite editar notas e estrelas (0-5), copiar/enviar e-mail e conversar no WhatsApp.
  */
 export default function SponsorLeadModal({
   participant,
   sponsorProfile,
+  isExistingLead = false,
   onClose,
-  onLeadCaptured
+  onLeadCaptured,
+  onLeadUpdated
 }) {
-  const [rating, setRating] = useState(0);
+  const [rating, setRating] = useState(participant?.rating || 0);
   const [hoverRating, setHoverRating] = useState(0);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(participant?.notes || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [savedLeadData, setSavedLeadData] = useState(null);
+  const [emailCopied, setEmailCopied] = useState(false);
+  const [updateSuccessToast, setUpdateSuccessToast] = useState(false);
+
+  useEffect(() => {
+    if (participant) {
+      setRating(participant.rating || 0);
+      setNotes(participant.notes || '');
+      setSavedLeadData(null);
+      setErrorMsg(null);
+      setEmailCopied(false);
+      setUpdateSuccessToast(false);
+    }
+  }, [participant]);
 
   if (!participant) return null;
 
   const sponsorCompanyName = sponsorProfile?.companyName || sponsorProfile?.empresa || sponsorProfile?.displayName || 'Empresa Patrocinadora';
+  const sponsorCompanyId = sponsorProfile?.companyId || sponsorProfile?.empresa || sponsorProfile?.companyName;
+  const participantUid = participant.participantUid || participant.uid || participant.id;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!participant.participantUid) {
+  const institutionLabel = participant.instituicao || participant.institution || participant.postgradInst || participant.otherInst || participant.participantType || '';
+
+  const handleCopyEmail = async () => {
+    if (!participant.email) return;
+    try {
+      await navigator.clipboard.writeText(participant.email);
+      setEmailCopied(true);
+      setTimeout(() => setEmailCopied(false), 2500);
+    } catch (err) {
+      console.warn('Erro ao copiar e-mail:', err);
+    }
+  };
+
+  const handleSaveOrSubmit = async (e) => {
+    e?.preventDefault();
+    if (!participantUid) {
       setErrorMsg('Identificador do participante não encontrado.');
       return;
     }
@@ -48,30 +84,63 @@ export default function SponsorLeadModal({
     setErrorMsg(null);
 
     try {
-      const response = await submitLead({
-        participantUid: participant.participantUid,
-        notes,
-        rating: rating > 0 ? rating : undefined,
-        companyId: sponsorProfile?.companyId || sponsorProfile?.empresa || sponsorProfile?.companyName
-      });
+      if (isExistingLead) {
+        // Atualização de lead existente no CRM
+        const response = await updateLead({
+          participantUid,
+          rating: rating !== undefined ? Number(rating) : 0,
+          notes,
+          companyId: sponsorCompanyId
+        });
 
-      const leadInfo = response?.lead || {
-        participantUid: participant.participantUid,
-        name: participant.name,
-        phone: participant.phone,
-        notes,
-        rating
-      };
+        setUpdateSuccessToast(true);
+        setTimeout(() => setUpdateSuccessToast(false), 3000);
 
-      setSavedLeadData(leadInfo);
-      if (onLeadCaptured) {
-        onLeadCaptured(leadInfo);
+        if (onLeadUpdated) {
+          onLeadUpdated({
+            ...participant,
+            rating,
+            notes
+          });
+        }
+      } else {
+        // Cadastro de novo lead pós-leitura de QR
+        const response = await submitLead({
+          participantUid,
+          notes,
+          rating: rating > 0 ? rating : undefined,
+          companyId: sponsorCompanyId
+        });
+
+        const leadInfo = response?.lead || {
+          ...participant,
+          participantUid,
+          notes,
+          rating
+        };
+
+        setSavedLeadData(leadInfo);
+        if (onLeadCaptured) {
+          onLeadCaptured(leadInfo);
+        }
       }
     } catch (err) {
-      console.error('Erro ao enviar lead:', err);
-      setErrorMsg(err.message || 'Erro ao registrar contato.');
+      console.error('Erro ao salvar lead:', err);
+      setErrorMsg(err.message || 'Erro ao processar dados do contato.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const formatLeadDate = (dateVal) => {
+    if (!dateVal) return null;
+    try {
+      if (typeof dateVal?.toDate === 'function') {
+        return dateVal.toDate().toLocaleString('pt-BR');
+      }
+      return new Date(dateVal).toLocaleString('pt-BR');
+    } catch {
+      return null;
     }
   };
 
@@ -97,15 +166,15 @@ export default function SponsorLeadModal({
         className="glass-panel"
         style={{
           width: '100%',
-          maxWidth: '460px',
+          maxWidth: '500px',
           maxHeight: '90vh',
           overflowY: 'auto',
           borderRadius: '24px',
           padding: '24px',
-          background: 'linear-gradient(145deg, rgba(20, 27, 45, 0.95), rgba(10, 15, 30, 0.98))',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(56, 189, 248, 0.1)',
-          fontFamily: "Montserrat, sans-serif",
+          background: 'linear-gradient(145deg, #121A36, #0A0F24)',
+          border: '1px solid #1C2548',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(37, 99, 235, 0.1)',
+          fontFamily: 'Montserrat, sans-serif',
           position: 'relative'
         }}
       >
@@ -117,7 +186,7 @@ export default function SponsorLeadModal({
             position: 'absolute',
             top: '18px',
             right: '18px',
-            background: 'rgba(255, 255, 255, 0.08)',
+            background: '#1A2347',
             border: 'none',
             borderRadius: '50%',
             width: '36px',
@@ -125,23 +194,24 @@ export default function SponsorLeadModal({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'var(--text-secondary)',
+            color: '#A9B1CC',
             cursor: 'pointer',
             transition: 'all 0.2s ease'
           }}
+          aria-label="Fechar"
         >
           <X size={18} />
         </button>
 
         {/* Lead Badge Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <div
             style={{
               padding: '4px 10px',
               borderRadius: '20px',
-              background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.15), rgba(56, 189, 248, 0.2))',
+              background: 'rgba(37, 99, 235, 0.15)',
               border: '1px solid rgba(56, 189, 248, 0.4)',
-              color: 'var(--link)',
+              color: '#8FA0FF',
               fontSize: '11px',
               fontWeight: '800',
               textTransform: 'uppercase',
@@ -152,10 +222,10 @@ export default function SponsorLeadModal({
             }}
           >
             <Sparkles size={13} />
-            <span>Lead de Estande</span>
+            <span>{isExistingLead ? 'Detalhes do Candidato' : 'Novo Lead de Estande'}</span>
           </div>
 
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ fontSize: '11px', color: '#A9B1CC', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Building2 size={12} />
             <span>{sponsorCompanyName}</span>
           </div>
@@ -164,13 +234,13 @@ export default function SponsorLeadModal({
         {/* Candidate Profile Box */}
         <div
           style={{
-            background: 'rgba(255, 255, 255, 0.03)',
+            background: '#1A2347',
             borderRadius: '18px',
             padding: '16px',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            marginBottom: '20px',
+            border: '1px solid #1C2548',
+            marginBottom: '18px',
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             gap: '14px'
           }}
         >
@@ -179,15 +249,15 @@ export default function SponsorLeadModal({
               width: '54px',
               height: '54px',
               borderRadius: '16px',
-              background: 'linear-gradient(135deg, #2563EB, var(--link))',
+              background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#07090E',
+              color: '#FFFFFF',
               fontWeight: '800',
               fontSize: '20px',
               flexShrink: 0,
-              boxShadow: '0 4px 15px rgba(56, 189, 248, 0.3)'
+              boxShadow: '0 4px 15px rgba(37, 99, 235, 0.3)'
             }}
           >
             {participant.avatarUrl ? (
@@ -202,26 +272,109 @@ export default function SponsorLeadModal({
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{ fontFamily: 'Montserrat, sans-serif', fontSize: '1.1rem', fontWeight: '800', color: '#ffffff', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {participant.name}
+            <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#EEF1FA', marginBottom: '4px', lineHeight: 1.25 }}>
+              {participant.name || 'Participante'}
             </h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-              <GraduationCap size={14} color="var(--link)" />
-              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {participant.course} {participant.period ? `• ${participant.period}º Período` : ''}
-              </span>
-            </div>
-            {participant.phone && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                <Phone size={12} />
-                <span>{participant.phone}</span>
+
+            {participant.course && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#A9B1CC', marginBottom: '4px' }}>
+                <GraduationCap size={14} color="#8FA0FF" />
+                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {participant.course} {participant.period ? `• ${participant.period}º Período` : ''}
+                </span>
               </div>
             )}
+
+            {institutionLabel && (
+              <div style={{ fontSize: '11px', color: '#8790AE', marginBottom: '4px' }}>
+                {institutionLabel}
+              </div>
+            )}
+
+            {/* Quick Contact Chips */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+              {participant.phone && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#A9B1CC' }}>
+                  <Phone size={12} color="#25D366" />
+                  <span>{participant.phone}</span>
+                </div>
+              )}
+
+              {participant.email && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#A9B1CC' }}>
+                  <Mail size={12} color="#8FA0FF" />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{participant.email}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* If already submitted, show success state & WhatsApp Button */}
-        {savedLeadData ? (
+        {/* Action Row for Email & WhatsApp in details mode */}
+        <div style={{ display: 'grid', gridTemplateColumns: participant.email ? '1fr 1fr' : '1fr', gap: '8px', marginBottom: '18px' }}>
+          {participant.email && (
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                type="button"
+                onClick={handleCopyEmail}
+                style={{
+                  flex: 1,
+                  minHeight: '44px',
+                  background: emailCopied ? 'rgba(16, 185, 129, 0.2)' : '#1A2347',
+                  border: emailCopied ? '1px solid #10B981' : '1px solid #1C2548',
+                  borderRadius: '12px',
+                  color: emailCopied ? '#34D399' : '#EEF1FA',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {emailCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                <span>{emailCopied ? 'Copiado!' : 'Copiar E-mail'}</span>
+              </button>
+
+              <a
+                href={`mailto:${participant.email}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  width: '44px',
+                  minHeight: '44px',
+                  background: '#1A2347',
+                  border: '1px solid #1C2548',
+                  borderRadius: '12px',
+                  color: '#8FA0FF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textDecoration: 'none'
+                }}
+                title="Abrir aplicativo de e-mail"
+              >
+                <ExternalLink size={16} />
+              </a>
+            </div>
+          )}
+
+          {participant.phone && (
+            <WhatsAppButton
+              phone={participant.phone}
+              participantName={participant.name}
+              companyName={sponsorCompanyName}
+              label="WhatsApp"
+              size="sm"
+              fullWidth
+            />
+          )}
+        </div>
+
+        {/* If newly scanned and just submitted, show success state */}
+        {!isExistingLead && savedLeadData ? (
           <div style={{ textAlign: 'center', animation: 'fadeIn 0.3s ease-in' }}>
             <div
               style={{
@@ -247,25 +400,14 @@ export default function SponsorLeadModal({
               🎉 +50 pontos foram creditados no crachá do participante.
             </p>
 
-            {/* Direct WhatsApp Conversion Button */}
-            <div style={{ marginBottom: '20px' }}>
-              <WhatsAppButton
-                phone={savedLeadData.phone || participant.phone}
-                participantName={savedLeadData.name || participant.name}
-                companyName={sponsorCompanyName}
-                label="Conversar no WhatsApp Agora"
-                size="lg"
-                fullWidth
-              />
-            </div>
-
             <button
               type="button"
               className="btn-primary"
               onClick={onClose}
               style={{
                 width: '100%',
-                padding: '14px',
+                minHeight: '44px',
+                padding: '12px',
                 fontSize: '14px',
                 fontWeight: '700',
                 display: 'flex',
@@ -280,75 +422,101 @@ export default function SponsorLeadModal({
           </div>
         ) : (
           /* Form for Rating and Notes */
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSaveOrSubmit}>
             {/* Star Rating Section */}
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Classificação do Candidato (1 a 5 estrelas)
-              </label>
+            <div style={{ marginBottom: '18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '700', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Avaliação do Candidato
+                </label>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: rating > 0 ? '#FBBF24' : '#8790AE' }}>
+                  {rating > 0 ? `${rating} de 5 estrelas` : 'Sem classificação'}
+                </span>
+              </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {[1, 2, 3, 4, 5].map((starValue) => {
                   const isFilled = (hoverRating || rating) >= starValue;
                   return (
                     <button
                       key={starValue}
                       type="button"
-                      onClick={() => setRating(starValue)}
+                      onClick={() => setRating(starValue === rating ? 0 : starValue)}
                       onMouseEnter={() => setHoverRating(starValue)}
                       onMouseLeave={() => setHoverRating(0)}
                       style={{
                         background: 'transparent',
                         border: 'none',
                         cursor: 'pointer',
-                        padding: '4px',
+                        padding: '6px',
                         transition: 'transform 0.15s ease',
-                        transform: (hoverRating || rating) >= starValue ? 'scale(1.15)' : 'scale(1)'
+                        transform: (hoverRating || rating) >= starValue ? 'scale(1.15)' : 'scale(1)',
+                        minWidth: '40px',
+                        minHeight: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
                       }}
                       aria-label={`${starValue} estrelas`}
                     >
                       <Star
-                        size={32}
-                        fill={isFilled ? '#eab308' : 'none'}
-                        color={isFilled ? '#eab308' : 'rgba(255, 255, 255, 0.25)'}
+                        size={30}
+                        fill={isFilled ? '#FBBF24' : 'none'}
+                        color={isFilled ? '#FBBF24' : 'rgba(255, 255, 255, 0.2)'}
                       />
                     </button>
                   );
                 })}
-                <span style={{ fontSize: '13px', fontWeight: '700', color: rating > 0 ? '#eab308' : 'var(--text-secondary)', marginLeft: '6px' }}>
-                  {rating > 0 ? `${rating} / 5` : 'Sem nota'}
-                </span>
               </div>
             </div>
 
             {/* Recruitment Notes Section */}
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Notas de Recrutamento (notes)
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#A9B1CC', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Anotações e Observações (Recrutamento)
               </label>
 
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Ex: Ótimo perfil para estágio backend em Node/Python, interesse na vaga de dados, soft skills excelentes..."
+                placeholder="Ex: Bom conhecimento em React e Node, busca estágio em backend, boa comunicação..."
                 rows={4}
                 style={{
                   width: '100%',
                   fontFamily: 'Montserrat, sans-serif',
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: '#131B3A',
+                  border: '1.5px solid #26305A',
                   borderRadius: '14px',
                   padding: '12px 14px',
-                  color: '#ffffff',
+                  color: '#EEF1FA',
                   fontSize: '13px',
                   resize: 'vertical',
                   outline: 'none',
-                  transition: 'border-color 0.2s ease'
+                  transition: 'border-color 0.2s ease',
+                  boxSizing: 'border-box'
                 }}
-                onFocus={(e) => { e.target.style.borderColor = 'var(--link)'; }}
-                onBlur={(e) => { e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'; }}
+                onFocus={(e) => { e.target.style.borderColor = '#2563EB'; }}
+                onBlur={(e) => { e.target.style.borderColor = '#26305A'; }}
               />
             </div>
+
+            {/* Lead Metadata (When view mode) */}
+            {isExistingLead && (participant.createdAt || participant.collectedByEmail) && (
+              <div style={{ padding: '10px 12px', background: '#0F1424', borderRadius: '12px', border: '1px solid #1C2548', marginBottom: '16px', fontSize: '11px', color: '#8790AE' }}>
+                {participant.collectedByEmail && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                    <UserCheck size={12} color="#8FA0FF" />
+                    <span>Coletado por: <strong>{participant.collectedByEmail}</strong></span>
+                  </div>
+                )}
+                {participant.createdAt && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Calendar size={12} color="#8FA0FF" />
+                    <span>Data: {formatLeadDate(participant.createdAt)}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Error Message */}
             {errorMsg && (
@@ -371,6 +539,27 @@ export default function SponsorLeadModal({
               </div>
             )}
 
+            {/* Success Toast for updates */}
+            {updateSuccessToast && (
+              <div
+                style={{
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  border: '1px solid #10B981',
+                  borderRadius: '12px',
+                  padding: '10px 14px',
+                  color: '#34D399',
+                  fontSize: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '16px'
+                }}
+              >
+                <CheckCircle2 size={16} />
+                <span>Alterações salvas com sucesso!</span>
+              </div>
+            )}
+
             {/* Submit Action Button */}
             <button
               type="submit"
@@ -378,24 +567,26 @@ export default function SponsorLeadModal({
               className="btn-primary"
               style={{
                 width: '100%',
+                minHeight: '44px',
                 padding: '14px',
                 fontSize: '14px',
                 fontWeight: '700',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: '8px',
+                cursor: 'pointer'
               }}
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="animate-spin" size={18} />
-                  <span>Enviando Lead...</span>
+                  <span>{isExistingLead ? 'Salvando Alterações...' : 'Salvando Lead...'}</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 size={18} />
-                  <span>Salvar Lead (+50 pts)</span>
+                  <span>{isExistingLead ? 'Salvar Alterações' : 'Salvar Lead (+50 pts)'}</span>
                 </>
               )}
             </button>

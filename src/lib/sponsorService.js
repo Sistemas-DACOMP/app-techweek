@@ -180,3 +180,142 @@ export async function submitLead({ participantUid, notes, rating, companyId }) {
 
   return data;
 }
+
+/**
+ * Busca os leads do patrocinador (meus e da empresa).
+ * @param {string} [companyId]
+ * @returns {Promise<{ myLeads: Array, companyLeads: Array, companyId: string }>}
+ */
+export async function fetchLeads(companyId) {
+  const token = auth?.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const baseUrl = getApiBaseUrl();
+  const query = companyId ? `?companyId=${encodeURIComponent(companyId)}` : '';
+  const url = `${baseUrl}/leads${query}`.replace('//leads', '/leads');
+
+  const response = await fetch(url, { method: 'GET', headers });
+  const data = await response.json();
+
+  if (!response.ok) {
+    const errorMsg = data?.message || data?.error || 'Erro ao carregar leads.';
+    const error = new Error(errorMsg);
+    error.status = response.status;
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Atualiza avaliação (rating) e observações (notes) de um lead capturado.
+ * @param {object} payload
+ * @param {string} payload.participantUid
+ * @param {number} [payload.rating] 0 a 5
+ * @param {string} [payload.notes]
+ * @param {string} [payload.companyId]
+ * @returns {Promise<object>}
+ */
+export async function updateLead({ participantUid, rating, notes, companyId }) {
+  if (!participantUid) throw new Error('participantUid é obrigatório.');
+
+  const token = auth?.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/leads/${encodeURIComponent(participantUid)}`.replace('//leads', '/leads');
+
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({
+      rating: rating !== undefined ? Number(rating) : undefined,
+      notes: notes !== undefined ? String(notes) : undefined,
+      companyId: companyId || undefined
+    })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const errorMsg = data?.message || data?.error || 'Erro ao atualizar lead.';
+    const error = new Error(errorMsg);
+    error.status = response.status;
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Utilitário de exportação de leads para arquivo CSV compatível com Excel/Google Sheets.
+ * @param {Array<object>} leads Lista de leads
+ * @param {string} [companyName] Nome da empresa para o nome do arquivo
+ */
+export function exportLeadsToCsv(leads = [], companyName = 'patrocinador') {
+  if (!leads || leads.length === 0) {
+    return false;
+  }
+
+  const headers = [
+    'Nome',
+    'E-mail',
+    'Telefone / WhatsApp',
+    'Curso / Instituição',
+    'Período',
+    'Avaliação (Estrelas)',
+    'Observações / Notas',
+    'Faixa Etária',
+    'LinkedIn',
+    'Instagram',
+    'Coletado Por',
+    'Data / Hora'
+  ];
+
+  const escapeCsv = (val) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const rows = leads.map((lead) => {
+    const dateFormatted = lead.createdAt
+      ? (typeof lead.createdAt?.toDate === 'function' ? lead.createdAt.toDate().toLocaleString('pt-BR') : new Date(lead.createdAt).toLocaleString('pt-BR'))
+      : '';
+    return [
+      escapeCsv(lead.name || ''),
+      escapeCsv(lead.email || ''),
+      escapeCsv(lead.phone || ''),
+      escapeCsv(lead.course || ''),
+      escapeCsv(lead.period ? `${lead.period}º Período` : ''),
+      escapeCsv(lead.rating ? `${lead.rating} ★` : 'Sem nota'),
+      escapeCsv(lead.notes || ''),
+      escapeCsv(lead.faixaEtaria || ''),
+      escapeCsv(lead.linkedin || ''),
+      escapeCsv(lead.instagram || ''),
+      escapeCsv(lead.collectedByEmail || lead.sponsorUid || ''),
+      escapeCsv(dateFormatted)
+    ].join(';');
+  });
+
+  // UTF-8 BOM (\uFEFF) garante acentuação perfeita no Microsoft Excel
+  const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
+  if (typeof document === 'undefined') {
+    return true;
+  }
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const sanitizedCompany = companyName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const dateStr = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `leads_${sanitizedCompany}_techweek_${dateStr}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return true;
+}
+

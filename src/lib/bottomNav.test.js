@@ -20,5 +20,6 @@ describe('shouldShowBottomNav', () => {
   it('continua escondida nas telas de entrada e nos painéis', () => {
     expect(shouldShowBottomNav({ pathname: '/login', isAuthPage: true, role: 'PARTICIPANT' })).toBe(false);
     expect(shouldShowBottomNav({ pathname: '/admin', isPortalPage: true, role: 'ADMIN' })).toBe(false);
+    expect(shouldShowBottomNav({ pathname: '/sponsor', role: 'SPONSOR' })).toBe(false);
   });
 });

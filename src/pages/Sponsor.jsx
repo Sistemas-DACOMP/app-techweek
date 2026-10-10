@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { 
@@ -13,17 +13,33 @@ import {
   CheckCircle2, 
   AlertCircle,
   RefreshCw,
-  Plus
+  Download,
+  Search,
+  CalendarDays,
+  MessageSquare,
+  Home,
+  Clock,
+  MapPin,
+  GraduationCap,
+  ChevronRight,
+  Filter,
+  Heart,
+  Share2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
-import { resolveParticipantFromQr } from '../lib/sponsorService';
+import { 
+  resolveParticipantFromQr, 
+  fetchLeads, 
+  updateLead, 
+  exportLeadsToCsv 
+} from '../lib/sponsorService';
 import { stopAllMediaTracks } from '../lib/cameraUtils';
+import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityService';
+import { subscribeToFeedPosts, toggleLikeFeedPost, DEFAULT_FEED_POSTS } from '../lib/feedService';
 import SponsorLeadModal from '../components/SponsorLeadModal';
 import WhatsAppButton from '../components/WhatsAppButton';
 
-// Atalhos de simulação só existem fora de produção (mesmo padrão do Scanner.jsx).
-// Só no build de desenvolvimento: um ?demo=true na URL não pode liberar o modo patrocinador em produção.
 const isDevMode = import.meta.env.DEV;
 
 export default function Sponsor() {
@@ -32,10 +48,26 @@ export default function Sponsor() {
   const { profile: userProfile } = useUser();
 
   // Role validation: SPONSOR or ADMIN
-  // Dev mode toggle to allow seamless local testing
   const [devSponsorOverride, setDevSponsorOverride] = useState(false);
   const actualRole = userProfile?.role || authUser?.role || 'PARTICIPANT';
   const hasAccess = actualRole === 'SPONSOR' || actualRole === 'ADMIN' || devSponsorOverride;
+
+  // Active Company ID
+  const [activeCompanyId, setActiveCompanyId] = useState(
+    userProfile?.companyId || userProfile?.empresa || 'kanastra'
+  );
+  const sponsorName = userProfile?.companyName || userProfile?.empresa || (activeCompanyId ? activeCompanyId.toUpperCase() : 'Empresa Patrocinadora');
+
+  // Tab State: 'home' | 'leads' | 'scanner' | 'agenda' | 'feed'
+  const [activeTab, setActiveTab] = useState('home');
+
+  // Leads CRM State
+  const [leadsTab, setLeadsTab] = useState('mine'); // 'mine' | 'company'
+  const [myLeads, setMyLeads] = useState([]);
+  const [companyLeads, setCompanyLeads] = useState([]);
+  const [isLoadingLeads, setIsLoadingLeads] = useState(false);
+  const [leadsSearch, setLeadsSearch] = useState('');
+  const [starFilter, setStarFilter] = useState('all'); // 'all' | '5' | '4' | '3'
 
   // Scanner States
   const [isScannerActive, setIsScannerActive] = useState(false);
@@ -43,20 +75,73 @@ export default function Sponsor() {
   const [isResolving, setIsResolving] = useState(false);
   const scannerRef = useRef(null);
 
-  // Modal & Leads States
-  const [activeParticipant, setActiveParticipant] = useState(null);
-  const [capturedLeads, setCapturedLeads] = useState([]);
+  // Modal States
+  const [activeParticipant, setActiveParticipant] = useState(null); // Newly scanned attendee
+  const [selectedLead, setSelectedLead] = useState(null); // Existing lead being viewed/edited
   const [toastMessage, setToastMessage] = useState(null);
-  const [activeCompanyId, setActiveCompanyId] = useState(
-    userProfile?.companyId || userProfile?.empresa || 'kanastra'
-  );
 
-  const sponsorName = userProfile?.companyName || userProfile?.empresa || (activeCompanyId ? activeCompanyId.toUpperCase() : 'Empresa Patrocinadora');
+  // Read-only Agenda State
+  const [activities, setActivities] = useState(DEFAULT_ACTIVITIES);
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [agendaSearch, setAgendaSearch] = useState('');
+  const [agendaTypeFilter, setAgendaTypeFilter] = useState('all');
 
-  // Iniciar scanner contínuo quando a página estiver com acesso e modal fechado
-  useEffect(() => {
+  // Feed State
+  const [feedPosts, setFeedPosts] = useState(DEFAULT_FEED_POSTS);
+  const [feedFilter, setFeedFilter] = useState('ALL'); // 'ALL' | 'ORGANIZATION' | 'SPONSOR'
+
+  // Show Toast helper
+  const showToast = useCallback((message, type = 'info') => {
+    setToastMessage({ message, type });
+    setTimeout(() => setToastMessage(null), 3500);
+  }, []);
+
+  // 1. Carrega Leads via API
+  const loadLeads = useCallback(async (compId = activeCompanyId) => {
     if (!hasAccess) return;
-    if (activeParticipant) {
+    setIsLoadingLeads(true);
+    try {
+      const data = await fetchLeads(compId);
+      setMyLeads(Array.isArray(data?.myLeads) ? data.myLeads : []);
+      setCompanyLeads(Array.isArray(data?.companyLeads) ? data.companyLeads : []);
+    } catch (err) {
+      console.warn('Erro ao carregar leads:', err);
+    } finally {
+      setIsLoadingLeads(false);
+    }
+  }, [hasAccess, activeCompanyId]);
+
+  useEffect(() => {
+    loadLeads();
+  }, [loadLeads]);
+
+  // 2. Escuta Atividades da Programação
+  useEffect(() => {
+    const unsub = subscribeToActivities((list) => {
+      if (list && list.length > 0) {
+        setActivities(list);
+      }
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
+
+  // 3. Escuta Feed da TechWeek
+  useEffect(() => {
+    const unsub = subscribeToFeedPosts((posts) => {
+      if (posts && posts.length > 0) {
+        setFeedPosts(posts);
+      }
+    });
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
+
+  // 4. Scanner Lifecycle: Só roda quando a aba ativa for 'scanner' e nenhum modal estiver aberto
+  useEffect(() => {
+    if (!hasAccess || activeTab !== 'scanner' || activeParticipant || selectedLead) {
       stopScanner();
       return;
     }
@@ -66,7 +151,7 @@ export default function Sponsor() {
     return () => {
       stopScanner();
     };
-  }, [hasAccess, activeParticipant]);
+  }, [hasAccess, activeTab, activeParticipant, selectedLead]);
 
   const startScanner = async () => {
     try {
@@ -89,9 +174,7 @@ export default function Sponsor() {
         async (decodedText) => {
           handleScanSuccess(decodedText);
         },
-        () => {
-          // Ignorado para UX contínua sem spam no console
-        }
+        () => {}
       );
 
       setIsScannerActive(true);
@@ -130,18 +213,22 @@ export default function Sponsor() {
         setActiveParticipant(resolved);
       } else {
         showToast('Código lido não corresponde a um participante válido.', 'warning');
-        setTimeout(() => startScanner(), 1500);
+        setTimeout(() => {
+          if (activeTab === 'scanner') startScanner();
+        }, 1500);
       }
     } catch (err) {
       console.error('Erro ao resolver QR do participante:', err);
       showToast('Erro ao processar leitura do crachá.', 'error');
-      setTimeout(() => startScanner(), 1500);
+      setTimeout(() => {
+        if (activeTab === 'scanner') startScanner();
+      }, 1500);
     } finally {
       setIsResolving(false);
     }
   };
 
-  // Simular leitura com crachá físico do Sympla ou app
+  // Simular leitura com crachá físico do Sympla ou app digital
   const simulateBadgeScan = (type = 'app') => {
     if (isResolving) return;
 
@@ -153,7 +240,7 @@ export default function Sponsor() {
         period: 6,
         phone: '(34) 99123-4567',
         email: 'guilherme.mendes@ufu.br',
-        participantType: 'Aluno da UFU'
+        participantType: 'Aluno UFU Graduação'
       },
       {
         participantUid: 'demo_user_2',
@@ -162,7 +249,7 @@ export default function Sponsor() {
         period: 4,
         phone: '(34) 99876-5432',
         email: 'camila.rocha@ufu.br',
-        participantType: 'Aluno da UFU'
+        participantType: 'Aluno UFU Graduação'
       },
       {
         participantUid: 'demo_user_3',
@@ -171,7 +258,8 @@ export default function Sponsor() {
         period: 8,
         phone: '(11) 98765-4321',
         email: 'lucas.ferreira@gmail.com',
-        participantType: 'Aluno de outra instituição'
+        participantType: 'Aluno UFU Pós-Graduação',
+        postgradInst: 'FACOM'
       }
     ];
 
@@ -187,27 +275,105 @@ export default function Sponsor() {
         course: candidate.course,
         period: candidate.period,
         phone: candidate.phone,
-        email: candidate.email
+        email: candidate.email,
+        participantType: candidate.participantType
       });
     }
 
     handleScanSuccess(simulatedPayload);
   };
 
+  // Callback ao registrar um novo lead pós-leitura
   const handleLeadCaptured = (newLead) => {
-    setCapturedLeads((prev) => [newLead, ...prev.filter(l => l.participantUid !== newLead.participantUid)]);
-    showToast(`Lead de ${newLead.name} salvo com sucesso!`, 'success');
+    setMyLeads((prev) => [newLead, ...prev.filter(l => l.participantUid !== newLead.participantUid)]);
+    setCompanyLeads((prev) => [newLead, ...prev.filter(l => l.participantUid !== newLead.participantUid)]);
+    showToast(`Lead de ${newLead.name} salvo (+50 pontos concedidos)!`, 'success');
   };
 
-  const showToast = (message, type = 'info') => {
-    setToastMessage({ message, type });
-    setTimeout(() => setToastMessage(null), 3500);
+  // Callback ao atualizar um lead existente na lista
+  const handleLeadUpdated = (updatedLead) => {
+    setMyLeads((prev) => prev.map(l => l.participantUid === updatedLead.participantUid ? { ...l, ...updatedLead } : l));
+    setCompanyLeads((prev) => prev.map(l => l.participantUid === updatedLead.participantUid ? { ...l, ...updatedLead } : l));
+    showToast(`Lead de ${updatedLead.name} atualizado!`, 'success');
   };
+
+  // Exportar Leads para CSV
+  const handleExportCsv = () => {
+    const leadsToExport = leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads;
+    if (!leadsToExport || leadsToExport.length === 0) {
+      showToast('Nenhum lead disponível para exportação.', 'warning');
+      return;
+    }
+    const success = exportLeadsToCsv(leadsToExport, sponsorName);
+    if (success) {
+      showToast('Planilha CSV gerada e baixada com sucesso!', 'success');
+    }
+  };
+
+  // Filtros de Leads
+  const filterLeadsList = useCallback((list) => {
+    return list.filter((lead) => {
+      const query = leadsSearch.toLowerCase().trim();
+      const matchQuery = !query || (
+        (lead.name && lead.name.toLowerCase().includes(query)) ||
+        (lead.course && lead.course.toLowerCase().includes(query)) ||
+        (lead.phone && lead.phone.includes(query)) ||
+        (lead.email && lead.email.toLowerCase().includes(query)) ||
+        (lead.notes && lead.notes.toLowerCase().includes(query))
+      );
+
+      const rating = Number(lead.rating) || 0;
+      let matchStars = true;
+      if (starFilter === '5') matchStars = rating === 5;
+      else if (starFilter === '4') matchStars = rating >= 4;
+      else if (starFilter === '3') matchStars = rating >= 3;
+
+      return matchQuery && matchStars;
+    });
+  }, [leadsSearch, starFilter]);
+
+  const filteredMyLeads = useMemo(() => filterLeadsList(myLeads), [myLeads, filterLeadsList]);
+  const filteredCompanyLeads = useMemo(() => filterLeadsList(companyLeads), [companyLeads, filterLeadsList]);
+
+  // Lista de dias únicos na Programação
+  const availableDays = useMemo(() => {
+    const days = [...new Set(activities.map(a => a.day).filter(Boolean))];
+    return days.sort();
+  }, [activities]);
+
+  const activeDay = selectedDay || (availableDays.length > 0 ? availableDays[0] : null);
+
+  // Atividades de hoje (para exibição na Home)
+  const todayActivities = useMemo(() => {
+    if (!activeDay) return activities.slice(0, 3);
+    return activities.filter(a => a.day === activeDay).slice(0, 4);
+  }, [activities, activeDay]);
+
+  // Atividades filtradas da aba Programação
+  const filteredAgendaActivities = useMemo(() => {
+    return activities.filter(act => {
+      const matchDay = !activeDay || act.day === activeDay;
+      const matchType = agendaTypeFilter === 'all' || String(act.type || '').toLowerCase() === agendaTypeFilter.toLowerCase();
+      const q = agendaSearch.toLowerCase().trim();
+      const matchSearch = !q || (
+        (act.title && act.title.toLowerCase().includes(q)) ||
+        (act.speaker && act.speaker.toLowerCase().includes(q)) ||
+        (act.room && act.room.toLowerCase().includes(q))
+      );
+      return matchDay && matchType && matchSearch;
+    });
+  }, [activities, activeDay, agendaTypeFilter, agendaSearch]);
+
+  // Feed filtrado
+  const filteredFeedPosts = useMemo(() => {
+    if (feedFilter === 'ALL') return feedPosts;
+    return feedPosts.filter(p => p.authorRole === feedFilter);
+  }, [feedPosts, feedFilter]);
 
   // 1. Tela de Bloqueio se não for SPONSOR nem ADMIN
   if (!hasAccess) {
     return (
-      <div className="page-container animate-fade-in" style={{ paddingBottom: '90px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '75vh', textAlign: 'center' }}>
+      <div className="page-container animate-fade-in" style={{ paddingBottom: '90px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '75vh', textAlign: 'center', fontFamily: 'Montserrat, sans-serif' }}>
         <div
           style={{
             width: '80px',
@@ -225,19 +391,18 @@ export default function Sponsor() {
           <ShieldAlert size={40} />
         </div>
 
-        <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff', marginBottom: '8px' }}>
-          Acesso Restrito: Modo Patrocinador
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#EEF1FA', marginBottom: '8px' }}>
+          Acesso Restrito: Portal Patrocinador
         </h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', maxWidth: '340px', lineHeight: '1.6', marginBottom: '24px' }}>
+        <p style={{ color: '#A9B1CC', fontSize: '13px', maxWidth: '340px', lineHeight: '1.6', marginBottom: '24px' }}>
           A rota <strong>/sponsor</strong> é exclusiva para contas com perfil <strong>SPONSOR</strong> ou <strong>ADMIN</strong> credenciadas nos estandes da FACOM TechWeek.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '300px' }}>
-          <button className="btn-primary" onClick={() => navigate('/')}>
+          <button type="button" className="btn-primary" onClick={() => navigate('/')}>
             Voltar para o Início
           </button>
 
-          {/* Atalho para facilitar demonstração e testes locais */}
           {isDevMode && (
             <button
               type="button"
@@ -246,10 +411,10 @@ export default function Sponsor() {
                 background: 'rgba(56, 189, 248, 0.1)',
                 border: '1px solid rgba(56, 189, 248, 0.3)',
                 borderRadius: '14px',
-                padding: '10px',
-                color: 'var(--link)',
+                padding: '12px',
+                color: '#8FA0FF',
                 fontSize: '12px',
-                fontWeight: '700',
+                fontWeight: 700,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -258,7 +423,7 @@ export default function Sponsor() {
               }}
             >
               <Sparkles size={14} />
-              <span>Simular Permissão de Patrocinador (Teste)</span>
+              <span>Simular Acesso de Patrocinador (Teste)</span>
             </button>
           )}
         </div>
@@ -267,7 +432,7 @@ export default function Sponsor() {
   }
 
   return (
-    <div className="page-container animate-fade-in" style={{ paddingBottom: '100px', fontFamily: "Montserrat, sans-serif" }}>
+    <div className="page-container animate-fade-in" style={{ paddingBottom: '90px', fontFamily: 'Montserrat, sans-serif', maxWidth: '640px', margin: '0 auto', boxSizing: 'border-box' }}>
       {/* Toast Alert */}
       {toastMessage && (
         <div
@@ -282,304 +447,1216 @@ export default function Sponsor() {
             maxWidth: '380px',
             padding: '12px 16px',
             borderRadius: '16px',
-            background: toastMessage.type === 'success' ? 'rgba(6, 78, 59, 0.95)' : toastMessage.type === 'warning' ? 'rgba(120, 53, 15, 0.95)' : 'rgba(127, 29, 29, 0.95)',
+            background: toastMessage.type === 'success' ? '#064E3B' : toastMessage.type === 'warning' ? '#78350F' : '#7F1D1D',
             border: '1px solid rgba(255, 255, 255, 0.15)',
-            color: '#fff',
+            color: '#ffffff',
             fontSize: '13px',
+            fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
             boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
           }}
         >
-          {toastMessage.type === 'success' ? <CheckCircle2 size={18} color="#34d399" /> : <AlertCircle size={18} color="#fbbf24" />}
+          {toastMessage.type === 'success' ? <CheckCircle2 size={18} color="#34D399" /> : <AlertCircle size={18} color="#FBBF24" />}
           <span>{toastMessage.message}</span>
         </div>
       )}
 
-      {/* Header Padronizado */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+      {/* Top Header Padronizado TechWeek */}
+      <header style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '12px',
+                backgroundColor: '#121A36',
+                border: '1px solid #1C2548',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#EEF1FA',
+                cursor: 'pointer',
+                flexShrink: 0
+              }}
+              aria-label="Voltar para o início"
+            >
+              <ArrowLeft size={18} />
+            </button>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    color: '#FBBF24',
+                    background: 'rgba(251, 191, 36, 0.12)',
+                    border: '1px solid rgba(251, 191, 36, 0.3)',
+                    padding: '2px 8px',
+                    borderRadius: '8px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Building2 size={11} />
+                  <span>Patrocinador</span>
+                </span>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#EEF1FA' }}>{sponsorName}</span>
+              </div>
+            </div>
+          </div>
+
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() => loadLeads()}
+            disabled={isLoadingLeads}
             style={{
               width: '40px',
               height: '40px',
               borderRadius: '12px',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B',
+              backgroundColor: '#121A36',
+              border: '1px solid #1C2548',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#F8FAFC',
-              cursor: 'pointer',
-              flexShrink: 0
+              color: isLoadingLeads ? '#8FA0FF' : '#A9B1CC',
+              cursor: 'pointer'
             }}
-            aria-label="Voltar para o início"
+            title="Atualizar dados de leads"
+            aria-label="Atualizar dados"
           >
-            <ArrowLeft size={18} />
+            <RefreshCw size={16} className={isLoadingLeads ? 'animate-spin' : ''} />
           </button>
-
-          <div>
-            <h1
-              style={{
-                fontFamily: 'Montserrat, sans-serif',
-                fontSize: '1.75rem',
-                fontWeight: 800,
-                color: '#F8FAFC',
-                margin: 0,
-                letterSpacing: '-0.03em',
-                lineHeight: 1.15
-              }}
-            >
-              Patrocinador
-            </h1>
-            <div
-              style={{
-                fontSize: '0.80rem',
-                color: 'var(--link)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                margin: '3px 0 0',
-                fontFamily: "Montserrat, sans-serif"
-              }}
-            >
-              <Building2 size={13} />
-              <span>{sponsorName}</span>
-            </div>
-          </div>
         </div>
 
-        <div
-          style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '12px',
-            backgroundColor: '#0F141F',
-            border: '1px solid #1E293B',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#10B981',
-            flexShrink: 0
-          }}
-        >
-          <QrCode size={18} />
-        </div>
-      </div>
-
-      {/* Seletor de Estande para Testes / ADMIN */}
-      {(devSponsorOverride || actualRole === 'ADMIN') && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '16px' }}>
-          <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600, whiteSpace: 'nowrap' }}>Estande Ativo:</span>
-          {['kanastra', 'bayer', 'aimirim', 'bip', 'hyperflow'].map(comp => (
-            <button
-              key={comp}
-              type="button"
-              onClick={() => setActiveCompanyId(comp)}
-              style={{
-                padding: '4px 10px',
-                borderRadius: '8px',
-                fontSize: '11px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                border: activeCompanyId === comp ? '1px solid var(--link)' : '1px solid #334155',
-                backgroundColor: activeCompanyId === comp ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                color: activeCompanyId === comp ? 'var(--link)' : '#94A3B8',
-                textTransform: 'capitalize'
-              }}
-            >
-              {comp}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Metric Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-        <div className="glass-panel" style={{ padding: '14px', textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>
-            Leads Bipados
-          </div>
-          <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--link)' }}>
-            {capturedLeads.length}
-          </div>
+        {/* Screen Title Centralizado com Traço de Gradiente (DESIGN.md §3) */}
+        <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+          <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+            {activeTab === 'home' && 'Painel do Estande'}
+            {activeTab === 'leads' && 'CRM de Leads'}
+            {activeTab === 'scanner' && 'Bipar Crachá'}
+            {activeTab === 'agenda' && 'Programação da TechWeek'}
+            {activeTab === 'feed' && 'Feed da Comunidade'}
+          </h1>
+          <div
+            style={{
+              width: '28px',
+              height: '4px',
+              borderRadius: '2px',
+              background: 'linear-gradient(90deg, #2563EB, #9B7BFF)',
+              margin: '0 auto'
+            }}
+          />
         </div>
 
-        <div className="glass-panel" style={{ padding: '14px', textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '700', marginBottom: '4px' }}>
-            Pontos Concedidos
-          </div>
-          <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#25D366' }}>
-            +{capturedLeads.length * 50}
-          </div>
-        </div>
-      </div>
-
-      {/* Leitor Contínuo de QR Code */}
-      <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px', textAlign: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '14px' }}>
-          <QrCode size={18} color="var(--link)" />
-          <span style={{ fontSize: '13px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#ffffff' }}>
-            Leitor de Crachá do Estande
-          </span>
-        </div>
-
-        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-          Aponte para o crachá físico Sympla ou crachá digital do app do estudante.
-        </p>
-
-        {/* Viewfinder da Câmera */}
-        <div
-          id="sponsor-qr-reader"
-          style={{
-            width: '100%',
-            maxWidth: '300px',
-            margin: '0 auto',
-            borderRadius: '16px',
-            overflow: 'hidden',
-            minHeight: '220px',
-            background: 'rgba(0, 0, 0, 0.4)',
-            border: '2px solid rgba(56, 189, 248, 0.3)'
-          }}
-        />
-
-        {scannerError && (
-          <p style={{ fontSize: '12px', color: '#fbbf24', marginTop: '12px' }}>
-            {scannerError}
-          </p>
-        )}
-
-        {isResolving && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--link)', marginTop: '14px', fontSize: '13px', fontWeight: '700' }}>
-            <Loader2 className="animate-spin" size={18} />
-            <span>Processando crachá lido...</span>
-          </div>
-        )}
-
-        {/* Botão de Teste e Simulação */}
-        {isDevMode && (
-          <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-              OU SIMULE A BIPAGEM (TESTE LOCAL):
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
+        {/* Seletor de Estande para ADMIN ou Teste DEV */}
+        {(devSponsorOverride || actualRole === 'ADMIN') && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '12px' }}>
+            <span style={{ fontSize: '11px', color: '#8790AE', fontWeight: 700, whiteSpace: 'nowrap' }}>Estande:</span>
+            {['kanastra', 'bayer', 'aimirim', 'bip', 'hyperflow'].map(comp => (
               <button
+                key={comp}
                 type="button"
-                className="btn-primary"
-                onClick={() => simulateBadgeScan('app')}
-                disabled={isResolving}
-                style={{ flex: 1, padding: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-              >
-                <Sparkles size={14} />
-                <span>Crachá App</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => simulateBadgeScan('sympla')}
-                disabled={isResolving}
+                onClick={() => {
+                  setActiveCompanyId(comp);
+                  loadLeads(comp);
+                }}
                 style={{
-                  flex: 1,
-                  padding: '10px',
-                  fontSize: '12px',
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  borderRadius: '14px',
-                  color: '#ffffff',
-                  fontWeight: '700',
+                  padding: '4px 10px',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                  fontWeight: 700,
                   cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
+                  border: activeCompanyId === comp ? '1px solid #2563EB' : '1px solid #1C2548',
+                  backgroundColor: activeCompanyId === comp ? 'rgba(37, 99, 235, 0.25)' : '#121A36',
+                  color: activeCompanyId === comp ? '#8FA0FF' : '#A9B1CC',
+                  textTransform: 'capitalize'
                 }}
               >
-                <QrCode size={14} />
-                <span>Crachá Sympla</span>
+                {comp}
               </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Lista de Leads Recentes no Estande */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Contatos Coletados Nesta Sessão ({capturedLeads.length})
-          </h3>
-        </div>
-
-        {capturedLeads.length === 0 ? (
-          <div className="glass-panel" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
-            Nenhum aluno bipado ainda. Posicione o crachá do participante em frente à câmera para capturar o primeiro lead.
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {capturedLeads.map((lead) => (
-              <div
-                key={lead.participantUid}
-                className="glass-panel"
-                style={{
-                  padding: '14px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px'
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: '700', fontSize: '14px', color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {lead.name}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
-                    {lead.rating && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '2px', color: '#eab308', fontSize: '12px', fontWeight: '700' }}>
-                        <Star size={12} fill="#eab308" />
-                        <span>{lead.rating}</span>
-                      </div>
-                    )}
-                    {lead.notes && (
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
-                        "{lead.notes}"
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ flexShrink: 0 }}>
-                  <WhatsAppButton
-                    phone={lead.phone}
-                    participantName={lead.name}
-                    companyName={sponsorName}
-                    label="Conversar"
-                    size="sm"
-                  />
-                </div>
-              </div>
             ))}
           </div>
         )}
-      </div>
+      </header>
 
-      {/* Modal Pós-Leitura */}
+      {/* ========================================================================= */}
+      {/* ABA 1: HOME / ESTANDE                                                    */}
+      {/* ========================================================================= */}
+      {activeTab === 'home' && (
+        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Métricas Principais (4 Cards) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            <div className="glass-panel" style={{ padding: '16px', background: '#121A36', borderRadius: '18px', border: '1px solid #1C2548' }}>
+              <div style={{ fontSize: '11px', color: '#A9B1CC', textTransform: 'uppercase', fontWeight: 700, marginBottom: '6px' }}>
+                Leads no Estande
+              </div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#EEF1FA' }}>
+                {companyLeads.length}
+              </div>
+              <div style={{ fontSize: '11px', color: '#8790AE', marginTop: '4px' }}>
+                Total da equipe {sponsorName}
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '16px', background: '#121A36', borderRadius: '18px', border: '1px solid #1C2548' }}>
+              <div style={{ fontSize: '11px', color: '#A9B1CC', textTransform: 'uppercase', fontWeight: 700, marginBottom: '6px' }}>
+                Meus Leads
+              </div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#8FA0FF' }}>
+                {myLeads.length}
+              </div>
+              <div style={{ fontSize: '11px', color: '#8790AE', marginTop: '4px' }}>
+                Coletados por você
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '16px', background: '#121A36', borderRadius: '18px', border: '1px solid #1C2548' }}>
+              <div style={{ fontSize: '11px', color: '#A9B1CC', textTransform: 'uppercase', fontWeight: 700, marginBottom: '6px' }}>
+                Pontos Concedidos
+              </div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#34D399' }}>
+                +{companyLeads.length * 50}
+              </div>
+              <div style={{ fontSize: '11px', color: '#8790AE', marginTop: '4px' }}>
+                50 pts por aluno bipado
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '16px', background: '#121A36', borderRadius: '18px', border: '1px solid #1C2548' }}>
+              <div style={{ fontSize: '11px', color: '#A9B1CC', textTransform: 'uppercase', fontWeight: 700, marginBottom: '6px' }}>
+                Destaques (4-5 ★)
+              </div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FBBF24' }}>
+                {companyLeads.filter(l => (l.rating || 0) >= 4).length}
+              </div>
+              <div style={{ fontSize: '11px', color: '#8790AE', marginTop: '4px' }}>
+                Candidatos qualificados
+              </div>
+            </div>
+          </div>
+
+          {/* Hero Action: Bipar Crachá */}
+          <div
+            style={{
+              padding: '20px',
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(124, 58, 237, 0.25))',
+              border: '1.5px solid rgba(56, 189, 248, 0.35)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '14px',
+              cursor: 'pointer',
+              transition: 'transform 0.15s ease'
+            }}
+            onClick={() => setActiveTab('scanner')}
+          >
+            <div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, color: '#8FA0FF', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                <Sparkles size={13} />
+                <span>Escanear Visitante</span>
+              </div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 4px' }}>
+                Bipar Crachá de Aluno
+              </h2>
+              <p style={{ fontSize: '12px', color: '#A9B1CC', margin: 0 }}>
+                Aponte a câmera para o QR digital ou crachá físico Sympla.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="btn-primary"
+              style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}
+              aria-label="Abrir câmera de escaneamento"
+            >
+              <QrCode size={26} />
+            </button>
+          </div>
+
+          {/* Programação de Hoje (Modo Read-Only) */}
+          <div style={{ background: '#121A36', borderRadius: '20px', padding: '18px', border: '1px solid #1C2548' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CalendarDays size={18} color="#8FA0FF" />
+                <h2 style={{ fontSize: '14px', fontWeight: 800, color: '#EEF1FA', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                  Acontecendo na TechWeek
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('agenda')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#8FA0FF',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <span>Ver tudo</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {todayActivities.length === 0 ? (
+                <div style={{ fontSize: '12px', color: '#8790AE', textAlign: 'center', padding: '12px' }}>
+                  Nenhuma atividade programada para agora.
+                </div>
+              ) : (
+                todayActivities.map((act) => (
+                  <div
+                    key={act.id}
+                    style={{
+                      background: '#1A2347',
+                      borderRadius: '14px',
+                      padding: '12px 14px',
+                      border: '1px solid #1C2548',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px'
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#EEF1FA', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {act.title}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: '#A9B1CC', marginTop: '4px' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Clock size={12} color="#8FA0FF" />
+                          <span>{act.time}</span>
+                        </span>
+                        {act.room && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <MapPin size={12} color="#8FA0FF" />
+                            <span>{act.room}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        background: 'rgba(37, 99, 235, 0.15)',
+                        color: '#8FA0FF',
+                        flexShrink: 0
+                      }}
+                    >
+                      {act.type || 'Palestra'}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Destaque do Feed */}
+          <div style={{ background: '#121A36', borderRadius: '20px', padding: '18px', border: '1px solid #1C2548' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <MessageSquare size={18} color="#8FA0FF" />
+                <h2 style={{ fontSize: '14px', fontWeight: 800, color: '#EEF1FA', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                  Avisos & Comunidade
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('feed')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#8FA0FF',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <span>Abrir feed</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+
+            {feedPosts.slice(0, 2).map((post) => (
+              <div
+                key={post.id}
+                style={{
+                  background: '#1A2347',
+                  borderRadius: '14px',
+                  padding: '12px 14px',
+                  border: '1px solid #1C2548',
+                  marginBottom: '10px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#EEF1FA' }}>{post.authorName}</span>
+                  {post.authorRole === 'ORGANIZATION' && (
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#8FA0FF', background: 'rgba(37, 99, 235, 0.2)', padding: '2px 6px', borderRadius: '6px' }}>
+                      Organização
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: '12px', color: '#A9B1CC', margin: 0, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  {post.content}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ABA 2: LEADS (CRM DO ESTANDE)                                            */}
+      {/* ========================================================================= */}
+      {activeTab === 'leads' && (
+        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Header da Aba com Botão de Exportar */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+            {/* Sub-abas Pills */}
+            <div style={{ display: 'flex', background: '#121A36', padding: '4px', borderRadius: '12px', border: '1px solid #1C2548', flex: 1 }}>
+              <button
+                type="button"
+                onClick={() => setLeadsTab('mine')}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: leadsTab === 'mine' ? '#1F2A55' : 'transparent',
+                  color: leadsTab === 'mine' ? '#EEF1FA' : '#8790AE',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Meus Leads ({myLeads.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setLeadsTab('company')}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: leadsTab === 'company' ? '#1F2A55' : 'transparent',
+                  color: leadsTab === 'company' ? '#EEF1FA' : '#8790AE',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Todos da Empresa ({companyLeads.length})
+              </button>
+            </div>
+
+            {/* Botão Exportar CSV */}
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              style={{
+                minHeight: '40px',
+                padding: '0 14px',
+                background: '#1A2347',
+                border: '1px solid #1C2548',
+                borderRadius: '12px',
+                color: '#34D399',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap'
+              }}
+              title="Baixar lista de leads formatada para Excel / Sheets"
+            >
+              <Download size={15} />
+              <span>Exportar CSV</span>
+            </button>
+          </div>
+
+          {/* Barra de Busca e Filtro por Estrelas */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={16} color="#8790AE" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                type="text"
+                value={leadsSearch}
+                onChange={(e) => setLeadsSearch(e.target.value)}
+                placeholder="Buscar por nome, curso, telefone ou anotação..."
+                style={{
+                  width: '100%',
+                  background: '#131B3A',
+                  border: '1.5px solid #26305A',
+                  borderRadius: '12px',
+                  padding: '10px 14px 10px 38px',
+                  color: '#EEF1FA',
+                  fontSize: '13px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* Filtros de Estrelas */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+              <span style={{ fontSize: '11px', color: '#8790AE', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Filter size={12} />
+                <span>Nota:</span>
+              </span>
+              {[
+                { id: 'all', label: 'Todas as notas' },
+                { id: '5', label: '5 ★' },
+                { id: '4', label: '4 ★ ou +' },
+                { id: '3', label: '3 ★ ou +' }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setStarFilter(f.id)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '8px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    border: starFilter === f.id ? '1px solid #FBBF24' : '1px solid #1C2548',
+                    background: starFilter === f.id ? 'rgba(251, 191, 36, 0.15)' : '#121A36',
+                    color: starFilter === f.id ? '#FBBF24' : '#8790AE',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Lista de Leads */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {(leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0 ? (
+              <div style={{ background: '#121A36', borderRadius: '18px', padding: '32px 20px', textAlign: 'center', border: '1px solid #1C2548' }}>
+                <Users size={32} color="#8790AE" style={{ margin: '0 auto 10px' }} />
+                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#EEF1FA', margin: '0 0 6px' }}>
+                  Nenhum lead encontrado
+                </h3>
+                <p style={{ fontSize: '12px', color: '#8790AE', margin: 0 }}>
+                  {leadsSearch || starFilter !== 'all'
+                    ? 'Nenhum contato corresponde aos filtros de busca aplicados.'
+                    : 'Ainda não há leads registrados nesta visualização. Use a câmera para bipar estudantes.'}
+                </p>
+              </div>
+            ) : (
+              (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).map((lead) => {
+                const ratingNum = Number(lead.rating) || 0;
+                return (
+                  <div
+                    key={lead.participantUid || lead.uid || lead.id}
+                    style={{
+                      background: '#121A36',
+                      borderRadius: '16px',
+                      padding: '14px 16px',
+                      border: '1px solid #1C2548',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      cursor: 'pointer',
+                      transition: 'background 0.15s ease'
+                    }}
+                    onClick={() => setSelectedLead(lead)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                      <div
+                        style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '14px',
+                          background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#ffffff',
+                          fontWeight: 800,
+                          fontSize: '16px',
+                          flexShrink: 0
+                        }}
+                      >
+                        {(lead.name || 'P').charAt(0).toUpperCase()}
+                      </div>
+
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#EEF1FA', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {lead.name || 'Aluno'}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#A9B1CC', marginTop: '2px' }}>
+                          {lead.course && (
+                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {lead.course} {lead.period ? `(${lead.period}º)` : ''}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Avaliação e Notas */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                          {ratingNum > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', color: '#FBBF24', fontSize: '11px', fontWeight: 700 }}>
+                              <Star size={12} fill="#FBBF24" />
+                              <span>{ratingNum}</span>
+                            </div>
+                          )}
+
+                          {lead.notes && (
+                            <div style={{ fontSize: '11px', color: '#8790AE', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
+                              "{lead.notes}"
+                            </div>
+                          )}
+                        </div>
+
+                        {leadsTab === 'company' && lead.collectedByEmail && (
+                          <div style={{ fontSize: '10px', color: '#6E779A', marginTop: '2px' }}>
+                            Bipado por: {lead.collectedByEmail}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Ação rápida de WhatsApp no card */}
+                    <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                      {lead.phone ? (
+                        <WhatsAppButton
+                          phone={lead.phone}
+                          participantName={lead.name}
+                          companyName={sponsorName}
+                          label="Whats"
+                          size="sm"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLead(lead)}
+                          style={{
+                            background: '#1A2347',
+                            border: '1px solid #1C2548',
+                            borderRadius: '10px',
+                            padding: '6px 10px',
+                            color: '#8FA0FF',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Ver
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ABA 3: SCANNER (BIPAR CRACHÁ)                                             */}
+      {/* ========================================================================= */}
+      {activeTab === 'scanner' && (
+        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ background: '#121A36', borderRadius: '24px', padding: '20px', border: '1px solid #1C2548', textAlign: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '10px' }}>
+              <QrCode size={20} color="#8FA0FF" />
+              <h2 style={{ fontSize: '14px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#EEF1FA', margin: 0 }}>
+                Leitor Contínuo do Estande
+              </h2>
+            </div>
+
+            <p style={{ fontSize: '12px', color: '#A9B1CC', margin: '0 0 16px', lineHeight: 1.5 }}>
+              Aponte a câmera para o crachá físico Sympla ou crachá digital do app do estudante.
+            </p>
+
+            {/* Viewfinder da Câmera */}
+            <div
+              id="sponsor-qr-reader"
+              style={{
+                width: '100%',
+                maxWidth: '280px',
+                margin: '0 auto',
+                borderRadius: '18px',
+                overflow: 'hidden',
+                minHeight: '260px',
+                background: '#0A0F24',
+                border: '2px solid rgba(56, 189, 248, 0.4)'
+              }}
+            />
+
+            {scannerError && (
+              <p style={{ fontSize: '12px', color: '#FBBF24', marginTop: '12px' }}>
+                {scannerError}
+              </p>
+            )}
+
+            {isResolving && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#8FA0FF', marginTop: '14px', fontSize: '13px', fontWeight: 700 }}>
+                <Loader2 className="animate-spin" size={18} />
+                <span>Processando crachá lido...</span>
+              </div>
+            )}
+
+            {/* Atalhos de Simulação para Teste DEV */}
+            {isDevMode && (
+              <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #1C2548' }}>
+                <div style={{ fontSize: '11px', color: '#8790AE', fontWeight: 700, marginBottom: '10px', textTransform: 'uppercase' }}>
+                  Simulação de Leitura (Ambiente de Teste):
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => simulateBadgeScan('app')}
+                    disabled={isResolving}
+                    style={{ flex: 1, padding: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    <Sparkles size={14} />
+                    <span>Crachá App</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => simulateBadgeScan('sympla')}
+                    disabled={isResolving}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      fontSize: '12px',
+                      background: '#1A2347',
+                      border: '1px solid #1C2548',
+                      borderRadius: '12px',
+                      color: '#EEF1FA',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <QrCode size={14} />
+                    <span>Crachá Sympla</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ABA 4: PROGRAMAÇÃO (READ-ONLY)                                           */}
+      {/* ========================================================================= */}
+      {activeTab === 'agenda' && (
+        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Seletor de Dias */}
+          {availableDays.length > 0 && (
+            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+              {availableDays.map(day => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => setSelectedDay(day)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    border: activeDay === day ? '1px solid #2563EB' : '1px solid #1C2548',
+                    background: activeDay === day ? '#1F2A55' : '#121A36',
+                    color: activeDay === day ? '#EEF1FA' : '#8790AE',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {day}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Busca e Filtros de Categoria */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={16} color="#8790AE" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                type="text"
+                value={agendaSearch}
+                onChange={(e) => setAgendaSearch(e.target.value)}
+                placeholder="Buscar palestras, oficinas ou palestrantes..."
+                style={{
+                  width: '100%',
+                  background: '#131B3A',
+                  border: '1.5px solid #26305A',
+                  borderRadius: '12px',
+                  padding: '10px 14px 10px 38px',
+                  color: '#EEF1FA',
+                  fontSize: '13px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+              {['all', 'palestra', 'workshop', 'minicurso', 'hackathon'].map(type => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setAgendaTypeFilter(type)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '8px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    border: agendaTypeFilter === type ? '1px solid #8FA0FF' : '1px solid #1C2548',
+                    background: agendaTypeFilter === type ? 'rgba(37, 99, 235, 0.2)' : '#121A36',
+                    color: agendaTypeFilter === type ? '#8FA0FF' : '#8790AE',
+                    textTransform: 'capitalize',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {type === 'all' ? 'Todas' : type}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Banner de Modo Leitura */}
+          <div style={{ background: '#121A36', borderRadius: '12px', padding: '10px 14px', border: '1px solid #1C2548', fontSize: '11px', color: '#8FA0FF', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <CheckCircle2 size={14} />
+            <span>Modo visualização da grade. As reservas são exclusivas para alunos participantes.</span>
+          </div>
+
+          {/* Lista de Atividades */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {filteredAgendaActivities.length === 0 ? (
+              <div style={{ background: '#121A36', borderRadius: '18px', padding: '32px 20px', textAlign: 'center', border: '1px solid #1C2548', color: '#8790AE', fontSize: '13px' }}>
+                Nenhuma atividade encontrada para os filtros selecionados.
+              </div>
+            ) : (
+              filteredAgendaActivities.map((act) => (
+                <div
+                  key={act.id}
+                  style={{
+                    background: '#121A36',
+                    borderRadius: '16px',
+                    padding: '16px',
+                    border: '1px solid #1C2548',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
+                    <div>
+                      <span
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          background: 'rgba(37, 99, 235, 0.15)',
+                          color: '#8FA0FF',
+                          display: 'inline-block',
+                          marginBottom: '6px'
+                        }}
+                      >
+                        {act.type || 'Palestra'}
+                      </span>
+                      <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#EEF1FA', margin: 0, lineHeight: 1.3 }}>
+                        {act.title}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {act.speaker && (
+                    <div style={{ fontSize: '12px', color: '#A9B1CC', fontWeight: 600 }}>
+                      {act.speaker} {act.company ? `• ${act.company}` : ''}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '12px', color: '#8790AE', marginTop: '2px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Clock size={13} color="#8FA0FF" />
+                      <span>{act.time}</span>
+                    </span>
+                    {act.room && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <MapPin size={13} color="#8FA0FF" />
+                        <span>{act.room}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ABA 5: FEED (COMUNIDADE)                                                 */}
+      {/* ========================================================================= */}
+      {activeTab === 'feed' && (
+        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Filtros do Feed */}
+          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+            {[
+              { id: 'ALL', label: 'Todos' },
+              { id: 'ORGANIZATION', label: 'Organização' },
+              { id: 'SPONSOR', label: 'Patrocinadores' }
+            ].map(f => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFeedFilter(f.id)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '10px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  border: feedFilter === f.id ? '1px solid #2563EB' : '1px solid #1C2548',
+                  background: feedFilter === f.id ? '#1F2A55' : '#121A36',
+                  color: feedFilter === f.id ? '#EEF1FA' : '#8790AE',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Lista de Publicações */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {filteredFeedPosts.map((post) => {
+              const likesCount = Array.isArray(post.likes) ? post.likes.length : 0;
+              const isLiked = authUser?.uid && Array.isArray(post.likes) && post.likes.includes(authUser.uid);
+
+              return (
+                <div
+                  key={post.id}
+                  style={{
+                    background: '#121A36',
+                    borderRadius: '18px',
+                    padding: '16px',
+                    border: '1px solid #1C2548'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                    <div
+                      style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '12px',
+                        background: '#1A2347',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ffffff',
+                        fontWeight: 800,
+                        fontSize: '14px'
+                      }}
+                    >
+                      {(post.authorName || 'T').charAt(0).toUpperCase()}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 800, color: '#EEF1FA' }}>{post.authorName}</span>
+                        {post.authorRole === 'ORGANIZATION' && (
+                          <span style={{ fontSize: '10px', fontWeight: 700, color: '#8FA0FF', background: 'rgba(37, 99, 235, 0.2)', padding: '2px 6px', borderRadius: '6px' }}>
+                            Oficial
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#8790AE' }}>
+                        {post.authorRole === 'SPONSOR' ? 'Patrocinador' : 'TechWeek 2026'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <p style={{ fontSize: '13px', color: '#EEF1FA', margin: '0 0 12px', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                    {post.content}
+                  </p>
+
+                  {/* Ações: Curtir */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', borderTop: '1px solid #1C2548', paddingTop: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (authUser?.uid) {
+                          toggleLikeFeedPost(post.id, authUser.uid);
+                        } else {
+                          showToast('Faça login para interagir no feed.', 'warning');
+                        }
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        color: isLiked ? '#F59AC0' : '#8790AE',
+                        fontSize: '12px',
+                        fontWeight: 700
+                      }}
+                    >
+                      <Heart size={16} fill={isLiked ? '#F59AC0' : 'none'} />
+                      <span>{likesCount} curtidas</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* BARRA INFERIOR EXCLUSIVA DO PATROCINADOR (DESIGN.md)                      */}
+      {/* ========================================================================= */}
+      <nav
+        aria-label="Navegação do Patrocinador"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+          display: 'flex',
+          justifyContent: 'center',
+          pointerEvents: 'none'
+        }}
+      >
+        <div
+          style={{
+            pointerEvents: 'auto',
+            width: '100%',
+            maxWidth: '430px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, 1fr)',
+            borderTop: '1px solid #1C2548',
+            backgroundColor: '#0D1330',
+            paddingTop: '6px',
+            paddingBottom: 'max(10px, env(safe-area-inset-bottom))'
+          }}
+        >
+          {/* 1. Estande */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('home')}
+            style={{
+              background: 'none',
+              border: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              fontSize: '11px',
+              fontWeight: activeTab === 'home' ? 800 : 500,
+              color: activeTab === 'home' ? '#EEF1FA' : '#8790AE',
+              cursor: 'pointer',
+              minHeight: '48px'
+            }}
+          >
+            <Home size={20} color={activeTab === 'home' ? '#8FA0FF' : 'currentColor'} />
+            <span>Estande</span>
+          </button>
+
+          {/* 2. Leads */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('leads')}
+            style={{
+              background: 'none',
+              border: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              fontSize: '11px',
+              fontWeight: activeTab === 'leads' ? 800 : 500,
+              color: activeTab === 'leads' ? '#EEF1FA' : '#8790AE',
+              cursor: 'pointer',
+              minHeight: '48px'
+            }}
+          >
+            <Users size={20} color={activeTab === 'leads' ? '#8FA0FF' : 'currentColor'} />
+            <span>Leads</span>
+          </button>
+
+          {/* 3. Bipar (Central) */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('scanner')}
+            style={{
+              background: 'none',
+              border: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: '4px',
+              fontSize: '11px',
+              fontWeight: activeTab === 'scanner' ? 800 : 600,
+              color: activeTab === 'scanner' ? '#EEF1FA' : '#8790AE',
+              cursor: 'pointer',
+              minHeight: '48px'
+            }}
+          >
+            <span
+              style={{
+                marginTop: '-22px',
+                width: '52px',
+                height: '52px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
+                boxShadow: '0 0 0 4px #0A0F24, 0 6px 18px rgba(91,59,224,0.45)',
+                color: '#ffffff'
+              }}
+            >
+              <QrCode size={24} />
+            </span>
+            <span>Bipar</span>
+          </button>
+
+          {/* 4. Programação */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('agenda')}
+            style={{
+              background: 'none',
+              border: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              fontSize: '11px',
+              fontWeight: activeTab === 'agenda' ? 800 : 500,
+              color: activeTab === 'agenda' ? '#EEF1FA' : '#8790AE',
+              cursor: 'pointer',
+              minHeight: '48px'
+            }}
+          >
+            <CalendarDays size={20} color={activeTab === 'agenda' ? '#8FA0FF' : 'currentColor'} />
+            <span>Agenda</span>
+          </button>
+
+          {/* 5. Feed */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('feed')}
+            style={{
+              background: 'none',
+              border: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              fontSize: '11px',
+              fontWeight: activeTab === 'feed' ? 800 : 500,
+              color: activeTab === 'feed' ? '#EEF1FA' : '#8790AE',
+              cursor: 'pointer',
+              minHeight: '48px'
+            }}
+          >
+            <MessageSquare size={20} color={activeTab === 'feed' ? '#8FA0FF' : 'currentColor'} />
+            <span>Feed</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* ========================================================================= */}
+      {/* MODAL 1: NOVO PARTICIPANTE BIPADO                                        */}
+      {/* ========================================================================= */}
       {activeParticipant && (
         <SponsorLeadModal
           participant={activeParticipant}
           sponsorProfile={{
             ...userProfile,
             companyId: userProfile?.companyId || activeCompanyId,
-            companyName: userProfile?.companyName || userProfile?.empresa || (activeCompanyId ? activeCompanyId.toUpperCase() : sponsorName)
+            companyName: userProfile?.companyName || userProfile?.empresa || sponsorName
           }}
+          isExistingLead={false}
           onClose={() => {
             setActiveParticipant(null);
-            setTimeout(() => startScanner(), 300);
+            if (activeTab === 'scanner') {
+              setTimeout(() => startScanner(), 300);
+            }
           }}
           onLeadCaptured={handleLeadCaptured}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: DETALHES / EDIÇÃO DE LEAD DO CRM                                 */}
+      {/* ========================================================================= */}
+      {selectedLead && (
+        <SponsorLeadModal
+          participant={selectedLead}
+          sponsorProfile={{
+            ...userProfile,
+            companyId: userProfile?.companyId || activeCompanyId,
+            companyName: userProfile?.companyName || userProfile?.empresa || sponsorName
+          }}
+          isExistingLead={true}
+          onClose={() => setSelectedLead(null)}
+          onLeadUpdated={handleLeadUpdated}
         />
       )}
     </div>

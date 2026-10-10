@@ -361,6 +361,133 @@ describe('POST /api/leads handler (KAN-55)', () => {
   });
 });
 
+describe('GET /api/leads handler', () => {
+  it('retorna myLeads e companyLeads com status 200', async () => {
+    const { getLeadsHandler } = await import('./leads');
+    const req = makeReq({}, { uid: 'sponsor-1', role: 'SPONSOR', email: 'contato@kanastra.com.br' });
+    const res = makeRes();
+
+    (db.collection as any).mockImplementation((colName: string) => {
+      if (colName === 'users') {
+        return {
+          doc: () => ({
+            get: () => Promise.resolve({
+              exists: true,
+              data: () => ({ companyId: 'kanastra' })
+            })
+          })
+        };
+      }
+      if (colName === 'leads') {
+        return {
+          doc: () => ({
+            collection: () => ({
+              get: () => Promise.resolve({
+                docs: [
+                  { id: 'part-1', data: () => ({ name: 'Aluno 1', rating: 5, notes: 'Fera' }) }
+                ]
+              })
+            })
+          })
+        };
+      }
+      if (colName === 'company_leads') {
+        return {
+          doc: () => ({
+            collection: () => ({
+              get: () => Promise.resolve({
+                docs: [
+                  { id: 'part-1', data: () => ({ name: 'Aluno 1', rating: 5, notes: 'Fera' }) },
+                  { id: 'part-2', data: () => ({ name: 'Aluno 2', rating: 4, notes: 'Bom perfil' }) }
+                ]
+              })
+            })
+          })
+        };
+      }
+      return { doc: () => ({ get: () => Promise.resolve({ exists: false }) }) };
+    });
+
+    await getLeadsHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        companyId: 'kanastra',
+        myLeads: expect.arrayContaining([expect.objectContaining({ id: 'part-1' })]),
+        companyLeads: expect.arrayContaining([
+          expect.objectContaining({ id: 'part-1' }),
+          expect.objectContaining({ id: 'part-2' })
+        ])
+      })
+    );
+  });
+});
+
+describe('PATCH /api/leads/:participantUid handler', () => {
+  it('rejeita participantUid inválido com 400', async () => {
+    const { updateLeadHandler } = await import('./leads');
+    const req = {
+      params: { participantUid: '!!invalido!!' },
+      body: { rating: 5 },
+      user: { uid: 'sponsor-1', role: 'SPONSOR' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await updateLeadHandler(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('atualiza rating e notes com sucesso (200)', async () => {
+    const { updateLeadHandler } = await import('./leads');
+    const req = {
+      params: { participantUid: 'part-1' },
+      body: { rating: 4, notes: 'Anotações atualizadas' },
+      user: { uid: 'sponsor-1', role: 'SPONSOR', email: 'contato@kanastra.com.br' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    const mockSet = vi.fn();
+    (db.collection as any).mockImplementation((colName: string) => {
+      if (colName === 'users') {
+        return {
+          doc: () => ({
+            get: () => Promise.resolve({ exists: true, data: () => ({ companyId: 'kanastra' }) })
+          })
+        };
+      }
+      return {
+        doc: () => ({
+          collection: () => ({
+            doc: () => ({
+              set: mockSet,
+              get: () => Promise.resolve({
+                data: () => ({ rating: 4, notes: 'Anotações atualizadas' })
+              })
+            })
+          })
+        })
+      };
+    });
+
+    await updateLeadHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(mockSet).toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        lead: expect.objectContaining({
+          participantUid: 'part-1',
+          rating: 4,
+          notes: 'Anotações atualizadas'
+        })
+      })
+    );
+  });
+});
+
 describe('leads route middleware configuration', () => {
   it('registra a rota POST / com middleware de autenticação e papel restrito', () => {
     const postRoute = (router as unknown as { stack: any[] }).stack.find(
@@ -369,5 +496,22 @@ describe('leads route middleware configuration', () => {
     expect(postRoute).toBeDefined();
     expect(postRoute.route.stack.length).toBeGreaterThanOrEqual(3); // requireAuth, requireRole, leadsHandler
   });
+
+  it('registra a rota GET / com middleware de autenticação e papel restrito', () => {
+    const getRoute = (router as unknown as { stack: any[] }).stack.find(
+      (layer) => layer.route?.path === '/' && layer.route?.methods?.get
+    );
+    expect(getRoute).toBeDefined();
+    expect(getRoute.route.stack.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('registra a rota PATCH /:participantUid com middleware de autenticação e papel restrito', () => {
+    const patchRoute = (router as unknown as { stack: any[] }).stack.find(
+      (layer) => layer.route?.path === '/:participantUid' && layer.route?.methods?.patch
+    );
+    expect(patchRoute).toBeDefined();
+    expect(patchRoute.route.stack.length).toBeGreaterThanOrEqual(3);
+  });
 });
+
 
