@@ -255,7 +255,7 @@ export async function validateMissionProof(
 
     if (missionId === 'network_type') {
       const targetType = (targetData?.participantType || targetData?.participant_type || '').trim();
-      if (!targetType || targetType === 'Aluno da UFU') {
+      if (!targetType || targetType === 'Aluno da UFU' || targetType === 'Aluno UFU Graduação') {
         return {
           valid: false,
           error: 'CRITERIA_NOT_MET',

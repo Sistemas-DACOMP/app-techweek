@@ -39,12 +39,18 @@ const UFU_COURSES = [
 ];
 
 const PARTICIPANT_TYPES = [
-  'Aluno da UFU',
-  'Pós-graduação',
+  'Aluno UFU Graduação',
+  'Aluno UFU Pós-graduação',
   'Aluno de outra instituição',
   'Servidor / Professor',
   'Comunidade Externa'
 ];
+
+const normalizeParticipantType = (type) => {
+  if (type === 'Aluno da UFU') return 'Aluno UFU Graduação';
+  if (type === 'Pós-graduação' || type === 'Aluno UFU Pos graduação') return 'Aluno UFU Pós-graduação';
+  return type || 'Aluno UFU Graduação';
+};
 
 const INSTITUTIONS = [
   'FACOM',
@@ -87,7 +93,7 @@ export default function Profile() {
       lastName: initialLastName,
       phone: cached?.phone || '',
       course: cached?.course || 'Sistemas de Informação',
-      participantType: cached?.participantType || cached?.participant_type || 'Aluno da UFU',
+      participantType: normalizeParticipantType(cached?.participantType || cached?.participant_type),
       period: cached?.period || null,
       institution: cached?.institution || '',
       avatarUrl: cached?.avatarUrl || cached?.avatar_url || cached?.photoURL || user?.photoURL || '',
@@ -112,7 +118,7 @@ export default function Profile() {
     lastName: '',
     username: '',
     phone: '',
-    participantType: 'Aluno da UFU',
+    participantType: 'Aluno UFU Graduação',
     course: 'Sistemas de Informação',
     customCourse: '',
     period: '',
@@ -172,7 +178,7 @@ export default function Profile() {
           lastName: data?.lastName || data?.last_name || prev.lastName,
           phone: data?.phone || prev.phone,
           course: data?.course || prev.course,
-          participantType: data?.participantType || data?.participant_type || prev.participantType,
+          participantType: normalizeParticipantType(data?.participantType || data?.participant_type || prev.participantType),
           period: data?.period !== undefined && data?.period !== null ? data.period : prev.period,
           institution: data?.institution || prev.institution || '',
           avatarUrl: data?.avatarUrl || data?.avatar_url || prev.avatarUrl || data?.photoURL || currentUser?.photoURL || '',
@@ -251,7 +257,7 @@ export default function Profile() {
       lastName: profile.lastName || '',
       username: (profile.username || '').replace(/^@/, ''),
       phone: profile.phone || '',
-      participantType: profile.participantType || 'Aluno da UFU',
+      participantType: normalizeParticipantType(profile.participantType),
       course: isCustomCourse ? 'Outro (especificar)' : (profile.course || 'Sistemas de Informação'),
       customCourse: isCustomCourse ? profile.course : '',
       period: profile.period ? String(profile.period) : '',
@@ -331,8 +337,8 @@ export default function Profile() {
     const cleanLastName = editForm.lastName.trim();
     const cleanUsername = editForm.username.trim().replace(/^@/, '');
     const cleanEmail = isTicketConfirmed ? (profile.email || '') : editForm.email.trim().toLowerCase();
-    const isStudent = editForm.participantType === 'Aluno da UFU' || editForm.participantType === 'Aluno de outra instituição';
-    const isPostgrad = editForm.participantType === 'Pós-graduação';
+    const isStudent = editForm.participantType === 'Aluno UFU Graduação' || editForm.participantType === 'Aluno da UFU' || editForm.participantType === 'Aluno de outra instituição';
+    const isPostgrad = editForm.participantType === 'Aluno UFU Pós-graduação' || editForm.participantType === 'Pós-graduação';
     const finalCourse = isStudent 
       ? (editForm.course === 'Outro (especificar)' ? editForm.customCourse.trim() : editForm.course) 
       : (isPostgrad ? 'Pós-graduação' : '');
@@ -663,8 +669,8 @@ export default function Profile() {
   const fullName = [cleanFirstName, cleanLastName].filter(Boolean).join(' ').trim();
   const cleanUsername = (profile.username || '').replace(/^@/, '');
   const initials = initialsOf(cleanFirstName, cleanLastName);
-  const isStudentProfile = profile.participantType === 'Aluno da UFU' || profile.participantType === 'Aluno de outra instituição';
-  const isPostgradProfile = profile.participantType === 'Pós-graduação';
+  const isStudentProfile = profile.participantType === 'Aluno UFU Graduação' || profile.participantType === 'Aluno da UFU' || profile.participantType === 'Aluno de outra instituição';
+  const isPostgradProfile = profile.participantType === 'Aluno UFU Pós-graduação' || profile.participantType === 'Pós-graduação';
   const academic = isStudentProfile && profile.course
     ? `${profile.course}${profile.period ? `, ${profile.period}º` : ''}`
     : isPostgradProfile
@@ -742,8 +748,8 @@ export default function Profile() {
 
   /* ------------------------------------------------------------------ Editar perfil (1.34) */
   if (isEditing) {
-    const isStudent = editForm.participantType === 'Aluno da UFU' || editForm.participantType === 'Aluno de outra instituição';
-    const isPostgrad = editForm.participantType === 'Pós-graduação';
+    const isStudent = editForm.participantType === 'Aluno UFU Graduação' || editForm.participantType === 'Aluno da UFU' || editForm.participantType === 'Aluno de outra instituição';
+    const isPostgrad = editForm.participantType === 'Aluno UFU Pós-graduação' || editForm.participantType === 'Pós-graduação';
     return (
       <div className="perfil-scroll h-full overflow-y-auto overflow-x-hidden bg-bg text-text">
         <form id="perfil-form" onSubmit={handleSaveProfile} noValidate className="flex min-h-full flex-col">
@@ -826,9 +832,9 @@ export default function Profile() {
             </Field>
 
             <Field id="pf-vem" label="Você vem como">
-              <select id="pf-vem" className="field pf-field" value={editForm.participantType}
+              <select id="pf-vem" className="field pf-field" value={normalizeParticipantType(editForm.participantType)}
                 onChange={(e) => setEditForm({ ...editForm, participantType: e.target.value })}>
-                {[...new Set([...PARTICIPANT_TYPES, editForm.participantType].filter(Boolean))].map((t) => <option key={t} value={t}>{t}</option>)}
+                {PARTICIPANT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </Field>
 

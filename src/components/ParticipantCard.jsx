@@ -198,7 +198,7 @@ export default function ParticipantCard({ participant, points = null, eyebrow = 
       </h2>
       {cleanUsername && <div className="mt-0.5 text-[15px] font-bold text-link">@{cleanUsername}</div>}
       {(() => {
-        const isPostgrad = participantType === 'Pós-graduação' || course === 'Pós-graduação';
+        const isPostgrad = participantType === 'Aluno UFU Pós-graduação' || participantType === 'Pós-graduação' || course === 'Pós-graduação';
         const academicLabel = isPostgrad
           ? (institution ? `Pós-graduação · ${institution}` : 'Pós-graduação')
           : [institution || course, periodLabel(period)].filter(Boolean).join(' · ');

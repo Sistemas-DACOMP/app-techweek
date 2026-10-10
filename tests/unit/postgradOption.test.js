@@ -69,11 +69,11 @@ describe('Pós-graduação Form and Service Logic', () => {
     );
   });
 
-  it('valida regras de negócio para Pós-graduação vs Aluno da UFU', () => {
+  it('valida regras de negócio para Pós-graduação vs Aluno da UFU (incluindo novos rótulos)', () => {
     const validatePostgrad = (data) => {
       const errors = {};
-      const isStudent = data.participantType === 'Aluno da UFU' || data.participantType === 'Aluno de outra instituição';
-      const isPostgrad = data.participantType === 'Pós-graduação';
+      const isStudent = data.participantType === 'Aluno UFU Graduação' || data.participantType === 'Aluno da UFU' || data.participantType === 'Aluno de outra instituição';
+      const isPostgrad = data.participantType === 'Aluno UFU Pós-graduação' || data.participantType === 'Pós-graduação';
 
       if (isStudent && !data.period) {
         errors.period = 'Selecione o período';
@@ -97,9 +97,17 @@ describe('Pós-graduação Form and Service Logic', () => {
     });
     expect(res1).toEqual({});
 
+    // Caso 1b: Aluno UFU Pós-graduação com FEELT (válido, sem período)
+    const res1b = validatePostgrad({
+      participantType: 'Aluno UFU Pós-graduação',
+      institution: 'FEELT',
+      period: null
+    });
+    expect(res1b).toEqual({});
+
     // Caso 2: Pós-graduação sem instituição (erro)
     const res2 = validatePostgrad({
-      participantType: 'Pós-graduação',
+      participantType: 'Aluno UFU Pós-graduação',
       institution: '',
       period: null
     });
@@ -107,7 +115,7 @@ describe('Pós-graduação Form and Service Logic', () => {
 
     // Caso 3: Pós-graduação com Outra mas sem preencher texto (erro)
     const res3 = validatePostgrad({
-      participantType: 'Pós-graduação',
+      participantType: 'Aluno UFU Pós-graduação',
       institution: 'Outra',
       customInstitution: '',
       period: null
@@ -116,7 +124,7 @@ describe('Pós-graduação Form and Service Logic', () => {
 
     // Caso 4: Pós-graduação com Outra e texto preenchido (válido)
     const res4 = validatePostgrad({
-      participantType: 'Pós-graduação',
+      participantType: 'Aluno UFU Pós-graduação',
       institution: 'Outra',
       customInstitution: 'UNICAMP',
       period: null
@@ -129,5 +137,19 @@ describe('Pós-graduação Form and Service Logic', () => {
       period: null
     });
     expect(res5.period).toBeDefined();
+
+    // Caso 6: Aluno UFU Graduação exige período
+    const res6 = validatePostgrad({
+      participantType: 'Aluno UFU Graduação',
+      period: null
+    });
+    expect(res6.period).toBeDefined();
+
+    // Caso 7: Aluno UFU Graduação com período preenchido (válido)
+    const res7 = validatePostgrad({
+      participantType: 'Aluno UFU Graduação',
+      period: 3
+    });
+    expect(res7).toEqual({});
   });
 });

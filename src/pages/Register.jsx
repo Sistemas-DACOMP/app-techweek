@@ -66,7 +66,7 @@ export default function Register() {
     phone: '',
     password: '',
     confirmPassword: '',
-    participantType: 'Aluno da UFU',
+    participantType: 'Aluno UFU Graduação',
     course: 'Sistemas de Informação',
     customCourse: '',
     period: '',
@@ -232,12 +232,12 @@ export default function Register() {
       errors.phone = 'Insira um telefone válido com DDD (10 ou 11 dígitos numéricos).';
     }
 
-    const isStudent = formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
+    const isStudent = formData.participantType === 'Aluno UFU Graduação' || formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
     if (isStudent && formData.course === 'Outro (especificar)' && !formData.customCourse.trim()) {
       errors.customCourse = 'Por favor, digite o nome do seu curso.';
     }
 
-    const isPostgrad = formData.participantType === 'Pós-graduação';
+    const isPostgrad = formData.participantType === 'Aluno UFU Pós-graduação' || formData.participantType === 'Pós-graduação';
     if (isPostgrad) {
       if (!formData.institution) {
         errors.institution = 'Por favor, selecione sua instituição.';
@@ -304,8 +304,8 @@ export default function Register() {
       return;
     }
 
-    const isStudent = formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
-    const isPostgrad = formData.participantType === 'Pós-graduação';
+    const isStudent = formData.participantType === 'Aluno UFU Graduação' || formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
+    const isPostgrad = formData.participantType === 'Aluno UFU Pós-graduação' || formData.participantType === 'Pós-graduação';
     const finalCourse = isStudent 
       ? (formData.course === 'Outro (especificar)' ? formData.customCourse.trim() : formData.course)
       : (isPostgrad ? 'Pós-graduação' : '');
@@ -430,8 +430,8 @@ export default function Register() {
   const isCoveringEyes = !isStep2 && isPasswordFocused;
   const isPeeking = !isStep2 && isPasswordFocused && showPassword;
 
-  const isStudent = formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
-  const isPostgrad = formData.participantType === 'Pós-graduação';
+  const isStudent = formData.participantType === 'Aluno UFU Graduação' || formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
+  const isPostgrad = formData.participantType === 'Aluno UFU Pós-graduação' || formData.participantType === 'Pós-graduação';
   const cleanUsernameView = formData.username.trim().replace(/^@/, '').toLowerCase();
   const usernameError = fieldErrors.username || (usernameCheck.status === 'taken' ? usernameCheck.message : '');
   const strengthTone = passwordStrength.score >= 3 ? 'var(--ok)' : passwordStrength.score === 2 ? 'var(--warn)' : 'var(--err)';
@@ -546,9 +546,9 @@ export default function Register() {
                   className="field ent-field font-semibold" required
                 >
                   <option value="" disabled>Selecione uma opção</option>
-                  <option value="Aluno da UFU">Aluno da UFU</option>
+                  <option value="Aluno UFU Graduação">Aluno UFU Graduação</option>
+                  <option value="Aluno UFU Pós-graduação">Aluno UFU Pós-graduação</option>
                   <option value="Aluno de outra instituição">Aluno de outra instituição</option>
-                  <option value="Pós-graduação">Pós-graduação</option>
                   <option value="Servidor / Professor">Servidor ou professor</option>
                   <option value="Comunidade Externa">Comunidade externa</option>
                 </select>

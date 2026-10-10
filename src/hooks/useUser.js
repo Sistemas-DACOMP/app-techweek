@@ -206,7 +206,7 @@ export function useUser() {
           }
         }
 
-        if (scannedProfile.participantType && scannedProfile.participantType !== 'Aluno da UFU') {
+        if (scannedProfile.participantType && scannedProfile.participantType !== 'Aluno da UFU' && scannedProfile.participantType !== 'Aluno UFU Graduação') {
           if (!hasCompletedChallenge('network_type')) {
             if (await recordEvent('challenge', 'network_type', 15, targetMeta)) {
               unlockedChallenges.push('network_type');

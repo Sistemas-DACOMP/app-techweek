@@ -182,5 +182,21 @@ describe('ParticipantCard (KAN-95)', () => {
       expect(html).toContain('Pós-graduação · FEELT');
       expect(html).not.toContain('período');
     });
+
+    it('renderiza Aluno UFU Pós-graduação com tag e instituição', () => {
+      const participant = {
+        name: 'Doutorando UFU',
+        username: 'doutorando',
+        participantType: 'Aluno UFU Pós-graduação',
+        institution: 'IME',
+        course: 'Pós-graduação'
+      };
+
+      const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
+      expect(html).toContain('Doutorando UFU');
+      expect(html).toContain('Aluno UFU Pós-graduação');
+      expect(html).toContain('Pós-graduação · IME');
+      expect(html).not.toContain('período');
+    });
   });
 });
