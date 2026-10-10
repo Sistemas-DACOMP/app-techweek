@@ -254,7 +254,7 @@ export async function updateLead({ participantUid, rating, notes, companyId }) {
  * @param {Array<object>} leads Lista de leads
  * @param {string} [companyName] Nome da empresa para o nome do arquivo
  */
-export function exportLeadsToCsv(leads = [], companyName = 'patrocinador') {
+export function exportLeadsToCsv(leads = [], companyName = 'patrocinador', scope = '') {
   if (!leads || leads.length === 0) {
     return false;
   }
@@ -263,14 +263,18 @@ export function exportLeadsToCsv(leads = [], companyName = 'patrocinador') {
     'Nome',
     'E-mail',
     'Telefone / WhatsApp',
-    'Curso / Instituição',
+    'Curso / Graduação',
     'Período',
+    'Tipo de Vínculo',
     'Avaliação (Estrelas)',
+    'Classificação / Status',
     'Observações / Notas',
-    'Faixa Etária',
+    'GitHub',
     'LinkedIn',
     'Instagram',
+    'Faixa Etária',
     'Coletado Por',
+    'Empresa',
     'Data / Hora'
   ];
 
@@ -280,27 +284,41 @@ export function exportLeadsToCsv(leads = [], companyName = 'patrocinador') {
     return `"${str}"`;
   };
 
+  const getStatusLabel = (rating) => {
+    const r = Number(rating) || 0;
+    if (r === 5) return 'Destaque Máximo (5 ★)';
+    if (r === 4) return 'Altamente Qualificado (4 ★)';
+    if (r === 3) return 'Bom Potencial (3 ★)';
+    if (r > 0) return `Avaliado (${r} ★)`;
+    return 'Sem classificação';
+  };
+
   const rows = leads.map((lead) => {
     const dateFormatted = lead.createdAt
       ? (typeof lead.createdAt?.toDate === 'function' ? lead.createdAt.toDate().toLocaleString('pt-BR') : new Date(lead.createdAt).toLocaleString('pt-BR'))
       : '';
+    const ratingNum = Number(lead.rating) || 0;
     return [
       escapeCsv(lead.name || ''),
       escapeCsv(lead.email || ''),
       escapeCsv(lead.phone || ''),
       escapeCsv(lead.course || ''),
       escapeCsv(lead.period ? `${lead.period}º Período` : ''),
-      escapeCsv(lead.rating ? `${lead.rating} ★` : 'Sem nota'),
+      escapeCsv(lead.participantType || lead.instituicao || ''),
+      escapeCsv(ratingNum > 0 ? `${ratingNum} ★` : 'Sem nota'),
+      escapeCsv(getStatusLabel(ratingNum)),
       escapeCsv(lead.notes || ''),
-      escapeCsv(lead.faixaEtaria || ''),
+      escapeCsv(lead.github || ''),
       escapeCsv(lead.linkedin || ''),
       escapeCsv(lead.instagram || ''),
+      escapeCsv(lead.faixaEtaria || ''),
       escapeCsv(lead.collectedByEmail || lead.sponsorUid || ''),
+      escapeCsv(companyName || ''),
       escapeCsv(dateFormatted)
     ].join(';');
   });
 
-  // UTF-8 BOM (\uFEFF) garante acentuação perfeita no Microsoft Excel
+  // UTF-8 BOM (\uFEFF) garante acentuação perfeita no Microsoft Excel e Google Sheets
   const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
   if (typeof document === 'undefined') {
     return true;
@@ -309,9 +327,11 @@ export function exportLeadsToCsv(leads = [], companyName = 'patrocinador') {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const sanitizedCompany = companyName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const scopeSuffix = scope ? `_${scope.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : '';
   const dateStr = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `leads_${sanitizedCompany}_techweek_${dateStr}.csv`;
+  // Mantém o prefixo 'leads_{company}_techweek_' para compatibilidade e adiciona escopo
+  a.download = `leads_${sanitizedCompany}_techweek_${dateStr}${scopeSuffix}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

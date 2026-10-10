@@ -189,8 +189,8 @@ export default function SponsorLeadModal({
             background: '#1A2347',
             border: 'none',
             borderRadius: '50%',
-            width: '36px',
-            height: '36px',
+            width: '44px',
+            height: '44px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -198,9 +198,9 @@ export default function SponsorLeadModal({
             cursor: 'pointer',
             transition: 'all 0.2s ease'
           }}
-          aria-label="Fechar"
+          aria-label="Fechar modal"
         >
-          <X size={18} />
+          <X size={20} />
         </button>
 
         {/* Lead Badge Header */}
@@ -451,8 +451,8 @@ export default function SponsorLeadModal({
                         padding: '6px',
                         transition: 'transform 0.15s ease',
                         transform: (hoverRating || rating) >= starValue ? 'scale(1.15)' : 'scale(1)',
-                        minWidth: '40px',
-                        minHeight: '40px',
+                        minWidth: '44px',
+                        minHeight: '44px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center'
@@ -472,11 +472,15 @@ export default function SponsorLeadModal({
 
             {/* Recruitment Notes Section */}
             <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#A9B1CC', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label
+                htmlFor="lead-recruitment-notes"
+                style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#A9B1CC', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+              >
                 Anotações e Observações (Recrutamento)
               </label>
 
               <textarea
+                id="lead-recruitment-notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Ex: Bom conhecimento em React e Node, busca estágio em backend, boa comunicação..."
@@ -521,12 +525,13 @@ export default function SponsorLeadModal({
             {/* Error Message */}
             {errorMsg && (
               <div
+                role="alert"
                 style={{
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid #ef4444',
+                  background: 'rgba(245, 154, 154, 0.12)',
+                  border: '1px solid #F59A9A',
                   borderRadius: '12px',
                   padding: '10px 14px',
-                  color: '#fca5a5',
+                  color: '#F59A9A',
                   fontSize: '12px',
                   display: 'flex',
                   alignItems: 'center',
@@ -542,12 +547,13 @@ export default function SponsorLeadModal({
             {/* Success Toast for updates */}
             {updateSuccessToast && (
               <div
+                role="status"
                 style={{
-                  background: 'rgba(16, 185, 129, 0.2)',
-                  border: '1px solid #10B981',
+                  background: 'rgba(111, 216, 166, 0.12)',
+                  border: '1px solid #6FD8A6',
                   borderRadius: '12px',
                   padding: '10px 14px',
-                  color: '#34D399',
+                  color: '#6FD8A6',
                   fontSize: '12px',
                   display: 'flex',
                   alignItems: 'center',

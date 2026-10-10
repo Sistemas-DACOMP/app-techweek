@@ -39,6 +39,7 @@ import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityServic
 import { subscribeToFeedPosts, toggleLikeFeedPost, DEFAULT_FEED_POSTS } from '../lib/feedService';
 import SponsorLeadModal from '../components/SponsorLeadModal';
 import WhatsAppButton from '../components/WhatsAppButton';
+import Mascot from '../components/Mascot';
 
 const isDevMode = import.meta.env.DEV;
 
@@ -301,12 +302,13 @@ export default function Sponsor() {
   const handleExportCsv = () => {
     const leadsToExport = leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads;
     if (!leadsToExport || leadsToExport.length === 0) {
-      showToast('Nenhum lead disponível para exportação.', 'warning');
+      showToast('Nenhum lead disponível para exportação com os filtros atuais.', 'warning');
       return;
     }
-    const success = exportLeadsToCsv(leadsToExport, sponsorName);
+    const scopeLabel = leadsTab === 'mine' ? 'meus' : 'todos';
+    const success = exportLeadsToCsv(leadsToExport, sponsorName, scopeLabel);
     if (success) {
-      showToast('Planilha CSV gerada e baixada com sucesso!', 'success');
+      showToast(`Planilha CSV (${leadsToExport.length} ${leadsToExport.length === 1 ? 'lead' : 'leads'}) gerada com sucesso!`, 'success');
     }
   };
 
@@ -433,9 +435,11 @@ export default function Sponsor() {
 
   return (
     <div className="page-container animate-fade-in" style={{ paddingBottom: '90px', fontFamily: 'Montserrat, sans-serif', maxWidth: '640px', margin: '0 auto', boxSizing: 'border-box' }}>
-      {/* Toast Alert */}
+      {/* Toast Alert padronizado com DESIGN.md §2.1 & §6 */}
       {toastMessage && (
         <div
+          role="alert"
+          aria-live="polite"
           className="animate-fade-in"
           style={{
             position: 'fixed',
@@ -447,19 +451,70 @@ export default function Sponsor() {
             maxWidth: '380px',
             padding: '12px 16px',
             borderRadius: '16px',
-            background: toastMessage.type === 'success' ? '#064E3B' : toastMessage.type === 'warning' ? '#78350F' : '#7F1D1D',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            color: '#ffffff',
+            background: '#1F2A55',
+            border: `1px solid ${
+              toastMessage.type === 'success'
+                ? '#6FD8A6'
+                : toastMessage.type === 'warning'
+                ? '#F2C46A'
+                : '#F59A9A'
+            }`,
+            color: '#EEF1FA',
             fontSize: '13px',
             fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '10px',
             boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
           }}
         >
-          {toastMessage.type === 'success' ? <CheckCircle2 size={18} color="#34D399" /> : <AlertCircle size={18} color="#FBBF24" />}
-          <span>{toastMessage.message}</span>
+          {toastMessage.type === 'success' ? (
+            <div
+              style={{
+                width: '26px',
+                height: '26px',
+                borderRadius: '50%',
+                background: 'rgba(111, 216, 166, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}
+            >
+              <CheckCircle2 size={16} color="#6FD8A6" />
+            </div>
+          ) : toastMessage.type === 'warning' ? (
+            <div
+              style={{
+                width: '26px',
+                height: '26px',
+                borderRadius: '50%',
+                background: 'rgba(242, 196, 106, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}
+            >
+              <AlertCircle size={16} color="#F2C46A" />
+            </div>
+          ) : (
+            <div
+              style={{
+                width: '26px',
+                height: '26px',
+                borderRadius: '50%',
+                background: 'rgba(245, 154, 154, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}
+            >
+              <AlertCircle size={16} color="#F59A9A" />
+            </div>
+          )}
+          <span style={{ lineHeight: 1.4 }}>{toastMessage.message}</span>
         </div>
       )}
 
@@ -826,14 +881,23 @@ export default function Sponsor() {
       {activeTab === 'leads' && (
         <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Caixa de Alternância entre Meus Leads e Todos da Empresa */}
-          <div style={{ display: 'flex', background: '#121A36', padding: '4px', borderRadius: '12px', border: '1px solid #1C2548', width: '100%' }}>
+          <div
+            role="tablist"
+            aria-label="Filtrar escopo dos leads"
+            style={{ display: 'flex', background: '#121A36', padding: '4px', borderRadius: '12px', border: '1px solid #1C2548', width: '100%' }}
+          >
             <button
               type="button"
+              role="tab"
+              id="tab-leads-mine"
+              aria-selected={leadsTab === 'mine'}
+              aria-controls="panel-leads-content"
               onClick={() => setLeadsTab('mine')}
               style={{
                 flex: 1,
+                minHeight: '44px',
                 padding: '10px 14px',
-                borderRadius: '8px',
+                borderRadius: '10px',
                 border: 'none',
                 fontSize: '13px',
                 fontWeight: 700,
@@ -848,11 +912,16 @@ export default function Sponsor() {
 
             <button
               type="button"
+              role="tab"
+              id="tab-leads-company"
+              aria-selected={leadsTab === 'company'}
+              aria-controls="panel-leads-content"
               onClick={() => setLeadsTab('company')}
               style={{
                 flex: 1,
+                minHeight: '44px',
                 padding: '10px 14px',
-                borderRadius: '8px',
+                borderRadius: '10px',
                 border: 'none',
                 fontSize: '13px',
                 fontWeight: 700,
@@ -867,35 +936,43 @@ export default function Sponsor() {
           </div>
 
           {/* Opção de Exportar CSV embaixo da caixa de alternância */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginTop: '-4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginTop: '-4px' }}>
             <span style={{ fontSize: '12px', color: '#8790AE', fontWeight: 600 }}>
-              {leadsTab === 'mine'
-                ? `${myLeads.length} ${myLeads.length === 1 ? 'contato coletado por você' : 'contatos coletados por você'}`
-                : `${companyLeads.length} ${companyLeads.length === 1 ? 'contato no total da empresa' : 'contatos no total da empresa'}`}
+              {leadsSearch.trim() || starFilter !== 'all' ? (
+                <>
+                  Mostrando <strong style={{ color: '#EEF1FA' }}>{(leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length}</strong> de {leadsTab === 'mine' ? myLeads.length : companyLeads.length} leads
+                </>
+              ) : leadsTab === 'mine' ? (
+                `${myLeads.length} ${myLeads.length === 1 ? 'contato coletado por você' : 'contatos coletados por você'}`
+              ) : (
+                `${companyLeads.length} ${companyLeads.length === 1 ? 'contato no total da empresa' : 'contatos no total da empresa'}`
+              )}
             </span>
 
             <button
               type="button"
               onClick={handleExportCsv}
+              disabled={(leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0}
               style={{
-                minHeight: '38px',
-                padding: '0 14px',
+                minHeight: '44px',
+                padding: '0 16px',
                 background: '#1A2347',
                 border: '1px solid #1C2548',
-                borderRadius: '10px',
-                color: '#34D399',
+                borderRadius: '12px',
+                color: (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0 ? '#6E779A' : '#6FD8A6',
                 fontSize: '12px',
                 fontWeight: 700,
-                cursor: 'pointer',
+                cursor: (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0 ? 'not-allowed' : 'pointer',
+                opacity: (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0 ? 0.6 : 1,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '8px',
                 whiteSpace: 'nowrap',
                 transition: 'all 0.15s ease'
               }}
-              title="Baixar lista de leads formatada para Excel / Sheets"
+              title="Baixar lista de leads formatada para Excel / Google Sheets"
             >
-              <Download size={14} />
+              <Download size={15} />
               <span>Exportar CSV</span>
             </button>
           </div>
@@ -903,28 +980,58 @@ export default function Sponsor() {
           {/* Barra de Busca e Filtro por Estrelas */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div style={{ position: 'relative' }}>
-              <Search size={16} color="#8790AE" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
+              <Search size={16} color="#8790AE" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
               <input
                 type="text"
                 value={leadsSearch}
                 onChange={(e) => setLeadsSearch(e.target.value)}
                 placeholder="Buscar por nome, curso, telefone ou anotação..."
+                aria-label="Buscar leads por nome, curso, telefone ou anotação"
                 style={{
                   width: '100%',
+                  minHeight: '44px',
                   background: '#131B3A',
                   border: '1.5px solid #26305A',
                   borderRadius: '12px',
-                  padding: '10px 14px 10px 38px',
+                  padding: '10px 38px 10px 38px',
                   color: '#EEF1FA',
                   fontSize: '13px',
                   outline: 'none',
                   boxSizing: 'border-box'
                 }}
               />
+              {leadsSearch && (
+                <button
+                  type="button"
+                  onClick={() => setLeadsSearch('')}
+                  aria-label="Limpar busca"
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    width: '32px',
+                    height: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#8790AE',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <X size={15} />
+                </button>
+              )}
             </div>
 
             {/* Filtros de Estrelas */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+            <div
+              role="group"
+              aria-label="Filtro por avaliação de estrelas"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}
+            >
               <span style={{ fontSize: '11px', color: '#8790AE', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <Filter size={12} />
                 <span>Nota:</span>
@@ -940,15 +1047,17 @@ export default function Sponsor() {
                   type="button"
                   onClick={() => setStarFilter(f.id)}
                   style={{
-                    padding: '4px 10px',
-                    borderRadius: '8px',
-                    fontSize: '11px',
+                    minHeight: '38px',
+                    padding: '6px 12px',
+                    borderRadius: '10px',
+                    fontSize: '12px',
                     fontWeight: 700,
                     cursor: 'pointer',
                     border: starFilter === f.id ? '1px solid #FBBF24' : '1px solid #1C2548',
                     background: starFilter === f.id ? 'rgba(251, 191, 36, 0.15)' : '#121A36',
                     color: starFilter === f.id ? '#FBBF24' : '#8790AE',
-                    whiteSpace: 'nowrap'
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s ease'
                   }}
                 >
                   {f.label}
@@ -958,18 +1067,96 @@ export default function Sponsor() {
           </div>
 
           {/* Lista de Leads */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {(leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0 ? (
-              <div style={{ background: '#121A36', borderRadius: '18px', padding: '32px 20px', textAlign: 'center', border: '1px solid #1C2548' }}>
-                <Users size={32} color="#8790AE" style={{ margin: '0 auto 10px' }} />
-                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#EEF1FA', margin: '0 0 6px' }}>
-                  Nenhum lead encontrado
+          <div
+            id="panel-leads-content"
+            role="tabpanel"
+            aria-labelledby={leadsTab === 'mine' ? 'tab-leads-mine' : 'tab-leads-company'}
+            style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
+          >
+            {(leadsTab === 'mine' ? myLeads : companyLeads).length === 0 ? (
+              <div
+                style={{
+                  background: '#121A36',
+                  borderRadius: '20px',
+                  padding: '36px 20px',
+                  textAlign: 'center',
+                  border: '1px solid #1C2548',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center'
+                }}
+              >
+                <div style={{ marginBottom: '16px' }}>
+                  <Mascot size={72} color="blue" isWaving={true} />
+                </div>
+                <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#EEF1FA', margin: '0 0 8px' }}>
+                  {leadsTab === 'mine' ? 'Nenhum lead coletado por você ainda' : 'Nenhum lead registrado pela empresa'}
                 </h3>
-                <p style={{ fontSize: '12px', color: '#8790AE', margin: 0 }}>
-                  {leadsSearch || starFilter !== 'all'
-                    ? 'Nenhum contato corresponde aos filtros de busca aplicados.'
-                    : 'Ainda não há leads registrados nesta visualização. Use a câmera para bipar estudantes.'}
+                <p style={{ fontSize: '13px', color: '#8790AE', margin: '0 0 20px', maxWidth: '320px', lineHeight: 1.5 }}>
+                  {leadsTab === 'mine'
+                    ? 'Aponte a câmera para o crachá dos estudantes no estande para salvar contatos, notas e avaliações.'
+                    : 'Nenhum membro da sua equipe bipou participantes ainda.'}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('scanner')}
+                  style={{
+                    minHeight: '44px',
+                    padding: '0 20px',
+                    background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                    border: 'none',
+                    borderRadius: '12px',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+                  }}
+                >
+                  <Camera size={16} />
+                  <span>Bipar Primeiro Estudante</span>
+                </button>
+              </div>
+            ) : (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).length === 0 ? (
+              <div
+                style={{
+                  background: '#121A36',
+                  borderRadius: '18px',
+                  padding: '32px 20px',
+                  textAlign: 'center',
+                  border: '1px solid #1C2548'
+                }}
+              >
+                <Search size={32} color="#8790AE" style={{ margin: '0 auto 12px' }} />
+                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#EEF1FA', margin: '0 0 6px' }}>
+                  Nenhum lead encontrado com estes filtros
+                </h3>
+                <p style={{ fontSize: '12px', color: '#8790AE', margin: '0 0 16px' }}>
+                  Nenhum contato corresponde ao termo "{leadsSearch}" ou à nota selecionada.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLeadsSearch('');
+                    setStarFilter('all');
+                  }}
+                  style={{
+                    minHeight: '38px',
+                    padding: '0 16px',
+                    background: '#1A2347',
+                    border: '1px solid #1C2548',
+                    borderRadius: '10px',
+                    color: '#8FA0FF',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Limpar Filtros
+                </button>
               </div>
             ) : (
               (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads).map((lead) => {
@@ -977,6 +1164,15 @@ export default function Sponsor() {
                 return (
                   <div
                     key={lead.participantUid || lead.uid || lead.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Ver detalhes do lead ${lead.name || 'Aluno'}`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedLead(lead);
+                      }
+                    }}
                     style={{
                       background: '#121A36',
                       borderRadius: '16px',
