@@ -4,7 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import SponsorLeadModal, {
   QUICK_RECRUITMENT_TAGS,
   RATING_CLASSIFICATIONS,
-  getAffiliationBadge
+  getAffiliationBadge,
+  getCleanInstitution
 } from '../../src/components/SponsorLeadModal';
 
 describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
@@ -77,7 +78,7 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
   });
 
   describe('3. Hierarquia e Reorganização dos Botões de Contato', () => {
-    it('no modo de captura imediata (isExistingLead = false), botões são compactos para poupar espaço', () => {
+    it('no modo de captura imediata (isExistingLead = false), botões soltos de contato são omitidos para foco na qualificação e economia vertical', () => {
       const html = renderToStaticMarkup(
         React.createElement(SponsorLeadModal, {
           participant: mockParticipant,
@@ -87,11 +88,11 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
         })
       );
 
-      // Contém atalho discreto e compacto
-      expect(html).toContain('Copiar E-mail');
-      expect(html).toContain('WhatsApp');
-      // O botão principal de salvar deve estar presente
+      // Não polui o fluxo inicial com botões soltos de contato
+      expect(html).not.toContain('Copiar E-mail');
+      // Os botões de ação de validação e salvamento devem estar presentes
       expect(html).toContain('Salvar Lead');
+      expect(html).toContain('Somente Validar');
     });
 
     it('no modo de visualização de lead CRM (isExistingLead = true), ações de contato são completas', () => {
@@ -194,6 +195,43 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
       expect(getAffiliationBadge({ participantType: 'Graduação' }).label).toBe('Graduação');
       expect(getAffiliationBadge({ participantType: 'Pós-Graduação' }).label).toBe('Pós-Graduação');
       expect(getAffiliationBadge({ participantType: 'Comunidade Externa' }).label).toBe('Externo');
+    });
+
+    it('higieniza rótulos redundantes de instituição para evitar texto duplicado', () => {
+      expect(getCleanInstitution({ instituicao: 'Aluno UFU Graduação' }, 'Graduação')).toBeNull();
+      expect(getCleanInstitution({ instituicao: 'Graduação' }, 'Graduação')).toBeNull();
+      expect(getCleanInstitution({ instituicao: 'Universidade Federal de Uberlândia (UFU)' }, 'Graduação')).toBe('UFU');
+      expect(getCleanInstitution({ instituicao: 'USP' }, 'Graduação')).toBe('USP');
+    });
+  });
+
+  describe('6. Estrutura Flexbox e Redesenho Compacto', () => {
+    it('utiliza layout flex com max-height 90vh e sticky footer lado a lado', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(SponsorLeadModal, {
+          participant: mockParticipant,
+          sponsorProfile: mockSponsorProfile,
+          isExistingLead: false,
+          onClose: () => {}
+        })
+      );
+
+      expect(html).toContain('max-height:90vh');
+      expect(html).toContain('flex-direction:column');
+      expect(html).toContain('grid-template-columns:1fr 1.35fr');
+    });
+
+    it('textarea inicia com placeholder de anotação rápida', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(SponsorLeadModal, {
+          participant: mockParticipant,
+          sponsorProfile: mockSponsorProfile,
+          isExistingLead: false,
+          onClose: () => {}
+        })
+      );
+
+      expect(html).toContain('placeholder="Adicionar anotação... (opcional)"');
     });
   });
 });

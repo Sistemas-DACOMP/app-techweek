@@ -9,12 +9,12 @@ import {
   GraduationCap, 
   Mail, 
   Phone, 
-  Sparkles,
-  QrCode,
-  Copy,
-  ExternalLink,
-  Calendar,
-  UserCheck
+  Sparkles, 
+  QrCode, 
+  Copy, 
+  ExternalLink, 
+  Calendar, 
+  UserCheck 
 } from 'lucide-react';
 import { GitHubIcon } from './ParticipantCard';
 import WhatsAppButton from './WhatsAppButton';
@@ -92,6 +92,24 @@ export const getAffiliationBadge = (lead) => {
 };
 
 /**
+ * Higieniza o rótulo de instituição para evitar duplicar informações da afiliação (ex: "Aluno UFU Graduação").
+ */
+export const getCleanInstitution = (lead, affiliationLabel) => {
+  const raw = lead?.instituicao || lead?.institution || lead?.postgradInst || lead?.otherInst || '';
+  if (!raw) return null;
+  const lowerRaw = raw.toLowerCase().trim();
+  const lowerAff = (affiliationLabel || '').toLowerCase();
+
+  if (lowerRaw === lowerAff || lowerRaw === 'graduação' || lowerRaw === 'graduacao' || lowerRaw.includes('aluno ufu graduação')) {
+    return null;
+  }
+  if (lowerRaw.includes('aluno ufu') || lowerRaw.includes('ufu') || lowerRaw.includes('uberlândia') || lowerRaw.includes('uberlandia')) {
+    return 'UFU';
+  }
+  return raw;
+};
+
+/**
  * Modal completo de Lead para Patrocinadores (Design System TechWeek).
  * 
  * Suporta dois fluxos:
@@ -111,6 +129,7 @@ export default function SponsorLeadModal({
   const [rating, setRating] = useState(participant?.rating || 0);
   const [hoverRating, setHoverRating] = useState(0);
   const [notes, setNotes] = useState(participant?.notes || '');
+  const [notesFocused, setNotesFocused] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isValidatingOnly, setIsValidatingOnly] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -126,6 +145,7 @@ export default function SponsorLeadModal({
       setErrorMsg(null);
       setEmailCopied(false);
       setUpdateSuccessToast(false);
+      setNotesFocused(false);
     }
   }, [participant]);
 
@@ -171,11 +191,12 @@ export default function SponsorLeadModal({
   const sponsorCompanyId = sponsorProfile?.companyId || sponsorProfile?.empresa || sponsorProfile?.companyName;
   const participantUid = participant.participantUid || participant.uid || participant.id;
 
-  const institutionLabel = participant.instituicao || participant.institution || participant.postgradInst || participant.otherInst || participant.participantType || '';
   const affiliation = getAffiliationBadge(participant);
+  const cleanInstitution = getCleanInstitution(participant, affiliation?.label);
 
   const displayRating = hoverRating || rating || 0;
   const currentClassification = RATING_CLASSIFICATIONS[displayRating] || RATING_CLASSIFICATIONS[0];
+  const isNotesExpanded = notesFocused || (notes && notes.length > 0);
 
   const handleCopyEmail = async () => {
     const targetEmail = savedLeadData?.email || participant.email;
@@ -207,7 +228,6 @@ export default function SponsorLeadModal({
       ]));
 
       if (isExistingLead) {
-        // Atualização de lead existente no CRM
         await updateLead({
           participantUid,
           rating: rating !== undefined ? Number(rating) : 0,
@@ -229,7 +249,6 @@ export default function SponsorLeadModal({
           });
         }
       } else {
-        // Cadastro de novo lead pós-leitura de QR
         const response = await submitLead({
           participantUid,
           notes,
@@ -320,36 +339,38 @@ export default function SponsorLeadModal({
         animation: 'fadeIn 0.2s ease-out'
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget && !isSubmitting) onClose();
+        if (e.target === e.currentTarget && !isSubmitting && !isValidatingOnly) onClose();
       }}
     >
       <div
         className="glass-panel"
         style={{
           width: '100%',
-          maxWidth: '500px',
-          maxHeight: '92vh',
-          overflowY: 'auto',
+          maxWidth: '480px',
+          maxHeight: '90vh',
           borderRadius: '24px',
-          padding: '24px',
           background: 'linear-gradient(145deg, #121A36, #0A0F24)',
           border: '1px solid #1C2548',
           boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(37, 99, 235, 0.1)',
           fontFamily: 'Montserrat, sans-serif',
-          position: 'relative'
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
         }}
       >
         {/* ========================================================================= */}
-        {/* 1. HEADER LIMPO E SEM CORTES (Flexbox integrado com Close Button)        */}
+        {/* 1. HEADER COMPACTO (Fixo no topo com Close Button)                        */}
         {/* ========================================================================= */}
         <div
           style={{
+            flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '12px',
-            marginBottom: '16px',
-            paddingBottom: '2px'
+            gap: '10px',
+            padding: '16px 20px 12px',
+            borderBottom: '1px solid rgba(28, 37, 72, 0.6)'
           }}
         >
           <div
@@ -357,7 +378,6 @@ export default function SponsorLeadModal({
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              flexWrap: 'wrap',
               flex: 1,
               minWidth: 0
             }}
@@ -365,7 +385,7 @@ export default function SponsorLeadModal({
             {/* Badge de contexto */}
             <div
               style={{
-                padding: '5px 12px',
+                padding: '4px 10px',
                 borderRadius: '20px',
                 background: 'rgba(37, 99, 235, 0.15)',
                 border: '1px solid rgba(56, 189, 248, 0.4)',
@@ -373,14 +393,14 @@ export default function SponsorLeadModal({
                 fontSize: '11px',
                 fontWeight: '800',
                 textTransform: 'uppercase',
-                letterSpacing: '0.08em',
+                letterSpacing: '0.06em',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '5px',
                 flexShrink: 0
               }}
             >
-              <Sparkles size={13} />
+              <Sparkles size={12} />
               <span>{isExistingLead ? 'Detalhes do Candidato' : 'Novo Lead de Estande'}</span>
             </div>
 
@@ -392,319 +412,59 @@ export default function SponsorLeadModal({
                 color: '#A9B1CC',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '5px',
+                gap: '4px',
                 background: '#1A2347',
-                padding: '4px 10px',
-                borderRadius: '12px',
+                padding: '3px 8px',
+                borderRadius: '10px',
                 border: '1px solid #1C2548',
-                maxWidth: '100%',
+                maxWidth: '180px',
                 overflow: 'hidden'
               }}
               title={sponsorCompanyName}
             >
-              <Building2 size={13} color="#8FA0FF" style={{ flexShrink: 0 }} />
+              <Building2 size={12} color="#8FA0FF" style={{ flexShrink: 0 }} />
               <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {sponsorCompanyName}
               </span>
             </div>
           </div>
 
-          {/* Botão de Fechar alinhado no fluxo sem sobreposição */}
+          {/* Botão de Fechar com touch target de 44px */}
           <button
             type="button"
             onClick={onClose}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isValidatingOnly}
             style={{
               background: '#1A2347',
               border: '1px solid #1C2548',
               borderRadius: '50%',
               width: '44px',
               height: '44px',
+              minWidth: '44px',
+              minHeight: '44px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#A9B1CC',
               cursor: 'pointer',
-              transition: 'all 0.2s ease',
+              transition: 'all 0.15s ease',
               flexShrink: 0
             }}
             aria-label="Fechar modal"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
-
-        {/* ========================================================================= */}
-        {/* CANDIDATE PROFILE BOX                                                     */}
-        {/* ========================================================================= */}
-        <div
-          style={{
-            background: '#1A2347',
-            borderRadius: '18px',
-            padding: '16px',
-            border: '1px solid #1C2548',
-            marginBottom: isExistingLead ? '16px' : '12px',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '14px'
-          }}
-        >
-          <div
-            style={{
-              width: '54px',
-              height: '54px',
-              borderRadius: '16px',
-              background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#FFFFFF',
-              fontWeight: '800',
-              fontSize: '20px',
-              flexShrink: 0,
-              boxShadow: '0 4px 15px rgba(37, 99, 235, 0.3)'
-            }}
-          >
-            {participant.avatarUrl ? (
-              <img
-                src={participant.avatarUrl}
-                alt=""
-                style={{ width: '100%', height: '100%', borderRadius: '16px', objectFit: 'cover' }}
-              />
-            ) : (
-              (participant.name || 'P').charAt(0).toUpperCase()
-            )}
-          </div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#EEF1FA', margin: 0, lineHeight: 1.25 }}>
-                {participant.name || 'Participante'}
-              </h3>
-
-              {affiliation && (
-                <span
-                  style={{
-                    padding: '2px 8px',
-                    borderRadius: '8px',
-                    fontSize: '10px',
-                    fontWeight: '800',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    color: affiliation.color,
-                    background: affiliation.bg,
-                    border: `1px solid ${affiliation.border}`
-                  }}
-                >
-                  {affiliation.label}
-                </span>
-              )}
-            </div>
-
-            {participant.course && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#A9B1CC', marginBottom: '4px' }}>
-                <GraduationCap size={14} color="#8FA0FF" />
-                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {participant.course} {participant.period ? `• ${participant.period}º Período` : ''}
-                </span>
-              </div>
-            )}
-
-            {institutionLabel && (
-              <div style={{ fontSize: '11px', color: '#8790AE', marginBottom: '4px' }}>
-                {institutionLabel}
-              </div>
-            )}
-
-            {/* Quick Contact Chips */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
-              {participant.phone && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#A9B1CC' }}>
-                  <Phone size={12} color="#25D366" />
-                  <span>{participant.phone}</span>
-                </div>
-              )}
-
-              {participant.email && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#A9B1CC' }}>
-                  <Mail size={12} color="#8FA0FF" />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{participant.email}</span>
-                </div>
-              )}
-
-              {participant.github && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#A9B1CC' }}>
-                  <GitHubIcon size={12} color="#8FA0FF" />
-                  <a
-                    href={`https://github.com/${participant.github.replace(/^@/, '').trim()}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: '#8FA0FF', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                  >
-                    @{participant.github.replace(/^@/, '').trim()}
-                  </a>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ========================================================================= */}
-        {/* 3. REORGANIZAÇÃO DOS BOTÕES DE CONTATO (E-mail / WhatsApp)                */}
-        {/* ========================================================================= */}
-        {/* Modo CRM Detalhes (isExistingLead = true): Botões completos em destaque  */}
-        {isExistingLead && (
-          <div style={{ display: 'grid', gridTemplateColumns: participant.email ? '1fr 1fr' : '1fr', gap: '8px', marginBottom: '18px' }}>
-            {participant.email && (
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button
-                  type="button"
-                  onClick={handleCopyEmail}
-                  style={{
-                    flex: 1,
-                    minHeight: '44px',
-                    background: emailCopied ? 'rgba(16, 185, 129, 0.2)' : '#1A2347',
-                    border: emailCopied ? '1px solid #10B981' : '1px solid #1C2548',
-                    borderRadius: '12px',
-                    color: emailCopied ? '#34D399' : '#EEF1FA',
-                    fontSize: '12px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {emailCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
-                  <span>{emailCopied ? 'Copiado!' : 'Copiar E-mail'}</span>
-                </button>
-
-                <a
-                  href={`mailto:${participant.email}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    width: '44px',
-                    minHeight: '44px',
-                    background: '#1A2347',
-                    border: '1px solid #1C2548',
-                    borderRadius: '12px',
-                    color: '#8FA0FF',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    textDecoration: 'none'
-                  }}
-                  title="Abrir aplicativo de e-mail"
-                >
-                  <ExternalLink size={16} />
-                </a>
-              </div>
-            )}
-
-            {participant.phone && (
-              <WhatsAppButton
-                phone={participant.phone}
-                participantName={participant.name}
-                companyName={sponsorCompanyName}
-                label="WhatsApp"
-                size="sm"
-                fullWidth
-              />
-            )}
-          </div>
-        )}
-
-        {/* Modo Bipagem Imediata (isExistingLead = false): Barra discreta e compacta  */}
-        {/* Poupa espaço vertical para manter o botão salvar visível sem scroll        */}
-        {!isExistingLead && !savedLeadData && (participant.email || participant.phone) && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '14px',
-              flexWrap: 'wrap'
-            }}
-          >
-            {participant.phone && (
-              <WhatsAppButton
-                phone={participant.phone}
-                participantName={participant.name}
-                companyName={sponsorCompanyName}
-                label="WhatsApp"
-                size="sm"
-                style={{
-                  minHeight: '34px',
-                  padding: '6px 12px',
-                  fontSize: '11px',
-                  borderRadius: '10px'
-                }}
-              />
-            )}
-
-            {participant.email && (
-              <div style={{ display: 'inline-flex', gap: '4px' }}>
-                <button
-                  type="button"
-                  onClick={handleCopyEmail}
-                  style={{
-                    minHeight: '34px',
-                    padding: '6px 12px',
-                    background: emailCopied ? 'rgba(16, 185, 129, 0.2)' : '#1A2347',
-                    border: emailCopied ? '1px solid #10B981' : '1px solid #1C2548',
-                    borderRadius: '10px',
-                    color: emailCopied ? '#34D399' : '#A9B1CC',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {emailCopied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
-                  <span>{emailCopied ? 'Copiado!' : 'Copiar E-mail'}</span>
-                </button>
-
-                <a
-                  href={`mailto:${participant.email}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    width: '34px',
-                    height: '34px',
-                    minHeight: '34px',
-                    background: '#1A2347',
-                    border: '1px solid #1C2548',
-                    borderRadius: '10px',
-                    color: '#8FA0FF',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    textDecoration: 'none'
-                  }}
-                  title="Abrir aplicativo de e-mail"
-                >
-                  <ExternalLink size={14} />
-                </a>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ========================================================================= */}
         {/* TELA DE SUCESSO PÓS-SALVAR COM ATALHOS PROEMINENTES DE CONTATO            */}
         {/* ========================================================================= */}
         {!isExistingLead && savedLeadData ? (
-          <div style={{ textAlign: 'center', animation: 'fadeIn 0.3s ease-in' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '24px 20px', textAlign: 'center', animation: 'fadeIn 0.25s ease-in' }}>
             <div
               style={{
-                width: '60px',
-                height: '60px',
+                width: '56px',
+                height: '56px',
                 borderRadius: '50%',
                 background: 'rgba(37, 211, 102, 0.15)',
                 border: '1px solid #25D366',
@@ -712,13 +472,13 @@ export default function SponsorLeadModal({
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#25D366',
-                margin: '0 auto 14px'
+                margin: '0 auto 12px'
               }}
             >
-              <CheckCircle2 size={36} />
+              <CheckCircle2 size={32} />
             </div>
 
-            <h4 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#ffffff', marginBottom: '6px' }}>
+            <h4 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#ffffff', marginBottom: '4px' }}>
               Lead Registrado com Sucesso!
             </h4>
             <p style={{ fontSize: '13px', color: '#a7f3d0', marginBottom: '16px' }}>
@@ -784,7 +544,7 @@ export default function SponsorLeadModal({
               onClick={onClose}
               style={{
                 width: '100%',
-                minHeight: '50px',
+                minHeight: '46px',
                 padding: '12px',
                 borderRadius: '16px',
                 fontSize: '14px',
@@ -802,329 +562,589 @@ export default function SponsorLeadModal({
           </div>
         ) : (
           /* ========================================================================= */
-          /* FORMULÁRIO DE QUALIFICAÇÃO (ESTRELAS, CHIPS E NOTAS)                      */
+          /* FORMULÁRIO DE QUALIFICAÇÃO (CORPO ROLÁVEL + STICKY FOOTER)                */
           /* ========================================================================= */
-          <form onSubmit={handleSaveOrSubmit}>
-            {/* ===================================================================== */}
-            {/* 4. VISIBILIDADE E CLASSIFICAÇÃO DINÂMICA DAS ESTRELAS (0 a 5 ★)       */}
-            {/* ===================================================================== */}
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
-                <label style={{ fontSize: '11px', fontWeight: '700', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Avaliação do Candidato
-                </label>
-
-                {/* Rótulo dinâmico de classificação semântica com badge estilizada */}
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: '700',
-                    color: currentClassification.color,
-                    background: currentClassification.bg,
-                    border: `1px solid ${currentClassification.border}`,
-                    padding: '3px 10px',
-                    borderRadius: '12px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {displayRating > 0 && <Star size={11} fill={currentClassification.color} color={currentClassification.color} />}
-                  <span>
-                    {displayRating > 0 ? `${displayRating} ★ — ` : ''}{currentClassification.label}
-                  </span>
-                </span>
-              </div>
-
-              {/* Botões das Estrelas com alto contraste para vazias e touch target >= 44px */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {[1, 2, 3, 4, 5].map((starValue) => {
-                  const isFilled = displayRating >= starValue;
-                  return (
-                    <button
-                      key={starValue}
-                      type="button"
-                      onClick={() => {
-                        const nextVal = starValue === rating ? 0 : starValue;
-                        setRating(nextVal);
-                        triggerHaptic(30);
-                      }}
-                      onMouseEnter={() => setHoverRating(starValue)}
-                      onMouseLeave={() => setHoverRating(0)}
-                      style={{
-                        background: isFilled
-                          ? 'rgba(251, 191, 36, 0.12)'
-                          : 'rgba(255, 255, 255, 0.04)',
-                        border: isFilled
-                          ? '1px solid rgba(251, 191, 36, 0.4)'
-                          : '1px solid rgba(255, 255, 255, 0.12)',
-                        borderRadius: '12px',
-                        cursor: 'pointer',
-                        padding: '6px',
-                        transition: 'all 0.15s ease',
-                        transform: isFilled ? 'scale(1.08)' : 'scale(1)',
-                        minWidth: '44px',
-                        minHeight: '44px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: isFilled
-                          ? '0 0 12px rgba(251, 191, 36, 0.25)'
-                          : 'none'
-                      }}
-                      aria-label={`${starValue} estrelas - ${RATING_CLASSIFICATIONS[starValue].label}`}
-                    >
-                      <Star
-                        size={28}
-                        fill={isFilled ? '#FBBF24' : 'none'}
-                        color={isFilled ? '#FBBF24' : 'rgba(255, 255, 255, 0.38)'}
-                        strokeWidth={isFilled ? 1.5 : 1.8}
-                        style={{
-                          filter: isFilled ? 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.5))' : 'none',
-                          transition: 'all 0.15s ease'
-                        }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ===================================================================== */}
-            {/* 2. CHIPS RÁPIDOS DE 1 TOQUE (Quick Recruitment Tags)                  */}
-            {/* ===================================================================== */}
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <label style={{ fontSize: '11px', fontWeight: '700', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Chips Rápidos (1 Toque)
-                </label>
-                <span style={{ fontSize: '11px', color: '#8790AE' }}>
-                  Toque para qualificar
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {QUICK_RECRUITMENT_TAGS.map((tag) => {
-                  const isSelected = isTagSelected(tag);
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => {
-                        handleToggleTag(tag);
-                        triggerHaptic(25);
-                      }}
-                      style={{
-                        minHeight: '36px',
-                        padding: '6px 12px',
-                        borderRadius: '10px',
-                        fontFamily: 'Montserrat, sans-serif',
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        transition: 'all 0.15s ease',
-                        background: isSelected
-                          ? 'rgba(37, 99, 235, 0.25)'
-                          : '#1A2347',
-                        border: isSelected
-                          ? '1px solid #2563EB'
-                          : '1px solid #1C2548',
-                        color: isSelected ? '#EEF1FA' : '#A9B1CC',
-                        boxShadow: isSelected
-                          ? '0 0 10px rgba(37, 99, 235, 0.35)'
-                          : 'none'
-                      }}
-                    >
-                      <span style={{ fontSize: '11px', fontWeight: '800', color: isSelected ? '#8FA0FF' : '#6E779A' }}>
-                        {isSelected ? '✓' : '+'}
-                      </span>
-                      <span>{tag}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ===================================================================== */}
-            {/* ANOTAÇÕES E OBSERVAÇÕES                                               */}
-            {/* ===================================================================== */}
-            <div style={{ marginBottom: '16px' }}>
-              <label
-                htmlFor="lead-recruitment-notes"
-                style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#A9B1CC', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
-              >
-                Anotações e Observações (Recrutamento)
-              </label>
-
-              <textarea
-                id="lead-recruitment-notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Ex: Bom conhecimento em React e Node, busca estágio em backend, boa comunicação..."
-                rows={3}
-                style={{
-                  width: '100%',
-                  fontFamily: 'Montserrat, sans-serif',
-                  background: '#131B3A',
-                  border: '1.5px solid #26305A',
-                  borderRadius: '14px',
-                  padding: '12px 14px',
-                  color: '#EEF1FA',
-                  fontSize: '13px',
-                  resize: 'vertical',
-                  outline: 'none',
-                  transition: 'border-color 0.2s ease',
-                  boxSizing: 'border-box'
-                }}
-                onFocus={(e) => { e.target.style.borderColor = '#2563EB'; }}
-                onBlur={(e) => { e.target.style.borderColor = '#26305A'; }}
-              />
-            </div>
-
-            {/* Metadados do Lead (quando visualizando no CRM) */}
-            {isExistingLead && (participant.createdAt || participant.collectedByEmail) && (
-              <div style={{ padding: '10px 12px', background: '#0F1424', borderRadius: '12px', border: '1px solid #1C2548', marginBottom: '16px', fontSize: '11px', color: '#8790AE' }}>
-                {participant.collectedByEmail && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-                    <UserCheck size={12} color="#8FA0FF" />
-                    <span>Coletado por: <strong>{participant.collectedByEmail}</strong></span>
-                  </div>
-                )}
-                {participant.createdAt && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Calendar size={12} color="#8FA0FF" />
-                    <span>Data: {formatLeadDate(participant.createdAt)}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Mensagem de Erro */}
-            {errorMsg && (
+          <form
+            onSubmit={handleSaveOrSubmit}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              minHeight: 0
+            }}
+          >
+            {/* CORPO ROLÁVEL SUAVE */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '16px 20px',
+                overscrollBehavior: 'contain'
+              }}
+            >
+              {/* ===================================================================== */}
+              {/* 2. CARD COMPACTO DO CANDIDATO                                         */}
+              {/* ===================================================================== */}
               <div
-                role="alert"
                 style={{
-                  background: 'rgba(245, 154, 154, 0.12)',
-                  border: '1px solid #F59A9A',
-                  borderRadius: '12px',
-                  padding: '10px 14px',
-                  color: '#F59A9A',
-                  fontSize: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginBottom: '16px'
-                }}
-              >
-                <AlertCircle size={16} />
-                <span>{errorMsg}</span>
-              </div>
-            )}
-
-            {/* Toast de Sucesso para Atualizações no CRM */}
-            {updateSuccessToast && (
-              <div
-                role="status"
-                style={{
-                  background: 'rgba(111, 216, 166, 0.12)',
-                  border: '1px solid #6FD8A6',
-                  borderRadius: '12px',
-                  padding: '10px 14px',
-                  color: '#6FD8A6',
-                  fontSize: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginBottom: '16px'
-                }}
-              >
-                <CheckCircle2 size={16} />
-                <span>Alterações salvas com sucesso!</span>
-              </div>
-            )}
-
-            {/* ===================================================================== */}
-            {/* BOTÕES DE AÇÃO: SALVAR LEAD E SOMENTE VALIDAR                         */}
-            {/* ===================================================================== */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {/* Botão Primário com degradê e bordas arredondadas (16px) */}
-              <button
-                type="submit"
-                disabled={isSubmitting || isValidatingOnly}
-                className="btn-primary"
-                style={{
-                  width: '100%',
-                  minHeight: '50px',
-                  padding: '12px 20px',
+                  background: '#1A2347',
                   borderRadius: '16px',
-                  border: 'none',
-                  fontSize: '15px',
-                  fontWeight: '800',
-                  fontFamily: 'Montserrat, sans-serif',
-                  color: '#FFFFFF',
-                  background: 'linear-gradient(135deg, #2563EB 0%, #5B3BE0 55%, #7C3AED 100%)',
-                  boxShadow: '0 8px 24px rgba(37, 99, 235, 0.35)',
+                  padding: '12px 14px',
+                  border: '1px solid #1C2548',
+                  marginBottom: '14px',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  cursor: isSubmitting || isValidatingOnly ? 'not-allowed' : 'pointer',
-                  opacity: isSubmitting || isValidatingOnly ? 0.7 : 1,
-                  transition: 'all 0.15s ease'
+                  alignItems: 'flex-start',
+                  gap: '12px'
                 }}
               >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="animate-spin" size={18} />
-                    <span>{isExistingLead ? 'Salvando Alterações...' : 'Salvando Lead...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 size={18} />
-                    <span>{isExistingLead ? 'Salvar Alterações' : 'Salvar Lead'}</span>
-                  </>
-                )}
-              </button>
-
-              {/* Botão Secundário: Somente Validar Presença (sem salvar notas no CRM) */}
-              {!isExistingLead && (
-                <button
-                  type="button"
-                  disabled={isSubmitting || isValidatingOnly}
-                  onClick={handleValidateOnly}
+                {/* Avatar com iniciais ou imagem */}
+                <div
                   style={{
-                    width: '100%',
-                    minHeight: '48px',
-                    padding: '10px 18px',
-                    borderRadius: '16px',
-                    border: '1px solid #1C2548',
-                    background: '#1A2347',
-                    fontSize: '14px',
-                    fontWeight: '700',
-                    fontFamily: 'Montserrat, sans-serif',
-                    color: '#EEF1FA',
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '14px',
+                    background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    color: '#FFFFFF',
+                    fontWeight: '800',
+                    fontSize: '18px',
+                    flexShrink: 0,
+                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+                  }}
+                >
+                  {participant.avatarUrl ? (
+                    <img
+                      src={participant.avatarUrl}
+                      alt=""
+                      style={{ width: '100%', height: '100%', borderRadius: '14px', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    (participant.name || 'P').charAt(0).toUpperCase()
+                  )}
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* Linha 1: Nome e Afiliação */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#EEF1FA', margin: 0, lineHeight: 1.25 }}>
+                      {participant.name || 'Participante'}
+                    </h3>
+
+                    {affiliation && (
+                      <span
+                        style={{
+                          padding: '2px 7px',
+                          borderRadius: '7px',
+                          fontSize: '10px',
+                          fontWeight: '800',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                          color: affiliation.color,
+                          background: affiliation.bg,
+                          border: `1px solid ${affiliation.border}`
+                        }}
+                      >
+                        {affiliation.label}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Linha 2: Curso e Período (sem truncamento com ellipsis rígido) */}
+                  {participant.course && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#A9B1CC', lineHeight: 1.35, marginTop: '2px', flexWrap: 'wrap' }}>
+                      <GraduationCap size={13} color="#8FA0FF" style={{ flexShrink: 0 }} />
+                      <span>
+                        {participant.course}
+                        {participant.period ? ` · ${participant.period}º Período` : ''}
+                        {cleanInstitution ? ` · ${cleanInstitution}` : ''}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Linha 3: Dados de Contato em Linha Compacta */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '6px', fontSize: '11px', color: '#A9B1CC' }}>
+                    {participant.email && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Mail size={12} color="#8FA0FF" style={{ flexShrink: 0 }} />
+                        <span style={{ maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {participant.email}
+                        </span>
+                      </div>
+                    )}
+
+                    {participant.phone && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Phone size={12} color="#25D366" style={{ flexShrink: 0 }} />
+                        <span>{participant.phone}</span>
+                      </div>
+                    )}
+
+                    {participant.github && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <GitHubIcon size={12} color="#8FA0FF" style={{ flexShrink: 0 }} />
+                        <a
+                          href={`https://github.com/${participant.github.replace(/^@/, '').trim()}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#8FA0FF', textDecoration: 'none' }}
+                        >
+                          @{participant.github.replace(/^@/, '').trim()}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* MODO CRM DETALHES (isExistingLead = true): Botões de contato proeminentes */}
+              {isExistingLead && (
+                <div style={{ display: 'grid', gridTemplateColumns: participant.email ? '1fr 1fr' : '1fr', gap: '8px', marginBottom: '14px' }}>
+                  {participant.email && (
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={handleCopyEmail}
+                        style={{
+                          flex: 1,
+                          minHeight: '44px',
+                          background: emailCopied ? 'rgba(16, 185, 129, 0.2)' : '#1A2347',
+                          border: emailCopied ? '1px solid #10B981' : '1px solid #1C2548',
+                          borderRadius: '12px',
+                          color: emailCopied ? '#34D399' : '#EEF1FA',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        {emailCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                        <span>{emailCopied ? 'Copiado!' : 'Copiar E-mail'}</span>
+                      </button>
+
+                      <a
+                        href={`mailto:${participant.email}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          width: '44px',
+                          minHeight: '44px',
+                          background: '#1A2347',
+                          border: '1px solid #1C2548',
+                          borderRadius: '12px',
+                          color: '#8FA0FF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textDecoration: 'none'
+                        }}
+                        title="Abrir aplicativo de e-mail"
+                      >
+                        <ExternalLink size={16} />
+                      </a>
+                    </div>
+                  )}
+
+                  {participant.phone && (
+                    <WhatsAppButton
+                      phone={participant.phone}
+                      participantName={participant.name}
+                      companyName={sponsorCompanyName}
+                      label="WhatsApp"
+                      size="sm"
+                      fullWidth
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* ===================================================================== */}
+              {/* 3. AVALIAÇÃO DO CANDIDATO (ESTRELAS 0 A 5)                            */}
+              {/* ===================================================================== */}
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', gap: '6px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: '700', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Avaliação do Candidato
+                  </label>
+
+                  {/* Rótulo dinâmico de classificação semântica com badge estilizada */}
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      color: currentClassification.color,
+                      background: currentClassification.bg,
+                      border: `1px solid ${currentClassification.border}`,
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {displayRating > 0 && <Star size={11} fill={currentClassification.color} color={currentClassification.color} />}
+                    <span>
+                      {displayRating > 0 ? `${displayRating} ★ — ` : ''}{currentClassification.label}
+                    </span>
+                  </span>
+                </div>
+
+                {/* Botões das Estrelas com touch target amplo (44px) e visual limpo */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {[1, 2, 3, 4, 5].map((starValue) => {
+                    const isFilled = displayRating >= starValue;
+                    return (
+                      <button
+                        key={starValue}
+                        type="button"
+                        onClick={() => {
+                          const nextVal = starValue === rating ? 0 : starValue;
+                          setRating(nextVal);
+                          triggerHaptic(30);
+                        }}
+                        onMouseEnter={() => setHoverRating(starValue)}
+                        onMouseLeave={() => setHoverRating(0)}
+                        style={{
+                          background: isFilled
+                            ? 'rgba(251, 191, 36, 0.12)'
+                            : 'rgba(255, 255, 255, 0.03)',
+                          border: isFilled
+                            ? '1px solid rgba(251, 191, 36, 0.45)'
+                            : '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: '12px',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          transition: 'all 0.15s ease',
+                          transform: isFilled ? 'scale(1.05)' : 'scale(1)',
+                          minWidth: '44px',
+                          minHeight: '44px',
+                          width: '44px',
+                          height: '44px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: isFilled
+                            ? '0 0 12px rgba(251, 191, 36, 0.25)'
+                            : 'none'
+                        }}
+                        aria-label={`${starValue} estrelas - ${RATING_CLASSIFICATIONS[starValue].label}`}
+                      >
+                        <Star
+                          size={26}
+                          fill={isFilled ? '#FBBF24' : 'none'}
+                          color={isFilled ? '#FBBF24' : 'rgba(255, 255, 255, 0.28)'}
+                          strokeWidth={isFilled ? 1.5 : 1.5}
+                          style={{
+                            filter: isFilled ? 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.45))' : 'none',
+                            transition: 'all 0.15s ease'
+                          }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ===================================================================== */}
+              {/* 4. CHIPS RÁPIDOS DE 1 TOQUE (Compactos e sem símbolo +)               */}
+              {/* ===================================================================== */}
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: '700', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Chips Rápidos (1 Toque)
+                  </label>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {QUICK_RECRUITMENT_TAGS.map((tag) => {
+                    const isSelected = isTagSelected(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          handleToggleTag(tag);
+                          triggerHaptic(25);
+                        }}
+                        style={{
+                          minHeight: '32px',
+                          height: '32px',
+                          padding: '4px 10px',
+                          borderRadius: '10px',
+                          fontFamily: 'Montserrat, sans-serif',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          transition: 'all 0.15s ease',
+                          background: isSelected
+                            ? 'rgba(37, 99, 235, 0.25)'
+                            : '#1A2347',
+                          border: isSelected
+                            ? '1px solid #2563EB'
+                            : '1px solid #1C2548',
+                          color: isSelected ? '#EEF1FA' : '#A9B1CC',
+                          boxShadow: isSelected
+                            ? '0 0 8px rgba(37, 99, 235, 0.35)'
+                            : 'none'
+                        }}
+                      >
+                        {isSelected && (
+                          <span style={{ fontSize: '11px', fontWeight: '800', color: '#8FA0FF' }}>
+                            ✓
+                          </span>
+                        )}
+                        <span>{tag}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ===================================================================== */}
+              {/* 5. ANOTAÇÃO AUTO-EXPANSÍVEL                                           */}
+              {/* ===================================================================== */}
+              <div style={{ marginBottom: '8px' }}>
+                <label
+                  htmlFor="lead-recruitment-notes"
+                  style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#A9B1CC', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                >
+                  Anotações e Observações (Recrutamento)
+                </label>
+
+                <textarea
+                  id="lead-recruitment-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Adicionar anotação... (opcional)"
+                  rows={isNotesExpanded ? 3 : 1}
+                  style={{
+                    width: '100%',
+                    fontFamily: 'Montserrat, sans-serif',
+                    background: '#131B3A',
+                    border: '1.5px solid #26305A',
+                    borderRadius: '12px',
+                    padding: '8px 12px',
+                    color: '#EEF1FA',
+                    fontSize: '12px',
+                    minHeight: isNotesExpanded ? '72px' : '38px',
+                    height: isNotesExpanded ? '72px' : '38px',
+                    resize: 'none',
+                    outline: 'none',
+                    transition: 'all 0.2s ease',
+                    boxSizing: 'border-box'
+                  }}
+                  onFocus={(e) => {
+                    setNotesFocused(true);
+                    e.target.style.borderColor = '#2563EB';
+                  }}
+                  onBlur={(e) => {
+                    setNotesFocused(false);
+                    e.target.style.borderColor = '#26305A';
+                  }}
+                />
+              </div>
+
+              {/* Metadados do Lead (quando visualizando no CRM) */}
+              {isExistingLead && (participant.createdAt || participant.collectedByEmail) && (
+                <div style={{ padding: '8px 10px', background: '#0F1424', borderRadius: '10px', border: '1px solid #1C2548', marginBottom: '10px', fontSize: '11px', color: '#8790AE' }}>
+                  {participant.collectedByEmail && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                      <UserCheck size={12} color="#8FA0FF" />
+                      <span>Coletado por: <strong>{participant.collectedByEmail}</strong></span>
+                    </div>
+                  )}
+                  {participant.createdAt && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Calendar size={12} color="#8FA0FF" />
+                      <span>Data: {formatLeadDate(participant.createdAt)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Mensagem de Erro */}
+              {errorMsg && (
+                <div
+                  role="alert"
+                  style={{
+                    background: 'rgba(245, 154, 154, 0.12)',
+                    border: '1px solid #F59A9A',
+                    borderRadius: '10px',
+                    padding: '8px 12px',
+                    color: '#F59A9A',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
                     gap: '8px',
-                    cursor: isSubmitting || isValidatingOnly ? 'not-allowed' : 'pointer',
-                    opacity: isSubmitting || isValidatingOnly ? 0.7 : 1,
+                    marginBottom: '10px'
+                  }}
+                >
+                  <AlertCircle size={15} />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+
+              {/* Toast de Sucesso para Atualizações no CRM */}
+              {updateSuccessToast && (
+                <div
+                  role="status"
+                  style={{
+                    background: 'rgba(111, 216, 166, 0.12)',
+                    border: '1px solid #6FD8A6',
+                    borderRadius: '10px',
+                    padding: '8px 12px',
+                    color: '#6FD8A6',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: '10px'
+                  }}
+                >
+                  <CheckCircle2 size={15} />
+                  <span>Alterações salvas com sucesso!</span>
+                </div>
+              )}
+            </div>
+
+            {/* ========================================================================= */}
+            {/* 6. RODAPÉ DE AÇÕES FIXO (Sticky Footer Lado a Lado)                       */}
+            {/* ========================================================================= */}
+            <div
+              style={{
+                flexShrink: 0,
+                padding: '12px 20px 16px',
+                borderTop: '1px solid rgba(28, 37, 72, 0.6)',
+                background: 'rgba(10, 15, 36, 0.95)',
+                backdropFilter: 'blur(8px)'
+              }}
+            >
+              {!isExistingLead ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.35fr', gap: '8px', alignItems: 'center' }}>
+                  {/* Botão Secundário: Somente Validar Presença */}
+                  <button
+                    type="button"
+                    disabled={isSubmitting || isValidatingOnly}
+                    onClick={handleValidateOnly}
+                    style={{
+                      height: '46px',
+                      minHeight: '46px',
+                      padding: '0 12px',
+                      borderRadius: '16px',
+                      border: '1px solid #1C2548',
+                      background: '#1A2347',
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      fontFamily: 'Montserrat, sans-serif',
+                      color: '#EEF1FA',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      cursor: isSubmitting || isValidatingOnly ? 'not-allowed' : 'pointer',
+                      opacity: isSubmitting || isValidatingOnly ? 0.7 : 1,
+                      transition: 'all 0.15s ease',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {isValidatingOnly ? (
+                      <>
+                        <Loader2 className="animate-spin" size={15} />
+                        <span>Validando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck size={16} color="#8FA0FF" />
+                        <span>Somente Validar</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Botão Primário com degradê */}
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || isValidatingOnly}
+                    className="btn-primary"
+                    style={{
+                      height: '46px',
+                      minHeight: '46px',
+                      padding: '0 16px',
+                      borderRadius: '16px',
+                      border: 'none',
+                      fontSize: '14px',
+                      fontWeight: '800',
+                      fontFamily: 'Montserrat, sans-serif',
+                      color: '#FFFFFF',
+                      background: 'linear-gradient(135deg, #2563EB 0%, #5B3BE0 55%, #7C3AED 100%)',
+                      boxShadow: '0 6px 20px rgba(37, 99, 235, 0.35)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      cursor: isSubmitting || isValidatingOnly ? 'not-allowed' : 'pointer',
+                      opacity: isSubmitting || isValidatingOnly ? 0.7 : 1,
+                      transition: 'all 0.15s ease',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="animate-spin" size={15} />
+                        <span>Salvando Lead...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} />
+                        <span>Salvar Lead</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="btn-primary"
+                  style={{
+                    width: '100%',
+                    height: '46px',
+                    minHeight: '46px',
+                    padding: '0 16px',
+                    borderRadius: '16px',
+                    border: 'none',
+                    fontSize: '14px',
+                    fontWeight: '800',
+                    fontFamily: 'Montserrat, sans-serif',
+                    color: '#FFFFFF',
+                    background: 'linear-gradient(135deg, #2563EB 0%, #5B3BE0 55%, #7C3AED 100%)',
+                    boxShadow: '0 6px 20px rgba(37, 99, 235, 0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                    opacity: isSubmitting ? 0.7 : 1,
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  {isValidatingOnly ? (
+                  {isSubmitting ? (
                     <>
-                      <Loader2 className="animate-spin" size={18} />
-                      <span>Validando Presença...</span>
+                      <Loader2 className="animate-spin" size={15} />
+                      <span>Salvando Alterações...</span>
                     </>
                   ) : (
                     <>
-                      <UserCheck size={18} color="#8FA0FF" />
-                      <span>Somente Validar</span>
+                      <CheckCircle2 size={16} />
+                      <span>Salvar Alterações</span>
                     </>
                   )}
                 </button>
