@@ -9,7 +9,6 @@ import {
   Users, 
   Star, 
   Sparkles, 
-  ArrowLeft, 
   Loader2, 
   CheckCircle2, 
   AlertCircle,
@@ -56,6 +55,7 @@ import {
   DEFAULT_FEED_POSTS 
 } from '../lib/feedService';
 import ActivityModal, { SeatsLight, categoryOf, describeDay } from '../components/ActivityModal';
+import { SPONSORS_CONFIG } from '../components/PassportTab';
 import { ActivityRow, TYPE_FILTERS, dayOrder, getActivityTimingState } from './Agenda';
 import { CameraFrame } from './Scanner';
 import { 
@@ -102,6 +102,17 @@ export default function Sponsor() {
   const firstName = rawName.trim().split(' ')[0] || rawName;
   const activeCompanyId = userProfile?.companyId || userProfile?.empresa || 'kanastra';
   const sponsorName = userProfile?.companyName || userProfile?.empresa || (activeCompanyId ? activeCompanyId.toUpperCase() : 'Empresa Patrocinadora');
+
+  // Resolução da Logo Oficial da Empresa Patrocinadora
+  const sponsorLogo = useMemo(() => {
+    if (userProfile?.companyLogo) return userProfile.companyLogo;
+    if (userProfile?.logoUrl) return userProfile.logoUrl;
+    const rawKey = (activeCompanyId || userProfile?.companyName || userProfile?.empresa || sponsorName || '').toLowerCase().trim();
+    const entry = Object.entries(SPONSORS_CONFIG).find(([k, v]) => {
+      return rawKey.includes(k) || k.includes(rawKey) || v.name.toLowerCase().includes(rawKey);
+    });
+    return entry ? entry[1].logo : null;
+  }, [userProfile, activeCompanyId, sponsorName]);
 
   // Tab State: 'home' | 'leads' | 'scanner' | 'agenda' | 'feed'
   const [activeTab, setActiveTab] = useState('home');
@@ -864,75 +875,22 @@ export default function Sponsor() {
         </div>
       )}
 
-      {/* Top Header Padronizado TechWeek */}
+      {/* Top Header Padronizado TechWeek com Logo Oficial Centralizada */}
       <header style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '12px',
-                backgroundColor: '#121A36',
-                border: '1px solid #1C2548',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#EEF1FA',
-                cursor: 'pointer',
-                flexShrink: 0
-              }}
-              aria-label="Voltar para o início"
-            >
-              <ArrowLeft size={18} />
-            </button>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  color: '#FBBF24',
-                  background: 'rgba(251, 191, 36, 0.12)',
-                  border: '1px solid rgba(251, 191, 36, 0.3)',
-                  padding: '4px 10px',
-                  borderRadius: '10px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Building2 size={13} />
-                <span>{sponsorName}</span>
+        <div className="flex flex-col items-center justify-center pt-1 pb-3">
+          {sponsorLogo ? (
+            <img
+              src={sponsorLogo}
+              alt={sponsorName}
+              className="max-h-12 max-w-[220px] object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-[17px] font-black uppercase tracking-wider text-[#EEF1FA]">
+                {sponsorName}
               </span>
             </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => loadLeads()}
-            disabled={isLoadingLeads}
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              backgroundColor: '#121A36',
-              border: '1px solid #1C2548',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: isLoadingLeads ? '#8FA0FF' : '#A9B1CC',
-              cursor: 'pointer'
-            }}
-            title="Atualizar dados de leads"
-            aria-label="Atualizar dados"
-          >
-            <RefreshCw size={16} className={isLoadingLeads ? 'animate-spin' : ''} />
-          </button>
+          )}
         </div>
 
         {/* Saudação e Contexto do Estande (Padrão AdminInicio) */}
@@ -986,7 +944,7 @@ export default function Sponsor() {
               {activeTab === 'leads' && 'CRM de Leads'}
               {activeTab === 'scanner' && 'Bipar Crachá'}
               {activeTab === 'agenda' && 'Programação da TechWeek'}
-              {activeTab === 'feed' && 'Feed da Comunidade'}
+              {activeTab === 'feed' && 'Feed'}
             </h1>
             <div
               style={{
@@ -1299,17 +1257,54 @@ export default function Sponsor() {
       {/* ========================================================================= */}
       {activeTab === 'leads' && (
         <div className="animate-fade-in flex flex-col gap-4">
-          {/* Caixa de Alternância entre Meus Leads e Todos da Empresa (Padrão Admin Chip) */}
-          <div className="flex gap-2" role="group" aria-label="Filtrar escopo dos leads">
-            <Chip selected={leadsTab === 'mine'} onClick={() => setLeadsTab('mine')}>
+          {/* Caixa Segmentada entre Meus Leads e Toda a Empresa (Padrão RankingTab .ds-tabs) */}
+          <div role="tablist" aria-label="Filtrar escopo dos leads" className="ds-tabs w-full">
+            <button
+              type="button"
+              role="tab"
+              id="tab-leads-mine"
+              aria-selected={leadsTab === 'mine'}
+              aria-controls="panel-leads-content"
+              onClick={() => setLeadsTab('mine')}
+              className="ds-tab flex items-center justify-center gap-2 transition-all duration-200"
+              style={{
+                background: leadsTab === 'mine' ? 'linear-gradient(135deg, #2563EB, #7C3AED)' : 'transparent',
+                color: leadsTab === 'mine' ? '#FFFFFF' : 'var(--text-3)',
+                boxShadow: leadsTab === 'mine' ? '0 2px 10px rgba(37, 99, 235, 0.35)' : 'none',
+              }}
+            >
               <span>Meus Leads</span>
-              <span className={leadsTab === 'mine' ? 'opacity-60' : 'text-text-3'}>{myLeads.length}</span>
-            </Chip>
-
-            <Chip selected={leadsTab === 'company'} onClick={() => setLeadsTab('company')}>
-              <span>Todos da Empresa</span>
-              <span className={leadsTab === 'company' ? 'opacity-60' : 'text-text-3'}>{companyLeads.length}</span>
-            </Chip>
+              <span
+                className={`text-[12px] font-bold px-1.5 py-0.5 rounded-full ${
+                  leadsTab === 'mine' ? 'bg-white/20 text-white' : 'bg-surface-raised text-text-3'
+                }`}
+              >
+                {myLeads.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-leads-company"
+              aria-selected={leadsTab === 'company'}
+              aria-controls="panel-leads-content"
+              onClick={() => setLeadsTab('company')}
+              className="ds-tab flex items-center justify-center gap-2 transition-all duration-200"
+              style={{
+                background: leadsTab === 'company' ? 'linear-gradient(135deg, #2563EB, #7C3AED)' : 'transparent',
+                color: leadsTab === 'company' ? '#FFFFFF' : 'var(--text-3)',
+                boxShadow: leadsTab === 'company' ? '0 2px 10px rgba(37, 99, 235, 0.35)' : 'none',
+              }}
+            >
+              <span>Toda a Empresa</span>
+              <span
+                className={`text-[12px] font-bold px-1.5 py-0.5 rounded-full ${
+                  leadsTab === 'company' ? 'bg-white/20 text-white' : 'bg-surface-raised text-text-3'
+                }`}
+              >
+                {companyLeads.length}
+              </span>
+            </button>
           </div>
 
           {/* Opção de Exportar CSV embaixo da caixa de alternância */}
@@ -1368,7 +1363,7 @@ export default function Sponsor() {
               )}
             </label>
 
-            {/* Filtros de Estrelas (Chips estilo Admin) */}
+            {/* Filtros de Estrelas (Primeira linha de filtros com degradê azul e roxo padrão no selecionado) */}
             <div
               className="adm-noscroll flex items-center gap-2 overflow-x-auto pb-1"
               role="group"
@@ -1383,11 +1378,29 @@ export default function Sponsor() {
                 { id: '5', label: '5 ★' },
                 { id: '4', label: '4 ★+' },
                 { id: '3', label: '3 ★+' }
-              ].map((f) => (
-                <Chip key={f.id} selected={starFilter === f.id} onClick={() => setStarFilter(f.id)}>
-                  <span>{f.label}</span>
-                </Chip>
-              ))}
+              ].map((f) => {
+                const isSelected = starFilter === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setStarFilter(f.id)}
+                    className={`press inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-[14px] font-bold transition-all ${
+                      isSelected
+                        ? 'border-0 text-white shadow-[0_2px_10px_rgba(37,99,235,0.35)]'
+                        : 'border border-line-2 bg-transparent text-text hover:border-text-3'
+                    }`}
+                    style={
+                      isSelected
+                        ? { background: 'linear-gradient(135deg, #2563EB, #7C3AED)' }
+                        : undefined
+                    }
+                  >
+                    <span>{f.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Ordenação Rápida dos Leads */}
@@ -1985,10 +1998,10 @@ export default function Sponsor() {
               type="button"
               onClick={() => setIsNewPostOpen(true)}
               aria-label="Publicar no Feed"
-              className="press flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-[linear-gradient(135deg,#2563EB,#7C3AED)] px-3.5 text-xs font-bold text-white shadow-[0_4px_12px_rgba(37,99,235,0.25)]"
+              title="Nova publicação no Feed"
+              className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#2563EB,#7C3AED)] text-white shadow-[0_4px_14px_rgba(37,99,235,0.35)] transition-transform hover:scale-105 active:scale-95"
             >
-              <Plus size={16} aria-hidden="true" />
-              <span>Publicar</span>
+              <Plus size={20} strokeWidth={2.6} aria-hidden="true" />
             </button>
           </div>
 
