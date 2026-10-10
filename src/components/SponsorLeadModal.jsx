@@ -254,7 +254,8 @@ export default function SponsorLeadModal({
           notes,
           rating: rating > 0 ? rating : undefined,
           tags: extractedTags,
-          companyId: sponsorCompanyId
+          companyId: sponsorCompanyId,
+          participantData: participant
         });
 
         triggerHaptic([60, 40, 60]);

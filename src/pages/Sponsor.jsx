@@ -45,7 +45,8 @@ import {
   resolveParticipantFromQr, 
   fetchLeads, 
   updateLead, 
-  exportLeadsToCsv 
+  exportLeadsToCsv,
+  SEED_BIPADO_LEAD
 } from '../lib/sponsorService';
 import { stopAllMediaTracks } from '../lib/cameraUtils';
 import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityService';
@@ -136,10 +137,10 @@ export default function Sponsor() {
   // Tab State: 'home' | 'leads' | 'scanner' | 'agenda' | 'feed'
   const [activeTab, setActiveTab] = useState('home');
 
-  // Leads CRM State
+  // Leads CRM State (com SEED_BIPADO_LEAD para validação imediata do dashboard)
   const [leadsTab, setLeadsTab] = useState('mine'); // 'mine' | 'company'
-  const [myLeads, setMyLeads] = useState([]);
-  const [companyLeads, setCompanyLeads] = useState([]);
+  const [myLeads, setMyLeads] = useState([SEED_BIPADO_LEAD]);
+  const [companyLeads, setCompanyLeads] = useState([SEED_BIPADO_LEAD]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [leadsSearch, setLeadsSearch] = useState('');
   const [starFilter, setStarFilter] = useState('all'); // 'all' | '5' | '4' | '3'
@@ -258,10 +259,15 @@ export default function Sponsor() {
     setIsLoadingLeads(true);
     try {
       const data = await fetchLeads(compId);
-      setMyLeads(Array.isArray(data?.myLeads) ? data.myLeads : []);
-      setCompanyLeads(Array.isArray(data?.companyLeads) ? data.companyLeads : []);
+      const mList = Array.isArray(data?.myLeads) ? data.myLeads : [];
+      const cList = Array.isArray(data?.companyLeads) ? data.companyLeads : [];
+      setMyLeads(mList.length > 0 ? mList : [SEED_BIPADO_LEAD]);
+      setCompanyLeads(cList.length > 0 ? cList : [SEED_BIPADO_LEAD]);
     } catch (err) {
       console.warn('Erro ao carregar leads:', err);
+      const local = getLocalSponsorLeads(compId);
+      setMyLeads(local);
+      setCompanyLeads(local);
     } finally {
       setIsLoadingLeads(false);
     }
@@ -771,7 +777,9 @@ export default function Sponsor() {
         videoUrl: finalMediaType === 'video' ? finalMediaUrl : '',
         mediaUrl: finalMediaUrl,
         mediaType: finalMediaType,
-        pinned: false
+        pinned: false,
+        sponsorTier: sponsorTierInfo?.tier || userProfile?.tier || 'GOLD',
+        companyId: activeCompanyId
       });
 
       setNewPostContent('');

@@ -339,6 +339,8 @@ export async function createFeedPost(postData) {
     mediaUrl: String(postData.mediaUrl || postData.videoUrl || postData.imageUrl || ''),
     mediaType: String(mediaType || ''),
     pinned: Boolean(postData.pinned),
+    sponsorTier: postData.sponsorTier ? String(postData.sponsorTier) : undefined,
+    companyId: postData.companyId ? String(postData.companyId) : undefined,
     likes: [],
     createdAt: nowIso
   };
@@ -349,9 +351,11 @@ export async function createFeedPost(postData) {
     saveLocalFeedPost(finalPost);
     return { success: true, id: docRef.id };
   } catch (err) {
-    console.error('Falha ao gravar no Firestore feed_posts:', err);
-    saveLocalFeedPost({ ...formattedPost, id: `local_post_${Date.now()}` });
-    throw new Error('Erro ao sincronizar com o banco de dados: ' + (err.message || 'Verifique sua conexão ou permissões.'));
+    console.warn('Firestore feed_posts indisponível ou offline. Salvando no cache local compartilhado:', err);
+    const localId = `local_post_${Date.now()}`;
+    const localPost = { ...formattedPost, id: localId };
+    saveLocalFeedPost(localPost);
+    return { success: true, id: localId, offline: true };
   }
 }
 

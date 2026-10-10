@@ -1,5 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { calculateSponsorRoi, exportLeadsToCsv } from '../../src/lib/sponsorService';
+import { 
+  calculateSponsorRoi, 
+  exportLeadsToCsv,
+  SEED_BIPADO_LEAD,
+  getLocalSponsorLeads,
+  saveLocalSponsorLead,
+  submitLead,
+  fetchLeads
+} from '../../src/lib/sponsorService';
 
 describe('Sponsor Service & Innovation Features', () => {
   describe('calculateSponsorRoi', () => {
@@ -204,6 +212,74 @@ describe('Sponsor Service & Innovation Features', () => {
       const sponsorContent = fs.readFileSync(path.resolve(__dirname, '../../src/pages/Sponsor.jsx'), 'utf-8');
       
       expect(sponsorContent).toContain('print:hidden flex items-center justify-between gap-2');
+    });
+  });
+
+  describe('Seed Lead & Resilient Lead Persistence', () => {
+    it('SEED_BIPADO_LEAD possui formato completo e dados de participante qualificado (5 estrelas)', () => {
+      expect(SEED_BIPADO_LEAD).toBeDefined();
+      expect(SEED_BIPADO_LEAD.name).toBe('Mariana Souza');
+      expect(SEED_BIPADO_LEAD.rating).toBe(5);
+      expect(SEED_BIPADO_LEAD.course).toBe('Ciência da Computação');
+      expect(SEED_BIPADO_LEAD.period).toBe(6);
+      expect(SEED_BIPADO_LEAD.phone).toBeTruthy();
+      expect(SEED_BIPADO_LEAD.tags).toContain('Frontend');
+      expect(SEED_BIPADO_LEAD.tags).toContain('React');
+      expect(SEED_BIPADO_LEAD.participantUid).toBeTruthy();
+    });
+
+    it('getLocalSponsorLeads inicializa com o lead semente se o storage estiver vazio', () => {
+      const leads = getLocalSponsorLeads('test_company_seed');
+      expect(Array.isArray(leads)).toBe(true);
+      expect(leads.length).toBeGreaterThanOrEqual(1);
+      expect(leads[0].name).toBe('Mariana Souza');
+    });
+
+    it('saveLocalSponsorLead insere novo lead ou atualiza existente sem perder integridade', () => {
+      const newLead = {
+        participantUid: 'test_candidato_123',
+        name: 'Carlos Oliveira',
+        rating: 4,
+        tags: ['Backend', 'Go'],
+        notes: 'Boa comunicação'
+      };
+
+      saveLocalSponsorLead(newLead, 'test_company_crm');
+      const stored = getLocalSponsorLeads('test_company_crm');
+      const found = stored.find(l => l.participantUid === 'test_candidato_123');
+      expect(found).toBeDefined();
+      expect(found.rating).toBe(4);
+      expect(found.tags).toContain('Go');
+    });
+
+    it('submitLead salva localmente e retorna sucesso com offline: true quando API não estiver disponível', async () => {
+      const result = await submitLead({
+        participantUid: 'demo_user_offline_test',
+        notes: 'Lead salvo em modo teste resiliente',
+        rating: 5,
+        companyId: 'test_company_offline',
+        tags: ['Frontend', 'Destaque'],
+        participantData: {
+          name: 'Lucas Teste',
+          course: 'Sistemas de Informação',
+          phone: '(34) 98888-7777',
+          email: 'lucas@ufu.br'
+        }
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.lead).toBeDefined();
+      expect(result.lead.participantUid).toBe('demo_user_offline_test');
+      expect(result.lead.name).toBe('Lucas Teste');
+      expect(result.lead.rating).toBe(5);
+    });
+
+    it('fetchLeads retorna leads da empresa com o lead semente quando não houver conexão com backend', async () => {
+      const data = await fetchLeads('test_fetch_company');
+      expect(data).toBeDefined();
+      expect(data.companyLeads).toBeDefined();
+      expect(data.companyLeads.length).toBeGreaterThanOrEqual(1);
+      expect(data.companyLeads[0].name).toBe('Mariana Souza');
     });
   });
 });
