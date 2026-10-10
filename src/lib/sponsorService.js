@@ -140,7 +140,7 @@ function formatParticipant(uid, data) {
  * @param {number} payload.rating 1 a 5 estrelas
  * @returns {Promise<object>} Resposta com dados do lead salvo e whatsapp
  */
-export async function submitLead({ participantUid, notes, rating, companyId, validateOnly }) {
+export async function submitLead({ participantUid, notes, rating, companyId, validateOnly, tags }) {
   if (!participantUid) {
     throw new Error('participantUid é obrigatório.');
   }
@@ -165,7 +165,8 @@ export async function submitLead({ participantUid, notes, rating, companyId, val
       notes: notes || '',
       rating: rating ? Number(rating) : undefined,
       companyId: companyId || undefined,
-      validateOnly: validateOnly ? true : undefined
+      validateOnly: validateOnly ? true : undefined,
+      tags: Array.isArray(tags) ? tags : undefined
     })
   });
 
@@ -210,15 +211,16 @@ export async function fetchLeads(companyId) {
 }
 
 /**
- * Atualiza avaliação (rating) e observações (notes) de um lead capturado.
+ * Atualiza avaliação (rating), observações (notes) e tags de um lead capturado.
  * @param {object} payload
  * @param {string} payload.participantUid
  * @param {number} [payload.rating] 0 a 5
  * @param {string} [payload.notes]
  * @param {string} [payload.companyId]
+ * @param {Array<string>} [payload.tags]
  * @returns {Promise<object>}
  */
-export async function updateLead({ participantUid, rating, notes, companyId }) {
+export async function updateLead({ participantUid, rating, notes, companyId, tags }) {
   if (!participantUid) throw new Error('participantUid é obrigatório.');
 
   const token = auth?.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
@@ -234,7 +236,8 @@ export async function updateLead({ participantUid, rating, notes, companyId }) {
     body: JSON.stringify({
       rating: rating !== undefined ? Number(rating) : undefined,
       notes: notes !== undefined ? String(notes) : undefined,
-      companyId: companyId || undefined
+      companyId: companyId || undefined,
+      tags: Array.isArray(tags) ? tags : undefined
     })
   });
 
@@ -269,6 +272,7 @@ export function exportLeadsToCsv(leads = [], companyName = 'patrocinador', scope
     'Tipo de Vínculo',
     'Avaliação (Estrelas)',
     'Classificação / Status',
+    'Tags / Habilidades',
     'Observações / Notas',
     'GitHub',
     'LinkedIn',
@@ -299,6 +303,7 @@ export function exportLeadsToCsv(leads = [], companyName = 'patrocinador', scope
       ? (typeof lead.createdAt?.toDate === 'function' ? lead.createdAt.toDate().toLocaleString('pt-BR') : new Date(lead.createdAt).toLocaleString('pt-BR'))
       : '';
     const ratingNum = Number(lead.rating) || 0;
+    const formattedTags = Array.isArray(lead.tags) ? lead.tags.join(', ') : '';
     return [
       escapeCsv(lead.name || ''),
       escapeCsv(lead.email || ''),
@@ -308,6 +313,7 @@ export function exportLeadsToCsv(leads = [], companyName = 'patrocinador', scope
       escapeCsv(lead.participantType || lead.instituicao || ''),
       escapeCsv(ratingNum > 0 ? `${ratingNum} ★` : 'Sem nota'),
       escapeCsv(getStatusLabel(ratingNum)),
+      escapeCsv(formattedTags),
       escapeCsv(lead.notes || ''),
       escapeCsv(lead.github || ''),
       escapeCsv(lead.linkedin || ''),
@@ -338,5 +344,151 @@ export function exportLeadsToCsv(leads = [], companyName = 'patrocinador', scope
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   return true;
+}
+
+/**
+ * Calcula métricas executivas de ROI do estande para apresentação pós-evento.
+ * 
+ * @param {Array<object>} leads Lista de leads capturados
+ * @param {number} [totalEventAttendees=600] Total estimado de inscritos na TechWeek
+ */
+export function calculateSponsorRoi(leads = [], totalEventAttendees = 600) {
+  const totalLeads = leads.length;
+  if (totalLeads === 0) {
+    return {
+      totalLeads: 0,
+      qualifiedCount: 0,
+      qualificationRate: 0,
+      topTalentsCount: 0,
+      withPhoneCount: 0,
+      withGithubCount: 0,
+      penetrationRate: 0,
+      courses: [],
+      periods: {
+        inicio: 0,
+        meio: 0,
+        conclusao: 0,
+        posGrad: 0,
+        outro: 0
+      },
+      tags: [],
+      attendants: [],
+      ratingFunnel: {
+        total: 0,
+        contactable: 0,
+        evaluated: 0,
+        qualified: 0,
+        destaques: 0
+      }
+    };
+  }
+
+  let qualifiedCount = 0;
+  let topTalentsCount = 0;
+  let withPhoneCount = 0;
+  let withGithubCount = 0;
+  let evaluatedCount = 0;
+
+  const courseCounts = {};
+  const tagCounts = {};
+  const attendantCounts = {};
+  const periods = {
+    inicio: 0,
+    meio: 0,
+    conclusao: 0,
+    posGrad: 0,
+    outro: 0
+  };
+
+  leads.forEach((l) => {
+    const r = Number(l.rating) || 0;
+    if (r > 0) evaluatedCount++;
+    if (r >= 4) qualifiedCount++;
+    if (r === 5) topTalentsCount++;
+    if (l.phone && String(l.phone).replace(/\D/g, '').length >= 10) withPhoneCount++;
+    if (l.github && String(l.github).trim()) withGithubCount++;
+
+    // Cursos
+    const rawCourse = (l.course || 'Não informado').trim();
+    courseCounts[rawCourse] = (courseCounts[rawCourse] || 0) + 1;
+
+    // Períodos
+    const p = Number(l.period);
+    const typeStr = (l.participantType || '').toLowerCase();
+    if (typeStr.includes('pós') || typeStr.includes('mestrado') || typeStr.includes('doutorado')) {
+      periods.posGrad++;
+    } else if (p >= 1 && p <= 3) {
+      periods.inicio++;
+    } else if (p >= 4 && p <= 6) {
+      periods.meio++;
+    } else if (p >= 7) {
+      periods.conclusao++;
+    } else {
+      periods.outro++;
+    }
+
+    // Tags
+    if (Array.isArray(l.tags)) {
+      l.tags.forEach((t) => {
+        const cleanT = String(t).trim();
+        if (cleanT) {
+          tagCounts[cleanT] = (tagCounts[cleanT] || 0) + 1;
+        }
+      });
+    }
+
+    // Atendentes
+    const collector = l.collectedByEmail || 'Estande Geral';
+    attendantCounts[collector] = (attendantCounts[collector] || 0) + 1;
+  });
+
+  const courses = Object.entries(courseCounts)
+    .map(([name, count]) => ({
+      name,
+      count,
+      percent: Math.round((count / totalLeads) * 100)
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const tags = Object.entries(tagCounts)
+    .map(([tag, count]) => ({
+      tag,
+      count,
+      percent: Math.round((count / totalLeads) * 100)
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const attendants = Object.entries(attendantCounts)
+    .map(([email, count]) => ({
+      email,
+      name: email.split('@')[0],
+      count,
+      percent: Math.round((count / totalLeads) * 100)
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const qualificationRate = totalLeads > 0 ? Math.round((qualifiedCount / totalLeads) * 100) : 0;
+  const penetrationRate = totalEventAttendees > 0 ? Number(((totalLeads / totalEventAttendees) * 100).toFixed(1)) : 0;
+
+  return {
+    totalLeads,
+    qualifiedCount,
+    qualificationRate,
+    topTalentsCount,
+    withPhoneCount,
+    withGithubCount,
+    penetrationRate,
+    courses,
+    periods,
+    tags,
+    attendants,
+    ratingFunnel: {
+      total: totalLeads,
+      contactable: withPhoneCount,
+      evaluated: evaluatedCount,
+      qualified: qualifiedCount,
+      destaques: topTalentsCount
+    }
+  };
 }
 

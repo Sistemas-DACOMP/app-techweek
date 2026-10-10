@@ -34,7 +34,9 @@ import {
   Plus,
   Send,
   Image as ImageIcon,
-  Film
+  Film,
+  TrendingUp,
+  BarChart3
 } from 'lucide-react';
 import { GitHubIcon } from '../components/ParticipantCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -65,6 +67,9 @@ import {
 } from './Feed';
 import { btn, Kpi, Chip, TypeTag } from './admin/ui';
 import SponsorLeadModal from '../components/SponsorLeadModal';
+import SponsorSplitView from '../components/sponsor/SponsorSplitView';
+import SponsorRoiDashboard from '../components/sponsor/SponsorRoiDashboard';
+import SponsorTeamGamification from '../components/sponsor/SponsorTeamGamification';
 import WhatsAppButton from '../components/WhatsAppButton';
 import Mascot from '../components/Mascot';
 import '../styles/cracha.css';
@@ -125,6 +130,7 @@ export default function Sponsor() {
   const [leadsSearch, setLeadsSearch] = useState('');
   const [starFilter, setStarFilter] = useState('all'); // 'all' | '5' | '4' | '3'
   const [leadSortBy, setLeadSortBy] = useState('recent'); // 'recent' | 'rating' | 'name'
+  const [leadsViewMode, setLeadsViewMode] = useState('crm'); // 'crm' | 'roi'
 
   // Scanner States
   const [isScannerActive, setIsScannerActive] = useState(false);
@@ -443,6 +449,23 @@ export default function Sponsor() {
     setMyLeads((prev) => prev.map(l => l.participantUid === updatedLead.participantUid ? { ...l, ...updatedLead } : l));
     setCompanyLeads((prev) => prev.map(l => l.participantUid === updatedLead.participantUid ? { ...l, ...updatedLead } : l));
     showToast(`Lead de ${updatedLead.name} atualizado!`, 'success');
+  };
+
+  // Callback de persistência direta ao editar no Split-View (Desktop/Tablet)
+  const handleUpdateLeadFromSplitView = async (updatedData) => {
+    try {
+      await updateLead({
+        participantUid: updatedData.participantUid,
+        rating: updatedData.rating !== undefined ? Number(updatedData.rating) : 0,
+        notes: updatedData.notes,
+        tags: updatedData.tags,
+        companyId: userProfile?.companyId || activeCompanyId
+      });
+      handleLeadUpdated(updatedData);
+    } catch (err) {
+      console.error('Erro ao atualizar lead via SplitView:', err);
+      showToast('Erro ao salvar alterações do lead.', 'error');
+    }
   };
 
   // Exportar Leads para CSV
@@ -791,7 +814,17 @@ export default function Sponsor() {
   }
 
   return (
-    <div className="page-container animate-fade-in" style={{ paddingBottom: '90px', fontFamily: 'Montserrat, sans-serif', maxWidth: '720px', margin: '0 auto', boxSizing: 'border-box' }}>
+    <div 
+      className="page-container animate-fade-in" 
+      style={{ 
+        paddingBottom: '90px', 
+        fontFamily: 'Montserrat, sans-serif', 
+        maxWidth: (activeTab === 'leads' || activeTab === 'home') ? '1240px' : '720px', 
+        margin: '0 auto', 
+        boxSizing: 'border-box',
+        transition: 'max-width 0.2s ease'
+      }}
+    >
       {/* Toast Alert padronizado com DESIGN.md §2.1 & §6 */}
       {toastMessage && (
         <div
@@ -1008,6 +1041,13 @@ export default function Sponsor() {
               </span>
             </Kpi>
           </div>
+
+          {/* Gamificação da Equipe do Estande (Metas, Ranking de Bipagem e Engajamento) */}
+          <SponsorTeamGamification
+            leads={companyLeads}
+            currentUserEmail={authUser?.email || userProfile?.email}
+            sponsorGoal={50}
+          />
 
           {/* Hero Action: Bipar Crachá */}
           <div
@@ -1267,8 +1307,53 @@ export default function Sponsor() {
       {/* ========================================================================= */}
       {activeTab === 'leads' && (
         <div className="animate-fade-in flex flex-col gap-4">
-          {/* Caixa Segmentada entre Meus Leads e Toda a Empresa (Padrão Design System §5 e §9) */}
-          <div role="tablist" aria-label="Filtrar escopo dos leads" className="ds-tabs w-full border border-line bg-surface p-1 rounded-2xl">
+          {/* Alternador de Modo: CRM de Coleta vs Relatório Executivo ROI */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-2">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setLeadsViewMode('crm')}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-bold transition-all ${
+                  leadsViewMode === 'crm'
+                    ? 'bg-link text-white shadow-xs'
+                    : 'bg-transparent text-text-3 hover:text-text hover:bg-surface-raised/50'
+                }`}
+              >
+                <Users size={16} />
+                <span>CRM de Coleta</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLeadsViewMode('roi')}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-bold transition-all ${
+                  leadsViewMode === 'roi'
+                    ? 'bg-link text-white shadow-xs'
+                    : 'bg-transparent text-text-3 hover:text-text hover:bg-surface-raised/50'
+                }`}
+              >
+                <TrendingUp size={16} />
+                <span>Relatório Executivo ROI</span>
+              </button>
+            </div>
+
+            {leadsViewMode === 'crm' && (
+              <div className="text-[12px] text-text-3 font-medium hidden sm:block pr-2">
+                {companyLeads.length} {companyLeads.length === 1 ? 'lead registrado' : 'leads registrados'}
+              </div>
+            )}
+          </div>
+
+          {leadsViewMode === 'roi' ? (
+            <SponsorRoiDashboard
+              leads={leadsTab === 'mine' ? myLeads : companyLeads}
+              companyName={sponsorName}
+              companyLogo={sponsorLogo}
+              totalEventAttendees={600}
+            />
+          ) : (
+            <>
+              {/* Caixa Segmentada entre Meus Leads e Toda a Empresa (Padrão Design System §5 e §9) */}
+              <div role="tablist" aria-label="Filtrar escopo dos leads" className="ds-tabs w-full border border-line bg-surface p-1 rounded-2xl">
             <button
               type="button"
               role="tab"
@@ -1319,7 +1404,21 @@ export default function Sponsor() {
             </button>
           </div>
 
-          {/* Opção de Exportar CSV embaixo da caixa de alternância */}
+          {/* Desktop / Tablet Booth OS: Split-View Master-Detail (visível em telas grandes: hidden lg:block) */}
+          <div className="hidden lg:block">
+            <SponsorSplitView
+              leads={leadsTab === 'mine' ? myLeads : companyLeads}
+              selectedLead={selectedLead}
+              onSelectLead={setSelectedLead}
+              onUpdateLead={handleUpdateLeadFromSplitView}
+              companyName={sponsorName}
+              isLoading={isLoadingLeads}
+            />
+          </div>
+
+          {/* Modo Lista / Mobile (visível abaixo de lg: lg:hidden) */}
+          <div className="lg:hidden flex flex-col gap-4">
+            {/* Opção de Exportar CSV embaixo da caixa de alternância */}
           <div className="flex flex-wrap items-center justify-between gap-2.5">
             <span className="text-[13px] font-medium text-text-3">
               {leadsSearch.trim() || starFilter !== 'all' ? (
@@ -1719,7 +1818,10 @@ export default function Sponsor() {
             )}
           </div>
         </div>
-      )}
+      </>
+    )}
+  </div>
+)}
 
       {/* ========================================================================= */}
       {/* ABA 3: SCANNER (BIPAR CRACHÁ)                                             */}

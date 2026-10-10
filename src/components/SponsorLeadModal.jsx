@@ -201,12 +201,18 @@ export default function SponsorLeadModal({
     setErrorMsg(null);
 
     try {
+      const extractedTags = Array.from(new Set([
+        ...(Array.isArray(participant?.tags) ? participant.tags : []),
+        ...((notes || '').match(/\[([^\]]+)\]/g)?.map(m => m.slice(1, -1).trim()).filter(Boolean) || [])
+      ]));
+
       if (isExistingLead) {
         // Atualização de lead existente no CRM
         await updateLead({
           participantUid,
           rating: rating !== undefined ? Number(rating) : 0,
           notes,
+          tags: extractedTags,
           companyId: sponsorCompanyId
         });
 
@@ -218,7 +224,8 @@ export default function SponsorLeadModal({
           onLeadUpdated({
             ...participant,
             rating,
-            notes
+            notes,
+            tags: extractedTags
           });
         }
       } else {
@@ -227,6 +234,7 @@ export default function SponsorLeadModal({
           participantUid,
           notes,
           rating: rating > 0 ? rating : undefined,
+          tags: extractedTags,
           companyId: sponsorCompanyId
         });
 
@@ -237,7 +245,8 @@ export default function SponsorLeadModal({
           ...(response?.lead || {}),
           participantUid,
           notes,
-          rating
+          rating,
+          tags: extractedTags
         };
 
         setSavedLeadData(leadInfo);

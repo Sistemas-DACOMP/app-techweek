@@ -114,7 +114,7 @@ export function resolveCompanyId(raw?: string | null): SponsorCompanyId | null {
  * Extraído para facilitar testes unitários isolados.
  */
 export async function leadsHandler(req: Request, res: Response): Promise<void> {
-  const { participantUid, notes, rating, companyId: providedCompanyId, validateOnly } = req.body ?? {};
+  const { participantUid, notes, rating, companyId: providedCompanyId, validateOnly, tags } = req.body ?? {};
   const sponsorUid = req.user!.uid;
 
   if (typeof participantUid !== 'string' || !participantUid || !isValidFirestoreId(participantUid)) {
@@ -144,6 +144,14 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
     });
     return;
   }
+
+  const sanitizedTags = Array.isArray(tags)
+    ? tags
+        .filter((t): t is string => typeof t === 'string')
+        .map(t => t.trim())
+        .filter(Boolean)
+        .slice(0, 25)
+    : [];
 
   const userRef = db.collection('users').doc(participantUid);
   const leadRef = db.collection('leads').doc(sponsorUid).collection('contacts').doc(participantUid);
@@ -182,6 +190,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       const period = userData.period || userData.periodo || null;
       const linkedin = userData.linkedin || null;
       const instagram = userData.instagram || null;
+      const github = userData.github || null;
 
       const birthDateRaw =
         userData.birthDate ||
@@ -290,7 +299,9 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         period,
         linkedin,
         instagram,
+        github,
         faixaEtaria,
+        tags: sanitizedTags,
         notes: typeof notes === 'string' ? notes.trim() : '',
         rating: typeof rating === 'number' ? rating : null,
         updatedAt: now
@@ -327,7 +338,9 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
             period,
             linkedin,
             instagram,
+            github,
             faixaEtaria,
+            tags: leadContactData.tags,
             notes: leadContactData.notes,
             rating: leadContactData.rating,
             pointsAwarded: pointsToIncrement,
@@ -398,7 +411,7 @@ export async function getLeadsHandler(req: Request, res: Response): Promise<void
  */
 export async function updateLeadHandler(req: Request, res: Response): Promise<void> {
   const { participantUid } = req.params;
-  const { rating, notes, companyId: providedCompanyId } = req.body ?? {};
+  const { rating, notes, companyId: providedCompanyId, tags } = req.body ?? {};
   const sponsorUid = req.user!.uid;
 
   if (!participantUid || !isValidFirestoreId(participantUid)) {
@@ -429,6 +442,14 @@ export async function updateLeadHandler(req: Request, res: Response): Promise<vo
     return;
   }
 
+  if (tags !== undefined && !Array.isArray(tags)) {
+    res.status(400).json({
+      error: 'INVALID_PAYLOAD',
+      message: 'tags deve ser uma lista de strings.'
+    });
+    return;
+  }
+
   try {
     const sponsorSnap = await db.collection('users').doc(sponsorUid).get().catch(() => ({ exists: false, data: () => ({}) }));
     const sponsorData = ((sponsorSnap && typeof sponsorSnap.data === 'function' ? sponsorSnap.data() : {}) || {}) as Record<string, any>;
@@ -443,6 +464,15 @@ export async function updateLeadHandler(req: Request, res: Response): Promise<vo
     }
     if (rating !== undefined) {
       updates.rating = rating === 0 ? null : Math.round(rating);
+    }
+    if (tags !== undefined) {
+      updates.tags = Array.isArray(tags)
+        ? tags
+            .filter((t): t is string => typeof t === 'string')
+            .map(t => t.trim())
+            .filter(Boolean)
+            .slice(0, 25)
+        : [];
     }
 
     const leadRef = db.collection('leads').doc(sponsorUid).collection('contacts').doc(participantUid);
