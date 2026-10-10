@@ -117,7 +117,21 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
   const { participantUid, notes, rating, companyId: providedCompanyId, validateOnly, tags } = req.body ?? {};
   const sponsorUid = req.user!.uid;
 
-  if (typeof participantUid !== 'string' || !participantUid || !isValidFirestoreId(participantUid)) {
+  let resolvedUid = participantUid;
+
+  if (typeof resolvedUid === 'string' && resolvedUid.includes('@')) {
+    try {
+      const usersCol = db.collection('users');
+      if (typeof usersCol.where === 'function') {
+        const emailSnap = await usersCol.where('email', '==', resolvedUid.toLowerCase().trim()).limit(1).get();
+        if (emailSnap && !emailSnap.empty) {
+          resolvedUid = emailSnap.docs[0].id;
+        }
+      }
+    } catch {}
+  }
+
+  if (typeof resolvedUid !== 'string' || !resolvedUid || !isValidFirestoreId(resolvedUid)) {
     res.status(400).json({
       error: 'INVALID_PAYLOAD',
       message: 'participantUid é obrigatório e deve ser um ID de documento válido.'
@@ -153,9 +167,9 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         .slice(0, 25)
     : [];
 
-  const userRef = db.collection('users').doc(participantUid);
-  const leadRef = db.collection('leads').doc(sponsorUid).collection('contacts').doc(participantUid);
-  const pointEventRef = db.collection('pointEvents').doc(`${participantUid}_sponsor_lead_${sponsorUid}`);
+  const userRef = db.collection('users').doc(resolvedUid);
+  const leadRef = db.collection('leads').doc(sponsorUid).collection('contacts').doc(resolvedUid);
+  const pointEventRef = db.collection('pointEvents').doc(`${resolvedUid}_sponsor_lead_${sponsorUid}`);
   const sponsorRef = db.collection('users').doc(sponsorUid);
 
   try {

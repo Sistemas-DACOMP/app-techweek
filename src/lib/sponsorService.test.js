@@ -74,6 +74,20 @@ describe('sponsorService', () => {
       expect(participant.name).toBe('Maria Silva');
       expect(participant.participantUid).toBe('user_789');
     });
+
+    it('resolve participante a partir de string de e-mail (ex: erick.raposo@ufu.br)', async () => {
+      const participant = await resolveParticipantFromQr('erick.raposo@ufu.br');
+      expect(participant).toBeDefined();
+      expect(participant.email).toBe('erick.raposo@ufu.br');
+      expect(participant.name).toContain('Erick');
+    });
+
+    it('resolve participante a partir de string com mailto:', async () => {
+      const participant = await resolveParticipantFromQr('mailto:erick.raposo@ufu.br');
+      expect(participant).toBeDefined();
+      expect(participant.email).toBe('erick.raposo@ufu.br');
+      expect(participant.name).toContain('Erick');
+    });
   });
 
   describe('submitLead', () => {

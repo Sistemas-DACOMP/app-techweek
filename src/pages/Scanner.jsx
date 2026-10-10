@@ -56,7 +56,8 @@ function badgeFromProfile(profile) {
     participantType: profile.participantType || profile.participant_type || 'Participante',
     avatarUrl: profile.avatarUrl || profile.avatar_url || profile.photoURL || null,
     symplaTicket: profile.symplaTicket || profile.sympla_ticket || null,
-    uid: profile.uid || profile.id || ''
+    uid: profile.uid || profile.id || '',
+    email: profile.email || ''
   };
 }
 

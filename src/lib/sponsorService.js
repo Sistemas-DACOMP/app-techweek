@@ -16,13 +16,16 @@ export async function resolveParticipantFromQr(rawData) {
   if (!rawData || typeof rawData !== 'string') return null;
 
   const trimmed = rawData.trim();
+  let decodedText = trimmed;
+  try {
+    decodedText = decodeURIComponent(trimmed);
+  } catch {}
 
   // 1. Tenta interpretar como JSON (crachá digital do app)
   let parsedJson = null;
   try {
-    const decoded = decodeURIComponent(trimmed);
-    if (decoded.startsWith('{') && decoded.endsWith('}')) {
-      parsedJson = JSON.parse(decoded);
+    if (decodedText.startsWith('{') && decodedText.endsWith('}')) {
+      parsedJson = JSON.parse(decodedText);
     }
   } catch {
     try {
@@ -42,10 +45,23 @@ export async function resolveParticipantFromQr(rawData) {
     } catch {}
   }
 
-  // Se contiver username
+  // Se contiver email no JSON
+  if (parsedJson?.email) {
+    try {
+      const cleanEmail = String(parsedJson.email).trim().toLowerCase();
+      const q = query(collection(db, 'users'), where('email', '==', cleanEmail), limit(1));
+      const snap = await getDocs(q);
+      if (snap && !snap.empty) {
+        const docSnap = snap.docs[0];
+        return formatParticipant(docSnap.id, docSnap.data());
+      }
+    } catch {}
+  }
+
+  // Se contiver username no JSON
   if (parsedJson?.username) {
     try {
-      const username = String(parsedJson.username).replace(/^@/, '').toLowerCase();
+      const username = String(parsedJson.username).replace(/^@/, '').toLowerCase().trim();
       const q = query(collection(db, 'users'), where('username', '==', username), limit(1));
       const snap = await getDocs(q);
       if (snap && !snap.empty) {
@@ -55,8 +71,8 @@ export async function resolveParticipantFromQr(rawData) {
     } catch {}
   }
 
-  // Se contiver número de ingresso Sympla
-  const ticketNumber = parsedJson?.ticketNumber || (trimmed.startsWith('SYMPLA:') ? trimmed.replace('SYMPLA:', '') : null);
+  // Se contiver número de ingresso Sympla no JSON ou texto
+  const ticketNumber = parsedJson?.ticketNumber || (trimmed.startsWith('SYMPLA:') ? trimmed.replace('SYMPLA:', '').trim() : null);
   if (ticketNumber) {
     try {
       const q1 = query(collection(db, 'users'), where('ticketId', '==', ticketNumber), limit(1));
@@ -73,7 +89,45 @@ export async function resolveParticipantFromQr(rawData) {
     } catch {}
   }
 
-  // 2. Se o dado lido for diretamente um ID de documento do Firestore (UID)
+  // 2. Se o dado lido for um e-mail (ex: erick.raposo@ufu.br ou mailto:erick.raposo@ufu.br)
+  const emailCandidate = decodedText.replace(/^mailto:/i, '').trim();
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailCandidate);
+  if (isEmail) {
+    try {
+      const q = query(collection(db, 'users'), where('email', '==', emailCandidate.toLowerCase()), limit(1));
+      const snap = await getDocs(q);
+      if (snap && !snap.empty) {
+        const docSnap = snap.docs[0];
+        return formatParticipant(docSnap.id, docSnap.data());
+      }
+      const qExact = query(collection(db, 'users'), where('email', '==', emailCandidate), limit(1));
+      const snapExact = await getDocs(qExact);
+      if (snapExact && !snapExact.empty) {
+        const docSnap = snapExact.docs[0];
+        return formatParticipant(docSnap.id, docSnap.data());
+      }
+    } catch {}
+
+    // Fallback gracioso com os dados inferidos do e-mail para não bloquear a operação
+    const namePart = emailCandidate.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return {
+      participantUid: emailCandidate,
+      name: namePart || 'Participante',
+      username: emailCandidate.split('@')[0],
+      firstName: namePart.split(' ')[0] || 'Participante',
+      course: 'Computação',
+      period: null,
+      phone: '',
+      email: emailCandidate,
+      linkedin: '',
+      instagram: '',
+      github: '',
+      participantType: 'Estudante',
+      avatarUrl: null
+    };
+  }
+
+  // 3. Se o dado lido for diretamente um ID de documento do Firestore (UID)
   if (/^[a-zA-Z0-9_-]{15,40}$/.test(trimmed)) {
     try {
       const directDoc = await getDoc(doc(db, 'users', trimmed));
@@ -83,12 +137,25 @@ export async function resolveParticipantFromQr(rawData) {
     } catch {}
   }
 
-  // 3. Fallback: se os dados parsed contiverem informações locais suficientes
-  if (parsedJson && (parsedJson.name || parsedJson.username)) {
+  // 4. Se for username direto (ex: @erickraposo ou erickraposo)
+  if (/^@?[a-zA-Z0-9_.-]{3,30}$/.test(trimmed) && !trimmed.includes(' ')) {
+    try {
+      const cleanUsername = trimmed.replace(/^@/, '').toLowerCase();
+      const q = query(collection(db, 'users'), where('username', '==', cleanUsername), limit(1));
+      const snap = await getDocs(q);
+      if (snap && !snap.empty) {
+        const docSnap = snap.docs[0];
+        return formatParticipant(docSnap.id, docSnap.data());
+      }
+    } catch {}
+  }
+
+  // 5. Fallback: se os dados parsed contiverem informações locais suficientes
+  if (parsedJson && (parsedJson.name || parsedJson.username || parsedJson.email)) {
     return {
-      participantUid: parsedJson.uid || `temp_${Date.now()}`,
-      name: parsedJson.name || parsedJson.username,
-      username: parsedJson.username || '',
+      participantUid: parsedJson.uid || parsedJson.email || `temp_${Date.now()}`,
+      name: parsedJson.name || parsedJson.username || parsedJson.email || 'Participante',
+      username: parsedJson.username || (parsedJson.email ? parsedJson.email.split('@')[0] : ''),
       course: parsedJson.course || 'Computação',
       period: parsedJson.period || null,
       phone: parsedJson.phone || '',
@@ -236,10 +303,23 @@ export async function submitLead({ participantUid, notes, rating, companyId, val
     throw new Error('participantUid é obrigatório.');
   }
 
+  // Se o UID for temporário ou contiver e-mail, resolve o UID real no Firestore
+  let effectiveUid = participantUid;
+  const emailToLookup = participantData?.email || (typeof effectiveUid === 'string' && effectiveUid.includes('@') ? effectiveUid : null);
+  if (emailToLookup && (typeof effectiveUid !== 'string' || effectiveUid.startsWith('temp_') || effectiveUid.includes('@'))) {
+    try {
+      const cleanEmail = emailToLookup.replace(/^mailto:/i, '').trim().toLowerCase();
+      const snap = await getDocs(query(collection(db, 'users'), where('email', '==', cleanEmail), limit(1)));
+      if (snap && !snap.empty) {
+        effectiveUid = snap.docs[0].id;
+      }
+    } catch {}
+  }
+
   const nowIso = new Date().toISOString();
   const localLead = {
-    id: `lead_${participantUid}_${Date.now()}`,
-    participantUid,
+    id: `lead_${effectiveUid}_${Date.now()}`,
+    participantUid: effectiveUid,
     rating: rating ? Number(rating) : 0,
     notes: notes || '',
     tags: Array.isArray(tags) ? tags : [],
@@ -250,7 +330,7 @@ export async function submitLead({ participantUid, notes, rating, companyId, val
     updatedAt: nowIso,
     name: participantData?.name || participantData?.displayName || 'Participante',
     firstName: participantData?.firstName || participantData?.name?.split(' ')[0] || 'Participante',
-    email: participantData?.email || '',
+    email: participantData?.email || (typeof participantUid === 'string' && participantUid.includes('@') ? participantUid : ''),
     phone: participantData?.phone || '',
     course: participantData?.course || 'Não informado',
     period: participantData?.period || null,
@@ -277,7 +357,7 @@ export async function submitLead({ participantUid, notes, rating, companyId, val
       method: 'POST',
       headers,
       body: JSON.stringify({
-        participantUid,
+        participantUid: effectiveUid,
         notes: notes || '',
         rating: rating ? Number(rating) : undefined,
         companyId: companyId || undefined,

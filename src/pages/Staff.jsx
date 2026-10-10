@@ -12,6 +12,7 @@ import { auth } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { decideAccess } from '../lib/accessGuard';
 import { stopAllMediaTracks } from '../lib/cameraUtils';
+import { resolveParticipantFromQr } from '../lib/sponsorService';
 import Mascot from '../components/Mascot';
 import RoleSwitcher from '../components/RoleSwitcher';
 import iconeTw from '../assets/icone.png';
@@ -259,16 +260,24 @@ export default function Staff() {
 
     let participantUid = null;
     try {
-      // Trying to parse as JSON if it's the expected format
-      const decoded = decodeURIComponent(data);
-      if (decoded.startsWith('{') && decoded.endsWith('}')) {
-        const parsed = JSON.parse(decoded);
-        participantUid = parsed.uid || parsed.username;
-      } else {
+      const resolved = await resolveParticipantFromQr(data);
+      if (resolved?.participantUid) {
+        participantUid = resolved.participantUid;
+      }
+    } catch (_err) {}
+
+    if (!participantUid) {
+      try {
+        const decoded = decodeURIComponent(data);
+        if (decoded.startsWith('{') && decoded.endsWith('}')) {
+          const parsed = JSON.parse(decoded);
+          participantUid = parsed.uid || parsed.email || parsed.username;
+        } else {
+          participantUid = data;
+        }
+      } catch (_e) {
         participantUid = data;
       }
-    } catch (e) {
-      participantUid = data;
     }
 
     if (!participantUid) {
@@ -280,17 +289,44 @@ export default function Staff() {
 
     let failed = false;
     try {
-      // Chamada para `POST /api/checkin/entrance` enviando `{ participantUid, activityId }`.
+      const currentActivity = activities.find((a) => a.id === selectedActivity);
+      const isDoubleCheck = currentActivity?.attendanceMode === 'DOUBLE_CHECK';
+
       const headers = { 'Content-Type': 'application/json' };
       if (auth.currentUser) {
         headers['Authorization'] = `Bearer ${await auth.currentUser.getIdToken()}`;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/checkin/entrance`, {
+      const payload = {
+        uid: participantUid,
+        participantUid,
+        activityId: selectedActivity
+      };
+
+      const primaryUrl = isDoubleCheck
+        ? `${import.meta.env.VITE_API_URL || ''}/api/checkin/entrance`
+        : `${import.meta.env.VITE_API_URL || ''}/api/staff/entrance`;
+
+      let response = await fetch(primaryUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ participantUid, activityId: selectedActivity })
+        body: JSON.stringify(payload)
       });
+
+      // Se falhar com WRONG_ATTENDANCE_MODE, tenta o endpoint alternativo como fallback gracioso
+      if (!response.ok && response.status === 400) {
+        const errJson = await response.clone().json().catch(() => ({}));
+        if (errJson.error === 'WRONG_ATTENDANCE_MODE') {
+          const fallbackUrl = isDoubleCheck
+            ? `${import.meta.env.VITE_API_URL || ''}/api/staff/entrance`
+            : `${import.meta.env.VITE_API_URL || ''}/api/checkin/entrance`;
+          response = await fetch(fallbackUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+          });
+        }
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -309,7 +345,10 @@ export default function Staff() {
         }
       } else {
         // Sucesso
-        showResult({ status: 'green', kind: 'ok', message: 'Entrada registrada. Lembre a pessoa de ler o QR do telão antes de sair.' }, participantUid);
+        const successMessage = isDoubleCheck
+          ? 'Entrada registrada. Lembre a pessoa de ler o QR do telão antes de sair.'
+          : 'Presença confirmada e pontos creditados!';
+        showResult({ status: 'green', kind: 'ok', message: successMessage }, participantUid);
         playSound('success');
       }
     } catch (err) {
