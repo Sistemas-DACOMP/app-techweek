@@ -116,6 +116,7 @@ export async function createUserProfile(uid, data) {
     participant_type: data.participantType || 'Aluno da UFU',
     course: data.course || '',
     period: data.period ? Number(data.period) : null,
+    institution: data.institution || '',
     linkedin: data.linkedin || '',
     instagram: data.instagram || '',
     github: data.github || '',

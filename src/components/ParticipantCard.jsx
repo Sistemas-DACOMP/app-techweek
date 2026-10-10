@@ -143,7 +143,7 @@ export default function ParticipantCard({ participant, points = null, eyebrow = 
 
   if (!participant) return null;
 
-  const { name = 'Participante', username, avatarUrl, photoURL, course, period, participantType } = participant;
+  const { name = 'Participante', username, avatarUrl, photoURL, course, period, participantType, institution } = participant;
 
   const effectiveAvatar = !imageError && (avatarUrl || photoURL) ? avatarUrl || photoURL : null;
   const cleanUsername = username ? String(username).replace(/^@/, '') : '';
@@ -197,11 +197,17 @@ export default function ParticipantCard({ participant, points = null, eyebrow = 
         {name}
       </h2>
       {cleanUsername && <div className="mt-0.5 text-[15px] font-bold text-link">@{cleanUsername}</div>}
-      {(course || period) && (
-        <span className="mt-2.5 rounded-[10px] border border-white/8 bg-white/5 px-3 py-1.5 text-[13px] text-[#C3C9DE]">
-          {[course, periodLabel(period)].filter(Boolean).join(' · ')}
-        </span>
-      )}
+      {(() => {
+        const isPostgrad = participantType === 'Pós-graduação' || course === 'Pós-graduação';
+        const academicLabel = isPostgrad
+          ? (institution ? `Pós-graduação · ${institution}` : 'Pós-graduação')
+          : [institution || course, periodLabel(period)].filter(Boolean).join(' · ');
+        return academicLabel ? (
+          <span className="mt-2.5 rounded-[10px] border border-white/8 bg-white/5 px-3 py-1.5 text-[13px] text-[#C3C9DE]">
+            {academicLabel}
+          </span>
+        ) : null;
+      })()}
 
       <div className="mt-[18px] w-full border-t border-white/8 pt-3.5 text-left">
         <div className="flex justify-between text-xs font-extrabold text-text-2">
