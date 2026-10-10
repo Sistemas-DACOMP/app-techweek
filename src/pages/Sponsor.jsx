@@ -875,65 +875,75 @@ export default function Sponsor() {
         </div>
       )}
 
-      {/* Top Header Padronizado TechWeek com Logo Oficial Centralizada */}
+      {/* Top Header Padronizado TechWeek */}
       <header style={{ marginBottom: '20px' }}>
-        <div className="flex flex-col items-center justify-center pt-1 pb-3">
-          {sponsorLogo ? (
-            <img
-              src={sponsorLogo}
-              alt={sponsorName}
-              className="max-h-12 max-w-[220px] object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
-            />
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-[17px] font-black uppercase tracking-wider text-[#EEF1FA]">
-                {sponsorName}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Saudação e Contexto do Estande (Padrão AdminInicio) */}
+        {/* Saudação e Caixa de Boas-Vindas com Oi e Logo Branca Monocromática */}
         {activeTab === 'home' ? (
-          <div className="mb-4 flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <Mascot style={{ width: 48, height: 48, animation: 'none', flexShrink: 0 }} isWaving={true} color="blue" />
-              <div className="min-w-0 flex-1">
-                <h1 className="m-0 text-[18px] font-extrabold tracking-[-0.01em] text-[#EEF1FA]">
-                  {greeting(now)}, {firstName}!
-                </h1>
-                <p className="m-0 mt-0.5 text-[12px] text-text-2">
-                  {longDate(now)} · {companyLeads.length} {companyLeads.length === 1 ? 'lead coletado' : 'leads coletados'} no estande
-                </p>
+          <div className="mb-5 rounded-[20px] bg-surface border border-line p-4 sm:p-5 flex flex-col gap-3.5 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <Mascot style={{ width: 46, height: 46, animation: 'none', flexShrink: 0 }} isWaving={true} color="blue" />
+                <div className="min-w-0 flex-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-link block truncate">
+                    Estande {sponsorName}
+                  </span>
+                  <h1 className="m-0 text-[19px] sm:text-[21px] font-extrabold tracking-[-0.01em] text-[#EEF1FA] truncate">
+                    Oi, {firstName}!
+                  </h1>
+                  <p className="m-0 mt-0.5 text-[12px] sm:text-[13px] text-text-2 truncate">
+                    {longDate(now)} · {companyLeads.length} {companyLeads.length === 1 ? 'lead coletado' : 'leads coletados'}
+                  </p>
+                </div>
               </div>
+
+              {/* Logo Oficial da Empresa monocromática branca no fundo escuro */}
+              {sponsorLogo ? (
+                <div className="shrink-0 flex items-center justify-end max-w-[120px] sm:max-w-[150px]">
+                  <img
+                    src={sponsorLogo}
+                    alt={sponsorName}
+                    className="max-h-8 sm:max-h-9 max-w-full object-contain"
+                    style={{
+                      filter: 'brightness(0) invert(1)',
+                      opacity: 0.95,
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="shrink-0 flex items-center justify-end">
+                  <span className="text-[12px] font-extrabold uppercase tracking-wider text-text-2 border border-line px-2.5 py-1 rounded-lg">
+                    {sponsorName}
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Ações Rápidas (Padrão Admin btn) */}
-            <div className="flex items-center gap-2">
+            {/* Ações Rápidas integradas */}
+            <div className="flex items-center gap-2 pt-1 border-t border-line/60">
               <button
                 type="button"
-                className={btn('action', 'flex-1 min-w-[130px] h-11 text-[13px]')}
+                className={btn('action', 'flex-1 min-w-[120px] h-10 text-[13px]')}
                 onClick={() => setActiveTab('scanner')}
               >
-                <QrCode size={17} aria-hidden="true" />
+                <QrCode size={16} aria-hidden="true" />
                 <span>Bipar crachá</span>
               </button>
               <button
                 type="button"
-                className={btn('secondary', 'flex-1 min-w-[110px] h-11 text-[13px]')}
+                className={btn('secondary', 'flex-1 min-w-[100px] h-10 text-[13px]')}
                 onClick={() => setActiveTab('leads')}
               >
-                <Users size={17} aria-hidden="true" />
+                <Users size={16} aria-hidden="true" />
                 <span>Leads ({companyLeads.length})</span>
               </button>
               <button
                 type="button"
-                className={btn('secondary', 'h-11 px-3 text-[13px]')}
+                className={btn('secondary', 'h-10 px-3 text-[13px]')}
                 onClick={handleExportCsv}
                 disabled={companyLeads.length === 0}
                 title="Exportar leads em CSV"
               >
-                <Download size={16} aria-hidden="true" />
+                <Download size={15} aria-hidden="true" />
                 <span className="hidden sm:inline">CSV</span>
               </button>
             </div>
@@ -1257,8 +1267,8 @@ export default function Sponsor() {
       {/* ========================================================================= */}
       {activeTab === 'leads' && (
         <div className="animate-fade-in flex flex-col gap-4">
-          {/* Caixa Segmentada entre Meus Leads e Toda a Empresa (Padrão RankingTab .ds-tabs) */}
-          <div role="tablist" aria-label="Filtrar escopo dos leads" className="ds-tabs w-full">
+          {/* Caixa Segmentada entre Meus Leads e Toda a Empresa (Padrão Design System §5 e §9) */}
+          <div role="tablist" aria-label="Filtrar escopo dos leads" className="ds-tabs w-full border border-line bg-surface p-1 rounded-2xl">
             <button
               type="button"
               role="tab"
@@ -1266,17 +1276,18 @@ export default function Sponsor() {
               aria-selected={leadsTab === 'mine'}
               aria-controls="panel-leads-content"
               onClick={() => setLeadsTab('mine')}
-              className="ds-tab flex items-center justify-center gap-2 transition-all duration-200"
-              style={{
-                background: leadsTab === 'mine' ? 'linear-gradient(135deg, #2563EB, #7C3AED)' : 'transparent',
-                color: leadsTab === 'mine' ? '#FFFFFF' : 'var(--text-3)',
-                boxShadow: leadsTab === 'mine' ? '0 2px 10px rgba(37, 99, 235, 0.35)' : 'none',
-              }}
+              className={`ds-tab flex items-center justify-center gap-2 rounded-xl py-2 px-3 text-[13px] font-bold transition-all duration-150 ${
+                leadsTab === 'mine'
+                  ? 'bg-surface-selected text-text border border-line-2/80 shadow-xs'
+                  : 'text-text-3 hover:text-text-2 hover:bg-surface-raised/50 border border-transparent'
+              }`}
             >
               <span>Meus Leads</span>
               <span
-                className={`text-[12px] font-bold px-1.5 py-0.5 rounded-full ${
-                  leadsTab === 'mine' ? 'bg-white/20 text-white' : 'bg-surface-raised text-text-3'
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                  leadsTab === 'mine'
+                    ? 'bg-surface-raised text-text border border-line-2/50'
+                    : 'bg-surface-raised/50 text-text-3'
                 }`}
               >
                 {myLeads.length}
@@ -1289,17 +1300,18 @@ export default function Sponsor() {
               aria-selected={leadsTab === 'company'}
               aria-controls="panel-leads-content"
               onClick={() => setLeadsTab('company')}
-              className="ds-tab flex items-center justify-center gap-2 transition-all duration-200"
-              style={{
-                background: leadsTab === 'company' ? 'linear-gradient(135deg, #2563EB, #7C3AED)' : 'transparent',
-                color: leadsTab === 'company' ? '#FFFFFF' : 'var(--text-3)',
-                boxShadow: leadsTab === 'company' ? '0 2px 10px rgba(37, 99, 235, 0.35)' : 'none',
-              }}
+              className={`ds-tab flex items-center justify-center gap-2 rounded-xl py-2 px-3 text-[13px] font-bold transition-all duration-150 ${
+                leadsTab === 'company'
+                  ? 'bg-surface-selected text-text border border-line-2/80 shadow-xs'
+                  : 'text-text-3 hover:text-text-2 hover:bg-surface-raised/50 border border-transparent'
+              }`}
             >
               <span>Toda a Empresa</span>
               <span
-                className={`text-[12px] font-bold px-1.5 py-0.5 rounded-full ${
-                  leadsTab === 'company' ? 'bg-white/20 text-white' : 'bg-surface-raised text-text-3'
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                  leadsTab === 'company'
+                    ? 'bg-surface-raised text-text border border-line-2/50'
+                    : 'bg-surface-raised/50 text-text-3'
                 }`}
               >
                 {companyLeads.length}
