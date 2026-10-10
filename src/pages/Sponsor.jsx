@@ -57,7 +57,7 @@ import {
   DEFAULT_FEED_POSTS 
 } from '../lib/feedService';
 import ActivityModal, { SeatsLight, categoryOf, describeDay } from '../components/ActivityModal';
-import { SPONSORS_CONFIG } from '../components/PassportTab';
+import { SPONSORS_CONFIG, TIER_STYLE } from '../components/PassportTab';
 import { ActivityRow, TYPE_FILTERS, dayOrder, getActivityTimingState } from './Agenda';
 import { CameraFrame } from './Scanner';
 import { 
@@ -69,7 +69,7 @@ import { btn, Kpi, Chip, TypeTag } from './admin/ui';
 import SponsorLeadModal from '../components/SponsorLeadModal';
 import SponsorSplitView from '../components/sponsor/SponsorSplitView';
 import SponsorRoiDashboard from '../components/sponsor/SponsorRoiDashboard';
-import SponsorTeamGamification from '../components/sponsor/SponsorTeamGamification';
+import SponsorShell from '../components/sponsor/SponsorShell';
 import WhatsAppButton from '../components/WhatsAppButton';
 import Mascot from '../components/Mascot';
 import '../styles/cracha.css';
@@ -119,6 +119,20 @@ export default function Sponsor() {
     return entry ? entry[1].logo : null;
   }, [userProfile, activeCompanyId, sponsorName]);
 
+  // Cota / Tier do Patrocinador (DIAMOND, GOLD, SILVER) conforme DESIGN.md §2.8
+  const sponsorTierInfo = useMemo(() => {
+    const rawKey = (activeCompanyId || userProfile?.companyName || userProfile?.empresa || sponsorName || '').toLowerCase().trim();
+    const entry = Object.entries(SPONSORS_CONFIG).find(([k, v]) => {
+      return rawKey.includes(k) || k.includes(rawKey) || v.name.toLowerCase().includes(rawKey);
+    });
+    const tierKey = entry ? entry[1].tier : (userProfile?.tier || 'GOLD');
+    const tierCfg = TIER_STYLE[tierKey] || TIER_STYLE.GOLD;
+    return {
+      tier: tierKey,
+      ...tierCfg,
+    };
+  }, [activeCompanyId, userProfile, sponsorName]);
+
   // Tab State: 'home' | 'leads' | 'scanner' | 'agenda' | 'feed'
   const [activeTab, setActiveTab] = useState('home');
 
@@ -131,6 +145,28 @@ export default function Sponsor() {
   const [starFilter, setStarFilter] = useState('all'); // 'all' | '5' | '4' | '3'
   const [leadSortBy, setLeadSortBy] = useState('recent'); // 'recent' | 'rating' | 'name'
   const [leadsViewMode, setLeadsViewMode] = useState('crm'); // 'crm' | 'roi'
+
+  // Chave de navegação ativa unificada para Desktop Shell
+  const activeNavKey = useMemo(() => {
+    if (activeTab === 'leads') {
+      return leadsViewMode === 'roi' ? 'roi' : 'leads';
+    }
+    return activeTab;
+  }, [activeTab, leadsViewMode]);
+
+  const handleNavigate = useCallback((key) => {
+    if (key === 'roi') {
+      setActiveTab('leads');
+      setLeadsViewMode('roi');
+      return;
+    }
+    if (key === 'leads') {
+      setActiveTab('leads');
+      setLeadsViewMode('crm');
+      return;
+    }
+    setActiveTab(key);
+  }, []);
 
   // Scanner States
   const [isScannerActive, setIsScannerActive] = useState(false);
@@ -814,16 +850,18 @@ export default function Sponsor() {
   }
 
   return (
-    <div 
-      className="page-container animate-fade-in" 
-      style={{ 
-        paddingBottom: '90px', 
-        fontFamily: 'Montserrat, sans-serif', 
-        maxWidth: (activeTab === 'leads' || activeTab === 'home') ? '1240px' : '720px', 
-        margin: '0 auto', 
-        boxSizing: 'border-box',
-        transition: 'max-width 0.2s ease'
-      }}
+    <SponsorShell
+      activeNavKey={activeNavKey}
+      onNavigate={handleNavigate}
+      companyName={sponsorName}
+      companyLogo={sponsorLogo}
+      tierInfo={sponsorTierInfo}
+      userProfile={userProfile}
+      authUser={authUser}
+      actualRole={actualRole}
+      leadsCount={companyLeads.length}
+      myLeadsCount={myLeads.length}
+      onExportCsv={handleExportCsv}
     >
       {/* Toast Alert padronizado com DESIGN.md §2.1 & §6 */}
       {toastMessage && (
@@ -855,7 +893,7 @@ export default function Sponsor() {
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
+            boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
           }}
         >
           {toastMessage.type === 'success' ? (
@@ -868,7 +906,7 @@ export default function Sponsor() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                flexShrink: 0
+                flexShrink: 0,
               }}
             >
               <CheckCircle2 size={16} color="#6FD8A6" />
@@ -883,7 +921,7 @@ export default function Sponsor() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                flexShrink: 0
+                flexShrink: 0,
               }}
             >
               <AlertCircle size={16} color="#F2C46A" />
@@ -898,7 +936,7 @@ export default function Sponsor() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                flexShrink: 0
+                flexShrink: 0,
               }}
             >
               <AlertCircle size={16} color="#F59A9A" />
@@ -908,19 +946,18 @@ export default function Sponsor() {
         </div>
       )}
 
-      {/* Top Header Padronizado TechWeek */}
-      <header style={{ marginBottom: '20px' }}>
-        {/* Saudação e Caixa de Boas-Vindas com Oi e Logo Branca Monocromática */}
+      {/* Top Header Mobile (na versão desktop, a SponsorShell já exibe a barra superior contextual fixa) */}
+      <header className="lg:hidden mb-4">
         {activeTab === 'home' ? (
-          <div className="mb-5 rounded-[20px] bg-surface border border-line p-4 sm:p-5 flex flex-col gap-3.5 shadow-sm">
+          <div className="mb-4 rounded-[20px] bg-surface border border-line p-4 sm:p-5 flex flex-col gap-3.5 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <Mascot style={{ width: 46, height: 46, animation: 'none', flexShrink: 0 }} isWaving={true} color="blue" />
+                <Mascot style={{ width: 44, height: 44, animation: 'none', flexShrink: 0 }} isWaving={true} color="blue" />
                 <div className="min-w-0 flex-1">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-link block truncate">
                     Estande {sponsorName}
                   </span>
-                  <h1 className="m-0 text-[19px] sm:text-[21px] font-extrabold tracking-[-0.01em] text-[#EEF1FA] truncate">
+                  <h1 className="m-0 text-[18px] sm:text-[20px] font-extrabold tracking-[-0.01em] text-[#EEF1FA] truncate">
                     Oi, {firstName}!
                   </h1>
                   <p className="m-0 mt-0.5 text-[12px] sm:text-[13px] text-text-2 truncate">
@@ -929,9 +966,8 @@ export default function Sponsor() {
                 </div>
               </div>
 
-              {/* Logo Oficial da Empresa monocromática branca no fundo escuro */}
               {sponsorLogo ? (
-                <div className="shrink-0 flex items-center justify-end max-w-[120px] sm:max-w-[150px]">
+                <div className="shrink-0 flex items-center justify-end max-w-[110px] sm:max-w-[130px]">
                   <img
                     src={sponsorLogo}
                     alt={sponsorName}
@@ -944,18 +980,18 @@ export default function Sponsor() {
                 </div>
               ) : (
                 <div className="shrink-0 flex items-center justify-end">
-                  <span className="text-[12px] font-extrabold uppercase tracking-wider text-text-2 border border-line px-2.5 py-1 rounded-lg">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-text-2 border border-line px-2.5 py-1 rounded-lg">
                     {sponsorName}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Ações Rápidas integradas */}
+            {/* Ações Rápidas integradas no mobile */}
             <div className="flex items-center gap-2 pt-1 border-t border-line/60">
               <button
                 type="button"
-                className={btn('action', 'flex-1 min-w-[120px] h-10 text-[13px]')}
+                className={btn('action', 'flex-1 min-w-[110px] h-10 text-[13px]')}
                 onClick={() => setActiveTab('scanner')}
               >
                 <QrCode size={16} aria-hidden="true" />
@@ -963,8 +999,11 @@ export default function Sponsor() {
               </button>
               <button
                 type="button"
-                className={btn('secondary', 'flex-1 min-w-[100px] h-10 text-[13px]')}
-                onClick={() => setActiveTab('leads')}
+                className={btn('secondary', 'flex-1 min-w-[90px] h-10 text-[13px]')}
+                onClick={() => {
+                  setActiveTab('leads');
+                  setLeadsViewMode('crm');
+                }}
               >
                 <Users size={16} aria-hidden="true" />
                 <span>Leads ({companyLeads.length})</span>
@@ -982,12 +1021,12 @@ export default function Sponsor() {
             </div>
           </div>
         ) : (
-          <div style={{ textAlign: 'center', marginBottom: '18px' }}>
-            <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
-              {activeTab === 'leads' && 'CRM de Leads'}
+          <div style={{ textAlign: 'center', marginBottom: '14px' }}>
+            <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+              {activeTab === 'leads' && (leadsViewMode === 'roi' ? 'Relatório Executivo ROI' : 'CRM de Leads')}
               {activeTab === 'scanner' && 'Bipar Crachá'}
               {activeTab === 'agenda' && 'Programação da TechWeek'}
-              {activeTab === 'feed' && 'Feed'}
+              {activeTab === 'feed' && 'Feed da Comunidade'}
             </h1>
             <div
               style={{
@@ -995,7 +1034,7 @@ export default function Sponsor() {
                 height: '4px',
                 borderRadius: '2px',
                 background: 'linear-gradient(90deg, #2563EB, #9B7BFF)',
-                margin: '0 auto'
+                margin: '0 auto',
               }}
             />
           </div>
@@ -1006,9 +1045,63 @@ export default function Sponsor() {
       {/* ABA 1: HOME / ESTANDE                                                    */}
       {/* ========================================================================= */}
       {activeTab === 'home' && (
-        <div className="animate-fade-in flex flex-col gap-4">
-          {/* Métricas Principais (Padrão Kpi do Admin) */}
-          <div className="grid grid-cols-2 gap-2.5">
+        <div className="animate-fade-in flex flex-col gap-5">
+          {/* Welcome Hero Desktop */}
+          <div className="hidden lg:flex items-center justify-between gap-4 p-5 rounded-[22px] bg-gradient-to-r from-surface via-surface to-surface-raised border border-line shadow-xs">
+            <div className="flex items-center gap-4 min-w-0">
+              <Mascot style={{ width: 50, height: 50, animation: 'none', flexShrink: 0 }} isWaving={true} color="blue" />
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-link">
+                    Estande {sponsorName}
+                  </span>
+                  {sponsorTierInfo && (
+                    <span
+                      className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider"
+                      style={{
+                        background: sponsorTierInfo.bg,
+                        color: sponsorTierInfo.color,
+                        border: `1px solid ${sponsorTierInfo.border}`,
+                      }}
+                    >
+                      {sponsorTierInfo.label}
+                    </span>
+                  )}
+                </div>
+                <h1 className="m-0 mt-0.5 text-[22px] font-extrabold tracking-[-0.01em] text-[#EEF1FA]">
+                  {greeting(now)}, {firstName}!
+                </h1>
+                <p className="m-0 mt-0.5 text-[13px] text-text-2">
+                  {longDate(now)} · Painel de controle e captação de talentos da {sponsorName}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button
+                type="button"
+                className={btn('action', 'h-11 px-5 text-[13px] font-bold shadow-lg shadow-action/20')}
+                onClick={() => setActiveTab('scanner')}
+              >
+                <QrCode size={17} aria-hidden="true" />
+                <span>Bipar Crachá</span>
+              </button>
+              <button
+                type="button"
+                className={btn('secondary', 'h-11 px-4 text-[13px] font-bold')}
+                onClick={() => {
+                  setActiveTab('leads');
+                  setLeadsViewMode('crm');
+                }}
+              >
+                <Users size={16} aria-hidden="true" />
+                <span>Ver Leads ({companyLeads.length})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Métricas Principais (4 colunas no Desktop, 2 no Mobile) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 lg:gap-3.5">
             <Kpi
               label="Leads no Estande"
               value={companyLeads.length}
@@ -1042,262 +1135,267 @@ export default function Sponsor() {
             </Kpi>
           </div>
 
-          {/* Gamificação da Equipe do Estande (Metas, Ranking de Bipagem e Engajamento) */}
-          <SponsorTeamGamification
-            leads={companyLeads}
-            currentUserEmail={authUser?.email || userProfile?.email}
-            sponsorGoal={50}
-          />
-
-          {/* Hero Action: Bipar Crachá */}
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => setActiveTab('scanner')}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setActiveTab('scanner');
-              }
-            }}
-            className="press flex cursor-pointer items-center justify-between gap-3.5 rounded-[20px] bg-surface p-4 border border-line hover:border-link transition-colors"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-link">
-                <Sparkles size={13} aria-hidden="true" />
-                <span>Escanear Visitante</span>
-              </div>
-              <h2 className="m-0 mt-1 text-[16px] font-extrabold text-[#EEF1FA]">
-                Bipar Crachá de Aluno
-              </h2>
-              <p className="m-0 mt-0.5 text-[12px] text-text-3">
-                Aponte a câmera para o QR digital ou crachá físico Sympla.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-action text-white shadow-lg shadow-action/25"
-              aria-label="Abrir câmera de escaneamento"
-            >
-              <QrCode size={24} aria-hidden="true" />
-            </button>
-          </div>
-
-          {/* Leads Recentes no Estande ("À Mostra" diretamente na Home) */}
-          <div className="rounded-[20px] bg-surface p-4 border border-line">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users size={17} className="text-link" aria-hidden="true" />
-                <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
-                  Leads Recentes no Estande
-                </h2>
-              </div>
-              {companyLeads.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('leads')}
-                  className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
-                >
-                  <span>Ver todos ({companyLeads.length})</span>
-                  <ChevronRight size={14} aria-hidden="true" />
-                </button>
-              )}
-            </div>
-
-            {recentLeads.length === 0 ? (
-              <div className="py-6 text-center">
-                <p className="m-0 text-[13px] text-text-3">
-                  Nenhum lead coletado ainda. Aponte a câmera para os crachás no estande!
-                </p>
-                <button
-                  type="button"
-                  className={btn('action', 'mt-3 h-10 px-4 text-[12px]')}
-                  onClick={() => setActiveTab('scanner')}
-                >
-                  <QrCode size={15} aria-hidden="true" />
-                  <span>Bipar primeiro visitante</span>
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {recentLeads.map((lead) => {
-                  const ratingNum = Number(lead.rating) || 0;
-                  const affiliation = getAffiliationBadge(lead);
-                  return (
-                    <div
-                      key={lead.participantUid || lead.uid || lead.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedLead(lead)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setSelectedLead(lead);
-                        }
-                      }}
-                      className="press flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-surface-raised p-3 border border-line hover:border-line-2 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold text-white"
-                          style={{ backgroundColor: bgFor(lead.name || lead.email || 'L') }}
-                        >
-                          {initialsOf(lead.name || 'Aluno')}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="truncate text-[14px] font-bold text-[#EEF1FA]">
-                              {lead.name || 'Aluno'}
-                            </span>
-                            {affiliation && (
-                              <span
-                                className="rounded px-1.5 py-0.5 text-[10px] font-bold"
-                                style={{ color: affiliation.color, backgroundColor: affiliation.bg, border: `1px solid ${affiliation.border}` }}
-                              >
-                                {affiliation.label}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-[11px] text-text-3 mt-0.5">
-                            {lead.course && <span className="truncate">{lead.course}</span>}
-                            {ratingNum > 0 && (
-                              <span className="flex items-center gap-1 font-bold text-warn">
-                                <Star size={11} fill="currentColor" /> {ratingNum}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                        {lead.phone ? (
-                          <WhatsAppButton
-                            phone={lead.phone}
-                            participantName={lead.name}
-                            companyName={sponsorName}
-                            label="Whats"
-                            size="sm"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            className={btn('secondary', 'h-8 px-2.5 text-[11px]')}
-                            onClick={() => setSelectedLead(lead)}
-                          >
-                            Ver
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Programação de Hoje (Modo Read-Only) */}
-          <div className="rounded-[20px] bg-surface p-4 border border-line">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CalendarDays size={17} className="text-link" aria-hidden="true" />
-                <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
-                  Acontecendo na TechWeek
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveTab('agenda')}
-                className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
-              >
-                <span>Ver tudo</span>
-                <ChevronRight size={14} aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {todayActivities.length === 0 ? (
-                <p className="m-0 py-3 text-center text-[12px] text-text-3">
-                  Nenhuma atividade programada para agora.
-                </p>
-              ) : (
-                todayActivities.map((act) => (
-                  <div
-                    key={act.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedActivityModal(act)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setSelectedActivityModal(act);
-                      }
-                    }}
-                    className="press flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-surface-raised p-3 border border-line hover:border-line-2 transition-colors"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-bold text-[#EEF1FA]">
-                        {act.title}
-                      </div>
-                      <div className="mt-1 flex items-center gap-2.5 text-[11px] text-text-3">
-                        <span className="flex items-center gap-1">
-                          <Clock size={12} className="text-link" />
-                          <span>{act.time}</span>
-                        </span>
-                        {(act.room || act.location) && (
-                          <span className="flex items-center gap-1 truncate">
-                            <MapPin size={12} className="text-link" />
-                            <span className="truncate">{act.room || act.location}</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="shrink-0">
-                      <TypeTag type={act.type || 'palestra'} />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Destaque do Feed */}
-          <div className="rounded-[20px] bg-surface p-4 border border-line">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquare size={17} className="text-link" aria-hidden="true" />
-                <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
-                  Avisos & Comunidade
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveTab('feed')}
-                className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
-              >
-                <span>Abrir feed</span>
-                <ChevronRight size={14} aria-hidden="true" />
-              </button>
-            </div>
-
-            {feedPosts.slice(0, 2).map((post) => (
+          {/* Módulos Operacionais da Home em Grid Responsivo de 12 colunas no Desktop */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            {/* Coluna da Esquerda (7 colunas no Desktop): Scanner CTA + Leads Recentes */}
+            <div className="lg:col-span-7 flex flex-col gap-5">
+              {/* Hero Action: Bipar Crachá */}
               <div
-                key={post.id}
-                className="mb-2 rounded-2xl bg-surface-raised p-3 border border-line last:mb-0"
+                role="button"
+                tabIndex={0}
+                onClick={() => setActiveTab('scanner')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveTab('scanner');
+                  }
+                }}
+                className="press flex cursor-pointer items-center justify-between gap-3.5 rounded-[20px] bg-surface p-4 border border-line hover:border-link transition-colors"
               >
-                <div className="mb-1 flex items-center gap-2">
-                  <span className="text-[12px] font-bold text-[#EEF1FA]">{post.authorName || post.author}</span>
-                  {post.authorRole === 'ORGANIZATION' && (
-                    <span className="rounded bg-link/15 px-1.5 py-0.5 text-[10px] font-bold text-link">
-                      Organização
-                    </span>
+                <div className="min-w-0 flex-1">
+                  <div className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-link">
+                    <Sparkles size={13} aria-hidden="true" />
+                    <span>Escanear Visitante</span>
+                  </div>
+                  <h2 className="m-0 mt-1 text-[16px] font-extrabold text-[#EEF1FA]">
+                    Bipar Crachá de Aluno
+                  </h2>
+                  <p className="m-0 mt-0.5 text-[12px] text-text-3">
+                    Aponte a câmera para o QR digital ou crachá físico Sympla.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-action text-white shadow-lg shadow-action/25"
+                  aria-label="Abrir câmera de escaneamento"
+                >
+                  <QrCode size={24} aria-hidden="true" />
+                </button>
+              </div>
+
+              {/* Leads Recentes no Estande */}
+              <div className="rounded-[20px] bg-surface p-4 border border-line">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users size={17} className="text-link" aria-hidden="true" />
+                    <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
+                      Leads Recentes no Estande
+                    </h2>
+                  </div>
+                  {companyLeads.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('leads');
+                        setLeadsViewMode('crm');
+                      }}
+                      className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
+                    >
+                      <span>Ver todos ({companyLeads.length})</span>
+                      <ChevronRight size={14} aria-hidden="true" />
+                    </button>
                   )}
                 </div>
-                <p className="m-0 text-[12px] text-text-2 line-clamp-2 leading-relaxed">
-                  {post.content}
-                </p>
+
+                {recentLeads.length === 0 ? (
+                  <div className="py-6 text-center">
+                    <p className="m-0 text-[13px] text-text-3">
+                      Nenhum lead coletado ainda. Aponte a câmera para os crachás no estande!
+                    </p>
+                    <button
+                      type="button"
+                      className={btn('action', 'mt-3 h-10 px-4 text-[12px]')}
+                      onClick={() => setActiveTab('scanner')}
+                    >
+                      <QrCode size={15} aria-hidden="true" />
+                      <span>Bipar primeiro visitante</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {recentLeads.map((lead) => {
+                      const ratingNum = Number(lead.rating) || 0;
+                      const affiliation = getAffiliationBadge(lead);
+                      return (
+                        <div
+                          key={lead.participantUid || lead.uid || lead.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setSelectedLead(lead)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setSelectedLead(lead);
+                            }
+                          }}
+                          className="press flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-surface-raised p-3 border border-line hover:border-line-2 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold text-white"
+                              style={{ backgroundColor: bgFor(lead.name || lead.email || 'L') }}
+                            >
+                              {initialsOf(lead.name || 'Aluno')}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="truncate text-[14px] font-bold text-[#EEF1FA]">
+                                  {lead.name || 'Aluno'}
+                                </span>
+                                {affiliation && (
+                                  <span
+                                    className="rounded px-1.5 py-0.5 text-[10px] font-bold"
+                                    style={{ color: affiliation.color, backgroundColor: affiliation.bg, border: `1px solid ${affiliation.border}` }}
+                                  >
+                                    {affiliation.label}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-text-3 mt-0.5">
+                                {lead.course && <span className="truncate">{lead.course}</span>}
+                                {ratingNum > 0 && (
+                                  <span className="flex items-center gap-1 font-bold text-warn">
+                                    <Star size={11} fill="currentColor" /> {ratingNum}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                            {lead.phone ? (
+                              <WhatsAppButton
+                                phone={lead.phone}
+                                participantName={lead.name}
+                                companyName={sponsorName}
+                                label="Whats"
+                                size="sm"
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className={btn('secondary', 'h-8 px-2.5 text-[11px]')}
+                                onClick={() => setSelectedLead(lead)}
+                              >
+                                Ver
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ))}
+            </div>
+
+            {/* Coluna da Direita (5 colunas no Desktop): Programação de Hoje + Feed */}
+            <div className="lg:col-span-5 flex flex-col gap-5">
+              {/* Programação de Hoje (Modo Read-Only) */}
+              <div className="rounded-[20px] bg-surface p-4 border border-line">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays size={17} className="text-link" aria-hidden="true" />
+                    <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
+                      Acontecendo na TechWeek
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('agenda')}
+                    className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
+                  >
+                    <span>Ver tudo</span>
+                    <ChevronRight size={14} aria-hidden="true" />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {todayActivities.length === 0 ? (
+                    <p className="m-0 py-3 text-center text-[12px] text-text-3">
+                      Nenhuma atividade programada para agora.
+                    </p>
+                  ) : (
+                    todayActivities.map((act) => (
+                      <div
+                        key={act.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedActivityModal(act)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedActivityModal(act);
+                          }
+                        }}
+                        className="press flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-surface-raised p-3 border border-line hover:border-line-2 transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13px] font-bold text-[#EEF1FA]">
+                            {act.title}
+                          </div>
+                          <div className="mt-1 flex items-center gap-2.5 text-[11px] text-text-3">
+                            <span className="flex items-center gap-1">
+                              <Clock size={12} className="text-link" />
+                              <span>{act.time}</span>
+                            </span>
+                            {(act.room || act.location) && (
+                              <span className="flex items-center gap-1 truncate">
+                                <MapPin size={12} className="text-link" />
+                                <span className="truncate">{act.room || act.location}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="shrink-0">
+                          <TypeTag type={act.type || 'palestra'} />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Destaque do Feed */}
+              <div className="rounded-[20px] bg-surface p-4 border border-line">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare size={17} className="text-link" aria-hidden="true" />
+                    <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
+                      Avisos & Comunidade
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('feed')}
+                    className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
+                  >
+                    <span>Abrir feed</span>
+                    <ChevronRight size={14} aria-hidden="true" />
+                  </button>
+                </div>
+
+                {feedPosts.slice(0, 2).map((post) => (
+                  <div
+                    key={post.id}
+                    className="mb-2 rounded-2xl bg-surface-raised p-3 border border-line last:mb-0"
+                  >
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="text-[12px] font-bold text-[#EEF1FA]">{post.authorName || post.author}</span>
+                      {post.authorRole === 'ORGANIZATION' && (
+                        <span className="rounded bg-link/15 px-1.5 py-0.5 text-[10px] font-bold text-link">
+                          Organização
+                        </span>
+                      )}
+                    </div>
+                    <p className="m-0 text-[12px] text-text-2 line-clamp-2 leading-relaxed">
+                      {post.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1827,125 +1925,131 @@ export default function Sponsor() {
       {/* ABA 3: SCANNER (BIPAR CRACHÁ)                                             */}
       {/* ========================================================================= */}
       {activeTab === 'scanner' && (
-        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <section
-            aria-label="Câmera do Estande"
-            className="relative h-[340px] overflow-hidden rounded-[26px] bg-[radial-gradient(120%_90%_at_50%_40%,#2B3157_0%,#11152A_70%)]"
-          >
-            <div aria-hidden="true" className="cracha-stripes absolute inset-0" />
-            {/* Elemento de montagem do Html5Qrcode */}
-            <div id="sponsor-qr-reader" />
-
-            {scannerError ? (
-              <div className="absolute inset-0 z-[9] flex flex-col items-center justify-center gap-2 px-8 text-center">
-                <span className="mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-[#1F2A55] text-[#A9B1CC]">
-                  <CameraOff size={22} aria-hidden="true" />
-                </span>
-                <span className="text-[15px] font-extrabold text-[#EEF1FA]">Câmera indisponível</span>
-                <span className="text-[13px] leading-snug text-[#A9B1CC]">
-                  Permita o acesso à câmera nas configurações do navegador para ler o crachá dos estudantes.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => startScanner()}
-                  className="press mt-2 inline-flex h-10 items-center gap-2 rounded-xl bg-[#1A2347] px-4 text-xs font-bold text-[#EEF1FA] border border-[#1C2548]"
-                >
-                  <RefreshCw size={14} aria-hidden="true" />
-                  Tentar de novo
-                </button>
-              </div>
-            ) : (
-              <>
-                <CameraFrame live={isScannerActive && !isResolving} />
-                <div aria-live="polite" className="absolute inset-x-0 bottom-[18px] z-[9] text-center text-sm font-semibold text-[#E0E7FF]">
-                  {isResolving ? 'Lendo o código…' : isScannerActive ? 'Aponte para o crachá do participante' : 'Abrindo a câmera…'}
-                </div>
-              </>
-            )}
-
-            <button
-              type="button"
-              onClick={toggleTorch}
-              disabled={!torchSupported}
-              aria-pressed={torchSupported ? torchOn : undefined}
-              aria-label={torchSupported ? (torchOn ? 'Desligar lanterna' : 'Ligar lanterna') : 'Lanterna indisponível neste aparelho'}
-              className="press absolute top-3.5 right-3.5 z-10 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-0 bg-[rgba(10,15,36,0.55)] text-[#EEF1FA] disabled:cursor-not-allowed disabled:opacity-45"
+        <div className="animate-fade-in grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* Câmera do Estande (7 colunas no Desktop) */}
+          <div className="lg:col-span-7 flex flex-col gap-3">
+            <section
+              aria-label="Câmera do Estande"
+              className="relative h-[340px] sm:h-[400px] lg:h-[440px] overflow-hidden rounded-[26px] bg-[radial-gradient(120%_90%_at_50%_40%,#2B3157_0%,#11152A_70%)]"
             >
-              {torchOn ? <FlashlightOff size={20} aria-hidden="true" /> : <Flashlight size={20} aria-hidden="true" />}
-            </button>
-          </section>
+              <div aria-hidden="true" className="cracha-stripes absolute inset-0" />
+              {/* Elemento de montagem do Html5Qrcode */}
+              <div id="sponsor-qr-reader" />
 
-          {/* O que dá para escanear no estande */}
-          <section aria-labelledby="sponsor-scannables" style={{ marginTop: '4px' }}>
-            <h2 id="sponsor-scannables" style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#8790AE', margin: '0 0 10px' }}>
-              O que você pode escanear
-            </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#121A36', borderRadius: '16px', padding: '12px 14px', border: '1px solid #1C2548' }}>
-                <span style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(37, 99, 235, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8FA0FF', flexShrink: 0 }}>
-                  <QrCode size={20} />
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#EEF1FA' }}>Crachá Digital TechWeek</span>
-                  <span style={{ display: 'block', fontSize: '12px', color: '#8790AE', marginTop: '1px' }}>QR Code no app do estudante com perfil acadêmico e GitHub</span>
+              {scannerError ? (
+                <div className="absolute inset-0 z-[9] flex flex-col items-center justify-center gap-2 px-8 text-center">
+                  <span className="mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-[#1F2A55] text-[#A9B1CC]">
+                    <CameraOff size={22} aria-hidden="true" />
+                  </span>
+                  <span className="text-[15px] font-extrabold text-[#EEF1FA]">Câmera indisponível</span>
+                  <span className="text-[13px] leading-snug text-[#A9B1CC]">
+                    Permita o acesso à câmera nas configurações do navegador para ler o crachá dos estudantes.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => startScanner()}
+                    className="press mt-2 inline-flex h-10 items-center gap-2 rounded-xl bg-[#1A2347] px-4 text-xs font-bold text-[#EEF1FA] border border-[#1C2548]"
+                  >
+                    <RefreshCw size={14} aria-hidden="true" />
+                    Tentar de novo
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <CameraFrame live={isScannerActive && !isResolving} />
+                  <div aria-live="polite" className="absolute inset-x-0 bottom-[18px] z-[9] text-center text-sm font-semibold text-[#E0E7FF]">
+                    {isResolving ? 'Lendo o código…' : isScannerActive ? 'Aponte para o crachá do participante' : 'Abrindo a câmera…'}
+                  </div>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={toggleTorch}
+                disabled={!torchSupported}
+                aria-pressed={torchSupported ? torchOn : undefined}
+                aria-label={torchSupported ? (torchOn ? 'Desligar lanterna' : 'Ligar lanterna') : 'Lanterna indisponível neste aparelho'}
+                className="press absolute top-3.5 right-3.5 z-10 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-0 bg-[rgba(10,15,36,0.55)] text-[#EEF1FA] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {torchOn ? <FlashlightOff size={20} aria-hidden="true" /> : <Flashlight size={20} aria-hidden="true" />}
+              </button>
+            </section>
+          </div>
+
+          {/* Instruções e Simulação (5 colunas no Desktop) */}
+          <div className="lg:col-span-5 flex flex-col gap-4">
+            {/* O que dá para escanear no estande */}
+            <section aria-labelledby="sponsor-scannables" className="rounded-[22px] bg-surface p-4 border border-line">
+              <h2 id="sponsor-scannables" style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#8790AE', margin: '0 0 12px' }}>
+                O que você pode escanear
+              </h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#121A36', borderRadius: '16px', padding: '12px 14px', border: '1px solid #1C2548' }}>
+                  <span style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(37, 99, 235, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8FA0FF', flexShrink: 0 }}>
+                    <QrCode size={20} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#EEF1FA' }}>Crachá Digital TechWeek</span>
+                    <span style={{ display: 'block', fontSize: '12px', color: '#8790AE', marginTop: '1px' }}>QR Code no app do estudante com perfil acadêmico e GitHub</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#121A36', borderRadius: '16px', padding: '12px 14px', border: '1px solid #1C2548' }}>
+                  <span style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(52, 211, 153, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34D399', flexShrink: 0 }}>
+                    <GraduationCap size={20} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#EEF1FA' }}>Crachá Físico Sympla</span>
+                    <span style={{ display: 'block', fontSize: '12px', color: '#8790AE', marginTop: '1px' }}>Código impresso da credencial no pescoço do aluno</span>
+                  </div>
                 </div>
               </div>
+            </section>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#121A36', borderRadius: '16px', padding: '12px 14px', border: '1px solid #1C2548' }}>
-                <span style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(52, 211, 153, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34D399', flexShrink: 0 }}>
-                  <GraduationCap size={20} />
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#EEF1FA' }}>Crachá Físico Sympla</span>
-                  <span style={{ display: 'block', fontSize: '12px', color: '#8790AE', marginTop: '1px' }}>Código impresso da credencial no pescoço do aluno</span>
+            {/* Simulação de leitura em ambiente de desenvolvimento */}
+            {isDevMode && (
+              <div className="rounded-[22px] bg-surface p-4 border border-line text-center">
+                <div style={{ fontSize: '11px', color: '#8790AE', fontWeight: 700, marginBottom: '8px', textTransform: 'uppercase' }}>
+                  Ambiente de Testes / Simulação:
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => simulateBadgeScan('app')}
+                    disabled={isResolving}
+                    style={{ flex: 1, padding: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    <Sparkles size={14} />
+                    <span>Simular Crachá App</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => simulateBadgeScan('sympla')}
+                    disabled={isResolving}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      fontSize: '12px',
+                      background: '#1A2347',
+                      border: '1px solid #1C2548',
+                      borderRadius: '12px',
+                      color: '#EEF1FA',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <QrCode size={14} />
+                    <span>Simular Crachá Sympla</span>
+                  </button>
                 </div>
               </div>
-            </div>
-          </section>
-
-          {/* Simulação de leitura em ambiente de desenvolvimento */}
-          {isDevMode && (
-            <div style={{ textAlign: 'center', marginTop: '4px' }}>
-              <div style={{ fontSize: '11px', color: '#8790AE', fontWeight: 700, marginBottom: '8px', textTransform: 'uppercase' }}>
-                Ambiente de Testes / Simulação:
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => simulateBadgeScan('app')}
-                  disabled={isResolving}
-                  style={{ flex: 1, padding: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                >
-                  <Sparkles size={14} />
-                  <span>Simular Crachá App</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => simulateBadgeScan('sympla')}
-                  disabled={isResolving}
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    fontSize: '12px',
-                    background: '#1A2347',
-                    border: '1px solid #1C2548',
-                    borderRadius: '12px',
-                    color: '#EEF1FA',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <QrCode size={14} />
-                  <span>Simular Crachá Sympla</span>
-                </button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 
@@ -2165,166 +2269,6 @@ export default function Sponsor() {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* BARRA INFERIOR EXCLUSIVA DO PATROCINADOR (DESIGN.md)                      */}
-      {/* ========================================================================= */}
-      <nav
-        aria-label="Navegação do Patrocinador"
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1000,
-          display: 'flex',
-          justifyContent: 'center',
-          pointerEvents: 'none'
-        }}
-      >
-        <div
-          style={{
-            pointerEvents: 'auto',
-            width: '100%',
-            maxWidth: '430px',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(5, 1fr)',
-            borderTop: '1px solid #1C2548',
-            backgroundColor: '#0D1330',
-            paddingTop: '6px',
-            paddingBottom: 'max(10px, env(safe-area-inset-bottom))'
-          }}
-        >
-          {/* 1. Estande */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('home')}
-            style={{
-              background: 'none',
-              border: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              fontSize: '11px',
-              fontWeight: activeTab === 'home' ? 800 : 500,
-              color: activeTab === 'home' ? '#EEF1FA' : '#8790AE',
-              cursor: 'pointer',
-              minHeight: '48px'
-            }}
-          >
-            <Home size={20} color={activeTab === 'home' ? '#8FA0FF' : 'currentColor'} />
-            <span>Estande</span>
-          </button>
-
-          {/* 2. Leads */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('leads')}
-            style={{
-              background: 'none',
-              border: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              fontSize: '11px',
-              fontWeight: activeTab === 'leads' ? 800 : 500,
-              color: activeTab === 'leads' ? '#EEF1FA' : '#8790AE',
-              cursor: 'pointer',
-              minHeight: '48px'
-            }}
-          >
-            <Users size={20} color={activeTab === 'leads' ? '#8FA0FF' : 'currentColor'} />
-            <span>Leads</span>
-          </button>
-
-          {/* 3. Bipar (Central) */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('scanner')}
-            style={{
-              background: 'none',
-              border: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: '4px',
-              fontSize: '11px',
-              fontWeight: activeTab === 'scanner' ? 800 : 600,
-              color: activeTab === 'scanner' ? '#EEF1FA' : '#8790AE',
-              cursor: 'pointer',
-              minHeight: '48px'
-            }}
-          >
-            <span
-              style={{
-                marginTop: '-22px',
-                width: '52px',
-                height: '52px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
-                boxShadow: '0 0 0 4px #0A0F24, 0 6px 18px rgba(91,59,224,0.45)',
-                color: '#ffffff'
-              }}
-            >
-              <QrCode size={24} />
-            </span>
-            <span>Bipar</span>
-          </button>
-
-          {/* 4. Programação */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('agenda')}
-            style={{
-              background: 'none',
-              border: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              fontSize: '11px',
-              fontWeight: activeTab === 'agenda' ? 800 : 500,
-              color: activeTab === 'agenda' ? '#EEF1FA' : '#8790AE',
-              cursor: 'pointer',
-              minHeight: '48px'
-            }}
-          >
-            <CalendarDays size={20} color={activeTab === 'agenda' ? '#8FA0FF' : 'currentColor'} />
-            <span>Agenda</span>
-          </button>
-
-          {/* 5. Feed */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('feed')}
-            style={{
-              background: 'none',
-              border: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              fontSize: '11px',
-              fontWeight: activeTab === 'feed' ? 800 : 500,
-              color: activeTab === 'feed' ? '#EEF1FA' : '#8790AE',
-              cursor: 'pointer',
-              minHeight: '48px'
-            }}
-          >
-            <MessageSquare size={20} color={activeTab === 'feed' ? '#8FA0FF' : 'currentColor'} />
-            <span>Feed</span>
-          </button>
-        </div>
-      </nav>
 
       {/* ========================================================================= */}
       {/* MODAL 1: NOVO PARTICIPANTE BIPADO                                        */}
@@ -2504,6 +2448,6 @@ export default function Sponsor() {
           onClose={() => setSelectedActivityModal(null)}
         />
       )}
-    </div>
+    </SponsorShell>
   );
 }
