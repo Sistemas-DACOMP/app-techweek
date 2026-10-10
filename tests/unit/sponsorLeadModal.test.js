@@ -5,7 +5,8 @@ import SponsorLeadModal, {
   QUICK_RECRUITMENT_TAGS,
   RATING_CLASSIFICATIONS,
   getAffiliationBadge,
-  getCleanInstitution
+  getCleanInstitution,
+  formatPeriod
 } from '../../src/components/SponsorLeadModal';
 
 describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
@@ -38,7 +39,7 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
 
       // Nome da empresa intacto
       expect(html).toContain('Kanastra');
-      expect(html).toContain('Novo Lead de Estande');
+      expect(html).toContain('Novo Lead');
       // Botão fechar com aria-label e dimensão 44px
       expect(html).toContain('aria-label="Fechar modal"');
       expect(html).toContain('width:44px');
@@ -105,10 +106,10 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
         })
       );
 
-      expect(html).toContain('Detalhes do Candidato');
+      expect(html).toContain('Ficha do Candidato');
       expect(html).toContain('Copiar E-mail');
       expect(html).toContain('WhatsApp');
-      expect(html).toContain('Editar Avaliação e Notas');
+      expect(html).toContain('Editar Avaliação');
       expect(html).toContain('Fechar');
       // No Modo 1 (Ficha Estratégica de CRM), controles de edição de formulário ficam ocultos até clique explícito
       expect(html).not.toContain('Salvar Alterações');
@@ -165,7 +166,7 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
 
       // Botões do Rodapé Estratégico
       expect(html).toContain('Fechar');
-      expect(html).toContain('Editar Avaliação e Notas');
+      expect(html).toContain('Editar Avaliação');
     });
   });
 
@@ -260,6 +261,17 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
       expect(getCleanInstitution({ instituicao: 'Graduação' }, 'Graduação')).toBeNull();
       expect(getCleanInstitution({ instituicao: 'Universidade Federal de Uberlândia (UFU)' }, 'Graduação')).toBe('UFU');
       expect(getCleanInstitution({ instituicao: 'USP' }, 'Graduação')).toBe('USP');
+    });
+  });
+
+  describe('Formatação de Período Acadêmico', () => {
+    it('formata números e strings sem duplicar o sufixo "Período"', () => {
+      expect(formatPeriod(4)).toBe('4º Período');
+      expect(formatPeriod('6')).toBe('6º Período');
+      expect(formatPeriod('6º Período')).toBe('6º Período');
+      expect(formatPeriod('2º periodo')).toBe('2º periodo');
+      expect(formatPeriod(null)).toBeNull();
+      expect(formatPeriod('')).toBeNull();
     });
   });
 

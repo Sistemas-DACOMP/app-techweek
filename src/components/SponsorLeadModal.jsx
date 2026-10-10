@@ -110,6 +110,19 @@ export const getCleanInstitution = (lead, affiliationLabel) => {
 };
 
 /**
+ * Formata o período acadêmico de forma consistente, evitando repetições como "6º Períodoº Período".
+ */
+export const formatPeriod = (period) => {
+  if (!period && period !== 0) return null;
+  const pStr = String(period).trim();
+  if (!pStr) return null;
+  if (pStr.toLowerCase().includes('período') || pStr.toLowerCase().includes('periodo')) {
+    return pStr;
+  }
+  return `${pStr}º Período`;
+};
+
+/**
  * Modal completo de Lead para Patrocinadores (Design System TechWeek).
  * 
  * Suporta dois fluxos principais:
@@ -357,11 +370,13 @@ export default function SponsorLeadModal({
   };
 
   // Título e badge contextual do cabeçalho
-  const headerContextBadge = !isExistingLead
-    ? 'Novo Lead de Estande'
+  const headerTitle = !isExistingLead
+    ? 'Novo Lead'
     : isEditing
-      ? 'Editar Lead · CRM'
-      : 'Detalhes do Candidato · CRM';
+      ? 'Editar Avaliação'
+      : 'Ficha do Candidato';
+
+  const headerBadgeLabel = !isExistingLead ? 'ESTANDE' : 'CRM';
 
   return (
     <div
@@ -374,7 +389,7 @@ export default function SponsorLeadModal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '16px',
+        padding: '12px 14px',
         animation: 'fadeIn 0.2s ease-out'
       }}
       onClick={(e) => {
@@ -399,7 +414,7 @@ export default function SponsorLeadModal({
         }}
       >
         {/* ========================================================================= */}
-        {/* 1. HEADER COMPACTO (Fixo no topo com Close Button)                        */}
+        {/* 1. HEADER MODAL (Fixo no topo, hierarquia limpa e sem aperto)            */}
         {/* ========================================================================= */}
         <div
           style={{
@@ -407,68 +422,83 @@ export default function SponsorLeadModal({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '10px',
-            padding: '16px 20px 12px',
-            borderBottom: '1px solid rgba(28, 37, 72, 0.6)'
+            gap: '12px',
+            padding: '14px 18px',
+            borderBottom: '1px solid rgba(28, 37, 72, 0.6)',
+            background: 'rgba(10, 15, 36, 0.6)'
           }}
         >
+          {/* Informações de Título e Empresa (Hierarquia Vertical Desafogada) */}
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
               flex: 1,
-              minWidth: 0
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '3px'
             }}
           >
-            {/* Badge de contexto */}
-            <div
-              style={{
-                padding: '4px 10px',
-                borderRadius: '20px',
-                background: 'rgba(37, 99, 235, 0.15)',
-                border: '1px solid rgba(56, 189, 248, 0.4)',
-                color: '#8FA0FF',
-                fontSize: '11px',
-                fontWeight: '800',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                flexShrink: 0
-              }}
-            >
-              <Sparkles size={12} />
-              <span>{headerContextBadge}</span>
+            {/* Linha 1: Título e Badge Semântico */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sparkles size={14} color="#8FA0FF" style={{ flexShrink: 0 }} />
+              <h2
+                style={{
+                  fontSize: '15px',
+                  fontWeight: '800',
+                  color: '#EEF1FA',
+                  margin: 0,
+                  lineHeight: 1.2,
+                  letterSpacing: '-0.01em',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {headerTitle}
+              </h2>
+              <span
+                style={{
+                  padding: '2px 7px',
+                  borderRadius: '6px',
+                  background: 'rgba(37, 99, 235, 0.18)',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  color: '#8FA0FF',
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  letterSpacing: '0.04em',
+                  lineHeight: 1,
+                  flexShrink: 0
+                }}
+              >
+                {headerBadgeLabel}
+              </span>
             </div>
 
-            {/* Nome da Empresa em pill dedicada */}
+            {/* Linha 2: Empresa Patrocinadora (Subtítulo com ícone e respiro total) */}
             <div
               style={{
-                fontSize: '11px',
-                fontWeight: '700',
-                color: '#A9B1CC',
-                display: 'inline-flex',
+                display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
-                background: '#1A2347',
-                padding: '3px 8px',
-                borderRadius: '10px',
-                border: '1px solid #1C2548',
-                maxWidth: '180px',
-                overflow: 'hidden'
+                gap: '5px',
+                fontSize: '12px',
+                color: '#A9B1CC',
+                fontWeight: '600',
+                minWidth: 0
               }}
               title={sponsorCompanyName}
             >
               <Building2 size={12} color="#8FA0FF" style={{ flexShrink: 0 }} />
-              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
+              >
                 {sponsorCompanyName}
               </span>
             </div>
           </div>
 
-          {/* Botão de Fechar com touch target de 44px */}
+          {/* Botão de Fechar com Touch Target Confortável (44px) */}
           <button
             type="button"
             onClick={onClose}
@@ -649,28 +679,28 @@ export default function SponsorLeadModal({
               <div
                 style={{
                   background: '#1A2347',
-                  borderRadius: '18px',
-                  padding: '16px',
+                  borderRadius: '16px',
+                  padding: '14px',
                   border: '1px solid #1C2548',
                   marginBottom: '14px',
                   display: 'flex',
                   alignItems: 'flex-start',
-                  gap: '14px'
+                  gap: '12px'
                 }}
               >
                 {/* Avatar com foto ou iniciais em gradiente */}
                 <div
                   style={{
-                    width: '52px',
-                    height: '52px',
-                    borderRadius: '16px',
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '14px',
                     background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: '#FFFFFF',
                     fontWeight: '800',
-                    fontSize: '20px',
+                    fontSize: '18px',
                     flexShrink: 0,
                     boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
                   }}
@@ -679,7 +709,7 @@ export default function SponsorLeadModal({
                     <img
                       src={participant.avatarUrl}
                       alt=""
-                      style={{ width: '100%', height: '100%', borderRadius: '16px', objectFit: 'cover' }}
+                      style={{ width: '100%', height: '100%', borderRadius: '14px', objectFit: 'cover' }}
                     />
                   ) : (
                     (participant.name || 'P').charAt(0).toUpperCase()
@@ -716,7 +746,7 @@ export default function SponsorLeadModal({
                       <GraduationCap size={14} color="#8FA0FF" style={{ flexShrink: 0 }} />
                       <span>
                         {participant.course}
-                        {participant.period ? ` · ${participant.period}º Período` : ''}
+                        {participant.period ? ` · ${formatPeriod(participant.period)}` : ''}
                         {cleanInstitution ? ` · ${cleanInstitution}` : ''}
                       </span>
                     </div>
@@ -815,71 +845,102 @@ export default function SponsorLeadModal({
                   </div>
                 )}
 
-                {/* Ações de E-mail: Copiar e Enviar */}
+                {/* Ações de E-mail: Exibição Elegante + Copiar e Abrir */}
                 {participant.email && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', marginBottom: '8px' }}>
-                    <button
-                      type="button"
-                      onClick={handleCopyEmail}
+                  <div
+                    style={{
+                      background: '#1A2347',
+                      border: '1px solid #1C2548',
+                      borderRadius: '14px',
+                      padding: '10px 12px',
+                      marginBottom: '8px'
+                    }}
+                  >
+                    <div
                       style={{
-                        minHeight: '44px',
-                        background: emailCopied ? 'rgba(16, 185, 129, 0.2)' : '#1A2347',
-                        border: emailCopied ? '1px solid #10B981' : '1px solid #1C2548',
-                        borderRadius: '12px',
-                        color: emailCopied ? '#34D399' : '#EEF1FA',
-                        fontSize: '12px',
-                        fontWeight: '700',
-                        cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      {emailCopied ? <CheckCircle2 size={15} /> : <Copy size={15} />}
-                      <span>{emailCopied ? 'E-mail Copiado!' : `Copiar E-mail (${participant.email})`}</span>
-                    </button>
-
-                    <a
-                      href={`mailto:${participant.email}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        minHeight: '44px',
-                        padding: '0 14px',
-                        background: '#1A2347',
-                        border: '1px solid #1C2548',
-                        borderRadius: '12px',
-                        color: '#8FA0FF',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
                         gap: '6px',
                         fontSize: '12px',
-                        fontWeight: '700',
-                        textDecoration: 'none'
+                        color: '#A9B1CC',
+                        marginBottom: '8px',
+                        wordBreak: 'break-all'
                       }}
-                      title="Abrir aplicativo de e-mail"
                     >
-                      <Mail size={15} />
-                      <span>E-mail</span>
-                      <ExternalLink size={13} />
-                    </a>
+                      <Mail size={13} color="#8FA0FF" style={{ flexShrink: 0 }} />
+                      <span style={{ fontWeight: '600' }}>{participant.email}</span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={handleCopyEmail}
+                        style={{
+                          minHeight: '44px',
+                          background: emailCopied ? 'rgba(16, 185, 129, 0.2)' : '#121A36',
+                          border: emailCopied ? '1px solid #10B981' : '1px solid #1C2548',
+                          borderRadius: '10px',
+                          color: emailCopied ? '#34D399' : '#EEF1FA',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          transition: 'all 0.2s ease',
+                          padding: '0 8px'
+                        }}
+                      >
+                        {emailCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                        <span>{emailCopied ? 'E-mail Copiado!' : 'Copiar E-mail'}</span>
+                      </button>
+
+                      <a
+                        href={`mailto:${participant.email}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          minHeight: '44px',
+                          background: '#121A36',
+                          border: '1px solid #1C2548',
+                          borderRadius: '10px',
+                          color: '#8FA0FF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          textDecoration: 'none',
+                          padding: '0 8px'
+                        }}
+                        title="Abrir aplicativo de e-mail"
+                      >
+                        <ExternalLink size={13} />
+                        <span>Abrir E-mail</span>
+                      </a>
+                    </div>
                   </div>
                 )}
 
-                {/* Links Profissionais (GitHub & LinkedIn) */}
+                {/* Links Profissionais (GitHub & LinkedIn em Grid Equilibrado) */}
                 {(githubUrl || linkedinUrl) && (
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: githubUrl && linkedinUrl ? '1fr 1fr' : '1fr',
+                      gap: '8px'
+                    }}
+                  >
                     {githubUrl && (
                       <a
                         href={githubUrl}
                         target="_blank"
                         rel="noopener noreferrer"
+                        title={participant.github ? `GitHub: @${participant.github.replace(/^@/, '').trim()}` : 'Ver GitHub'}
                         style={{
-                          flex: 1,
-                          minHeight: '38px',
+                          minHeight: '44px',
                           background: '#1A2347',
                           border: '1px solid #1C2548',
                           borderRadius: '10px',
@@ -891,11 +952,11 @@ export default function SponsorLeadModal({
                           fontSize: '12px',
                           fontWeight: '700',
                           textDecoration: 'none',
-                          padding: '6px 12px'
+                          padding: '8px 12px'
                         }}
                       >
                         <GitHubIcon size={14} color="#8FA0FF" />
-                        <span>GitHub (@{participant.github.replace(/^@/, '').trim()})</span>
+                        <span>GitHub</span>
                         <ExternalLink size={12} />
                       </a>
                     )}
@@ -905,9 +966,9 @@ export default function SponsorLeadModal({
                         href={linkedinUrl}
                         target="_blank"
                         rel="noopener noreferrer"
+                        title="Ver Perfil no LinkedIn"
                         style={{
-                          flex: 1,
-                          minHeight: '38px',
+                          minHeight: '44px',
                           background: '#1A2347',
                           border: '1px solid #1C2548',
                           borderRadius: '10px',
@@ -919,11 +980,11 @@ export default function SponsorLeadModal({
                           fontSize: '12px',
                           fontWeight: '700',
                           textDecoration: 'none',
-                          padding: '6px 12px'
+                          padding: '8px 12px'
                         }}
                       >
                         <LinkedInIcon size={14} color="#60A5FA" />
-                        <span>Ver LinkedIn</span>
+                        <span>LinkedIn</span>
                         <ExternalLink size={12} />
                       </a>
                     )}
@@ -1007,7 +1068,7 @@ export default function SponsorLeadModal({
               )}
             </div>
 
-            {/* STICKY FOOTER DO MODO CRM (FECHAR + EDITAR AVALIAÇÃO E NOTAS) */}
+            {/* STICKY FOOTER DO MODO CRM (FECHAR + EDITAR AVALIAÇÃO) */}
             <div
               style={{
                 flexShrink: 0,
@@ -1016,7 +1077,7 @@ export default function SponsorLeadModal({
                 background: 'rgba(10, 15, 36, 0.95)',
                 backdropFilter: 'blur(8px)',
                 display: 'grid',
-                gridTemplateColumns: '1fr 1.6fr',
+                gridTemplateColumns: '1fr 1.25fr',
                 gap: '10px',
                 alignItems: 'center'
               }}
@@ -1044,7 +1105,7 @@ export default function SponsorLeadModal({
                 Fechar
               </button>
 
-              {/* Botão Ação Editar Avaliação e Notas */}
+              {/* Botão Ação Editar Avaliação */}
               <button
                 type="button"
                 onClick={() => {
@@ -1070,7 +1131,7 @@ export default function SponsorLeadModal({
                 }}
               >
                 <Pencil size={15} />
-                <span>Editar Avaliação e Notas</span>
+                <span>Editar Avaliação</span>
               </button>
             </div>
           </div>
@@ -1167,7 +1228,7 @@ export default function SponsorLeadModal({
                       <GraduationCap size={13} color="#8FA0FF" style={{ flexShrink: 0 }} />
                       <span>
                         {participant.course}
-                        {participant.period ? ` · ${participant.period}º Período` : ''}
+                        {participant.period ? ` · ${formatPeriod(participant.period)}` : ''}
                         {cleanInstitution ? ` · ${cleanInstitution}` : ''}
                       </span>
                     </div>
