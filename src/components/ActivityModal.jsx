@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Loader2, ScanLine, User } from 'lucide-react';
+import { X, Check, Loader2, ScanLine, User, Star } from 'lucide-react';
 import { useScrollLock } from '../hooks/useScrollLock';
 import ConfirmModal from './ConfirmModal';
+import ActivityFeedbackModal from './ActivityFeedbackModal';
+import { isActivityEvaluated } from '../lib/liveOpsService';
 import { CATEGORY_STYLES } from './Badge';
 import '../styles/agenda.css';
 
@@ -96,6 +98,12 @@ export default function ActivityModal({
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [evaluated, setEvaluated] = useState(() => isActivityEvaluated(activity?.id));
+
+  useEffect(() => {
+    setEvaluated(isActivityEvaluated(activity?.id));
+  }, [activity?.id]);
 
   const touchStartY = useRef(0);
   const isDragging = useRef(false);
@@ -210,10 +218,27 @@ export default function ActivityModal({
     );
   } else if (status === 'COMPLETED') {
     footer = (
-      <p className="flex min-h-[54px] items-center justify-center gap-2 rounded-[14px] bg-surface-raised text-[15px] font-extrabold text-ok" role="status">
-        <Check size={18} strokeWidth={3} aria-hidden="true" />
-        Presença confirmada
-      </p>
+      <div className="flex flex-col gap-2.5">
+        <div className="flex min-h-12 items-center justify-center gap-2 rounded-[14px] bg-[rgba(111,216,166,0.12)] text-[14px] font-bold text-ok" role="status">
+          <Check size={18} strokeWidth={3} aria-hidden="true" />
+          Presença confirmada
+        </div>
+        {evaluated ? (
+          <div className="flex items-center justify-center gap-2 rounded-[14px] bg-surface-raised py-2.5 text-xs font-semibold text-text-3">
+            <Star size={14} className="fill-gold text-gold" />
+            Avaliação enviada (+10 XP)
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowFeedbackModal(true)}
+            className="btn btn-primary btn-block min-h-[48px] text-[14px] font-bold flex items-center justify-center gap-2 bg-[linear-gradient(135deg,#7C3AED,#3B82F6)] hover:brightness-110 shadow-md"
+          >
+            <Star size={16} className="fill-white text-white" />
+            Avaliar palestra (+10 XP)
+          </button>
+        )}
+      </div>
     );
   } else if (status === 'CHECKED_IN') {
     footer = (
@@ -416,6 +441,19 @@ export default function ActivityModal({
           setConfirmingCancel(false);
         }}
       />
+      {showFeedbackModal && (
+        <ActivityFeedbackModal
+          isOpen={true}
+          activity={activity}
+          onClose={() => {
+            setShowFeedbackModal(false);
+            setEvaluated(isActivityEvaluated(activity?.id));
+          }}
+          onSuccess={() => {
+            setEvaluated(true);
+          }}
+        />
+      )}
     </>,
     document.body
   );

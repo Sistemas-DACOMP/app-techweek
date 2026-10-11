@@ -25,6 +25,7 @@ import {
   capacityOf, EmptyState, PageHead
 } from './ui';
 import { SPONSORS_CONFIG, TIER_STYLE } from '../../components/PassportTab';
+import ActivityBroadcastModal from '../../components/ActivityBroadcastModal';
 import {
   releaseWalkinSeats,
   getWalkinReleases,
@@ -481,6 +482,7 @@ export default function AdminDados({
   });
   const [hoveredHourSlot, setHoveredHourSlot] = useState(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [broadcastModalActivity, setBroadcastModalActivity] = useState(null);
   const chartId = useId();
 
   // Estados dos Pilares de Operações em Tempo Real (Live Ops)
@@ -1215,8 +1217,17 @@ export default function AdminDados({
                     </div>
                   </div>
 
-                  {onOpenTelao && (
-                    <div className="mt-3 flex justify-end">
+                  <div className="mt-3 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastModalActivity(act)}
+                      className="press inline-flex items-center gap-1.5 text-[12px] font-bold text-text-2 hover:text-link"
+                      title="Enviar aviso push/feed aos inscritos"
+                    >
+                      <Radio size={14} aria-hidden="true" />
+                      Avisar Inscritos
+                    </button>
+                    {onOpenTelao && (
                       <button
                         type="button"
                         onClick={() => onOpenTelao(act)}
@@ -1225,8 +1236,8 @@ export default function AdminDados({
                         <Monitor size={14} aria-hidden="true" />
                         Projetar Telão
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -1473,6 +1484,17 @@ export default function AdminDados({
                       <span className="text-[11px] text-text-3">{talk.ratingsCount} avaliações</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const fullAct = activities.find((a) => a.id === talk.activityId) || { id: talk.activityId, title: talk.title };
+                          setBroadcastModalActivity(fullAct);
+                        }}
+                        className="press inline-flex items-center gap-1 rounded-lg border border-line bg-surface-raised px-2 py-1 text-[11px] font-bold text-text-2 hover:text-link hover:border-link"
+                        title="Enviar comunicado aos inscritos desta palestra"
+                      >
+                        <Radio size={12} className="text-link" /> Avisar
+                      </button>
                       <span className="flex items-center gap-1 rounded-lg bg-warn/15 px-2 py-0.5 text-[12px] font-black text-warn">
                         <Star size={12} fill="currentColor" /> {talk.avgRating}
                       </span>
@@ -2018,6 +2040,14 @@ export default function AdminDados({
             </form>
           </div>
         </div>
+      )}
+
+      {broadcastModalActivity && (
+        <ActivityBroadcastModal
+          activity={broadcastModalActivity}
+          onClose={() => setBroadcastModalActivity(null)}
+          onSuccess={() => setBroadcastModalActivity(null)}
+        />
       )}
     </div>
   );

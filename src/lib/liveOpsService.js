@@ -11,11 +11,14 @@
  * 5. Governança & Auditoria UFU (Regra 75% de Carga Horária)
  */
 
+import { addNotification } from './notifications';
+
 const INCIDENTS_STORAGE_KEY = 'techweek_live_incidents_v2';
 const WALKIN_STORAGE_KEY = 'techweek_walkin_releases_v2';
 const SPONSOR_BOOSTS_KEY = 'techweek_sponsor_boosts_v2';
 const MICROPULSE_KEY = 'techweek_micropulse_ratings_v2';
 const STAGE_MODE_KEY = 'techweek_stage_mode_v2';
+const ACTIVITY_BROADCASTS_KEY = 'techweek_activity_broadcasts_v2';
 
 // Fallback em memória para ambientes sem localStorage (SSR, Node/Vitest)
 const memoryStorage = new Map();
@@ -51,6 +54,7 @@ export function resetLiveOpsStorage() {
       window.localStorage.removeItem(SPONSOR_BOOSTS_KEY);
       window.localStorage.removeItem(MICROPULSE_KEY);
       window.localStorage.removeItem(STAGE_MODE_KEY);
+      window.localStorage.removeItem(ACTIVITY_BROADCASTS_KEY);
     }
   } catch {
     // ignore
@@ -381,25 +385,65 @@ export function getMicroPulseRatings() {
   }
 }
 
+export const SEMANTIC_RATING_LABELS = {
+  1: 'Abaixo do esperado',
+  2: 'Regular',
+  3: 'Boa',
+  4: 'Excelente',
+  5: 'Espetacular!',
+};
+
+export const PERCEPTION_TAGS = [
+  'Didática Clara',
+  'Mão na Massa / Prático',
+  'Inovador & Tendências',
+  'Slides Excelentes',
+  'Ritmo Rápido',
+  'Conteúdo Denso',
+];
+
+export function isActivityEvaluated(activityId, userId = 'anon') {
+  if (!activityId) return false;
+  return !!storageGet(`tw_activity_evaluated_${activityId}_${userId}`);
+}
+
+export function markActivityEvaluated(activityId, userId = 'anon') {
+  if (!activityId) return;
+  storageSet(`tw_activity_evaluated_${activityId}_${userId}`, 'true');
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('techweek_activity_evaluated', { detail: { activityId, userId } }));
+    } catch {
+      // ignore
+    }
+  }
+}
+
 export function submitMicroPulseRating({
   activityId,
   activityTitle = '',
   speaker = '',
   rating = 5,
-  reaction = 'love',
+  reaction = null,
   tag = 'Didática Clara',
+  tags = [],
   comment = '',
   userCourse = 'Ciência da Computação',
 }) {
   const current = getMicroPulseRatings();
+  const selectedTags = Array.isArray(tags) && tags.length > 0 ? tags : (tag ? [tag] : ['Didática Clara']);
+  const numericRating = Math.max(1, Math.min(5, Number(rating) || 5));
+  const autoReaction = numericRating >= 4 ? 'love' : numericRating === 3 ? 'good' : 'poor';
+
   const entry = {
     id: `mp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     activityId: activityId || 'geral',
     activityTitle: activityTitle || 'Atividade TechWeek',
     speaker: speaker || 'Palestrante',
-    rating: Math.max(1, Math.min(5, Number(rating) || 5)),
-    reaction: reaction || 'love',
-    tag: tag || 'Excelente Conteúdo',
+    rating: numericRating,
+    reaction: reaction || autoReaction,
+    tag: selectedTags[0] || 'Didática Clara',
+    tags: selectedTags,
     comment: (comment || '').trim(),
     userCourse,
     createdAt: new Date().toISOString(),
@@ -461,8 +505,12 @@ export function calculateMicroPulseAnalytics(activitiesOrRatings = [], maybeActi
     }
     actMap[aid].ratingsCount += 1;
     actMap[aid].ratingsSum += (r.rating || 5);
-    if (r.tag) {
-      actMap[aid].tagsCount[r.tag] = (actMap[aid].tagsCount[r.tag] || 0) + 1;
+
+    const reviewTags = Array.isArray(r.tags) && r.tags.length > 0 ? r.tags : (r.tag ? [r.tag] : []);
+    for (const t of reviewTags) {
+      if (t) {
+        actMap[aid].tagsCount[t] = (actMap[aid].tagsCount[t] || 0) + 1;
+      }
     }
   }
 
@@ -484,12 +532,15 @@ export function calculateMicroPulseAnalytics(activitiesOrRatings = [], maybeActi
   // Frequência global de Tags
   const tagTotals = {};
   for (const r of allRatings) {
-    if (r.tag) {
-      tagTotals[r.tag] = (tagTotals[r.tag] || 0) + 1;
+    const reviewTags = Array.isArray(r.tags) && r.tags.length > 0 ? r.tags : (r.tag ? [r.tag] : []);
+    for (const t of reviewTags) {
+      if (t) {
+        tagTotals[t] = (tagTotals[t] || 0) + 1;
+      }
     }
   }
   const topTags = Object.entries(tagTotals)
-    .map(([name, count]) => ({ name, count, pct: Math.round((count / totalReviews) * 100) }))
+    .map(([name, count]) => ({ name, count, pct: Math.round((count / Math.max(1, totalReviews)) * 100) }))
     .sort((a, b) => b.count - a.count);
 
   return {
@@ -617,3 +668,100 @@ export function exportUfuAuditCsv(auditResult) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+// -----------------------------------------------------------------------------
+// 6. TARGETED ACTIVITY BROADCAST (AVISOS SEGMENTADOS POR ATIVIDADE)
+// -----------------------------------------------------------------------------
+
+export const BROADCAST_TEMPLATES = [
+  {
+    id: 'start_10m',
+    name: 'Início em 10 min',
+    title: 'Início em 10 minutos',
+    message: 'A atividade "{titulo}" começará em 10 minutos no local {local}. Dirija-se à sala para garantir seu assento!',
+  },
+  {
+    id: 'room_change',
+    name: 'Mudança de Sala',
+    title: 'Atenção: Mudança de Sala',
+    message: 'Aviso importante: a atividade "{titulo}" foi transferida para {local}. Aguardamos você lá!',
+  },
+  {
+    id: 'materials',
+    name: 'Material & Slides',
+    title: 'Slides & Material Disponíveis',
+    message: 'Os slides e materiais de apoio de "{titulo}" já estão disponíveis para consulta.',
+  },
+  {
+    id: 'custom',
+    name: 'Comunicado Livre',
+    title: 'Comunicado da Coordenação',
+    message: '',
+  },
+];
+
+export function getActivityBroadcasts(activityId = null) {
+  try {
+    const raw = storageGet(ACTIVITY_BROADCASTS_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    if (!activityId) return list;
+    return list.filter((b) => b.activityId === activityId);
+  } catch {
+    return [];
+  }
+}
+
+export function sendActivityBroadcast({
+  activityId,
+  activityTitle = '',
+  location = '',
+  targetAudience = 'all', // 'all' | 'checked_in' | 'pending'
+  title = '',
+  message = '',
+  urgent = false,
+}) {
+  const current = getActivityBroadcasts();
+  const audienceLabels = {
+    all: 'Todos os Inscritos',
+    checked_in: 'Apenas Presentes',
+    pending: 'Apenas Pendentes',
+  };
+
+  const broadcast = {
+    id: `bc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    activityId,
+    activityTitle: activityTitle || 'Atividade TechWeek',
+    location: location || 'Sala da Atividade',
+    targetAudience,
+    audienceLabel: audienceLabels[targetAudience] || 'Inscritos',
+    title: title || `Aviso: ${activityTitle || 'Atividade'}`,
+    message: (message || '').trim(),
+    urgent: !!urgent,
+    sentAt: new Date().toISOString(),
+  };
+
+  const updated = [broadcast, ...current];
+  storageSet(ACTIVITY_BROADCASTS_KEY, JSON.stringify(updated));
+
+  try {
+    addNotification({
+      title: broadcast.title,
+      message: broadcast.message,
+      type: 'lecture',
+      actionUrl: `/agenda?act=${activityId}`,
+      actionLabel: 'Ver atividade',
+      urgent: broadcast.urgent,
+      activityId,
+      targetAudience,
+    });
+  } catch {
+    // fallback
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('techweek_broadcast_sent', { detail: broadcast }));
+  }
+
+  return broadcast;
+}
+

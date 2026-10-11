@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Plus, Monitor, Pencil, QrCode, Trash2, Download, MapPin, Search } from 'lucide-react';
+import { Plus, Monitor, Pencil, QrCode, Trash2, Download, MapPin, Search, Radio } from 'lucide-react';
 import Mascot from '../../components/Mascot';
+import ActivityBroadcastModal from '../../components/ActivityBroadcastModal';
 import { LinkedinIcon, GithubIcon, InstagramIcon } from './SocialIcons';
 import {
   btn, ICON_BTN, Chip, PageHead, TypeTag, OccBar, MoreMenu, EmptyState, typeColor, typeLabel, sessionsOf, firstDate, startTime,
@@ -59,6 +60,7 @@ export default function AdminProgramacao(p) {
     locations, onNew, onEdit, onDelete, onTelao, onQr, onExport, onNewSpeaker, onEditSpeaker, onDeleteSpeaker, onNewLocation, photoFallback,
   } = p;
   const [day, setDay] = useState('ALL');
+  const [broadcastAct, setBroadcastAct] = useState(null);
   const now = new Date();
 
   const types = useMemo(() => [...new Set(activities.map((a) => (a.type || 'palestra').toLowerCase()))], [activities]);
@@ -72,6 +74,7 @@ export default function AdminProgramacao(p) {
   const tipFull = tipActs.find((a) => { const c = capacityOf(a); return c.limited && c.taken >= c.total; });
 
   const menuFor = (act) => [
+    { label: 'Avisar inscritos (Push/Feed)', icon: Radio, onClick: () => setBroadcastAct(act) },
     { label: 'QR de check-in', icon: QrCode, onClick: () => onQr(act) },
     { label: 'Excluir atividade', icon: Trash2, onClick: () => onDelete(act.id, act.title), danger: true },
   ];
@@ -177,6 +180,7 @@ export default function AdminProgramacao(p) {
                       <td className="px-3 py-4"><PresenceTag act={act} /></td>
                       <td className="whitespace-nowrap px-3 py-4 text-right">
                         <span className="inline-flex gap-1.5">
+                          <button type="button" aria-label={`Avisar inscritos de ${act.title}`} title="Avisar inscritos (Push/Feed)" className={ICON_BTN} onClick={() => setBroadcastAct(act)}><Radio size={16} aria-hidden="true" /></button>
                           <button type="button" aria-label={`Abrir telão de ${act.title}`} title="Abrir telão" className={ICON_BTN} onClick={() => onTelao(act)}><Monitor size={16} aria-hidden="true" /></button>
                           <button type="button" aria-label={`Editar ${act.title}`} title="Editar" className={ICON_BTN} onClick={() => onEdit(act)}><Pencil size={16} aria-hidden="true" /></button>
                           <MoreMenu items={menuFor(act)} />
@@ -297,6 +301,14 @@ export default function AdminProgramacao(p) {
             ))}
           </div>
         </>
+      )}
+
+      {broadcastAct && (
+        <ActivityBroadcastModal
+          activity={broadcastAct}
+          onClose={() => setBroadcastAct(null)}
+          onSuccess={() => setBroadcastAct(null)}
+        />
       )}
     </>
   );

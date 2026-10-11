@@ -17,6 +17,12 @@ import {
   setStageDisplayMode,
   calculateUfuExtensionAudit,
   resetLiveOpsStorage,
+  sendActivityBroadcast,
+  getActivityBroadcasts,
+  isActivityEvaluated,
+  markActivityEvaluated,
+  SEMANTIC_RATING_LABELS,
+  PERCEPTION_TAGS,
 } from '../../src/lib/liveOpsService';
 
 describe('liveOpsService - Live Operations & Event Steering Engine', () => {
@@ -191,4 +197,56 @@ describe('liveOpsService - Live Operations & Event Steering Engine', () => {
       expect(bruno.statusLabel).toBe('FREQUÊNCIA INSUFICIENTE');
     });
   });
+
+  describe('Pilar 6: Avisos Segmentados por Atividade & Avaliação Pós-Presença', () => {
+    it('dispara avisos segmentados com audiência específica e templates', () => {
+      const bc = sendActivityBroadcast({
+        activityId: 'act_cloud_2026',
+        activityTitle: 'Oficina de Kubernetes & Cloud',
+        location: 'Lab 2 (Bloco 5R)',
+        targetAudience: 'checked_in',
+        title: 'Material Adicional',
+        message: 'O link do repositório está no telão.',
+        urgent: true,
+      });
+
+      expect(bc.id).toBeDefined();
+      expect(bc.activityId).toBe('act_cloud_2026');
+      expect(bc.targetAudience).toBe('checked_in');
+      expect(bc.audienceLabel).toBe('Apenas Presentes');
+      expect(bc.urgent).toBe(true);
+
+      const list = getActivityBroadcasts('act_cloud_2026');
+      expect(list.length).toBeGreaterThanOrEqual(1);
+      expect(list[0].title).toBe('Material Adicional');
+
+      const allList = getActivityBroadcasts();
+      expect(allList.some((b) => b.id === bc.id)).toBe(true);
+    });
+
+    it('gerencia status de avaliação do participante por atividade', () => {
+      expect(isActivityEvaluated('act_99', 'user_123')).toBe(false);
+      markActivityEvaluated('act_99', 'user_123');
+      expect(isActivityEvaluated('act_99', 'user_123')).toBe(true);
+      expect(isActivityEvaluated('act_outro', 'user_123')).toBe(false);
+    });
+
+    it('submete avaliação com múltiplas tags de percepção e rótulo semântico', () => {
+      const review = submitMicroPulseRating({
+        activityId: 'act_99',
+        activityTitle: 'Palestra Arquitetura de Microsserviços',
+        speaker: 'Fábio Silva',
+        rating: 5,
+        tags: [PERCEPTION_TAGS[0], PERCEPTION_TAGS[1]],
+        comment: 'Didática fantástica!',
+      });
+
+      expect(review.rating).toBe(5);
+      expect(review.tags).toContain('Didática Clara');
+      expect(review.tags).toContain('Mão na Massa / Prático');
+      expect(SEMANTIC_RATING_LABELS[5]).toBe('Espetacular!');
+      expect(SEMANTIC_RATING_LABELS[2]).toBe('Regular');
+    });
+  });
 });
+
