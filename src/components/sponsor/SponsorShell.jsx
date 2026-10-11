@@ -57,7 +57,7 @@ const MENU_GROUPS = [
       { key: 'home', label: 'Visão Geral', icon: LayoutDashboard },
       { key: 'leads', label: 'Leads do Estande', icon: Users, badgeKey: 'leads' },
       { key: 'settings', label: 'Mensagens & Tags', icon: SlidersHorizontal, tag: 'Novo' },
-      { key: 'roi', label: 'Relatório Executivo ROI', icon: TrendingUp, tag: 'ROI' },
+      { key: 'roi', label: 'Relatório Executivo', icon: TrendingUp, tag: 'ROI' },
       { key: 'scanner', label: 'Scanner de Crachá', icon: QrCode, tag: 'Bipar' },
     ],
   },
@@ -164,7 +164,7 @@ export default function SponsorShell({
       {/* ========================================================================= */}
       <aside
         aria-label="Menu do Patrocinador"
-        className="fixed inset-y-0 left-0 z-30 hidden h-dvh w-[260px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-line bg-nav px-3.5 py-5 lg:flex print:!hidden"
+        className="fixed inset-y-0 left-0 z-30 hidden h-dvh w-[280px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-line bg-nav px-3.5 py-5 lg:flex print:!hidden"
       >
         {/* Topo da Sidebar: Tech Week 2026 */}
         <button
@@ -254,10 +254,10 @@ export default function SponsorShell({
                     {/* Badge ou Tag de Apoio */}
                     {badgeKey === 'leads' && (
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold transition-colors ${
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold shrink-0 transition-colors ${
                           isCurrent
-                            ? 'bg-link/20 text-link'
-                            : 'bg-surface-raised text-text-3'
+                            ? 'bg-link/25 text-link border border-link/40'
+                            : 'bg-surface-raised border border-line text-text-3'
                         }`}
                       >
                         {leadsCount}
@@ -266,10 +266,10 @@ export default function SponsorShell({
 
                     {tag && !badgeKey && (
                       <span
-                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-extrabold tracking-wider uppercase ${
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold tracking-wider uppercase shrink-0 transition-colors ${
                           isCurrent
-                            ? 'bg-link text-white'
-                            : 'bg-surface-raised text-text-4'
+                            ? 'bg-link text-white shadow-xs'
+                            : 'bg-surface-raised border border-line text-text-3'
                         }`}
                       >
                         {tag}
@@ -292,7 +292,7 @@ export default function SponsorShell({
               size={36}
             />
             <div className="min-w-0 flex-1">
-              <span className="block truncate text-[13px] font-bold text-text">{rawName}</span>
+              <span className="block truncate text-[13px] font-bold text-text" title={rawName}>{rawName}</span>
               <span className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: 'var(--role-patrocinador)' }}>
                 <span>Patrocinador</span>
                 <span className="text-text-4 font-normal">·</span>
@@ -325,7 +325,7 @@ export default function SponsorShell({
       {/* ========================================================================= */}
       {/* ÁREA PRINCIPAL DE CONTEÚDO                                               */}
       {/* ========================================================================= */}
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-[260px] print:!pl-0">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-[280px] print:!pl-0">
         {/* Topo Desktop (≥1024px): Contexto + Atalhos Rápidos + Live Status */}
         <header className="hidden items-center justify-between gap-4 border-b border-line/60 bg-bg/80 backdrop-blur-md px-8 py-3.5 lg:flex print:!hidden">
           <div className="flex items-center gap-3.5 min-w-0">

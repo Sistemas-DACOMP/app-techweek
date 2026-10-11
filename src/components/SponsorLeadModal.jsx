@@ -207,31 +207,8 @@ export default function SponsorLeadModal({
     }
   }, [notes, isTagSelected]);
 
-  if (!participant) return null;
-
   const sponsorCompanyName = sponsorProfile?.companyName || sponsorProfile?.empresa || sponsorProfile?.displayName || 'Empresa Patrocinadora';
   const sponsorCompanyId = sponsorProfile?.companyId || sponsorProfile?.empresa || sponsorProfile?.companyName;
-  const participantUid = participant.participantUid || participant.uid || participant.id;
-
-  const affiliation = getAffiliationBadge(participant);
-  const cleanInstitution = getCleanInstitution(participant, affiliation?.label);
-
-  const displayRating = hoverRating || rating || 0;
-  const currentClassification = RATING_CLASSIFICATIONS[displayRating] || RATING_CLASSIFICATIONS[0];
-  const isNotesExpanded = notesFocused || (notes && notes.length > 0);
-
-  // Lista consolidada de tags ativas para exibição de CRM
-  const activeTags = Array.from(new Set([
-    ...(Array.isArray(participant?.tags) ? participant.tags : []),
-    ...((notes || '').match(/\[([^\]]+)\]/g)?.map(m => m.slice(1, -1).trim()).filter(Boolean) || [])
-  ]));
-
-  // Anotações em texto limpo (removendo tags com colchetes para visualização executiva)
-  const cleanNotes = (notes || '').replace(/\[([^\]]+)\]/g, '').trim();
-
-  // URLs de redes sociais
-  const githubUrl = participant.github ? formatSocialUrl('github', participant.github) : null;
-  const linkedinUrl = participant.linkedin ? formatSocialUrl('linkedin', participant.linkedin) : null;
 
   // Tags dinâmicas configuradas pelo patrocinador (com fallback nas 8 tags padrão)
   const effectiveTags = useMemo(() => {
@@ -275,6 +252,30 @@ export default function SponsorLeadModal({
       return 'Abordagem Geral';
     }
   }, [sponsorCompanyId]);
+
+  if (!participant) return null;
+
+  const participantUid = participant.participantUid || participant.uid || participant.id;
+
+  const affiliation = getAffiliationBadge(participant);
+  const cleanInstitution = getCleanInstitution(participant, affiliation?.label);
+
+  const displayRating = hoverRating || rating || 0;
+  const currentClassification = RATING_CLASSIFICATIONS[displayRating] || RATING_CLASSIFICATIONS[0];
+  const isNotesExpanded = notesFocused || (notes && notes.length > 0);
+
+  // Lista consolidada de tags ativas para exibição de CRM
+  const activeTags = Array.from(new Set([
+    ...(Array.isArray(participant?.tags) ? participant.tags : []),
+    ...((notes || '').match(/\[([^\]]+)\]/g)?.map(m => m.slice(1, -1).trim()).filter(Boolean) || [])
+  ]));
+
+  // Anotações em texto limpo (removendo tags com colchetes para visualização executiva)
+  const cleanNotes = (notes || '').replace(/\[([^\]]+)\]/g, '').trim();
+
+  // URLs de redes sociais
+  const githubUrl = participant.github ? formatSocialUrl('github', participant.github) : null;
+  const linkedinUrl = participant.linkedin ? formatSocialUrl('linkedin', participant.linkedin) : null;
 
   const handleCopyEmail = async () => {
     const targetEmail = savedLeadData?.email || participant.email;

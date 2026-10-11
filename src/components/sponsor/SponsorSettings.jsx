@@ -324,15 +324,15 @@ export default function SponsorSettings({
       </div>
 
       {/* GRID PRINCIPAL: BLOCO A (WHATSAPP) & BLOCO B (TAGS) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         {/* ========================================================================= */}
-        {/* BLOCO A: MENSAGENS DE CONTATO RÁPIDO WHATSAPP (7 Colunas no Desktop)     */}
+        {/* BLOCO A: MENSAGENS DE CONTATO RÁPIDO WHATSAPP (7 Colunas no Desktop XL)   */}
         {/* ========================================================================= */}
         <section
           aria-labelledby="section-whatsapp-title"
-          className="lg:col-span-7 flex flex-col gap-4 rounded-[22px] border border-line bg-surface p-5 shadow-sm"
+          className="xl:col-span-7 flex flex-col gap-4 rounded-[22px] border border-line bg-surface p-5 shadow-sm"
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-line">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-line">
             <div>
               <div className="flex items-center gap-2">
                 <span className="flex size-7 items-center justify-center rounded-lg bg-[#25D366]/15 text-[#25D366]">
@@ -343,31 +343,25 @@ export default function SponsorSettings({
                 </h2>
               </div>
               <p className="text-[12px] text-text-3 mt-1 m-0">
-                Personalize o que é enviado ao clicar em "WhatsApp 1-Clique" no perfil do lead ou no scanner.
+                Personalize os modelos de WhatsApp da equipe {companyName} para disparo ágil no CRM e Scanner.
               </p>
             </div>
 
-            {/* Toggle / Indicador de Template Ativo como Padrão de 1-Clique */}
+            {/* Status Pill do Modelo Ativo */}
             {isCurrentActiveOutreach ? (
-              <span className="inline-flex items-center gap-1.5 rounded-xl bg-[#25D366]/20 border border-[#25D366]/60 px-3.5 py-1.5 text-[11px] font-extrabold text-[#25D366] shadow-sm">
-                <Star size={13} className="fill-[#25D366]" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#25D366]/15 border border-[#25D366]/40 px-3 py-1 text-[11px] font-extrabold text-[#25D366] shrink-0">
+                <Star size={12} className="fill-[#25D366]" />
                 <span>PADRÃO NO 1-CLIQUE ATIVO</span>
               </span>
             ) : (
-              <button
-                type="button"
-                onClick={() => handleSetAsDefaultTemplate(selectedTemplateId)}
-                className="press inline-flex items-center gap-1.5 rounded-xl border border-link/40 bg-link/15 px-3.5 py-1.5 text-[11px] font-extrabold text-link hover:bg-link/25 hover:border-link transition-all shadow-sm"
-                title="Tornar este modelo o padrão principal disparado no botão de 1-Clique"
-              >
-                <Star size={13} />
-                <span>⭐ Definir como Padrão do 1-Clique</span>
-              </button>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-raised border border-line px-3 py-1 text-[11px] font-semibold text-text-3 shrink-0">
+                <span>Modelo Alternativo</span>
+              </span>
             )}
           </div>
 
-          {/* Abas de Modelos de Mensagem */}
-          <div className="flex flex-wrap gap-2">
+          {/* Seletor de Modelos de Mensagem em Grid Equilibrado (Sem abas órfãs) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {settings.templates.map((tpl) => {
               const isSelected = tpl.id === selectedTemplateId;
               const isDefault = tpl.id === settings.activeTemplateId;
@@ -379,29 +373,32 @@ export default function SponsorSettings({
                   type="button"
                   onClick={() => handleSelectTemplate(tpl.id)}
                   aria-pressed={isSelected}
-                  className={`press flex items-center gap-2 rounded-xl px-3.5 py-2 text-[12px] font-bold transition-all border ${
+                  title={tpl.title}
+                  className={`press group relative flex flex-col justify-between items-start gap-1.5 rounded-2xl p-3 text-left transition-all border min-h-[64px] ${
                     isSelected
-                      ? 'bg-surface-selected border-link text-text shadow-sm shadow-link/10'
-                      : 'bg-surface-raised border-line text-text-2 hover:bg-surface-raised/80 hover:text-text'
+                      ? 'bg-surface-selected border-link text-text shadow-sm shadow-link/10 ring-1 ring-link/40'
+                      : 'bg-surface-raised border-line text-text-2 hover:bg-surface-raised/80 hover:text-text hover:border-line-2'
                   }`}
                 >
-                  <IconComp size={14} className={isSelected ? 'text-link' : 'text-text-3'} />
-                  <span>{tpl.title}</span>
-                  {isDefault && (
-                    <span
-                      className="inline-flex items-center gap-1 rounded-md bg-[#25D366]/20 border border-[#25D366]/50 px-1.5 py-0.5 text-[10px] font-extrabold text-[#25D366] uppercase tracking-wider"
-                      title="Modelo padrão configurado no botão 1-Clique"
-                    >
-                      <Star size={10} className="fill-[#25D366]" />
-                      <span>Padrão 1-Clique</span>
-                    </span>
-                  )}
+                  <div className="flex items-center justify-between w-full gap-1">
+                    <IconComp size={15} className={`shrink-0 ${isSelected ? 'text-link' : 'text-text-3 group-hover:text-text'}`} />
+                    {isDefault && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full bg-[#25D366]/20 border border-[#25D366]/40 px-1.5 py-0.5 text-[9px] font-extrabold text-[#25D366] shrink-0 uppercase"
+                        title="Modelo padrão configurado no 1-Clique"
+                      >
+                        <Star size={9} className="fill-[#25D366]" />
+                        <span>Padrão 1-Clique</span>
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[12px] font-bold line-clamp-2 leading-snug">{tpl.title}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Banner Educativo / Explicativo do Modelo Padrão no 1-Clique */}
+          {/* Banner Educativo & Ação Unificada do Modelo Selecionado (Elimina duplicação e espaço morto) */}
           {isCurrentActiveOutreach ? (
             <div className="flex items-start gap-3 rounded-2xl border border-[#25D366]/40 bg-[#25D366]/10 p-3.5">
               <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-[#25D366]/20 text-[#25D366]">
@@ -414,39 +411,37 @@ export default function SponsorSettings({
                 <p className="m-0 mt-0.5 text-[12px] leading-relaxed text-text">
                   Toda vez que qualquer recrutador da sua equipe clicar no botão <strong>"WhatsApp 1-Clique"</strong> na ficha de um participante ou no scanner, esta mensagem será aberta pronta para envio com os dados do estudante preenchidos automaticamente.
                 </p>
+                <div className="mt-1 text-[11px] text-text-3">
+                  {currentTemplateObj.description}
+                </div>
               </div>
             </div>
           ) : (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-line bg-surface-raised/60 p-3.5">
               <div className="flex items-start gap-3 min-w-0">
                 <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-surface text-text-3 border border-line">
-                  <Info size={15} />
+                  <Info size={15} className="text-link" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[12px] font-bold text-text-2">
+                  <div className="text-[12px] font-bold text-text">
                     Modelo Salvo como Alternativo
                   </div>
                   <p className="m-0 mt-0.5 text-[12px] leading-relaxed text-text-3">
-                    Este modelo está salvo como alternativo. Clique no botão ao lado se quiser que ele seja disparado automaticamente no botão principal de 1-Clique.
+                    {currentTemplateObj.description}. Clique ao lado para torná-lo o modelo disparado automaticamente no botão de 1-Clique.
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => handleSetAsDefaultTemplate(selectedTemplateId)}
-                className="press shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-link/40 bg-link/15 px-3 py-1.5 text-[11px] font-bold text-link hover:bg-link/25 transition-colors self-start sm:self-auto"
+                className="press shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-link/40 bg-link/15 px-3 py-1.5 text-[11px] font-extrabold text-link hover:bg-link/25 hover:border-link transition-all self-start sm:self-auto min-h-[34px]"
+                title="Tornar este modelo o padrão principal disparado no botão de 1-Clique"
               >
                 <Star size={12} />
-                <span>⭐ Definir como Padrão do 1-Clique</span>
+                <span>Definir como Padrão do 1-Clique</span>
               </button>
             </div>
           )}
-
-          {/* Descrição contextual do modelo selecionado */}
-          <div className="flex items-center gap-2 rounded-xl bg-surface-raised/60 px-3 py-2 text-[12px] text-text-3 border border-line/60">
-            <Info size={14} className="text-link shrink-0" />
-            <span className="truncate">{currentTemplateObj.description}</span>
-          </div>
 
           {/* Chips de Inserção de Variáveis Dinâmicas */}
           <div className="flex flex-col gap-1.5">
@@ -618,11 +613,11 @@ export default function SponsorSettings({
         </section>
 
         {/* ========================================================================= */}
-        {/* BLOCO B: TAGS DE QUALIFICAÇÃO DO ESTANDE (5 Colunas no Desktop)          */}
+        {/* BLOCO B: TAGS DE QUALIFICAÇÃO DO ESTANDE (5 Colunas no Desktop XL)        */}
         {/* ========================================================================= */}
         <section
           aria-labelledby="section-tags-title"
-          className="lg:col-span-5 flex flex-col gap-4 rounded-[22px] border border-line bg-surface p-5 shadow-sm"
+          className="xl:col-span-5 flex flex-col gap-4 rounded-[22px] border border-line bg-surface p-5 shadow-sm"
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-line">
             <div>
