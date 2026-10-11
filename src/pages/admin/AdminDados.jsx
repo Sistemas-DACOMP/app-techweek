@@ -5,6 +5,21 @@ import {
   Sparkles, Filter, Clock, MapPin, Radio, Target, ExternalLink, ShieldCheck, Check
 } from 'lucide-react';
 import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  ReferenceLine,
+  CartesianGrid,
+} from 'recharts';
+import {
   btn, Kpi, OccBar, Section, TypeTag, EVENT_DAYS, isoToday, dayLabel, firstDate, startTime,
   capacityOf, EmptyState, PageHead
 } from './ui';
@@ -33,12 +48,12 @@ const TIME_SLOTS = [
 
 /* Agrupamento acadêmico padronizado da FACOM/UFU (DESIGN.md §2-4) */
 const COURSE_CATEGORIES = [
-  { id: 'bcc', label: 'Ciência da Computação (BCC)', regex: /ci[eê]ncia da computa[çc][aã]o|bcc/i, color: 'var(--link)', short: 'BCC' },
-  { id: 'bsi', label: 'Sistemas de Informação (BSI)', regex: /sistemas? de informa[çc][aã]o|bsi/i, color: 'var(--cat-workshop)', short: 'BSI' },
-  { id: 'engcomp', label: 'Engenharia de Computação', regex: /engenharia de computa[çc][aã]o|eng\.? comp/i, color: 'var(--cat-minicurso)', short: 'Eng. Comp' },
-  { id: 'ads', label: 'Análise e Des. de Sistemas (ADS)', regex: /an[aá]lise e des|ads/i, color: 'var(--warn)', short: 'ADS' },
-  { id: 'pos', label: 'Pós-Graduação & Pesquisa', regex: /p[oó]s-gradua[çc][aã]o|mestrado|doutorado|pesquisador/i, color: 'var(--you)', short: 'Pós-Grad' },
-  { id: 'outros', label: 'Outras Engenharias & Comunidade', regex: /.*/, color: 'var(--text-3)', short: 'Outros' },
+  { id: 'bcc', label: 'Ciência da Computação (BCC)', regex: /ci[eê]ncia da computa[çc][aã]o|bcc/i, color: '#60A5FA', short: 'BCC' },
+  { id: 'bsi', label: 'Sistemas de Informação (BSI)', regex: /sistemas? de informa[çc][aã]o|bsi/i, color: '#8FA0FF', short: 'BSI' },
+  { id: 'engcomp', label: 'Engenharia de Computação', regex: /engenharia de computa[çc][aã]o|eng\.? comp/i, color: '#C4B5FD', short: 'Eng. Comp' },
+  { id: 'ads', label: 'Análise e Des. de Sistemas (ADS)', regex: /an[aá]lise e des|ads/i, color: '#FBBF24', short: 'ADS' },
+  { id: 'pos', label: 'Pós-Graduação & Pesquisa', regex: /p[oó]s-gradua[çc][aã]o|mestrado|doutorado|pesquisador/i, color: '#EC4899', short: 'Pós-Grad' },
+  { id: 'outros', label: 'Outras Engenharias & Comunidade', regex: /.*/, color: '#94A3B8', short: 'Outros' },
 ];
 
 /**
@@ -136,6 +151,9 @@ export function calculateDadosAnalytics({ activities = [], usersList = [], missi
     let peakSlot = hourlyData[0];
     hourlyData.forEach((d) => {
       if (d.count > peakSlot.count) peakSlot = d;
+    });
+    hourlyData.forEach((d) => {
+      d.isPeak = d.hour === peakSlot.hour;
     });
 
     // Encontrar o slot de "Agora" (apenas dentro da janela ativa do evento: 08:00 às 22:30)
@@ -353,6 +371,89 @@ export function useDadosAnalytics({ activities = [], usersList = [], missionsLis
   );
 }
 
+/* =========================================================================
+   TOOLTIPS PERSONALIZADOS (DESIGN SYSTEM ADERENTE COM BLUR E CORES SEMÂNTICAS)
+   ========================================================================= */
+
+function HourlyTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null;
+  const data = payload[0].payload;
+  return (
+    <div className="rounded-2xl border border-line-2 bg-surface-raised/95 p-3.5 shadow-2xl backdrop-blur-md">
+      <div className="flex items-center gap-2">
+        <Clock size={14} className="text-link" aria-hidden="true" />
+        <span className="text-[13px] font-extrabold text-text">
+          {data.hour} · {data.name}
+        </span>
+      </div>
+      <div className="mt-2 text-[14px] font-black text-link">
+        {fmtInt(data.count)} <span className="text-[12px] font-semibold text-text-3">pessoas no campus</span>
+      </div>
+      <div className="mt-1 text-[11px] font-medium text-text-3">
+        {data.activeActivitiesCount} {data.activeActivitiesCount === 1 ? 'atividade acontecendo' : 'atividades acontecendo'}
+      </div>
+      {data.isPeak && (
+        <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-black text-warn">
+          <Flame size={11} aria-hidden="true" /> Pico de afluência
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SponsorTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null;
+  const data = payload[0].payload;
+  return (
+    <div className="min-w-[200px] rounded-2xl border border-line-2 bg-surface-raised/95 p-3.5 shadow-2xl backdrop-blur-md">
+      <div className="flex items-center justify-between gap-2 border-b border-line pb-2">
+        <span className="text-[13px] font-extrabold text-text">{data.name}</span>
+        <span
+          className="rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide"
+          style={{ background: `${data.tierColor}20`, color: data.tierColor }}
+        >
+          {data.tierLabel}
+        </span>
+      </div>
+      <div className="mt-2 space-y-1.5 text-[12px]">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-text-3">
+            <span className="h-2 w-2 rounded-full bg-[#60A5FA]" /> Visitas Passaporte:
+          </span>
+          <span className="font-extrabold text-text">{fmtInt(data.visits)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-text-3">
+            <span className="h-2 w-2 rounded-full bg-[#6FD8A6]" /> Leads Coletados:
+          </span>
+          <span className="font-extrabold text-ok">{fmtInt(data.leads)}</span>
+        </div>
+        <div className="flex items-center justify-between pt-1 border-t border-line/60 text-[11px] text-text-4">
+          <span>Conversão de público:</span>
+          <span className="font-bold text-text-2">{data.conversionPct}%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AcademicTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null;
+  const data = payload[0].payload;
+  return (
+    <div className="rounded-2xl border border-line-2 bg-surface-raised/95 p-3.5 shadow-2xl backdrop-blur-md">
+      <div className="flex items-center gap-2">
+        <span className="h-3 w-3 rounded-full shrink-0" style={{ background: data.color }} />
+        <span className="text-[13px] font-extrabold text-text">{data.label}</span>
+      </div>
+      <div className="mt-1.5 flex items-baseline gap-2">
+        <span className="text-[16px] font-black text-text">{fmtInt(data.count)}</span>
+        <span className="text-[12px] font-bold text-text-3">alunos ({data.pct}%)</span>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDados({
   activities = [],
   usersList = [],
@@ -464,52 +565,6 @@ export default function AdminDados({
     setExportModalOpen(false);
   };
 
-  // Coordenadas para o gráfico SVG de Afluência Horária (viewBox 0 0 840 240)
-  const svgWidth = 840;
-  const svgHeight = 240;
-  const padLeft = 48;
-  const padRight = 36;
-  const padTop = 38;
-  const padBottom = 42;
-  const chartW = svgWidth - padLeft - padRight;
-  const chartH = svgHeight - padTop - padBottom;
-
-  // Escala Y com arredondamento inteligente para passos limpos (ex: 100, 200, 300, 400)
-  const rawMax = Math.max(...stats.hourlyData.map((d) => d.count), 100);
-  const step = rawMax > 400 ? 100 : rawMax > 200 ? 50 : 25;
-  const yMaxCeil = Math.ceil((rawMax * 1.1) / step) * step;
-  const yTicks = [0.25, 0.5, 0.75, 1].map((pct) => ({
-    pct,
-    value: Math.round(yMaxCeil * pct),
-    y: padTop + chartH * (1 - pct),
-  }));
-
-  // Mapeamento proporcional no tempo real do evento (08:00 = 480m até 22:30 = 1350m -> amplitude 870m)
-  const points = stats.hourlyData.map((d) => {
-    const [h, m] = d.hour.split(':').map(Number);
-    const slotMin = h * 60 + m;
-    const progress = Math.min(Math.max((slotMin - 480) / 870, 0), 1);
-    const x = padLeft + progress * chartW;
-    const y = padTop + chartH - (d.count / yMaxCeil) * chartH;
-    return { x, y, data: d, slotMin };
-  });
-
-  // Geração do path fluido (Catmull-Rom com tensão 0.22)
-  const linePathD = buildSmoothPath(points);
-  const areaPathD = points.length > 0
-    ? `${linePathD} L ${points[points.length - 1].x.toFixed(1)} ${padTop + chartH} L ${points[0].x.toFixed(1)} ${padTop + chartH} Z`
-    : '';
-
-  // Localização do Pico e de Agora no SVG
-  const peakPoint = points.find((p) => p.data.hour === stats.peakSlot.hour) || points[0];
-  let nowPoint = null;
-  if (stats.isWithinEventHours && stats.nowMinutesTotal >= 480 && stats.nowMinutesTotal <= 1350) {
-    const progress = (stats.nowMinutesTotal - 480) / 870;
-    const nowX = padLeft + progress * chartW;
-    const matchedPoint = stats.closestNowIdx >= 0 ? points[stats.closestNowIdx] : null;
-    const nowY = matchedPoint ? matchedPoint.y : padTop + chartH * 0.5;
-    nowPoint = { x: nowX, y: nowY, count: matchedPoint ? matchedPoint.data.count : 0 };
-  }
 
   // Definição dos 5 períodos dinâmicos do dia
   const dayPeriods = [
@@ -750,280 +805,111 @@ export default function AdminDados({
             </div>
           </div>
 
-          {/* SVG Nativo da Curva com Alta Fidelidade Visual */}
-          <div className="relative w-full overflow-hidden">
-            <svg
-              id={chartId}
-              viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-              className="h-60 w-full touch-pan-x select-none overflow-visible"
-              preserveAspectRatio="none"
-              role="img"
-              aria-label="Gráfico de Curva de Afluência Horária da TechWeek"
-            >
-              <defs>
-                {/* Gradiente de preenchimento fluido e suave */}
-                <linearGradient id="areaFlowGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#8FA0FF" stopOpacity="0.38" />
-                  <stop offset="40%" stopColor="#6366F1" stopOpacity="0.16" />
-                  <stop offset="80%" stopColor="#4338CA" stopOpacity="0.04" />
-                  <stop offset="100%" stopColor="#1E1B4B" stopOpacity="0" />
-                </linearGradient>
+          {/* Gráfico Recharts de Curva de Afluência com Alta Fidelidade e Animações Fluidas */}
+          <div className="relative h-[360px] sm:h-[400px] w-full min-w-0 select-none pt-2">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <AreaChart
+                data={stats.hourlyData}
+                margin={{ top: 20, right: 24, left: -10, bottom: 10 }}
+                onMouseMove={(state) => {
+                  if (state?.activePayload?.[0]?.payload) {
+                    setHoveredHourSlot(state.activePayload[0].payload);
+                  }
+                }}
+                onMouseLeave={() => setHoveredHourSlot(null)}
+              >
+                <defs>
+                  {/* Gradiente de preenchimento fluido e suave */}
+                  <linearGradient id="areaFlowGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8FA0FF" stopOpacity={0.42} />
+                    <stop offset="40%" stopColor="#6366F1" stopOpacity={0.18} />
+                    <stop offset="85%" stopColor="#4338CA" stopOpacity={0.04} />
+                    <stop offset="100%" stopColor="#1E1B4B" stopOpacity={0} />
+                  </linearGradient>
 
-                {/* Gradiente da linha principal */}
-                <linearGradient id="strokeLineGradient" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#60A5FA" />
-                  <stop offset="50%" stopColor="#8FA0FF" />
-                  <stop offset="100%" stopColor="#A78BFA" />
-                </linearGradient>
+                  {/* Gradiente da linha principal */}
+                  <linearGradient id="strokeLineGradient" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#60A5FA" />
+                    <stop offset="50%" stopColor="#8FA0FF" />
+                    <stop offset="100%" stopColor="#A78BFA" />
+                  </linearGradient>
+                </defs>
 
-                {/* Filtro Neon Glow */}
-                <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="3.5" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
+                <CartesianGrid stroke="var(--line)" strokeDasharray="4 6" vertical={false} opacity={0.65} />
 
-                {/* Sombra de Tooltip flutuante */}
-                <filter id="tooltipShadow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#000000" floodOpacity="0.5" />
-                </filter>
-              </defs>
+                <XAxis
+                  dataKey="label"
+                  stroke="var(--text-4)"
+                  tickLine={false}
+                  axisLine={{ stroke: 'var(--line)' }}
+                  tick={{ fontSize: 12, fill: 'var(--text-3)', fontWeight: 600 }}
+                  dy={8}
+                />
 
-              {/* Linhas de Grade Horizontais com Ticks Limpos */}
-              {yTicks.map(({ pct, value, y }) => (
-                <g key={pct}>
-                  <line
-                    x1={padLeft}
-                    y1={y}
-                    x2={svgWidth - padRight}
-                    y2={y}
-                    stroke="var(--line)"
-                    strokeWidth="1"
-                    strokeDasharray="4 6"
-                    opacity="0.7"
-                  />
-                  <text
-                    x={padLeft - 10}
-                    y={y + 3.5}
-                    fill="var(--text-4)"
-                    fontSize="11"
-                    fontWeight="600"
-                    textAnchor="end"
-                  >
-                    {value}
-                  </text>
-                </g>
-              ))}
+                <YAxis
+                  stroke="var(--text-4)"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 11, fill: 'var(--text-4)', fontWeight: 600 }}
+                  domain={[0, (dataMax) => Math.ceil((dataMax * 1.15) / 25) * 25]}
+                  dx={-2}
+                />
 
-              {/* Linha de base zero */}
-              <line
-                x1={padLeft}
-                y1={padTop + chartH}
-                x2={svgWidth - padRight}
-                y2={padTop + chartH}
-                stroke="var(--line)"
-                strokeWidth="1"
-              />
+                <RechartsTooltip
+                  content={<HourlyTooltip />}
+                  cursor={{
+                    stroke: 'rgba(143,160,255,0.4)',
+                    strokeWidth: 1.5,
+                    strokeDasharray: '3 3',
+                  }}
+                />
 
-              {/* Área preenchida com gradiente sofisticado */}
-              <path d={areaPathD} fill="url(#areaFlowGradient)" />
-
-              {/* Glow sutil por baixo da linha principal */}
-              <path
-                d={linePathD}
-                fill="none"
-                stroke="url(#strokeLineGradient)"
-                strokeWidth="6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity="0.3"
-                filter="url(#neonGlow)"
-              />
-
-              {/* Linha principal límpida e precisa */}
-              <path
-                d={linePathD}
-                fill="none"
-                stroke="url(#strokeLineGradient)"
-                strokeWidth="3.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-
-              {/* Destaque do Pico (Halo Dourado Pulsante e Badge Refinada) */}
-              <g pointerEvents="none">
-                <circle cx={peakPoint.x} cy={peakPoint.y} r="14" fill="#FBBF24" fillOpacity="0.14" />
-                <circle cx={peakPoint.x} cy={peakPoint.y} r="6" fill="#FBBF24" />
-                <circle cx={peakPoint.x} cy={peakPoint.y} r="2.5" fill="#0D1224" />
-                <g transform={`translate(${Math.max(padLeft, Math.min(peakPoint.x - 38, svgWidth - padRight - 76))}, ${Math.max(12, peakPoint.y - 30)})`}>
-                  <rect
-                    width="76"
-                    height="20"
-                    rx="6"
-                    fill="#151928"
+                {stats.peakSlot && (
+                  <ReferenceLine
+                    x={stats.peakSlot.label}
                     stroke="#FBBF24"
-                    strokeWidth="1.2"
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    label={{
+                      value: `Pico (${stats.peakSlot.count})`,
+                      position: 'insideTopRight',
+                      fill: '#FBBF24',
+                      fontSize: 11,
+                      fontWeight: 800,
+                    }}
                   />
-                  <text
-                    x="38"
-                    y="14"
-                    fill="#FBBF24"
-                    fontSize="10"
-                    fontWeight="800"
-                    textAnchor="middle"
-                  >
-                    Pico · {peakPoint.data.count}
-                  </text>
-                </g>
-              </g>
+                )}
 
-              {/* Marcador Dinâmico de "Agora" (Renderizado EXCLUSIVAMENTE durante o evento) */}
-              {nowPoint && (
-                <g pointerEvents="none">
-                  <line
-                    x1={nowPoint.x}
-                    y1={padTop}
-                    x2={nowPoint.x}
-                    y2={padTop + chartH}
+                {stats.isWithinEventHours && stats.closestNowIdx >= 0 && (
+                  <ReferenceLine
+                    x={stats.hourlyData[stats.closestNowIdx]?.label}
                     stroke="var(--ok)"
-                    strokeWidth="1.8"
                     strokeDasharray="3 3"
+                    strokeWidth={1.5}
+                    label={{
+                      value: `Agora (${stats.currentTimeStr})`,
+                      position: 'top',
+                      fill: 'var(--ok)',
+                      fontSize: 11,
+                      fontWeight: 800,
+                    }}
                   />
-                  <circle
-                    cx={nowPoint.x}
-                    cy={nowPoint.y}
-                    r="12"
-                    fill="none"
-                    stroke="var(--ok)"
-                    strokeWidth="1.5"
-                    opacity="0.75"
-                    className="animate-ping"
-                  />
-                  <circle cx={nowPoint.x} cy={nowPoint.y} r="5.5" fill="var(--ok)" />
-                  <circle cx={nowPoint.x} cy={nowPoint.y} r="2.5" fill="#0A0F24" />
-                  <g transform={`translate(${Math.max(padLeft, Math.min(nowPoint.x - 42, svgWidth - padRight - 84))}, ${padTop - 26})`}>
-                    <rect
-                      width="84"
-                      height="20"
-                      rx="10"
-                      fill="var(--ok)"
-                    />
-                    <text
-                      x="42"
-                      y="14"
-                      fill="#0A0F24"
-                      fontSize="10"
-                      fontWeight="800"
-                      textAnchor="middle"
-                    >
-                      Agora ({stats.currentTimeStr})
-                    </text>
-                  </g>
-                </g>
-              )}
+                )}
 
-              {/* Rótulos de Horário no Eixo X (Espaçados de forma limpa) */}
-              {points.map((p, idx) => {
-                const showLabel = idx % 2 === 0 || idx === points.length - 1;
-                const isHovered = hoveredHourSlot?.hour === p.data.hour;
-                if (!showLabel && !isHovered) return null;
-
-                return (
-                  <text
-                    key={`label-${p.data.hour}`}
-                    x={p.x}
-                    y={padTop + chartH + 20}
-                    fill={isHovered ? 'var(--link)' : 'var(--text-3)'}
-                    fontSize="11"
-                    fontWeight={isHovered ? '800' : '600'}
-                    textAnchor="middle"
-                    pointerEvents="none"
-                  >
-                    {p.data.label}
-                  </text>
-                );
-              })}
-
-              {/* Colunas Interativas Invisíveis de Hit-Test com Crosshair & Tooltip */}
-              {points.map((p, idx) => {
-                const colWidth = chartW / points.length;
-                const isHovered = hoveredHourSlot?.hour === p.data.hour;
-
-                return (
-                  <g key={`hit-${p.data.hour}`}>
-                    {/* Linha Crosshair Vertical ativa */}
-                    {isHovered && (
-                      <g pointerEvents="none">
-                        <line
-                          x1={p.x}
-                          y1={padTop}
-                          x2={p.x}
-                          y2={padTop + chartH}
-                          stroke="rgba(255,255,255,0.25)"
-                          strokeWidth="1.2"
-                          strokeDasharray="3 3"
-                        />
-                        <circle
-                          cx={p.x}
-                          cy={p.y}
-                          r="6.5"
-                          fill="#8FA0FF"
-                          stroke="#FFFFFF"
-                          strokeWidth="2.5"
-                        />
-                        {/* Tooltip flutuante rico */}
-                        <g transform={`translate(${Math.max(padLeft, Math.min(p.x - 65, svgWidth - padRight - 130))}, ${Math.max(10, p.y - 48)})`}>
-                          <rect
-                            width="130"
-                            height="40"
-                            rx="8"
-                            fill="#0F1424"
-                            stroke="rgba(143,160,255,0.35)"
-                            strokeWidth="1"
-                            filter="url(#tooltipShadow)"
-                          />
-                          <text
-                            x="65"
-                            y="16"
-                            fill="#FFFFFF"
-                            fontSize="11"
-                            fontWeight="800"
-                            textAnchor="middle"
-                          >
-                            {p.data.hour} · {p.data.count} pessoas
-                          </text>
-                          <text
-                            x="65"
-                            y="31"
-                            fill="var(--text-3)"
-                            fontSize="9.5"
-                            fontWeight="600"
-                            textAnchor="middle"
-                          >
-                            {p.data.activeActivitiesCount} {p.data.activeActivitiesCount === 1 ? 'atividade' : 'atividades'} ativas
-                          </text>
-                        </g>
-                      </g>
-                    )}
-
-                    {/* Área de toque transparente */}
-                    <rect
-                      x={p.x - colWidth / 2}
-                      y={padTop}
-                      width={colWidth}
-                      height={chartH + 24}
-                      fill="transparent"
-                      className="cursor-pointer"
-                      onMouseEnter={() => setHoveredHourSlot(p.data)}
-                      onMouseLeave={() => setHoveredHourSlot(null)}
-                      onClick={() => setHoveredHourSlot(p.data)}
-                    />
-                  </g>
-                );
-              })}
-            </svg>
+                <Area
+                  type="monotone"
+                  dataKey="count"
+                  stroke="url(#strokeLineGradient)"
+                  strokeWidth={3.5}
+                  fill="url(#areaFlowGradient)"
+                  isAnimationActive={true}
+                  animationDuration={1100}
+                  animationEasing="ease-out"
+                  dot={{ r: 3, fill: '#8FA0FF', stroke: '#0F1424', strokeWidth: 2 }}
+                  activeDot={{ r: 7, fill: '#8FA0FF', stroke: '#FFFFFF', strokeWidth: 3 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
 
           {/* Cards Dinâmicos de Períodos com Detecção Real do Pico */}
@@ -1258,6 +1144,68 @@ export default function AdminDados({
           </button>
         }
       >
+        {/* Gráfico Comparativo de Desempenho dos Estandes */}
+        <div className="mb-5 rounded-2xl border border-line bg-surface-raised p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
+            <div>
+              <div className="text-[13px] font-black text-text">Comparativo de Engajamento por Estande</div>
+              <div className="text-[12px] text-text-3">Visitas registradas no Passaporte TechWeek vs Leads qualificados pela equipe</div>
+            </div>
+            <div className="flex items-center gap-4 text-[12px]">
+              <span className="flex items-center gap-1.5 font-bold text-text">
+                <span className="h-3 w-3 rounded-sm bg-[#60A5FA]" /> Visitas Passaporte
+              </span>
+              <span className="flex items-center gap-1.5 font-bold text-ok">
+                <span className="h-3 w-3 rounded-sm bg-[#6FD8A6]" /> Leads Coletados
+              </span>
+            </div>
+          </div>
+
+          <div className="h-[260px] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <BarChart
+                data={stats.sponsorStats}
+                margin={{ top: 10, right: 16, left: -10, bottom: 10 }}
+              >
+                <CartesianGrid stroke="var(--line)" strokeDasharray="4 6" vertical={false} opacity={0.65} />
+                <XAxis
+                  dataKey="name"
+                  stroke="var(--text-4)"
+                  tickLine={false}
+                  axisLine={{ stroke: 'var(--line)' }}
+                  tick={{ fontSize: 12, fill: 'var(--text)', fontWeight: 700 }}
+                  dy={6}
+                />
+                <YAxis
+                  stroke="var(--text-4)"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 11, fill: 'var(--text-4)', fontWeight: 600 }}
+                />
+                <RechartsTooltip content={<SponsorTooltip />} />
+                <Bar
+                  dataKey="visits"
+                  name="Visitas Passaporte"
+                  fill="#60A5FA"
+                  radius={[6, 6, 0, 0]}
+                  isAnimationActive={true}
+                  animationDuration={1000}
+                  animationEasing="ease-out"
+                />
+                <Bar
+                  dataKey="leads"
+                  name="Leads Coletados"
+                  fill="#6FD8A6"
+                  radius={[6, 6, 0, 0]}
+                  isAnimationActive={true}
+                  animationDuration={1200}
+                  animationEasing="ease-out"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {stats.sponsorStats.map((s, idx) => (
             <div
@@ -1394,33 +1342,80 @@ export default function AdminDados({
             </span>
           }
         >
-          <div className="space-y-3.5">
-            {stats.academicDistribution.map((course) => (
-              <div key={course.id} className="rounded-xl border border-line bg-surface-raised p-3.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="h-3 w-3 rounded-full shrink-0"
-                      style={{ background: course.color }}
-                      aria-hidden="true"
-                    />
-                    <span className="text-[13px] font-extrabold text-text">{course.label}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[14px] font-black text-text">{course.count}</span>
-                    <span className="ml-1.5 text-[12px] text-text-3 font-semibold">({course.pct}%)</span>
-                  </div>
-                </div>
-
-                {/* Barra Proporcional */}
-                <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-surface">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${course.pct}%`, background: course.color }}
-                  />
+          <div className="space-y-4">
+            {/* Donut Chart Animado de Perfil Acadêmico */}
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-line bg-surface p-4">
+              <div className="relative h-[220px] w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                  <PieChart>
+                    <Pie
+                      data={stats.academicDistribution}
+                      dataKey="count"
+                      nameKey="short"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={58}
+                      outerRadius={88}
+                      paddingAngle={3}
+                      isAnimationActive={true}
+                      animationDuration={1100}
+                      animationEasing="ease-out"
+                    >
+                      {stats.academicDistribution.map((entry) => (
+                        <Cell key={`cell-${entry.id}`} fill={entry.color} stroke="#0A0F24" strokeWidth={2} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip content={<AcademicTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Centro do Donut com Total */}
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+                  <span className="text-[22px] font-black tracking-tight text-text">{fmtInt(stats.totalAcademicSum)}</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-text-3">Participantes</span>
                 </div>
               </div>
-            ))}
+
+              {/* Legenda em chips refinados */}
+              <div className="mt-2 flex flex-wrap justify-center gap-2">
+                {stats.academicDistribution.map((c) => (
+                  <span key={c.id} className="inline-flex items-center gap-1.5 rounded-full bg-surface-raised px-2.5 py-1 text-[11px] font-bold text-text-3 border border-line">
+                    <span className="h-2 w-2 rounded-full" style={{ background: c.color }} />
+                    <span className="text-text">{c.short}</span>
+                    <span className="text-text-4">({c.pct}%)</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Lista Detalhada com Barras Proporcionais */}
+            <div className="space-y-3">
+              {stats.academicDistribution.map((course) => (
+                <div key={course.id} className="rounded-xl border border-line bg-surface-raised p-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-3 w-3 rounded-full shrink-0"
+                        style={{ background: course.color }}
+                        aria-hidden="true"
+                      />
+                      <span className="text-[13px] font-extrabold text-text">{course.label}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[14px] font-black text-text">{course.count}</span>
+                      <span className="ml-1.5 text-[12px] text-text-3 font-semibold">({course.pct}%)</span>
+                    </div>
+                  </div>
+
+                  {/* Barra Proporcional */}
+                  <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-surface">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${course.pct}%`, background: course.color }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
 
             <div className="mt-4 rounded-xl bg-surface p-3 text-[12px] text-text-2 border border-line">
               <span className="font-extrabold text-text block mb-1">💡 Destaque da Coordenação:</span>
