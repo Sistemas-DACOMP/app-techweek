@@ -105,6 +105,16 @@ export default function Dashboard() {
   const [toastMessage, setToastMessage] = useState(null);
   const [now, setNow] = useState(() => new Date());
 
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
+
+  // Timeout de segurança: se o perfil demorar mais que 1.5s (rede/offline), libera a tela
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoadTimedOut(true);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Relógio do "Acontecendo agora" (reavalia a cada minuto)
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60000);
@@ -116,6 +126,7 @@ export default function Dashboard() {
     const unsubscribe = onAuthChange(async (user) => {
       if (!user) {
         setCurrentUser(null);
+        setUserProfile(null);
         setFirstName('Participante');
         setUserInitials('TW');
         return;
@@ -133,11 +144,30 @@ export default function Dashboard() {
           const initialB = profile.lastName?.charAt(0) || '';
           setUserInitials((initialA + initialB).toUpperCase() || 'TW');
         } else {
-          setFirstName(user.displayName?.split(' ')[0] || 'Participante');
+          // Usuário autenticado mas sem perfil no Firestore (ou recém-criado)
+          const fallbackProfile = {
+            id: user.uid,
+            role: 'PARTICIPANT',
+            displayName: user.displayName || 'Participante',
+            email: user.email,
+            firstName: user.displayName?.split(' ')[0] || 'Participante'
+          };
+          setUserProfile(fallbackProfile);
+          setFirstName(fallbackProfile.firstName);
           setUserInitials(user.displayName ? user.displayName.slice(0, 2).toUpperCase() : 'TW');
         }
-      } catch {
+      } catch (err) {
+        console.warn('[Dashboard] Erro ao buscar perfil no Firestore, usando fallback:', err);
+        const fallbackProfile = {
+          id: user.uid,
+          role: 'PARTICIPANT',
+          displayName: user.displayName || 'Participante',
+          email: user.email,
+          firstName: user.displayName?.split(' ')[0] || 'Participante'
+        };
+        setUserProfile(fallbackProfile);
         setFirstName('Participante');
+        setUserInitials(user.displayName ? user.displayName.slice(0, 2).toUpperCase() : 'TW');
       }
     });
 
@@ -301,7 +331,7 @@ export default function Dashboard() {
   };
 
   // Estado da tela: carregando perfil → Primeiros passos (sem ingresso) → Início
-  const profileLoaded = Boolean(hookProfile || userProfile);
+  const profileLoaded = Boolean(hookProfile || userProfile || loadTimedOut);
   const pending = profileLoaded && !hasSymplaTicket;
   const avatarUrl = userProfile?.avatarUrl || hookProfile?.avatarUrl || hookProfile?.avatar_url || null;
 
