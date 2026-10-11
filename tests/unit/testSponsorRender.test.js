@@ -40,7 +40,7 @@ describe('Render Sponsor page with SPONSOR role', () => {
     );
     expect(html).toContain('sponsor-shell');
     expect(html).toContain('Kanastra');
-    expect(html).toContain('Bipar Crachá');
+    expect(html).toContain('Escanear Crachá');
   });
 
   it('renders settings tab cleanly without throwing', async () => {

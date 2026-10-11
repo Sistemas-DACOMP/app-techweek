@@ -21,6 +21,7 @@ import {
   Building2,
   Heart,
   Share2,
+  Loader2,
 } from 'lucide-react';
 import {
   getSponsorSettings,
@@ -35,6 +36,7 @@ import {
 } from '../../lib/sponsorSettingsService';
 import { uploadFeedMedia } from '../../lib/feedService';
 import { btn } from '../../pages/admin/ui';
+import '../../styles/perfil.css';
 
 const SAMPLE_CANDIDATES = [
   {
@@ -60,6 +62,29 @@ const TEMPLATE_ICONS = {
   tech_challenge: Code2,
   stand_material: FileText,
 };
+
+function SponsorAvatarDisplay({ url, initials, alt = '', className = '' }) {
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt={alt}
+        className="size-full rounded-full object-cover"
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+        }}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex size-full items-center justify-center rounded-full bg-surface-raised font-extrabold text-text ${className}`}
+    >
+      {initials}
+    </span>
+  );
+}
 
 export default function SponsorSettings({
   companyId = 'kanastra',
@@ -389,19 +414,26 @@ export default function SponsorSettings({
       ? 'Patrocinador Bronze'
       : 'Patrocinador Ouro';
 
+  const initials = useMemo(() => {
+    const name = feedDisplayName.trim() || companyName || 'P';
+    return name
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase() || '')
+      .join('');
+  }, [feedDisplayName, companyName]);
+
   const SETTINGS_SECTIONS = [
     {
       id: 'feed',
       label: 'Perfil no Feed',
       icon: AtSign,
-      badge: 'Público',
       description: 'Foto de perfil e @handle no Feed',
     },
     {
       id: 'messages_tags',
       label: 'Mensagens & Tags',
       icon: MessageSquare,
-      badge: `${activeTags.length} tags`,
       description: 'Modelos de WhatsApp e tags de qualificação',
     },
   ];
@@ -419,20 +451,18 @@ export default function SponsorSettings({
         </div>
       )}
 
-      {/* Header Limpo e Direto da Seção */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
-        <div>
-          <h1 className="text-[20px] sm:text-[22px] font-extrabold text-text tracking-tight m-0">
-            Personalização do Estande
-          </h1>
-          <p className="text-[13px] text-text-3 mt-1 m-0">
-            Configure o perfil público no Feed, modelos de WhatsApp e tags para a equipe {companyName}.
-          </p>
-        </div>
+      {/* Header Contextual Desktop (No mobile, o título canônico centralizado já é exibido por Sponsor.jsx) */}
+      <div className="hidden lg:block pb-1">
+        <h1 className="text-[20px] font-extrabold text-text tracking-tight m-0">
+          Personalização do Estande
+        </h1>
+        <p className="text-[13px] text-text-3 mt-1 m-0">
+          Configure o perfil público no Feed, modelos de WhatsApp e tags para a equipe {companyName}.
+        </p>
       </div>
 
-      {/* Navegação entre Sub-Abas (Perfil no Feed | Mensagens & Tags) */}
-      <div className="flex items-center gap-2 border-b border-line pb-3 overflow-x-auto">
+      {/* Navegação entre Sub-Abas (Segmented Control 2 Colunas - Sem corte no mobile) */}
+      <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-surface border border-line">
         {SETTINGS_SECTIONS.map((sec) => {
           const isActive = activeSection === sec.id;
           const IconComp = sec.icon;
@@ -442,25 +472,14 @@ export default function SponsorSettings({
               type="button"
               onClick={() => setActiveSection(sec.id)}
               aria-pressed={isActive}
-              className={`press inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-bold transition-all border min-h-[44px] shrink-0 ${
+              className={`press flex items-center justify-center gap-2 rounded-xl py-2.5 px-3 text-[13px] font-extrabold transition-all min-h-[44px] ${
                 isActive
-                  ? 'bg-surface-selected border-link text-text shadow-sm ring-1 ring-link/40'
-                  : 'bg-surface-raised border-line text-text-3 hover:text-text hover:bg-surface-selected/60'
+                  ? 'bg-surface-selected border border-link text-text shadow-sm'
+                  : 'text-text-3 hover:text-text hover:bg-surface-raised/50 border border-transparent'
               }`}
             >
-              <IconComp size={15} className={isActive ? 'text-link' : 'text-text-4'} />
-              <span>{sec.label}</span>
-              {sec.badge && (
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                    isActive
-                      ? 'bg-link/20 text-link border border-link/30'
-                      : 'bg-surface border border-line text-text-4'
-                  }`}
-                >
-                  {sec.badge}
-                </span>
-              )}
+              <IconComp size={16} className={isActive ? 'text-link' : 'text-text-4'} />
+              <span className="truncate">{sec.label}</span>
             </button>
           );
         })}
@@ -496,110 +515,129 @@ export default function SponsorSettings({
               )}
             </div>
 
-            {/* Bloco de Foto de Perfil (Avatar) */}
-            <div className="flex flex-col gap-3">
-              <label className="text-[12px] font-bold text-text">
+            {/* Foto de Perfil (Avatar com padrão Profile.jsx 104px circular com gradiente) */}
+            <div className="flex flex-col items-center pt-2 pb-1">
+              <label className="text-[12px] font-extrabold uppercase tracking-wider text-text-2 mb-2 self-start">
                 Foto de Perfil (Avatar)
               </label>
-
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                {/* Preview Circular 72px */}
-                <div className="relative size-[72px] rounded-full border-2 border-line bg-surface-raised flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+              <span
+                className="relative h-[104px] w-[104px] rounded-full p-1 shrink-0"
+                style={{ background: 'linear-gradient(135deg, #2563EB, #7C3AED)' }}
+              >
+                <div className="h-full w-full rounded-full overflow-hidden bg-surface-raised flex items-center justify-center">
                   {displayAvatar ? (
                     <img
                       src={displayAvatar}
                       alt={displayAuthor}
-                      className="size-full object-cover"
+                      className="h-full w-full object-cover"
                     />
                   ) : (
-                    <Building2 size={28} className="text-text-4" />
-                  )}
-                  {isUploadingAvatar && (
-                    <div className="absolute inset-0 bg-surface/80 flex items-center justify-center text-[10px] font-bold text-link animate-pulse">
-                      Enviando...
-                    </div>
-                  )}
-                </div>
-
-                {/* Ações de Foto */}
-                <div className="flex flex-col gap-2 flex-1">
-                  <input
-                    ref={avatarFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarFileSelected}
-                    className="hidden"
-                  />
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => avatarFileInputRef.current?.click()}
-                      disabled={isUploadingAvatar}
-                      className={btn('secondary', 'min-h-[44px] px-3.5 text-[12px] shrink-0')}
-                      title="Fazer upload de foto do computador ou celular"
-                    >
-                      <Camera size={14} />
-                      <span>{feedAvatarUrl ? 'Alterar foto' : 'Enviar foto'}</span>
-                    </button>
-
-                    {sponsorLogo && sponsorLogo !== feedAvatarUrl && (
-                      <button
-                        type="button"
-                        onClick={handleUseCompanyLogo}
-                        className={btn('secondary', 'min-h-[44px] px-3.5 text-[12px] shrink-0')}
-                        title="Usar logo cadastrada da empresa"
-                      >
-                        <Upload size={14} />
-                        <span>Usar logo oficial</span>
-                      </button>
-                    )}
-
-                    {feedAvatarUrl && (
-                      <button
-                        type="button"
-                        onClick={handleRemoveAvatar}
-                        className={btn('secondary', 'min-h-[44px] px-3 text-[12px] text-warn shrink-0')}
-                        title="Remover foto personalizada"
-                      >
-                        <Trash2 size={13} />
-                        <span>Remover</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {avatarError && (
-                    <span className="flex items-center gap-1 text-[11px] font-medium text-warn">
-                      <AlertCircle size={12} /> {avatarError}
+                    <span className="text-[32px] font-extrabold text-text select-none">
+                      {initials}
                     </span>
                   )}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => avatarFileInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
+                  aria-label="Trocar foto de perfil"
+                  className="press absolute -right-0.5 bottom-0.5 flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-bg bg-white text-[#3730A3] shadow-md hover:scale-105 transition-transform"
+                >
+                  {isUploadingAvatar ? (
+                    <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Camera size={17} strokeWidth={2.2} aria-hidden="true" />
+                  )}
+                </button>
+              </span>
+
+              <input
+                ref={avatarFileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarFileSelected}
+                className="hidden"
+              />
+
+              {/* Botões de Ação estilo Profile.jsx */}
+              <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => avatarFileInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
+                  className="press min-h-11 rounded-full border-[1.5px] border-[#8F7BFF] bg-[rgba(124,58,237,0.16)] px-4 text-[13px] font-extrabold text-text hover:bg-[rgba(124,58,237,0.25)] transition-colors disabled:opacity-50"
+                >
+                  {feedAvatarUrl ? 'Trocar foto' : 'Enviar foto'}
+                </button>
+
+                {sponsorLogo && sponsorLogo !== feedAvatarUrl && (
+                  <button
+                    type="button"
+                    onClick={handleUseCompanyLogo}
+                    disabled={isUploadingAvatar}
+                    className="press min-h-11 rounded-full border border-line bg-surface-raised px-4 text-[13px] font-bold text-text hover:bg-surface-selected transition-colors disabled:opacity-50"
+                    title="Usar logo oficial do estande"
+                  >
+                    Usar logo oficial
+                  </button>
+                )}
+
+                {feedAvatarUrl && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    disabled={isUploadingAvatar}
+                    className="press min-h-11 px-3 text-[13px] font-bold text-text-2 hover:text-warn transition-colors disabled:opacity-50"
+                    title="Remover foto personalizada"
+                  >
+                    Remover
+                  </button>
+                )}
               </div>
 
-              {/* URL Direta de Imagem */}
-              <div className="flex flex-col gap-1 mt-1">
-                <span className="text-[11px] text-text-4">Ou informe a URL direta de uma imagem:</span>
-                <input
-                  type="url"
-                  value={feedAvatarUrl}
-                  onChange={(e) => {
-                    setFeedAvatarUrl(e.target.value);
-                    setIsFeedProfileDirty(true);
-                  }}
-                  placeholder="https://exemplo.com/sua-logo.png"
-                  className="w-full rounded-xl border border-field-line bg-field px-3.5 py-2 text-[12px] text-text font-mono placeholder-text-4 focus:border-link focus:outline-none min-h-[40px]"
-                />
-              </div>
+              <span className="mt-1.5 text-[12px] text-text-3" role={avatarError ? 'alert' : undefined}>
+                {avatarError ? (
+                  <span className="text-err flex items-center gap-1 font-semibold">
+                    <AlertCircle size={13} /> {avatarError}
+                  </span>
+                ) : isUploadingAvatar ? (
+                  'Enviando foto...'
+                ) : (
+                  'Imagem de até 2 MB (PNG, JPG, SVG)'
+                )}
+              </span>
+
+              {/* URL Direta de Imagem (opcional / secundário) */}
+              <details className="w-full mt-3 pt-2.5 border-t border-line/60 text-left group">
+                <summary className="cursor-pointer text-[11px] font-semibold text-text-3 hover:text-text select-none flex items-center justify-center gap-1 py-1">
+                  <span>Ou colar link/URL da imagem</span>
+                  <span className="text-[10px] text-text-4 group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="mt-2 flex flex-col gap-1">
+                  <input
+                    type="url"
+                    value={feedAvatarUrl}
+                    onChange={(e) => {
+                      setFeedAvatarUrl(e.target.value);
+                      setIsFeedProfileDirty(true);
+                    }}
+                    placeholder="https://exemplo.com/sua-logo.png"
+                    className="w-full rounded-xl border border-field-line bg-field px-3.5 py-2 text-[12px] text-text font-mono placeholder:text-text-4 focus:border-link focus:outline-none min-h-[42px]"
+                  />
+                </div>
+              </details>
             </div>
 
-            {/* Campo: @ Identificador no Feed */}
-            <div className="flex flex-col gap-1.5 pt-2 border-t border-line">
-              <label htmlFor="feed-handle-input" className="text-[12px] font-bold text-text">
+            {/* Campo: @ Identificador no Feed com .pf-group */}
+            <div className="flex flex-col gap-1.5 pt-3 border-t border-line">
+              <label htmlFor="feed-handle-input" className="text-[12px] font-extrabold uppercase tracking-wider text-text-2">
                 @ Identificador no Feed
               </label>
 
-              <div className="flex items-center rounded-xl border border-field-line bg-field focus-within:border-link focus-within:ring-1 focus-within:ring-link overflow-hidden min-h-[44px]">
-                <span className="px-3.5 text-text-3 font-mono font-bold select-none text-[14px]">@</span>
+              <div className="pf-group">
+                <span className="text-[15px] font-bold text-text-4 select-none" aria-hidden="true">@</span>
                 <input
                   type="text"
                   id="feed-handle-input"
@@ -611,9 +649,10 @@ export default function SponsorSettings({
                   }}
                   placeholder={companyId || 'empresa'}
                   maxLength={24}
-                  className="flex-1 bg-transparent py-2.5 pr-3 text-[13px] font-mono text-text placeholder-text-4 focus:outline-none"
+                  autoComplete="off"
+                  className="pf-group-input font-bold"
                 />
-                <span className="pr-3 text-[11px] font-mono text-text-4">
+                <span className="shrink-0 text-[11px] font-mono text-text-4 select-none">
                   {feedHandle.replace(/^@/, '').length}/24
                 </span>
               </div>
@@ -622,9 +661,9 @@ export default function SponsorSettings({
               </p>
             </div>
 
-            {/* Campo: Nome de Exibição no Feed */}
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="feed-display-name-input" className="text-[12px] font-bold text-text">
+            {/* Campo: Nome de Exibição no Feed com .pf-field */}
+            <div className="flex flex-col gap-1.5 pt-1">
+              <label htmlFor="feed-display-name-input" className="text-[12px] font-extrabold uppercase tracking-wider text-text-2">
                 Nome de Exibição no Feed
               </label>
 
@@ -638,7 +677,7 @@ export default function SponsorSettings({
                 }}
                 placeholder={companyName}
                 maxLength={40}
-                className="w-full rounded-xl border border-field-line bg-field px-3.5 py-2.5 text-[13px] text-text placeholder-text-4 focus:border-link focus:outline-none min-h-[44px]"
+                className="field pf-field w-full px-3.5 text-text placeholder:text-text-4"
               />
               <p className="text-[11px] text-text-4 m-0">
                 Nome exibido em destaque no cabeçalho das publicações. Deixe em branco para usar "{companyName}".
@@ -646,11 +685,11 @@ export default function SponsorSettings({
             </div>
 
             {/* Ações do Perfil */}
-            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-line">
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-4 border-t border-line">
               <button
                 type="button"
                 onClick={handleResetFeedProfile}
-                className="press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-raised px-3.5 py-2 text-[12px] font-semibold text-text-3 hover:text-text hover:border-line-2 transition-colors min-h-[44px]"
+                className="press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-raised px-3.5 py-2 text-[12px] font-bold text-text-3 hover:text-text hover:border-line-2 transition-colors min-h-[44px]"
               >
                 <RotateCcw size={13} />
                 <span>Restaurar perfil padrão</span>
@@ -662,19 +701,19 @@ export default function SponsorSettings({
                 disabled={!isFeedProfileDirty}
                 className={btn(
                   isFeedProfileDirty ? 'action' : 'secondary',
-                  `min-h-[44px] px-5 text-[13px] ${!isFeedProfileDirty ? 'opacity-50 cursor-not-allowed' : ''}`
+                  `min-h-[44px] px-5 text-[13px] font-bold ${!isFeedProfileDirty ? 'opacity-50 cursor-not-allowed' : ''}`
                 )}
               >
-                <Save size={14} />
+                <Save size={15} />
                 <span>Salvar Perfil do Feed</span>
               </button>
             </div>
           </section>
 
           {/* Coluna de Live Preview do Feed (5 Colunas no Desktop XL) */}
-          <aside className="xl:col-span-5 flex flex-col gap-3 rounded-[20px] border border-line bg-surface p-5 shadow-sm">
+          <aside className="xl:col-span-5 flex flex-col gap-3 rounded-[20px] border border-line bg-surface p-4 sm:p-5 shadow-sm">
             <div className="flex items-center justify-between pb-2 border-b border-line">
-              <h3 className="text-[14px] font-extrabold text-text m-0">
+              <h3 className="text-[13px] font-extrabold uppercase tracking-wider text-text-2 m-0">
                 Pré-visualização no Feed
               </h3>
               <span className="text-[11px] font-semibold text-text-4">
@@ -682,8 +721,8 @@ export default function SponsorSettings({
               </span>
             </div>
 
-            {/* Mini Card Autêntico do Feed */}
-            <article className="rounded-2xl border border-line bg-surface-raised/40 p-4 shadow-sm flex flex-col gap-3 mt-1">
+            {/* Post Autêntico do Feed (Sem borda duplicada interna, conforme DESIGN.md §13) */}
+            <div className="rounded-2xl bg-surface-raised p-4 flex flex-col gap-3 mt-1">
               {/* Header do Post */}
               <div className="flex items-start gap-3">
                 <div className="relative size-10 rounded-full border border-line overflow-hidden bg-surface flex items-center justify-center shrink-0">
@@ -694,7 +733,9 @@ export default function SponsorSettings({
                       className="size-full object-cover"
                     />
                   ) : (
-                    <Building2 size={18} className="text-text-3" />
+                    <span className="text-[14px] font-extrabold text-text select-none">
+                      {initials}
+                    </span>
                   )}
                 </div>
 
@@ -709,7 +750,7 @@ export default function SponsorSettings({
                   </div>
 
                   <div className="flex items-center gap-1.5 text-[11px] text-text-3 mt-0.5">
-                    <span className="font-semibold text-text-2">{displayHandle}</span>
+                    <span className="font-semibold text-link">{displayHandle}</span>
                     <span className="opacity-40">•</span>
                     <span>Agora</span>
                   </div>
@@ -722,7 +763,7 @@ export default function SponsorSettings({
               </p>
 
               {/* Barra de Engajamento Simulada */}
-              <div className="flex items-center gap-4 pt-2 border-t border-line text-text-3 text-[12px]">
+              <div className="flex items-center gap-4 pt-2 border-t border-line/60 text-text-3 text-[12px]">
                 <div className="inline-flex items-center gap-1">
                   <Heart size={14} className="text-red-400 fill-red-400" />
                   <span className="font-semibold text-text-2">24</span>
@@ -735,10 +776,10 @@ export default function SponsorSettings({
                   <Share2 size={13} />
                 </div>
               </div>
-            </article>
+            </div>
 
             {/* Dica de Integração */}
-            <div className="rounded-xl border border-line bg-surface-raised/20 p-3 text-[11px] text-text-3 leading-relaxed">
+            <div className="rounded-xl border border-line/60 bg-surface-raised/40 p-3 text-[11px] text-text-3 leading-relaxed">
               <p className="m-0">
                 Esta foto e @handle serão aplicados automaticamente a qualquer postagem ou aviso publicado pela sua empresa no Feed da TechWeek.
               </p>

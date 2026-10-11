@@ -676,7 +676,7 @@ export default function SponsorLeadModal({
               }}
             >
               <QrCode size={18} />
-              <span>Bipar Próximo Aluno</span>
+              <span>Escanear Próximo Aluno</span>
             </button>
           </div>
         ) : isExistingLead && !isEditing ? (

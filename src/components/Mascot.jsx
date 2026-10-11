@@ -23,11 +23,24 @@ export default function Mascot({
   const resolvedPeeking = isPeeking || mood === 'peeking';
   const resolvedCoveringEyes = isCoveringEyes || mood === 'coveringEyes' || mood === 'sad' || mood === 'error';
 
+  const rawId = React.useId();
+  const reactId = rawId.replace(/[^a-zA-Z0-9_-]/g, '');
+  const gradSuffix = `${resolvedColor}`;
+  const bodyGradId = `mascot-bodyGrad-${gradSuffix}-${reactId}`;
+  const accentGradId = `accentGrad-${gradSuffix}-${reactId}`;
+  const eyeGradId = `eyeGrad-${reactId}`;
+  const bodyClipId = `bodyClip-${reactId}`;
+
   // Resolução de Tamanho (DESIGN.md §8: 28, 44, 50-52, 56, 64-76, 112-150)
-  const sizeStyle = size != null
+  const sizeValue = size != null ? (typeof size === 'number' ? `${size}px` : size) : null;
+  const sizeStyle = sizeValue
     ? {
-        width: typeof size === 'number' ? `${size}px` : size,
-        height: typeof size === 'number' ? `${size}px` : size,
+        width: sizeValue,
+        height: sizeValue,
+        minWidth: sizeValue,
+        minHeight: sizeValue,
+        flexShrink: 0,
+        aspectRatio: '1 / 1',
       }
     : {};
 
@@ -45,8 +58,6 @@ export default function Mascot({
   const cappedOffset = Math.min(Math.max(lookOffset, -8), 8);
   const cappedOffsetY = Math.min(Math.max(lookOffsetY, -8), 8);
 
-  const gradSuffix = `${resolvedColor}`;
-
   return (
     <div
       className={`mascot-container mascot-name-${mascotName.toLowerCase()} ${mood ? `mascot-mood-${mood}` : ''} ${className}`.trim().replace(/\s+/g, ' ')}
@@ -60,20 +71,20 @@ export default function Mascot({
         className="mascot-svg"
       >
         <defs>
-          <linearGradient id={`bodyGrad-${gradSuffix}`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={bodyGradId} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor={gradient.start} />
             <stop offset="100%" stopColor={gradient.end} />
           </linearGradient>
-          <linearGradient id={`accentGrad-${gradSuffix}`} x1="0%" y1="100%" x2="100%" y2="0%">
+          <linearGradient id={accentGradId} x1="0%" y1="100%" x2="100%" y2="0%">
             <stop offset="0%" stopColor={gradient.end} stopOpacity="0.4" />
             <stop offset="100%" stopColor={gradient.start} stopOpacity="0" />
           </linearGradient>
-          <linearGradient id="eyeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={eyeGradId} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#e2e8f0" />
             <stop offset="100%" stopColor="#94a3b8" />
           </linearGradient>
           
-          <clipPath id="bodyClip">
+          <clipPath id={bodyClipId}>
             <rect x="40" y="40" width="120" height="120" rx="16" />
           </clipPath>
         </defs>
@@ -118,20 +129,21 @@ export default function Mascot({
           />
         </g>
 
-        {/* Body */}
+        {/* Body com fallback de cor solida caso WebKit/gradiente falhe */}
         <rect
           x="40"
           y="40"
           width="120"
           height="120"
           rx="16"
-          fill={`url(#bodyGrad-${gradSuffix})`}
+          fill={gradient.start}
+          style={{ fill: `url(#${bodyGradId})` }}
           className="mascot-body"
         />
         
         {/* Geometric Accents */}
-        <g clipPath="url(#bodyClip)">
-          <path d="M 40 160 L 160 40 L 160 160 Z" fill={`url(#accentGrad-${gradSuffix})`} />
+        <g clipPath={`url(#${bodyClipId})`}>
+          <path d="M 40 160 L 160 40 L 160 160 Z" fill={`url(#${accentGradId})`} />
           <path d="M 40 100 L 100 40 L 160 40 L 40 160 Z" fill="rgba(255,255,255,0.08)" />
         </g>
 
@@ -141,7 +153,7 @@ export default function Mascot({
              <path d="M 55 85 L 75 75 L 95 85" fill="none" stroke="#1e293b" strokeWidth="8" strokeLinejoin="miter" strokeLinecap="square" />
           ) : (
             <>
-              <rect x="53" y="63" width="44" height="44" rx="10" fill="url(#eyeGrad)" />
+              <rect x="53" y="63" width="44" height="44" rx="10" fill={`url(#${eyeGradId})`} />
               <rect x={63 + cappedOffset} y={73 + cappedOffsetY} width="24" height="24" rx="6" fill="#0f172a" style={{ transition: 'all 0.1s ease-out' }} />
               <rect x={77 + cappedOffset} y={77 + cappedOffsetY} width="6" height="6" rx="2" fill="#fff" style={{ transition: 'all 0.1s ease-out' }} />
             </>
@@ -154,7 +166,7 @@ export default function Mascot({
              <path d="M 105 85 L 125 75 L 145 85" fill="none" stroke="#1e293b" strokeWidth="8" strokeLinejoin="miter" strokeLinecap="square" />
           ) : (
             <>
-              <rect x="103" y="63" width="44" height="44" rx="10" fill="url(#eyeGrad)" />
+              <rect x="103" y="63" width="44" height="44" rx="10" fill={`url(#${eyeGradId})`} />
               <rect x={113 + cappedOffset} y={73 + cappedOffsetY} width="24" height="24" rx="6" fill="#0f172a" style={{ transition: 'all 0.1s ease-out' }} />
               <rect x={127 + cappedOffset} y={77 + cappedOffsetY} width="6" height="6" rx="2" fill="#fff" style={{ transition: 'all 0.1s ease-out' }} />
             </>

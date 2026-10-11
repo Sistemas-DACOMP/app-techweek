@@ -99,7 +99,7 @@ export default function SponsorTeamGamification({
         <Mascot name="alan" mood="happy" size={38} className="shrink-0" />
         <div className="min-w-0 text-[12px] text-text-2">
           {totalLeads === 0 ? (
-            <span>Prontos para começar? Bipe o crachá dos alunos e inicie conexões valiosas!</span>
+            <span>Prontos para começar? Escaneie o crachá dos alunos e inicie conexões valiosas!</span>
           ) : progressPct >= 100 ? (
             <span className="font-bold text-[#6FD8A6]">
               Incrível! A meta do estande foi batida! Continuem conectando os melhores talentos.

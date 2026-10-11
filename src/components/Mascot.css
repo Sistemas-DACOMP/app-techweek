@@ -1,7 +1,11 @@
 .mascot-container {
   width: 150px;
   height: 150px;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1;
   /* Floating animation for the whole container (DESIGN.md §8: flutuar 6px em loop de 3s) */
   animation: float 3s ease-in-out infinite;
   cursor: pointer;
@@ -10,7 +14,9 @@
 .mascot-svg {
   width: 100%;
   height: 100%;
-  overflow: visible;
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
 }
 
 /* Floating keyframes: DESIGN.md §8 (6px de flutuação suave) */
@@ -23,6 +29,7 @@
 /* Arm Animations */
 .mascot-arm {
   transform-origin: 50% 100px;
+  transform-box: fill-box;
 }
 
 .mascot-arm-left {

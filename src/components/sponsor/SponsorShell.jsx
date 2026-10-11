@@ -58,7 +58,7 @@ const MENU_GROUPS = [
       { key: 'leads', label: 'Leads do Estande', icon: Users, badgeKey: 'leads' },
       { key: 'settings', label: 'Configurações', icon: SlidersHorizontal, tag: 'Perfil & Feed' },
       { key: 'roi', label: 'Relatório Executivo', icon: TrendingUp, tag: 'ROI' },
-      { key: 'scanner', label: 'Scanner de Crachá', icon: QrCode, tag: 'Bipar' },
+      { key: 'scanner', label: 'Scanner de Crachá', icon: QrCode, tag: 'SCAN' },
     ],
   },
   {
@@ -73,7 +73,7 @@ const MENU_GROUPS = [
 const MOBILE_NAV_TABS = [
   { key: 'home', label: 'Estande', icon: LayoutDashboard },
   { key: 'leads', label: 'Leads', icon: Users },
-  { key: 'scanner', label: 'Bipar', icon: QrCode, isFab: true },
+  { key: 'scanner', label: 'Scanner', icon: QrCode, isFab: true },
   { key: 'agenda', label: 'Agenda', icon: CalendarDays },
   { key: 'feed', label: 'Feed', icon: MessageSquare },
 ];
@@ -341,7 +341,7 @@ export default function SponsorShell({
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-            {/* Atalho Rápido para Bipar */}
+            {/* Atalho Rápido para Scanner */}
             {activeNavKey !== 'scanner' && (
               <button
                 type="button"
@@ -349,7 +349,7 @@ export default function SponsorShell({
                 className="press inline-flex h-9 items-center gap-2 rounded-xl bg-action px-3.5 text-[12px] font-extrabold text-white shadow-sm hover:brightness-110 transition-all"
               >
                 <QrCode size={15} aria-hidden="true" />
-                <span>Bipar Crachá</span>
+                <span>Escanear Crachá</span>
               </button>
             )}
 

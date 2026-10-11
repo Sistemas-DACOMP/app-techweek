@@ -986,7 +986,7 @@ export default function Sponsor() {
           <div className="mb-4 rounded-[20px] bg-surface border border-line p-4 sm:p-5 flex flex-col gap-3.5 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <Mascot size={44} name="alan" mood="happy" className="shrink-0" />
+                <Mascot size={44} name="alan" mood="happy" className="shrink-0 mascot-still" />
                 <div className="min-w-0 flex-1">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-link block truncate">
                     Estande {sponsorName}
@@ -1029,7 +1029,7 @@ export default function Sponsor() {
                 onClick={() => setActiveTab('scanner')}
               >
                 <QrCode size={16} aria-hidden="true" />
-                <span>Bipar crachá</span>
+                <span>Escanear crachá</span>
               </button>
               <button
                 type="button"
@@ -1067,7 +1067,7 @@ export default function Sponsor() {
           <div style={{ textAlign: 'center', marginBottom: '14px' }}>
             <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
               {activeTab === 'leads' && 'Leads do Estande'}
-              {activeTab === 'scanner' && 'Bipar Crachá'}
+              {activeTab === 'scanner' && 'Scanner de Crachá'}
               {activeTab === 'agenda' && 'Programação da TechWeek'}
               {activeTab === 'feed' && 'Feed da Comunidade'}
               {activeTab === 'settings' && 'Configurações do Estande'}
@@ -1093,7 +1093,7 @@ export default function Sponsor() {
           {/* Welcome Hero Desktop */}
           <div className="hidden lg:flex items-center justify-between gap-4 p-5 rounded-[22px] bg-gradient-to-r from-surface via-surface to-surface-raised border border-line shadow-xs">
             <div className="flex items-center gap-4 min-w-0">
-              <Mascot size={52} name="alan" mood="happy" className="shrink-0" />
+              <Mascot size={52} name="alan" mood="happy" className="shrink-0 mascot-still" />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-link">
@@ -1128,7 +1128,7 @@ export default function Sponsor() {
                 onClick={() => setActiveTab('scanner')}
               >
                 <QrCode size={17} aria-hidden="true" />
-                <span>Bipar Crachá</span>
+                <span>Escanear Crachá</span>
               </button>
               <button
                 type="button"
@@ -1183,7 +1183,7 @@ export default function Sponsor() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             {/* Coluna da Esquerda (7 colunas no Desktop): Scanner CTA + Leads Recentes */}
             <div className="lg:col-span-7 flex flex-col gap-5">
-              {/* Hero Action: Bipar Crachá */}
+              {/* Hero Action: Escanear Crachá */}
               <div
                 role="button"
                 tabIndex={0}
@@ -1202,7 +1202,7 @@ export default function Sponsor() {
                     <span>Escanear Visitante</span>
                   </div>
                   <h2 className="m-0 mt-1 text-[16px] font-extrabold text-[#EEF1FA]">
-                    Bipar Crachá de Aluno
+                    Escanear Crachá de Aluno
                   </h2>
                   <p className="m-0 mt-0.5 text-[12px] text-text-3">
                     Aponte a câmera para o QR digital ou crachá físico Sympla.
@@ -1253,7 +1253,7 @@ export default function Sponsor() {
                       onClick={() => setActiveTab('scanner')}
                     >
                       <QrCode size={15} aria-hidden="true" />
-                      <span>Bipar primeiro visitante</span>
+                      <span>Escanear primeiro visitante</span>
                     </button>
                   </div>
                 ) : (
@@ -1689,7 +1689,7 @@ export default function Sponsor() {
                     <p className="mb-3.5 max-w-[280px] text-[12px] leading-relaxed text-text-3">
                       {leadsTab === 'mine'
                         ? 'Aponte a câmera para o crachá dos estudantes no estande para salvar contatos, notas e avaliações.'
-                        : 'Nenhum membro da sua equipe bipou participantes ainda.'}
+                        : 'Nenhum membro da sua equipe escaneou participantes ainda.'}
                     </p>
                     <button
                       type="button"
@@ -1697,7 +1697,7 @@ export default function Sponsor() {
                       className={`${btn('action')} inline-flex items-center gap-1.5 h-9 px-4 text-[12px] font-extrabold`}
                     >
                       <Camera size={15} />
-                      <span>Bipar Primeiro Estudante</span>
+                      <span>Escanear Primeiro Estudante</span>
                     </button>
                   </div>
                 ) : displayedLeads.length === 0 ? (
@@ -1920,7 +1920,7 @@ export default function Sponsor() {
 
                             {leadsTab === 'company' && lead.collectedByEmail && (
                               <div className="text-[10px] text-text-3 mt-1">
-                                Bipado por: {lead.collectedByName || lead.collectedByEmail}
+                                Escaneado por: {lead.collectedByName || lead.collectedByEmail}
                               </div>
                             )}
                           </div>
@@ -1959,7 +1959,7 @@ export default function Sponsor() {
 )}
 
       {/* ========================================================================= */}
-      {/* ABA 3: SCANNER (BIPAR CRACHÁ)                                             */}
+      {/* ABA 3: SCANNER DE CRACHÁ                                                  */}
       {/* ========================================================================= */}
       {activeTab === 'scanner' && (
         <div className="animate-fade-in grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
@@ -2321,7 +2321,7 @@ export default function Sponsor() {
 
 
       {/* ========================================================================= */}
-      {/* MODAL 1: NOVO PARTICIPANTE BIPADO                                        */}
+      {/* MODAL 1: NOVO PARTICIPANTE ESCANEADO                                      */}
       {/* ========================================================================= */}
       {activeParticipant && (
         <SponsorLeadModal
