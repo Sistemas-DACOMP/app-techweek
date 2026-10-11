@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Plus, Megaphone, Zap, Monitor, AlertTriangle, Ticket, ChevronRight, BarChart3,
-  LifeBuoy, Wrench, CheckCircle2, Radio, QrCode, Calendar, Trophy, X, ShieldAlert
+  LifeBuoy, Wrench, CheckCircle2, Radio, QrCode, Calendar, Trophy, X, ShieldAlert,
+  Phone, Send, Clock, User, MessageSquare, Check, Sparkles, Building2
 } from 'lucide-react';
 import Mascot from '../../components/Mascot';
 import iconeTw from '../../assets/icone.png';
@@ -17,6 +18,13 @@ import {
   setStageDisplayMode,
   STAGE_MODES,
 } from '../../lib/liveOpsService';
+import {
+  getTickets,
+  updateTicketStatus,
+  addTicketNote,
+  createTicket,
+  TICKETS_UPDATED_EVENT,
+} from '../../lib/ticketService';
 
 /* 2.01 Visão geral (desktop) e 2.08 Início (celular) + Central de Chamados SOS & Orquestrador de Telão */
 
@@ -124,39 +132,97 @@ export default function AdminInicio({
   const highlight = live[0] || dayActs.find((a) => liveStatus(a, now) === 'future') || null;
   const lastPost = feedPosts[0];
 
-  // Gestão de Incidentes SOS em Tempo Real
+  // Gestão de Incidentes SOS & Chamados em Tempo Real
   const [incidents, setIncidents] = useState(() => getRoomIncidents());
+  const [tickets, setTickets] = useState(() => getTickets());
+  const [ticketFilter, setTicketFilter] = useState('ALL'); // 'ALL' | 'SPONSOR' | 'STAFF' | 'ROOMS'
+  const [replyInputMap, setReplyInputMap] = useState({});
+  const [activeReplyId, setActiveReplyId] = useState(null);
+
   const [newIncidentModal, setNewIncidentModal] = useState(false);
+  const [newTicketOrigin, setNewTicketOrigin] = useState('ROOM'); // 'ROOM' | 'SPONSOR' | 'STAFF'
   const [newIncRoom, setNewIncRoom] = useState('Anfiteatro FACOM');
+  const [newIncSenderName, setNewIncSenderName] = useState('');
   const [newIncIssue, setNewIncIssue] = useState('');
   const [newIncPriority, setNewIncPriority] = useState('alta');
 
   // Gestão do Modo do Telão
   const [currentStageMode, setCurrentStageMode] = useState(() => getStageDisplayMode());
 
-  const openIncidents = incidents.filter((i) => i.status !== 'resolved');
+  // Atualização em tempo real via evento de tickets
+  useEffect(() => {
+    const handleUpdate = () => {
+      setTickets(getTickets());
+      setIncidents(getRoomIncidents());
+    };
+    window.addEventListener(TICKETS_UPDATED_EVENT, handleUpdate);
+    return () => window.removeEventListener(TICKETS_UPDATED_EVENT, handleUpdate);
+  }, []);
 
-  const handleDispatchSupport = (id) => {
-    dispatchIncidentSupport(id, 'Técnico de Plantão FACOM');
-    setIncidents(getRoomIncidents());
+  const openIncidents = incidents.filter((i) => i.status !== 'resolved');
+  const openTickets = tickets.filter((t) => t.status !== 'RESOLVED');
+
+  const sponsorOpenCount = openTickets.filter((t) => t.role === 'SPONSOR').length;
+  const staffOpenCount = openTickets.filter((t) => t.role === 'STAFF').length;
+  const roomOpenCount = openIncidents.length;
+  const totalOpenCount = sponsorOpenCount + staffOpenCount + roomOpenCount;
+
+  const handleDispatchSupport = (id, isTicket = false) => {
+    if (isTicket) {
+      updateTicketStatus(id, 'IN_PROGRESS', 'Coordenação TechWeek');
+      setTickets(getTickets());
+    } else {
+      dispatchIncidentSupport(id, 'Técnico de Plantão FACOM');
+      setIncidents(getRoomIncidents());
+    }
   };
 
-  const handleResolveIncident = (id) => {
-    resolveIncident(id);
-    setIncidents(getRoomIncidents());
+  const handleResolveIncident = (id, isTicket = false) => {
+    if (isTicket) {
+      updateTicketStatus(id, 'RESOLVED');
+      setTickets(getTickets());
+    } else {
+      resolveIncident(id);
+      setIncidents(getRoomIncidents());
+    }
+  };
+
+  const handleSendTicketReply = (ticketId) => {
+    const text = replyInputMap[ticketId];
+    if (!text || !text.trim()) return;
+    addTicketNote(ticketId, text.trim(), `Coordenação (${firstName || 'Admin'})`);
+    setReplyInputMap((prev) => ({ ...prev, [ticketId]: '' }));
+    setActiveReplyId(null);
+    setTickets(getTickets());
   };
 
   const handleCreateIncident = (e) => {
     e.preventDefault();
     if (!newIncIssue.trim()) return;
-    createRoomIncident({
-      room: newIncRoom,
-      issue: newIncIssue.trim(),
-      priority: newIncPriority,
-      reporter: `Admin (${firstName || 'Operador'})`,
-    });
-    setIncidents(getRoomIncidents());
+
+    if (newTicketOrigin === 'ROOM') {
+      createRoomIncident({
+        room: newIncRoom,
+        issue: newIncIssue.trim(),
+        priority: newIncPriority,
+        reporter: `Admin (${firstName || 'Operador'})`,
+      });
+      setIncidents(getRoomIncidents());
+    } else {
+      createTicket({
+        role: newTicketOrigin,
+        senderName: newIncSenderName.trim() || (newTicketOrigin === 'SPONSOR' ? 'Estande Patrocinador' : 'Staff Portaria'),
+        category: 'geral',
+        title: newIncIssue.trim().slice(0, 48),
+        description: newIncIssue.trim(),
+        location: newIncRoom,
+        priority: newIncPriority === 'alta' ? 'URGENT' : newIncPriority === 'media' ? 'MEDIUM' : 'LOW',
+      });
+      setTickets(getTickets());
+    }
+
     setNewIncIssue('');
+    setNewIncSenderName('');
     setNewIncidentModal(false);
   };
 
@@ -167,6 +233,49 @@ export default function AdminInicio({
       onOpenTelao(highlight);
     }
   };
+
+  const filteredItems = useMemo(() => {
+    const list = [];
+
+    if (ticketFilter === 'ALL' || ticketFilter === 'ROOMS') {
+      openIncidents.forEach((inc) => {
+        list.push({
+          id: inc.id,
+          kind: 'ROOM',
+          room: inc.room,
+          issue: inc.issue,
+          priority: inc.priority,
+          status: inc.status,
+          technician: inc.technician,
+          createdAt: inc.timestamp,
+        });
+      });
+    }
+
+    if (ticketFilter === 'ALL' || ticketFilter === 'SPONSOR' || ticketFilter === 'STAFF') {
+      openTickets.forEach((t) => {
+        if (ticketFilter === 'ALL' || ticketFilter === t.role) {
+          list.push({
+            id: t.id,
+            kind: 'TICKET',
+            ticket: t,
+            room: t.location || (t.role === 'SPONSOR' ? 'Estande' : 'Portaria'),
+            issue: t.description || t.title,
+            priority: t.priority === 'URGENT' || t.priority === 'HIGH' ? 'alta' : 'media',
+            status: t.status === 'IN_PROGRESS' ? 'dispatched' : 'open',
+            technician: t.assignedTo,
+            createdAt: t.createdAt,
+            senderName: t.senderName,
+            senderPhone: t.senderPhone,
+            role: t.role,
+            notes: t.notes || [],
+          });
+        }
+      });
+    }
+
+    return list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  }, [ticketFilter, openIncidents, openTickets]);
 
   const subtitle = isToday
     ? `${longDate(now)} · ${dayActs.length} ${dayActs.length === 1 ? 'atividade' : 'atividades'} hoje${live.length ? ` · ${live.length} acontecendo agora` : ''}`
@@ -296,17 +405,17 @@ export default function AdminInicio({
         </Section>
 
         <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
-          {/* PILAR 1: Central de Chamados SOS de Sala */}
+          {/* PILAR 1: Central de Apoio & Chamados SOS */}
           <section aria-labelledby="adm-sos" className="rounded-[20px] bg-surface p-4 lg:p-5 border border-line">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <LifeBuoy size={18} className="text-warn" aria-hidden="true" />
                 <h2 id="adm-sos" className="m-0 text-[15px] font-extrabold lg:text-[17px]">
-                  Chamados SOS de Sala
+                  Central de Apoio & Chamados SOS
                 </h2>
-                {openIncidents.length > 0 && (
+                {totalOpenCount > 0 && (
                   <span className="rounded-full bg-warn/20 px-2 py-0.5 text-[11px] font-extrabold text-warn">
-                    {openIncidents.length}
+                    {totalOpenCount}
                   </span>
                 )}
               </div>
@@ -319,48 +428,156 @@ export default function AdminInicio({
               </button>
             </div>
 
-            {openIncidents.length === 0 ? (
+            {/* Abas de Origem / Filtro */}
+            <div className="mb-3 flex flex-wrap gap-1.5 border-b border-line pb-2.5">
+              {[
+                { key: 'ALL', label: 'Todos', count: totalOpenCount },
+                { key: 'SPONSOR', label: 'Patrocinadores', count: sponsorOpenCount },
+                { key: 'STAFF', label: 'Staff', count: staffOpenCount },
+                { key: 'ROOMS', label: 'Salas FACOM', count: roomOpenCount },
+              ].map((tab) => {
+                const isActive = ticketFilter === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setTicketFilter(tab.key)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-extrabold transition-all ${
+                      isActive
+                        ? 'bg-link text-[#0A0F24]'
+                        : 'bg-surface-raised text-text-3 hover:text-text'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    {tab.count > 0 && (
+                      <span
+                        className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+                          isActive ? 'bg-[#0A0F24]/20 text-[#0A0F24]' : 'bg-surface text-text-2'
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {filteredItems.length === 0 ? (
               <p className="m-0 text-[13px] text-text-3 py-2">
-                Nenhum chamado aberto. Todas as salas operando normalmente.
+                Nenhum chamado aberto nesta categoria. Tudo operando normalmente.
               </p>
             ) : (
               <div className="space-y-2.5">
-                {openIncidents.map((inc) => (
+                {filteredItems.map((item) => (
                   <div
-                    key={inc.id}
+                    key={item.id}
                     className="rounded-xl border border-line-2 bg-surface-raised p-3 text-left shadow-sm"
                     style={{
                       borderLeftWidth: '3px',
-                      borderLeftColor: inc.priority === 'alta' ? 'var(--warn)' : 'var(--link)',
+                      borderLeftColor: item.priority === 'alta' ? 'var(--warn)' : 'var(--link)',
                     }}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-black text-text">{inc.room}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {item.kind === 'ROOM' && (
+                          <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-bold text-text-2">
+                            Sala FACOM
+                          </span>
+                        )}
+                        {item.kind === 'TICKET' && item.role === 'SPONSOR' && (
+                          <span className="inline-flex items-center gap-1 rounded bg-link/15 px-1.5 py-0.5 text-[10px] font-bold text-link">
+                            <Building2 size={11} /> Patrocinador · {item.senderName}
+                          </span>
+                        )}
+                        {item.kind === 'TICKET' && item.role === 'STAFF' && (
+                          <span className="inline-flex items-center gap-1 rounded bg-[#C4B5FD]/15 px-1.5 py-0.5 text-[10px] font-bold text-[#C4B5FD]">
+                            <User size={11} /> Staff · {item.senderName}
+                          </span>
+                        )}
+                        <span className="text-[12px] font-extrabold text-text">
+                          {item.room}
+                        </span>
+                      </div>
                       <span
-                        className="rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase"
+                        className="rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase shrink-0"
                         style={{
-                          background: inc.status === 'dispatched' ? 'rgba(96,165,250,0.2)' : 'rgba(251,191,36,0.2)',
-                          color: inc.status === 'dispatched' ? '#60A5FA' : '#FBBF24',
+                          background: item.status === 'dispatched' ? 'rgba(96,165,250,0.2)' : 'rgba(251,191,36,0.2)',
+                          color: item.status === 'dispatched' ? '#60A5FA' : '#FBBF24',
                         }}
                       >
-                        {inc.status === 'dispatched' ? 'Suporte a caminho' : 'Aguardando'}
+                        {item.status === 'dispatched' ? 'Suporte a caminho' : 'Aguardando'}
                       </span>
                     </div>
 
-                    <p className="m-0 mt-1 text-[12px] font-medium text-text-2">{inc.issue}</p>
+                    <p className="m-0 mt-1.5 text-[12px] font-medium text-text-2 leading-relaxed">
+                      {item.issue}
+                    </p>
 
-                    {inc.technician && (
+                    {item.technician && (
                       <div className="mt-1 flex items-center gap-1.5 text-[11px] text-link">
                         <Wrench size={12} />
-                        <span>Despachado: <b>{inc.technician}</b></span>
+                        <span>Atendente/Suporte: <b>{item.technician}</b></span>
                       </div>
                     )}
 
-                    <div className="mt-2.5 flex items-center justify-end gap-2 border-t border-line/60 pt-2">
-                      {inc.status === 'open' && (
+                    {/* Resposta recente da coordenação se houver */}
+                    {item.kind === 'TICKET' && item.notes && item.notes.length > 0 && (
+                      <div className="mt-2 rounded-lg bg-surface/80 p-2 border border-line text-[11px] text-text-2">
+                        <span className="font-bold text-text">Última nota ({item.notes[item.notes.length - 1].author}):</span>{' '}
+                        {item.notes[item.notes.length - 1].text}
+                      </div>
+                    )}
+
+                    {/* Formulário de resposta rápida inline */}
+                    {activeReplyId === item.id && (
+                      <div className="mt-2.5 pt-2 border-t border-line/60 flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Digite uma mensagem para o solicitante..."
+                          value={replyInputMap[item.id] || ''}
+                          onChange={(e) => setReplyInputMap({ ...replyInputMap, [item.id]: e.target.value })}
+                          className="flex-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-[12px] text-text outline-none focus:border-link"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSendTicketReply(item.id);
+                          }}
+                        />
                         <button
                           type="button"
-                          onClick={() => handleDispatchSupport(inc.id)}
+                          onClick={() => handleSendTicketReply(item.id)}
+                          className="press inline-flex items-center gap-1 rounded-lg bg-link px-2.5 py-1 text-[11px] font-bold text-[#0A0F24]"
+                        >
+                          <Send size={11} /> Enviar
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="mt-2.5 flex flex-wrap items-center justify-end gap-1.5 border-t border-line/60 pt-2">
+                      {item.senderPhone && (
+                        <a
+                          href={`https://wa.me/55${item.senderPhone.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="press inline-flex items-center gap-1 rounded-lg bg-[#25D366]/15 px-2 py-1 text-[11px] font-bold text-[#25D366] hover:bg-[#25D366]/25"
+                        >
+                          <Phone size={11} /> WhatsApp
+                        </a>
+                      )}
+
+                      {item.kind === 'TICKET' && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveReplyId(activeReplyId === item.id ? null : item.id)}
+                          className="press inline-flex items-center gap-1 rounded-lg bg-surface px-2 py-1 text-[11px] font-bold text-text-2 hover:text-text"
+                        >
+                          <MessageSquare size={11} /> {activeReplyId === item.id ? 'Fechar' : 'Responder'}
+                        </button>
+                      )}
+
+                      {item.status === 'open' && (
+                        <button
+                          type="button"
+                          onClick={() => handleDispatchSupport(item.id, item.kind === 'TICKET')}
                           className="press inline-flex items-center gap-1 rounded-lg bg-link/15 px-2.5 py-1 text-[11px] font-bold text-link hover:bg-link/25"
                         >
                           <Wrench size={12} /> Despachar Suporte
@@ -368,7 +585,7 @@ export default function AdminInicio({
                       )}
                       <button
                         type="button"
-                        onClick={() => handleResolveIncident(inc.id)}
+                        onClick={() => handleResolveIncident(item.id, item.kind === 'TICKET')}
                         className="press inline-flex items-center gap-1 rounded-lg bg-ok/15 px-2.5 py-1 text-[11px] font-bold text-ok hover:bg-ok/25"
                       >
                         <CheckCircle2 size={12} /> Resolver
@@ -488,7 +705,7 @@ export default function AdminInicio({
             <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center gap-2 text-warn">
                 <ShieldAlert size={20} />
-                <h3 className="m-0 text-[16px] font-extrabold text-text">Novo Chamado SOS de Sala</h3>
+                <h3 className="m-0 text-[16px] font-extrabold text-text">Novo Chamado de Suporte / SOS</h3>
               </div>
               <button
                 type="button"
@@ -501,12 +718,62 @@ export default function AdminInicio({
 
             <form onSubmit={handleCreateIncident} className="mt-4 space-y-4">
               <div>
-                <label className="block text-[12px] font-bold text-text-2 mb-1">Local / Sala</label>
+                <label className="block text-[12px] font-bold text-text-2 mb-1">Origem do Chamado</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { key: 'ROOM', label: 'Sala FACOM' },
+                    { key: 'SPONSOR', label: 'Patrocinador' },
+                    { key: 'STAFF', label: 'Staff' },
+                  ].map((orig) => {
+                    const isSel = newTicketOrigin === orig.key;
+                    return (
+                      <button
+                        key={orig.key}
+                        type="button"
+                        onClick={() => {
+                          setNewTicketOrigin(orig.key);
+                          if (orig.key === 'ROOM') setNewIncRoom('Anfiteatro FACOM');
+                          else if (orig.key === 'SPONSOR') setNewIncRoom('Estande Principal');
+                          else setNewIncRoom('Portaria / Scanner');
+                        }}
+                        className={`rounded-lg py-1.5 text-[11px] font-extrabold transition-all ${
+                          isSel
+                            ? 'bg-link text-[#0A0F24]'
+                            : 'bg-surface text-text-3 hover:text-text'
+                        }`}
+                      >
+                        {orig.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {newTicketOrigin !== 'ROOM' && (
+                <div>
+                  <label className="block text-[12px] font-bold text-text-2 mb-1">
+                    {newTicketOrigin === 'SPONSOR' ? 'Empresa / Solicitante' : 'Membro do Staff / Portaria'}
+                  </label>
+                  <input
+                    type="text"
+                    value={newIncSenderName}
+                    onChange={(e) => setNewIncSenderName(e.target.value)}
+                    placeholder={newTicketOrigin === 'SPONSOR' ? 'Ex: Google Cloud, Kanastra...' : 'Ex: Carlos Portaria...'}
+                    required
+                    className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-[14px] text-text outline-none focus:border-link"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[12px] font-bold text-text-2 mb-1">
+                  {newTicketOrigin === 'ROOM' ? 'Local / Sala' : 'Local / Estande / Ponto'}
+                </label>
                 <input
                   type="text"
                   value={newIncRoom}
                   onChange={(e) => setNewIncRoom(e.target.value)}
-                  placeholder="Ex: Anfiteatro FACOM, Lab 1..."
+                  placeholder="Ex: Anfiteatro FACOM, Estande KANASTRA, Portaria Bloco B..."
                   required
                   className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-[14px] text-text outline-none focus:border-link"
                 />
@@ -517,7 +784,7 @@ export default function AdminInicio({
                 <textarea
                   value={newIncIssue}
                   onChange={(e) => setNewIncIssue(e.target.value)}
-                  placeholder="Ex: Cabo HDMI do púlpito falhando, microfone sem bateria..."
+                  placeholder="Descreva o que está ocorrendo ou o que precisa de suporte..."
                   rows={3}
                   required
                   className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-[14px] text-text outline-none focus:border-link resize-none"

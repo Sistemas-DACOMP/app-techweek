@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   Camera, Check, ChevronDown, ChevronLeft, ChevronRight, ArrowLeftRight, Flashlight,
-  Loader2, LogOut, Pencil, ScanLine, ShieldCheck, TriangleAlert, Volume2, VolumeX, X
+  Loader2, LogOut, Pencil, ScanLine, ShieldCheck, TriangleAlert, Volume2, VolumeX, X,
+  LifeBuoy
 } from 'lucide-react';
 import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { getMyProfile } from '../lib/gameplay';
@@ -15,6 +16,7 @@ import { stopAllMediaTracks } from '../lib/cameraUtils';
 import { resolveParticipantFromQr } from '../lib/sponsorService';
 import Mascot from '../components/Mascot';
 import RoleSwitcher from '../components/RoleSwitcher';
+import SupportTicketModal from '../components/SupportTicketModal';
 import iconeTw from '../assets/icone.png';
 import '../styles/staff.css';
 
@@ -97,6 +99,7 @@ export default function Staff() {
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null); // { status: 'green'|'yellow'|'red', kind: 'ok'|'warn'|'dup'|'err', message }
   const [processing, setProcessing] = useState(false);
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
 
   // Apresentação (não muda regra): conta, câmera, som, lanterna, histórico local de leituras
   const [showAccount, setShowAccount] = useState(false);
@@ -584,13 +587,25 @@ export default function Staff() {
 
     return (
       <div className="staff-root w-full pb-[120px]">
-        <header className="mx-auto grid max-w-[1440px] grid-cols-[44px_1fr_44px] items-center px-3 pt-[18px] lg:grid-cols-[1fr_auto_1fr] lg:px-8 lg:pt-5">
+        <header className="mx-auto grid max-w-[1440px] grid-cols-[auto_1fr_auto] items-center px-3 pt-[18px] lg:grid-cols-[1fr_auto_1fr] lg:px-8 lg:pt-5">
           <span className="flex items-center justify-center gap-2.5 lg:justify-start">
             <img src={iconeTw} alt="Tech Week" className="h-7 w-[26px] object-contain" />
             <span className="hidden text-[14px] font-bold text-text-2 lg:inline">Tech Week 2026</span>
           </span>
           <TitleBlock>Portaria</TitleBlock>
-          <span className="flex justify-center lg:justify-end">{avatarButton}{accountChip}</span>
+          <span className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIsSupportModalOpen(true)}
+              className="press flex h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-[12px] font-bold text-warn hover:bg-surface-raised transition-colors"
+              title="Abrir chamado de apoio com a coordenação"
+            >
+              <LifeBuoy size={16} aria-hidden="true" />
+              <span className="hidden sm:inline">SOS</span>
+            </button>
+            {avatarButton}
+            {accountChip}
+          </span>
         </header>
 
         <main className="mx-auto max-w-[560px]">
@@ -669,6 +684,18 @@ export default function Staff() {
             Começar a leitura
           </button>
         </div>
+
+        {/* Modal de Chamados da Portaria */}
+        <SupportTicketModal
+          isOpen={isSupportModalOpen}
+          onClose={() => setIsSupportModalOpen(false)}
+          role="STAFF"
+          entityName="Portaria / Apoio"
+          senderName={name}
+          senderEmail={profile?.email || authUser?.email || ''}
+          senderPhone={profile?.phone || ''}
+          defaultLocation="Portaria Principal"
+        />
       </div>
     );
   }
@@ -729,14 +756,23 @@ export default function Staff() {
 
   return (
     <div className="staff-root w-full pb-10">
-      <header className="mx-auto grid max-w-[1440px] grid-cols-[44px_1fr_44px] items-center px-3 pt-[18px] lg:grid-cols-[1fr_auto_1fr] lg:px-8 lg:pt-5">
+      <header className="mx-auto grid max-w-[1440px] grid-cols-[auto_1fr_auto] items-center px-3 pt-[18px] lg:grid-cols-[1fr_auto_1fr] lg:px-8 lg:pt-5">
         <span className="flex items-center justify-center gap-2.5 lg:justify-start">
           <span className="lg:hidden"><RoundButton label="Voltar para a escolha de atividade" onClick={backToChoice}><ChevronLeft size={20} aria-hidden="true" /></RoundButton></span>
           <img src={iconeTw} alt="Tech Week" className="hidden h-7 w-[26px] object-contain lg:block" />
           <span className="hidden text-[14px] font-bold text-text-2 lg:inline">Tech Week 2026</span>
         </span>
         <TitleBlock>Portaria</TitleBlock>
-        <span className="flex items-center justify-center gap-2.5 lg:justify-end">
+        <span className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setIsSupportModalOpen(true)}
+            className="press flex h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-[12px] font-bold text-warn hover:bg-surface-raised transition-colors"
+            title="Abrir chamado de apoio com a coordenação"
+          >
+            <LifeBuoy size={16} aria-hidden="true" />
+            <span className="hidden sm:inline">SOS</span>
+          </button>
           <RoundButton label={soundOn ? 'Som ligado' : 'Som desligado'} aria-pressed={soundOn} onClick={() => setSoundOn((v) => !v)}>
             {soundOn ? <Volume2 size={20} aria-hidden="true" /> : <VolumeX size={20} aria-hidden="true" />}
           </RoundButton>
@@ -889,6 +925,18 @@ export default function Staff() {
           </div>
         </div>
       )}
+
+      {/* Modal de Chamados da Portaria */}
+      <SupportTicketModal
+        isOpen={isSupportModalOpen}
+        onClose={() => setIsSupportModalOpen(false)}
+        role="STAFF"
+        entityName="Portaria / Apoio"
+        senderName={name}
+        senderEmail={profile?.email || authUser?.email || ''}
+        senderPhone={profile?.phone || ''}
+        defaultLocation={current?.location || 'Portaria Principal'}
+      />
     </div>
   );
 }

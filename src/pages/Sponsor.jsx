@@ -38,7 +38,8 @@ import {
   Film,
   TrendingUp,
   BarChart3,
-  SlidersHorizontal
+  SlidersHorizontal,
+  LifeBuoy
 } from 'lucide-react';
 import { GitHubIcon } from '../components/ParticipantCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -75,6 +76,7 @@ import SponsorRoiDashboard from '../components/sponsor/SponsorRoiDashboard';
 import SponsorSettings from '../components/sponsor/SponsorSettings';
 import { getSponsorSettings } from '../lib/sponsorSettingsService';
 import SponsorShell from '../components/sponsor/SponsorShell';
+import SupportTicketModal from '../components/SupportTicketModal';
 import WhatsAppButton from '../components/WhatsAppButton';
 import Mascot from '../components/Mascot';
 import '../styles/cracha.css';
@@ -162,7 +164,14 @@ export default function Sponsor() {
   // Chave de navegação ativa unificada para Desktop Shell
   const activeNavKey = activeTab;
 
+  // Suporte e Chamados SOS
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+
   const handleNavigate = useCallback((key) => {
+    if (key === 'chamados') {
+      setIsSupportModalOpen(true);
+      return;
+    }
     setActiveTab(key);
   }, []);
 
@@ -883,6 +892,7 @@ export default function Sponsor() {
       leadsCount={companyLeads.length}
       myLeadsCount={myLeads.length}
       onExportCsv={handleExportCsv}
+      onOpenSupport={() => setIsSupportModalOpen(true)}
     >
       {/* Toast Alert padronizado com DESIGN.md §2.1 & §6 */}
       {toastMessage && (
@@ -1026,6 +1036,15 @@ export default function Sponsor() {
                 <Users size={16} aria-hidden="true" />
                 <span>Leads ({companyLeads.length})</span>
               </button>
+              <button
+                type="button"
+                className={btn('secondary', 'h-10 px-3 text-[13px] text-warn hover:text-warn')}
+                onClick={() => setIsSupportModalOpen(true)}
+                title="Abrir chamado com a coordenação"
+              >
+                <LifeBuoy size={16} aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">SOS</span>
+              </button>
             </div>
           </div>
         ) : (
@@ -1103,6 +1122,15 @@ export default function Sponsor() {
               >
                 <Users size={16} aria-hidden="true" />
                 <span>Ver Leads ({companyLeads.length})</span>
+              </button>
+              <button
+                type="button"
+                className={btn('secondary', 'h-11 px-3.5 text-[13px] font-bold text-warn hover:text-warn')}
+                onClick={() => setIsSupportModalOpen(true)}
+                title="Abrir chamado de apoio ou suporte técnico"
+              >
+                <LifeBuoy size={16} aria-hidden="true" />
+                <span>Chamado SOS</span>
               </button>
             </div>
           </div>
@@ -2576,6 +2604,18 @@ export default function Sponsor() {
           onClose={() => setSelectedActivityModal(null)}
         />
       )}
+      {/* ========================================================================= */}
+      {/* MODAL 5: CENTRAL DE CHAMADOS & APOIO (SPONSOR)                           */}
+      {/* ========================================================================= */}
+      <SupportTicketModal
+        isOpen={isSupportModalOpen}
+        onClose={() => setIsSupportModalOpen(false)}
+        role="SPONSOR"
+        entityName={sponsorName}
+        senderName={firstName ? `${firstName} (${sponsorName})` : sponsorName}
+        senderEmail={userProfile?.email || authUser?.email || ''}
+        defaultLocation={`Estande ${sponsorName}`}
+      />
     </SponsorShell>
   );
 }

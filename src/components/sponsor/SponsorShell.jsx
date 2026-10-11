@@ -18,6 +18,7 @@ import {
   Layers,
   ChevronRight,
   SlidersHorizontal,
+  LifeBuoy,
 } from 'lucide-react';
 import iconeTw from '../../assets/icone.png';
 import { eventDayInfo, LiveChip } from '../../pages/admin/AdminShell';
@@ -68,6 +69,12 @@ const MENU_GROUPS = [
       { key: 'feed', label: 'Feed da TechWeek', icon: MessageSquare },
     ],
   },
+  {
+    group: 'Apoio & Coordenação',
+    items: [
+      { key: 'chamados', label: 'Chamados & Suporte', icon: LifeBuoy, tag: 'SOS' },
+    ],
+  },
 ];
 
 const MOBILE_NAV_TABS = [
@@ -107,6 +114,10 @@ const CONTEXT_HEADERS = {
     title: 'Feed da TechWeek',
     subtitle: 'Avisos da organização, bastidores e publicações oficiais',
   },
+  chamados: {
+    title: 'Central de Apoio & Chamados',
+    subtitle: 'Comunicação direta com a coordenação e suporte técnico',
+  },
 };
 
 /**
@@ -127,6 +138,7 @@ export default function SponsorShell({
   leadsCount = 0,
   myLeadsCount = 0,
   onExportCsv,
+  onOpenSupport,
   actualRole = 'SPONSOR',
   children,
 }) {
@@ -363,6 +375,17 @@ export default function SponsorShell({
             >
               <Download size={14} aria-hidden="true" />
               <span>CSV ({leadsCount})</span>
+            </button>
+
+            {/* Abrir Chamado / Apoio */}
+            <button
+              type="button"
+              onClick={() => (onOpenSupport ? onOpenSupport() : onNavigate('chamados'))}
+              className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-[12px] font-bold text-text-2 hover:bg-surface-raised hover:text-text transition-colors"
+              title="Abrir chamado de apoio com a coordenação do evento"
+            >
+              <LifeBuoy size={15} className="text-warn" aria-hidden="true" />
+              <span>Chamados</span>
             </button>
 
             {/* Live Chip da TechWeek */}
