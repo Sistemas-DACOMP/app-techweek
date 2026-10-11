@@ -41,6 +41,34 @@ const COURSE_CATEGORIES = [
   { id: 'outros', label: 'Outras Engenharias & Comunidade', regex: /.*/, color: 'var(--text-3)', short: 'Outros' },
 ];
 
+/**
+ * Interpolação cúbica suave (Catmull-Rom com fator de tensão 0.22)
+ * Gera curvas fluidas e orgânicas sem oscilações bruscas.
+ */
+export function buildSmoothPath(points) {
+  if (!points || points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+
+  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const pPrev = points[Math.max(0, i - 1)];
+    const pCurr = points[i];
+    const pNext = points[i + 1];
+    const pNextNext = points[Math.min(points.length - 1, i + 2)];
+
+    const tension = 0.22;
+    const cp1x = pCurr.x + (pNext.x - pPrev.x) * tension;
+    const cp1y = pCurr.y + (pNext.y - pPrev.y) * tension;
+    const cp2x = pNext.x - (pNextNext.x - pCurr.x) * tension;
+    const cp2y = pNext.y - (pNextNext.y - pCurr.y) * tension;
+
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${pNext.x.toFixed(1)} ${pNext.y.toFixed(1)}`;
+  }
+
+  return d;
+}
+
 export function calculateDadosAnalytics({ activities = [], usersList = [], missionsList = [], selectedDay = 'ALL' }) {
   const now = new Date();
   const currentHours = now.getHours();
@@ -110,20 +138,23 @@ export function calculateDadosAnalytics({ activities = [], usersList = [], missi
       if (d.count > peakSlot.count) peakSlot = d;
     });
 
-    // Encontrar o slot de "Agora"
-    let closestNowIdx = -1;
-    let closestDiff = Infinity;
+    // Encontrar o slot de "Agora" (apenas dentro da janela ativa do evento: 08:00 às 22:30)
     const [nowH, nowM] = [now.getHours(), now.getMinutes()];
     const nowMinutesTotal = nowH * 60 + nowM;
+    const isWithinEventHours = nowMinutesTotal >= 480 && nowMinutesTotal <= 1350;
 
-    hourlyData.forEach((d, idx) => {
-      const [h, m] = d.hour.split(':').map(Number);
-      const diff = Math.abs((h * 60 + m) - nowMinutesTotal);
-      if (diff < closestDiff) {
-        closestDiff = diff;
-        closestNowIdx = idx;
-      }
-    });
+    let closestNowIdx = -1;
+    if (isWithinEventHours) {
+      let closestDiff = Infinity;
+      hourlyData.forEach((d, idx) => {
+        const [h, m] = d.hour.split(':').map(Number);
+        const diff = Math.abs((h * 60 + m) - nowMinutesTotal);
+        if (diff < closestDiff) {
+          closestDiff = diff;
+          closestNowIdx = idx;
+        }
+      });
+    }
 
     // 7. Gestão de Salas & Retenção de Palestras
     // Ranking de Atividades: Mais procuradas vs Salas Ociosas
@@ -301,6 +332,8 @@ export function calculateDadosAnalytics({ activities = [], usersList = [], missi
       hourlyData,
       peakSlot,
       closestNowIdx,
+      isWithinEventHours,
+      nowMinutesTotal,
       mostSought,
       idleRooms,
       highEvasionAlerts,
@@ -431,37 +464,64 @@ export default function AdminDados({
     setExportModalOpen(false);
   };
 
-  // Coordenadas para o gráfico SVG de Afluência Horária (viewBox 0 0 800 220)
-  const svgWidth = 800;
-  const svgHeight = 220;
-  const padLeft = 45;
-  const padRight = 35;
-  const padTop = 30;
-  const padBottom = 40;
+  // Coordenadas para o gráfico SVG de Afluência Horária (viewBox 0 0 840 240)
+  const svgWidth = 840;
+  const svgHeight = 240;
+  const padLeft = 48;
+  const padRight = 36;
+  const padTop = 38;
+  const padBottom = 42;
   const chartW = svgWidth - padLeft - padRight;
   const chartH = svgHeight - padTop - padBottom;
 
-  const maxVal = Math.max(...stats.hourlyData.map((d) => d.count), 100);
-  const points = stats.hourlyData.map((d, i) => {
-    const x = padLeft + (i / (stats.hourlyData.length - 1)) * chartW;
-    const y = padTop + chartH - (d.count / maxVal) * chartH;
-    return { x, y, data: d };
+  // Escala Y com arredondamento inteligente para passos limpos (ex: 100, 200, 300, 400)
+  const rawMax = Math.max(...stats.hourlyData.map((d) => d.count), 100);
+  const step = rawMax > 400 ? 100 : rawMax > 200 ? 50 : 25;
+  const yMaxCeil = Math.ceil((rawMax * 1.1) / step) * step;
+  const yTicks = [0.25, 0.5, 0.75, 1].map((pct) => ({
+    pct,
+    value: Math.round(yMaxCeil * pct),
+    y: padTop + chartH * (1 - pct),
+  }));
+
+  // Mapeamento proporcional no tempo real do evento (08:00 = 480m até 22:30 = 1350m -> amplitude 870m)
+  const points = stats.hourlyData.map((d) => {
+    const [h, m] = d.hour.split(':').map(Number);
+    const slotMin = h * 60 + m;
+    const progress = Math.min(Math.max((slotMin - 480) / 870, 0), 1);
+    const x = padLeft + progress * chartW;
+    const y = padTop + chartH - (d.count / yMaxCeil) * chartH;
+    return { x, y, data: d, slotMin };
   });
 
-  // Geração do path suave (Bézier cúbico simples)
-  let linePathD = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i];
-    const p1 = points[i + 1];
-    const mx = (p0.x + p1.x) / 2;
-    linePathD += ` C ${mx} ${p0.y}, ${mx} ${p1.y}, ${p1.x} ${p1.y}`;
-  }
-
-  const areaPathD = `${linePathD} L ${points[points.length - 1].x} ${padTop + chartH} L ${points[0].x} ${padTop + chartH} Z`;
+  // Geração do path fluido (Catmull-Rom com tensão 0.22)
+  const linePathD = buildSmoothPath(points);
+  const areaPathD = points.length > 0
+    ? `${linePathD} L ${points[points.length - 1].x.toFixed(1)} ${padTop + chartH} L ${points[0].x.toFixed(1)} ${padTop + chartH} Z`
+    : '';
 
   // Localização do Pico e de Agora no SVG
   const peakPoint = points.find((p) => p.data.hour === stats.peakSlot.hour) || points[0];
-  const nowPoint = stats.closestNowIdx >= 0 ? points[stats.closestNowIdx] : null;
+  let nowPoint = null;
+  if (stats.isWithinEventHours && stats.nowMinutesTotal >= 480 && stats.nowMinutesTotal <= 1350) {
+    const progress = (stats.nowMinutesTotal - 480) / 870;
+    const nowX = padLeft + progress * chartW;
+    const matchedPoint = stats.closestNowIdx >= 0 ? points[stats.closestNowIdx] : null;
+    const nowY = matchedPoint ? matchedPoint.y : padTop + chartH * 0.5;
+    nowPoint = { x: nowX, y: nowY, count: matchedPoint ? matchedPoint.data.count : 0 };
+  }
+
+  // Definição dos 5 períodos dinâmicos do dia
+  const dayPeriods = [
+    { id: 'manha', label: 'Credenciamento Manhã', timeRange: '08h00 – 10h00', startMin: 480, endMin: 600, targetHour: '09:00' },
+    { id: 'almoco', label: 'Pausa & Visitas Almoço', timeRange: '11h30 – 13h30', startMin: 690, endMin: 810, targetHour: '12:30' },
+    { id: 'tarde', label: 'Palestras Tarde', timeRange: '14h30 – 16h30', startMin: 870, endMin: 990, targetHour: '15:30' },
+    { id: 'noite', label: 'Keynotes & Noite', timeRange: '18h30 – 20h00', startMin: 1110, endMin: 1200, targetHour: '19:30' },
+    { id: 'saida', label: 'Sorteios & Saída', timeRange: '21h00 – 22h30', startMin: 1260, endMin: 1350, targetHour: '21:30' },
+  ];
+  const [peakH, peakM] = (stats.peakSlot.hour || '14:30').split(':').map(Number);
+  const peakMin = peakH * 60 + peakM;
+  const peakPeriodMatch = dayPeriods.find((p) => peakMin >= p.startMin && peakMin <= p.endMin) || dayPeriods[2];
 
   return (
     <div className="adm-dados space-y-6">
@@ -630,230 +690,380 @@ export default function AdminDados({
         subtitle="Volume estimado de participantes em trânsito no campus da FACOM e concentração por período."
         action={
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-lg bg-[rgba(143,160,255,0.12)] px-2.5 py-1 text-[12px] font-bold text-link">
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[rgba(242,196,106,0.3)] bg-[rgba(242,196,106,0.12)] px-2.5 py-1 text-[12px] font-bold text-warn">
               <Flame size={14} aria-hidden="true" />
-              Pico: {stats.peakSlot.hour} ({stats.peakSlot.count} pessoas)
+              Pico Máximo: {stats.peakSlot.hour} ({stats.peakSlot.count} pessoas)
             </span>
           </div>
         }
       >
         <div className="relative mt-3 rounded-2xl border border-line bg-surface-raised p-4">
           {/* Informação contextual do slot selecionado ou pico */}
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface text-link">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface text-link shadow-inner">
                 <Clock size={20} aria-hidden="true" />
               </div>
               <div>
-                <span className="text-[12px] font-bold text-text-3">Janela em Foco:</span>
-                <span className="ml-1.5 text-[14px] font-black text-text">
-                  {hoveredHourSlot ? `${hoveredHourSlot.hour} · ${hoveredHourSlot.name}` : `${stats.peakSlot.hour} · ${stats.peakSlot.name} (Pico Principal)`}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-bold text-text-3">Janela em Foco:</span>
+                  <span className="text-[14px] font-black text-text">
+                    {hoveredHourSlot ? `${hoveredHourSlot.hour} · ${hoveredHourSlot.name}` : `${stats.peakSlot.hour} · ${stats.peakSlot.name}`}
+                  </span>
+                  {!hoveredHourSlot && (
+                    <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-warn">
+                      Pico do Dia
+                    </span>
+                  )}
+                </div>
                 <div className="text-[12px] text-text-2">
-                  {hoveredHourSlot ? `${hoveredHourSlot.count} pessoas previstas · ${hoveredHourSlot.activeActivitiesCount} atividades ativas` : `${stats.peakSlot.count} pessoas no campus · Maior afluência do dia`}
+                  {hoveredHourSlot
+                    ? `${hoveredHourSlot.count} pessoas no campus · ${hoveredHourSlot.activeActivitiesCount} ${hoveredHourSlot.activeActivitiesCount === 1 ? 'atividade ativa' : 'atividades ativas'}`
+                    : `${stats.peakSlot.count} pessoas estimadas no campus · Momento de maior lotação`}
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 text-[12px] text-text-3">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-link" /> Afluência Estimada
+            <div className="flex flex-wrap items-center gap-3.5 text-[12px] text-text-3">
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="h-2 w-5 rounded-full bg-gradient-to-r from-[#60A5FA] via-[#8FA0FF] to-[#A78BFA]" />
+                Curva de Afluência
               </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-ok" /> Agora ({stats.currentTimeStr})
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="h-2.5 w-2.5 rounded-full border border-warn bg-warn/20" />
+                Pico
               </span>
+              {stats.isWithinEventHours ? (
+                <span className="flex items-center gap-1.5 font-bold text-ok">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-ok" />
+                  </span>
+                  Agora ({stats.currentTimeStr})
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-text-4">
+                  <span className="h-2 w-2 rounded-full bg-line-2" />
+                  Fora da Janela (08h–22h30)
+                </span>
+              )}
             </div>
           </div>
 
-          {/* SVG Nativo da Curva */}
+          {/* SVG Nativo da Curva com Alta Fidelidade Visual */}
           <div className="relative w-full overflow-hidden">
             <svg
               id={chartId}
               viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-              className="h-56 w-full touch-pan-x select-none overflow-visible"
+              className="h-60 w-full touch-pan-x select-none overflow-visible"
               preserveAspectRatio="none"
               role="img"
               aria-label="Gráfico de Curva de Afluência Horária da TechWeek"
             >
               <defs>
-                <linearGradient id="trafficGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#8FA0FF" stopOpacity="0.45" />
-                  <stop offset="70%" stopColor="#8FA0FF" stopOpacity="0.08" />
-                  <stop offset="100%" stopColor="#8FA0FF" stopOpacity="0" />
+                {/* Gradiente de preenchimento fluido e suave */}
+                <linearGradient id="areaFlowGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#8FA0FF" stopOpacity="0.38" />
+                  <stop offset="40%" stopColor="#6366F1" stopOpacity="0.16" />
+                  <stop offset="80%" stopColor="#4338CA" stopOpacity="0.04" />
+                  <stop offset="100%" stopColor="#1E1B4B" stopOpacity="0" />
                 </linearGradient>
+
+                {/* Gradiente da linha principal */}
+                <linearGradient id="strokeLineGradient" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#60A5FA" />
+                  <stop offset="50%" stopColor="#8FA0FF" />
+                  <stop offset="100%" stopColor="#A78BFA" />
+                </linearGradient>
+
+                {/* Filtro Neon Glow */}
+                <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="3.5" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+
+                {/* Sombra de Tooltip flutuante */}
+                <filter id="tooltipShadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#000000" floodOpacity="0.5" />
+                </filter>
               </defs>
 
-              {/* Linhas de Grade Horizontais */}
-              {[0.25, 0.5, 0.75, 1].map((pct) => {
-                const y = padTop + chartH * (1 - pct);
-                return (
-                  <g key={pct}>
-                    <line
-                      x1={padLeft}
-                      y1={y}
-                      x2={svgWidth - padRight}
-                      y2={y}
-                      stroke="var(--line)"
-                      strokeWidth="1"
-                      strokeDasharray="4 4"
-                    />
-                    <text
-                      x={padLeft - 8}
-                      y={y + 4}
-                      fill="var(--text-4)"
-                      fontSize="10"
-                      fontWeight="600"
-                      textAnchor="end"
-                    >
-                      {Math.round(maxVal * pct)}
-                    </text>
-                  </g>
-                );
-              })}
+              {/* Linhas de Grade Horizontais com Ticks Limpos */}
+              {yTicks.map(({ pct, value, y }) => (
+                <g key={pct}>
+                  <line
+                    x1={padLeft}
+                    y1={y}
+                    x2={svgWidth - padRight}
+                    y2={y}
+                    stroke="var(--line)"
+                    strokeWidth="1"
+                    strokeDasharray="4 6"
+                    opacity="0.7"
+                  />
+                  <text
+                    x={padLeft - 10}
+                    y={y + 3.5}
+                    fill="var(--text-4)"
+                    fontSize="11"
+                    fontWeight="600"
+                    textAnchor="end"
+                  >
+                    {value}
+                  </text>
+                </g>
+              ))}
 
-              {/* Área preenchida com gradiente */}
-              <path d={areaPathD} fill="url(#trafficGradient)" />
+              {/* Linha de base zero */}
+              <line
+                x1={padLeft}
+                y1={padTop + chartH}
+                x2={svgWidth - padRight}
+                y2={padTop + chartH}
+                stroke="var(--line)"
+                strokeWidth="1"
+              />
 
-              {/* Linha principal da curva */}
+              {/* Área preenchida com gradiente sofisticado */}
+              <path d={areaPathD} fill="url(#areaFlowGradient)" />
+
+              {/* Glow sutil por baixo da linha principal */}
               <path
                 d={linePathD}
                 fill="none"
-                stroke="var(--link)"
-                strokeWidth="3.5"
+                stroke="url(#strokeLineGradient)"
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity="0.3"
+                filter="url(#neonGlow)"
+              />
+
+              {/* Linha principal límpida e precisa */}
+              <path
+                d={linePathD}
+                fill="none"
+                stroke="url(#strokeLineGradient)"
+                strokeWidth="3.2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
 
-              {/* Marcador Dinâmico de "Agora" */}
+              {/* Destaque do Pico (Halo Dourado Pulsante e Badge Refinada) */}
+              <g pointerEvents="none">
+                <circle cx={peakPoint.x} cy={peakPoint.y} r="14" fill="#FBBF24" fillOpacity="0.14" />
+                <circle cx={peakPoint.x} cy={peakPoint.y} r="6" fill="#FBBF24" />
+                <circle cx={peakPoint.x} cy={peakPoint.y} r="2.5" fill="#0D1224" />
+                <g transform={`translate(${Math.max(padLeft, Math.min(peakPoint.x - 38, svgWidth - padRight - 76))}, ${Math.max(12, peakPoint.y - 30)})`}>
+                  <rect
+                    width="76"
+                    height="20"
+                    rx="6"
+                    fill="#151928"
+                    stroke="#FBBF24"
+                    strokeWidth="1.2"
+                  />
+                  <text
+                    x="38"
+                    y="14"
+                    fill="#FBBF24"
+                    fontSize="10"
+                    fontWeight="800"
+                    textAnchor="middle"
+                  >
+                    Pico · {peakPoint.data.count}
+                  </text>
+                </g>
+              </g>
+
+              {/* Marcador Dinâmico de "Agora" (Renderizado EXCLUSIVAMENTE durante o evento) */}
               {nowPoint && (
-                <g>
+                <g pointerEvents="none">
                   <line
                     x1={nowPoint.x}
                     y1={padTop}
                     x2={nowPoint.x}
                     y2={padTop + chartH}
                     stroke="var(--ok)"
-                    strokeWidth="2"
+                    strokeWidth="1.8"
                     strokeDasharray="3 3"
                   />
-                  <circle cx={nowPoint.x} cy={nowPoint.y} r="5.5" fill="var(--ok)" />
                   <circle
                     cx={nowPoint.x}
                     cy={nowPoint.y}
-                    r="11"
+                    r="12"
                     fill="none"
                     stroke="var(--ok)"
                     strokeWidth="1.5"
-                    opacity="0.6"
+                    opacity="0.75"
                     className="animate-ping"
                   />
-                  {/* Badge de Agora */}
-                  <rect
-                    x={nowPoint.x - 30}
-                    y={padTop - 24}
-                    width="60"
-                    height="20"
-                    rx="10"
-                    fill="var(--ok)"
-                  />
-                  <text
-                    x={nowPoint.x}
-                    y={padTop - 10}
-                    fill="#0A0F24"
-                    fontSize="10"
-                    fontWeight="800"
-                    textAnchor="middle"
-                  >
-                    Agora
-                  </text>
+                  <circle cx={nowPoint.x} cy={nowPoint.y} r="5.5" fill="var(--ok)" />
+                  <circle cx={nowPoint.x} cy={nowPoint.y} r="2.5" fill="#0A0F24" />
+                  <g transform={`translate(${Math.max(padLeft, Math.min(nowPoint.x - 42, svgWidth - padRight - 84))}, ${padTop - 26})`}>
+                    <rect
+                      width="84"
+                      height="20"
+                      rx="10"
+                      fill="var(--ok)"
+                    />
+                    <text
+                      x="42"
+                      y="14"
+                      fill="#0A0F24"
+                      fontSize="10"
+                      fontWeight="800"
+                      textAnchor="middle"
+                    >
+                      Agora ({stats.currentTimeStr})
+                    </text>
+                  </g>
                 </g>
               )}
 
-              {/* Destaque do Pico */}
-              <g>
-                <circle cx={peakPoint.x} cy={peakPoint.y} r="6" fill="var(--warn)" />
-                <circle cx={peakPoint.x} cy={peakPoint.y} r="12" fill="none" stroke="var(--warn)" strokeWidth="1.5" opacity="0.6" />
-                <rect
-                  x={peakPoint.x - 40}
-                  y={peakPoint.y - 30}
-                  width="80"
-                  height="20"
-                  rx="6"
-                  fill="var(--surface)"
-                  stroke="var(--warn)"
-                  strokeWidth="1"
-                />
-                <text
-                  x={peakPoint.x}
-                  y={peakPoint.y - 16}
-                  fill="var(--warn)"
-                  fontSize="10"
-                  fontWeight="800"
-                  textAnchor="middle"
-                >
-                  Pico · {peakPoint.data.count}
-                </text>
-              </g>
-
-              {/* Pontos Interativos e Rótulos do Eixo X */}
+              {/* Rótulos de Horário no Eixo X (Espaçados de forma limpa) */}
               {points.map((p, idx) => {
-                const isHovered = hoveredHourSlot?.hour === p.data.hour;
                 const showLabel = idx % 2 === 0 || idx === points.length - 1;
+                const isHovered = hoveredHourSlot?.hour === p.data.hour;
+                if (!showLabel && !isHovered) return null;
 
                 return (
-                  <g
-                    key={p.data.hour}
-                    className="cursor-pointer"
-                    onMouseEnter={() => setHoveredHourSlot(p.data)}
-                    onMouseLeave={() => setHoveredHourSlot(null)}
+                  <text
+                    key={`label-${p.data.hour}`}
+                    x={p.x}
+                    y={padTop + chartH + 20}
+                    fill={isHovered ? 'var(--link)' : 'var(--text-3)'}
+                    fontSize="11"
+                    fontWeight={isHovered ? '800' : '600'}
+                    textAnchor="middle"
+                    pointerEvents="none"
                   >
-                    <circle
-                      cx={p.x}
-                      cy={p.y}
-                      r={isHovered ? 6 : 3.5}
-                      fill={isHovered ? 'var(--link)' : 'var(--surface-raised)'}
-                      stroke="var(--link)"
-                      strokeWidth="2"
-                    />
-                    {showLabel && (
-                      <text
-                        x={p.x}
-                        y={padTop + chartH + 20}
-                        fill={isHovered ? 'var(--link)' : 'var(--text-3)'}
-                        fontSize="11"
-                        fontWeight={isHovered ? '800' : '600'}
-                        textAnchor="middle"
-                      >
-                        {p.data.label}
-                      </text>
+                    {p.data.label}
+                  </text>
+                );
+              })}
+
+              {/* Colunas Interativas Invisíveis de Hit-Test com Crosshair & Tooltip */}
+              {points.map((p, idx) => {
+                const colWidth = chartW / points.length;
+                const isHovered = hoveredHourSlot?.hour === p.data.hour;
+
+                return (
+                  <g key={`hit-${p.data.hour}`}>
+                    {/* Linha Crosshair Vertical ativa */}
+                    {isHovered && (
+                      <g pointerEvents="none">
+                        <line
+                          x1={p.x}
+                          y1={padTop}
+                          x2={p.x}
+                          y2={padTop + chartH}
+                          stroke="rgba(255,255,255,0.25)"
+                          strokeWidth="1.2"
+                          strokeDasharray="3 3"
+                        />
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r="6.5"
+                          fill="#8FA0FF"
+                          stroke="#FFFFFF"
+                          strokeWidth="2.5"
+                        />
+                        {/* Tooltip flutuante rico */}
+                        <g transform={`translate(${Math.max(padLeft, Math.min(p.x - 65, svgWidth - padRight - 130))}, ${Math.max(10, p.y - 48)})`}>
+                          <rect
+                            width="130"
+                            height="40"
+                            rx="8"
+                            fill="#0F1424"
+                            stroke="rgba(143,160,255,0.35)"
+                            strokeWidth="1"
+                            filter="url(#tooltipShadow)"
+                          />
+                          <text
+                            x="65"
+                            y="16"
+                            fill="#FFFFFF"
+                            fontSize="11"
+                            fontWeight="800"
+                            textAnchor="middle"
+                          >
+                            {p.data.hour} · {p.data.count} pessoas
+                          </text>
+                          <text
+                            x="65"
+                            y="31"
+                            fill="var(--text-3)"
+                            fontSize="9.5"
+                            fontWeight="600"
+                            textAnchor="middle"
+                          >
+                            {p.data.activeActivitiesCount} {p.data.activeActivitiesCount === 1 ? 'atividade' : 'atividades'} ativas
+                          </text>
+                        </g>
+                      </g>
                     )}
+
+                    {/* Área de toque transparente */}
+                    <rect
+                      x={p.x - colWidth / 2}
+                      y={padTop}
+                      width={colWidth}
+                      height={chartH + 24}
+                      fill="transparent"
+                      className="cursor-pointer"
+                      onMouseEnter={() => setHoveredHourSlot(p.data)}
+                      onMouseLeave={() => setHoveredHourSlot(null)}
+                      onClick={() => setHoveredHourSlot(p.data)}
+                    />
                   </g>
                 );
               })}
             </svg>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2 text-center text-[12px] text-text-3 sm:grid-cols-4 lg:grid-cols-5">
-            <div className="rounded-xl bg-surface p-2">
-              <span className="block text-[11px] text-text-4">Credenciamento Manhã</span>
-              <span className="font-extrabold text-text">08h00 – 10h00</span>
-            </div>
-            <div className="rounded-xl bg-surface p-2">
-              <span className="block text-[11px] text-text-4">Pausa & Visitas</span>
-              <span className="font-extrabold text-text">11h30 – 13h30</span>
-            </div>
-            <div className="rounded-xl bg-surface p-2 border border-[rgba(242,196,106,0.3)]">
-              <span className="block text-[11px] text-warn font-bold">Pico Principal</span>
-              <span className="font-extrabold text-text">14h30 – 16h30</span>
-            </div>
-            <div className="rounded-xl bg-surface p-2">
-              <span className="block text-[11px] text-text-4">Credenciamento Noite</span>
-              <span className="font-extrabold text-text">18h30 – 19h30</span>
-            </div>
-            <div className="rounded-xl bg-surface p-2">
-              <span className="block text-[11px] text-text-4">Sorteios & Saída</span>
-              <span className="font-extrabold text-text">21h00 – 22h30</span>
-            </div>
+          {/* Cards Dinâmicos de Períodos com Detecção Real do Pico */}
+          <div className="mt-4 grid grid-cols-2 gap-2 text-center text-[12px] sm:grid-cols-3 lg:grid-cols-5">
+            {dayPeriods.map((period) => {
+              const isPeak = period.id === peakPeriodMatch.id;
+              const isSelected = hoveredHourSlot && hoveredHourSlot.hour === period.targetHour;
+
+              return (
+                <button
+                  key={period.id}
+                  type="button"
+                  onClick={() => {
+                    const matchedSlot = stats.hourlyData.find((d) => d.hour === period.targetHour) || stats.peakSlot;
+                    setHoveredHourSlot(matchedSlot);
+                  }}
+                  className={`rounded-xl p-2.5 text-left transition-all ${
+                    isPeak
+                      ? 'border border-[rgba(242,196,106,0.35)] bg-[rgba(242,196,106,0.08)] ring-1 ring-[rgba(242,196,106,0.25)]'
+                      : isSelected
+                      ? 'border border-link/40 bg-link/10'
+                      : 'border border-line bg-surface hover:border-line-2 hover:bg-surface-raised'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className={`block text-[11px] font-bold ${isPeak ? 'text-warn' : 'text-text-4'}`}>
+                      {period.label}
+                    </span>
+                    {isPeak && (
+                      <span className="rounded bg-warn/20 px-1 py-0.2 text-[9px] font-black text-warn">
+                        PICO
+                      </span>
+                    )}
+                  </div>
+                  <span className="mt-0.5 block text-[13px] font-extrabold text-text">
+                    {period.timeRange}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </Section>

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import AdminDados, { calculateDadosAnalytics } from '../../src/pages/admin/AdminDados';
+import AdminDados, { calculateDadosAnalytics, buildSmoothPath } from '../../src/pages/admin/AdminDados';
 
 describe('AdminDados - Analytics Engine & Component', () => {
   const mockActivities = [
@@ -161,5 +161,33 @@ describe('AdminDados - Analytics Engine & Component', () => {
     expect(html).toContain('Estandes &amp; Engajamento');
     expect(html).toContain('Missões &amp; Gamificação');
     expect(html).toContain('Perfil Acadêmico');
+  });
+
+  it('gera caminho suave cúbico via buildSmoothPath sem descontinuidades', () => {
+    const points = [
+      { x: 48, y: 180 },
+      { x: 100, y: 140 },
+      { x: 200, y: 60 },
+      { x: 300, y: 120 },
+    ];
+    const path = buildSmoothPath(points);
+    expect(path).toContain('M 48.0 180.0');
+    expect(path).toContain('C ');
+    expect(path.split('C').length).toBe(4); // 3 segmentos de curva
+  });
+
+  it('calcula estado de janela de evento e slot de pico corretamente', () => {
+    const stats = calculateDadosAnalytics({
+      activities: mockActivities,
+      usersList: mockUsers,
+      missionsList: mockMissions,
+      selectedDay: 'ALL',
+    });
+
+    expect(stats.hourlyData.length).toBe(15);
+    expect(typeof stats.isWithinEventHours).toBe('boolean');
+    expect(typeof stats.nowMinutesTotal).toBe('number');
+    expect(stats.peakSlot).toBeDefined();
+    expect(stats.peakSlot.hour).toMatch(/^\d{2}:\d{2}$/);
   });
 });
