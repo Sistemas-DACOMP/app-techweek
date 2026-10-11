@@ -241,7 +241,7 @@ export default function SponsorLeadModal({
     return `Olá, ${participant?.name || 'tudo bem'}! Foi ótimo conversar com você no estande da ${sponsorCompanyName} na TechWeek! Gostaríamos de marcar uma conversa rápida sobre nossas oportunidades. Qual o seu melhor horário?`;
   }, [customOutreachMessage, sponsorCompanyId, participant?.name, participant?.course, sponsorCompanyName]);
 
-  // Título amigável do modelo de WhatsApp padrão configurado para o 1-clique
+  // Título amigável do modelo de WhatsApp padrão configurado
   const activeTemplateTitle = useMemo(() => {
     try {
       const settings = getSponsorSettings(sponsorCompanyId);
@@ -621,12 +621,12 @@ export default function SponsorLeadModal({
                         participantName={savedLeadData.name}
                         companyName={sponsorCompanyName}
                         customMessage={recruiterOutreachMessage}
-                        label="WhatsApp 1-Clique"
+                        label="WhatsApp"
                         size="sm"
                         fullWidth
                       />
                       <div style={{ fontSize: '10px', color: '#10B981', marginTop: '4px', textAlign: 'center', fontWeight: '600' }}>
-                        ⭐ Padrão: {activeTemplateTitle}
+                        Padrão: {activeTemplateTitle}
                       </div>
                     </div>
                   )}
@@ -887,16 +887,16 @@ export default function SponsorLeadModal({
                       participantName={participant.name}
                       companyName={sponsorCompanyName}
                       customMessage={recruiterOutreachMessage}
-                      label="WhatsApp 1-Clique"
+                      label="WhatsApp"
                       size="md"
                       fullWidth
                     />
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '11px', color: '#A9B1CC', marginTop: '6px' }}>
                       <span style={{ color: '#10B981', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                        ⚡ Modelo 1-Clique:
+                        Modelo Padrão:
                       </span>
                       <span style={{ color: '#EEF1FA', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '1px 8px', borderRadius: '6px', fontWeight: '600', fontSize: '10.5px' }}>
-                        ⭐ {activeTemplateTitle}
+                        {activeTemplateTitle}
                       </span>
                     </div>
                   </div>

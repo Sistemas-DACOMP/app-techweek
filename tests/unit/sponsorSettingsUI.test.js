@@ -19,20 +19,22 @@ describe('SponsorSettings UI Component', () => {
 
       expect(html).toContain('Personalização do Estande');
       expect(html).toContain('Kanastra');
-      expect(html).toContain('Mensagens de Contato Rápido (1-Clique)');
+      expect(html).toContain('Modelos de WhatsApp');
       expect(html).toContain('Tags de Qualificação');
-      expect(html).toContain('Sincronizado em tempo real');
+      // Design enxuto sem ruído visual
+      expect(html).not.toContain('1-Clique');
+      expect(html).not.toContain('⭐');
     });
   });
 
-  describe('Bloco A: Customização de Mensagens WhatsApp 1-Clique', () => {
+  describe('Bloco A: Customização de Modelos de WhatsApp', () => {
     it('renderiza os 4 modelos padrão de mensagens WhatsApp', () => {
       const html = renderToStaticMarkup(
         React.createElement(SponsorSettings, defaultProps)
       );
 
       DEFAULT_WHATSAPP_TEMPLATES.forEach(tpl => {
-        expect(html).toContain(tpl.title);
+        expect(html).toContain(tpl.title.replace(/\s*\(Padrão\)/i, ''));
       });
     });
 
@@ -44,7 +46,7 @@ describe('SponsorSettings UI Component', () => {
       expect(html).toContain('{nome}');
       expect(html).toContain('{empresa}');
       expect(html).toContain('{curso}');
-      expect(html).toContain('Variáveis Disponíveis');
+      expect(html).toContain('Inserir variável no texto');
     });
 
     it('renderiza o balão de preview realista de WhatsApp com cabeçalho de simulação', () => {
@@ -52,9 +54,8 @@ describe('SponsorSettings UI Component', () => {
         React.createElement(SponsorSettings, defaultProps)
       );
 
-      expect(html).toContain('Pré-visualização em Tempo Real');
+      expect(html).toContain('Pré-visualização (WhatsApp)');
       expect(html).toContain('Gabriel Santos');
-      expect(html).toContain('online');
       // Background do balão WhatsApp em tom esmeralda escuro
       expect(html).toContain('#005C4B');
     });
@@ -64,7 +65,7 @@ describe('SponsorSettings UI Component', () => {
         React.createElement(SponsorSettings, defaultProps)
       );
 
-      expect(html).toContain('Restaurar Texto Padrão');
+      expect(html).toContain('Restaurar texto original');
     });
   });
 
@@ -85,7 +86,7 @@ describe('SponsorSettings UI Component', () => {
         React.createElement(SponsorSettings, defaultProps)
       );
 
-      expect(html).toContain('placeholder="Ex: Cybersec, Fullstack, IA..."');
+      expect(html).toContain('placeholder="Nova tag (ex: IA, Frontend)..."');
       expect(html).toContain('Adicionar');
     });
 
@@ -94,7 +95,7 @@ describe('SponsorSettings UI Component', () => {
         React.createElement(SponsorSettings, defaultProps)
       );
 
-      expect(html).toContain('Restaurar Tags Padrão');
+      expect(html).toContain('Restaurar tags padrão');
     });
 
     it('possui ações de clique acessíveis com touch targets mínimos de 44px', () => {

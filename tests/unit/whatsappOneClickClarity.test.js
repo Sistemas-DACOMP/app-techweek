@@ -5,35 +5,40 @@ import SponsorSettings from '../../src/components/sponsor/SponsorSettings';
 import SponsorWhatsAppHub from '../../src/components/sponsor/SponsorWhatsAppHub';
 import SponsorLeadModal from '../../src/components/SponsorLeadModal';
 
-describe('WhatsApp 1-Clique Clarity & Transparency', () => {
+describe('WhatsApp Modelo Padrão Clarity & Design System', () => {
   const companyProps = {
     companyId: 'test-sponsor',
     companyName: 'TechCorp',
   };
 
   describe('SponsorSettings (Configuração de Estande)', () => {
-    it('exibe badge de destaque "Padrão 1-Clique" no tab do modelo ativo', () => {
+    it('exibe badge sutil "Padrão" no tab do modelo ativo e status "Modelo Padrão"', () => {
       const html = renderToStaticMarkup(
         React.createElement(SponsorSettings, companyProps)
       );
 
-      expect(html).toContain('Padrão 1-Clique');
-      expect(html).toContain('PADRÃO NO 1-CLIQUE ATIVO');
+      expect(html).toContain('Padrão');
+      expect(html).toContain('Modelo Padrão');
+      // Não deve ter a expressão confusa 1-clique nem emojis
+      expect(html).not.toContain('1-Clique');
+      expect(html).not.toContain('⭐');
+      expect(html).not.toContain('⚡');
     });
 
-    it('exibe banner educativo explicando o funcionamento do disparo em 1-clique', () => {
+    it('não exibe banners prolixos educativos, mantendo interface enxuta', () => {
       const html = renderToStaticMarkup(
         React.createElement(SponsorSettings, companyProps)
       );
 
-      expect(html).toContain('Este é o Modelo Padrão no 1-Clique');
-      expect(html).toContain('WhatsApp 1-Clique');
-      expect(html).toContain('dados do estudante preenchidos automaticamente');
+      expect(html).not.toContain('Este é o Modelo Padrão no 1-Clique');
+      expect(html).not.toContain('Toda vez que qualquer recrutador');
+      expect(html).toContain('Modelos de WhatsApp');
+      expect(html).toContain('Tags de Qualificação');
     });
   });
 
   describe('SponsorWhatsAppHub (Hub de Mensagens Rápidas)', () => {
-    it('exibe badge visual de "Padrão 1-Clique" no cabeçalho e chip de template', () => {
+    it('exibe badge visual sóbrio de "Padrão" sem emojis e sem 1-Clique', () => {
       const html = renderToStaticMarkup(
         React.createElement(SponsorWhatsAppHub, {
           companyId: 'test-hub-sponsor',
@@ -44,14 +49,16 @@ describe('WhatsApp 1-Clique Clarity & Transparency', () => {
         })
       );
 
-      expect(html).toContain('Padrão 1-Clique:');
-      expect(html).toContain('⭐ Padrão');
-      expect(html).toContain('Este é o modelo padrão configurado para o 1-Clique rápido');
+      expect(html).toContain('Padrão:');
+      expect(html).toContain('Modelo padrão configurado');
+      expect(html).not.toContain('⭐');
+      expect(html).not.toContain('⚡');
+      expect(html).not.toContain('1-Clique');
     });
   });
 
-  describe('SponsorLeadModal (Ações de Contato Rápido & Pós-Salvamento)', () => {
-    it('indica claramente o botão WhatsApp 1-Clique com o modelo padrão vinculado', () => {
+  describe('SponsorLeadModal (Ações de Contato & Outreach)', () => {
+    it('exibe o botão WhatsApp limpo com Modelo Padrão sem emojis', () => {
       const html = renderToStaticMarkup(
         React.createElement(SponsorLeadModal, {
           participant: {
@@ -70,9 +77,12 @@ describe('WhatsApp 1-Clique Clarity & Transparency', () => {
         })
       );
 
-      expect(html).toContain('WhatsApp 1-Clique');
-      expect(html).toContain('Modelo 1-Clique:');
+      expect(html).toContain('WhatsApp');
+      expect(html).toContain('Modelo Padrão:');
       expect(html).toContain('Abordagem Geral');
+      expect(html).not.toContain('WhatsApp 1-Clique');
+      expect(html).not.toContain('⚡');
+      expect(html).not.toContain('⭐');
     });
   });
 });

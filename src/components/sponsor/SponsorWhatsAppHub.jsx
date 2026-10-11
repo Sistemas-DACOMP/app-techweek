@@ -9,8 +9,7 @@ import {
   Briefcase,
   Calendar,
   Code2,
-  FileText,
-  Star
+  FileText
 } from 'lucide-react';
 import { buildWhatsAppLink, sanitizeBrazilianPhone } from '../../lib/whatsapp';
 import { WhatsAppIcon } from '../WhatsAppButton';
@@ -157,7 +156,7 @@ export default function SponsorWhatsAppHub({
             <WhatsAppIcon size={18} color="#25D366" />
           </span>
           <div>
-            <div className="text-[13px] font-extrabold text-text">WhatsApp Outreach 1-Click</div>
+            <div className="text-[13px] font-extrabold text-text">WhatsApp</div>
             <div className="text-[11px] text-text-3">
               {hasValidPhone ? `Telefone: ${phone}` : 'Participante sem telefone válido'}
             </div>
@@ -181,9 +180,8 @@ export default function SponsorWhatsAppHub({
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between px-0.5">
           <span className="text-[11px] font-bold text-text-3">Modelos Rápidos:</span>
-          <span className="inline-flex items-center gap-1 rounded-md bg-amber-400/10 px-2 py-0.5 text-[10.5px] font-bold text-amber-300 border border-amber-400/20">
-            <Star size={10} className="fill-amber-400 text-amber-400" />
-            Padrão 1-Clique: {defaultTemplateTitle}
+          <span className="inline-flex items-center gap-1 rounded-md bg-link/10 px-2 py-0.5 text-[10.5px] font-bold text-link border border-link/25">
+            Padrão: {defaultTemplateTitle}
           </span>
         </div>
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
@@ -207,10 +205,10 @@ export default function SponsorWhatsAppHub({
                 <span className="truncate">{tmpl.title}</span>
                 {isDefault && (
                   <span
-                    className="ml-0.5 inline-flex items-center rounded px-1 py-0.2 text-[8.5px] font-black uppercase tracking-wider bg-amber-400/25 text-amber-300 border border-amber-400/40"
-                    title="Modelo ativo no botão 1-Clique rápido do CRM"
+                    className="ml-0.5 inline-flex items-center rounded px-1 py-0.5 text-[8.5px] font-bold uppercase tracking-wider bg-link/15 text-link border border-link/30"
+                    title="Modelo padrão configurado"
                   >
-                    ⭐ Padrão
+                    Padrão
                   </span>
                 )}
               </button>
@@ -231,12 +229,12 @@ export default function SponsorWhatsAppHub({
         <div className="flex items-center justify-between text-[10px] text-text-4">
           <span className="flex items-center gap-1">
             {isCurrentSelectionDefault ? (
-              <span className="font-semibold text-emerald-400 flex items-center gap-1">
-                ⚡ Este é o modelo padrão configurado para o 1-Clique rápido
+              <span className="font-medium text-ok flex items-center gap-1">
+                Modelo padrão configurado
               </span>
             ) : (
               <span className="text-text-3">
-                Modelo alternativo (o 1-Clique rápido usa "{defaultTemplateTitle}")
+                Modelo alternativo (o padrão é "{defaultTemplateTitle}")
               </span>
             )}
           </span>

@@ -1,7 +1,7 @@
 /**
  * sponsorSettingsService.js
  * Gerenciador de configurações de estande para patrocinadores na FACOM TechWeek.
- * Controla tags personalizadas de qualificação e modelos de mensagens WhatsApp de 1-clique.
+ * Controla tags personalizadas de qualificação e modelos de mensagens WhatsApp padrão.
  */
 
 export const DEFAULT_QUALIFICATION_TAGS = [
@@ -18,8 +18,8 @@ export const DEFAULT_QUALIFICATION_TAGS = [
 export const DEFAULT_WHATSAPP_TEMPLATES = [
   {
     id: 'recruiter_outreach',
-    title: 'Abordagem Geral (Padrão)',
-    description: 'Mensagem de 1-clique usada no modal de CRM e pós-leitura de QR Code',
+    title: 'Abordagem Geral',
+    description: 'Mensagem padrão usada no modal de CRM e pós-leitura de QR Code',
     text: 'Olá, {nome}! Foi ótimo conversar com você no estande da {empresa} na FACOM TechWeek! Gostaríamos de marcar uma conversa rápida sobre nossas oportunidades para alunos de {curso}. Qual o seu melhor horário?',
   },
   {
@@ -189,7 +189,7 @@ export function interpolateTemplate(templateString = '', data = {}) {
 }
 
 /**
- * Obtém a mensagem de 1-clique ativa e já interpolada para um lead específico.
+ * Obtém a mensagem de outreach ativa e já interpolada para um lead específico.
  * @param {string} companyId - Identificador do patrocinador
  * @param {object} leadData - { name, course, companyName }
  * @returns {string} Mensagem pronta para envio

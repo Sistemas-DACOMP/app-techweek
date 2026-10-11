@@ -1,18 +1,14 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   MessageSquare,
-  Tag,
   Plus,
   X,
   Check,
   RotateCcw,
-  Sparkles,
   Smartphone,
   CheckCheck,
   Save,
   Pencil,
-  Info,
-  Star,
   Briefcase,
   Calendar,
   Code2,
@@ -27,7 +23,6 @@ import {
   DEFAULT_QUALIFICATION_TAGS,
   DEFAULT_WHATSAPP_TEMPLATES,
 } from '../../lib/sponsorSettingsService';
-import { WhatsAppIcon } from '../WhatsAppButton';
 import { btn } from '../../pages/admin/ui';
 
 const SAMPLE_CANDIDATES = [
@@ -155,14 +150,14 @@ export default function SponsorSettings({
     if (onSettingsSaved) onSettingsSaved(updated);
   };
 
-  // Define o template atual como padrão para o botão de 1-clique
+  // Define o template atual como padrão para contato rápido
   const handleSetAsDefaultTemplate = (templateId) => {
     const updated = saveSponsorSettings(companyId, {
       ...settings,
       activeTemplateId: templateId,
     });
     setSettings(updated);
-    showToast('Modelo definido como padrão no botão de 1-clique!', 'success');
+    showToast('Modelo definido como padrão!', 'success');
     if (onSettingsSaved) onSettingsSaved(updated);
   };
 
@@ -280,9 +275,6 @@ export default function SponsorSettings({
     });
   }, [templateText, activeSample, companyName]);
 
-  const currentTemplateObj =
-    settings.templates.find((t) => t.id === selectedTemplateId) || DEFAULT_WHATSAPP_TEMPLATES[0];
-
   const isCurrentActiveOutreach = settings.activeTemplateId === selectedTemplateId;
 
   return (
@@ -298,74 +290,64 @@ export default function SponsorSettings({
         </div>
       )}
 
-      {/* Header Informativo da Seção */}
-      <div className="rounded-[22px] border border-line bg-surface p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-start gap-3.5">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-link/10 border border-link/30 text-link">
-            <MessageSquare size={22} />
-          </div>
-          <div>
-            <h1 className="text-[19px] sm:text-[21px] font-black text-text tracking-tight m-0">
-              Personalização do Estande
-            </h1>
-            <p className="text-[13px] text-text-2 mt-0.5 leading-relaxed">
-              Configure as mensagens rápidas de WhatsApp e as tags de recrutamento da equipe{' '}
-              <strong className="text-text">{companyName}</strong>.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-          <span className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-raised px-3 py-1.5 text-[11px] font-bold text-text-3">
-            <Sparkles size={13} className="text-link" />
-            <span>Sincronizado em tempo real</span>
-          </span>
+      {/* Header Limpo e Direto da Seção */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
+        <div>
+          <h1 className="text-[20px] sm:text-[22px] font-extrabold text-text tracking-tight m-0">
+            Personalização do Estande
+          </h1>
+          <p className="text-[13px] text-text-3 mt-1 m-0">
+            Modelos de mensagem do WhatsApp e tags de qualificação para a equipe {companyName}.
+          </p>
         </div>
       </div>
 
       {/* GRID PRINCIPAL: BLOCO A (WHATSAPP) & BLOCO B (TAGS) */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         {/* ========================================================================= */}
-        {/* BLOCO A: MENSAGENS DE CONTATO RÁPIDO WHATSAPP (7 Colunas no Desktop XL)   */}
+        {/* BLOCO A: MODELOS DE WHATSAPP (7 Colunas no Desktop XL)                    */}
         {/* ========================================================================= */}
         <section
           aria-labelledby="section-whatsapp-title"
-          className="xl:col-span-7 flex flex-col gap-4 rounded-[22px] border border-line bg-surface p-5 shadow-sm"
+          className="xl:col-span-7 flex flex-col gap-4 rounded-[20px] border border-line bg-surface p-5 shadow-sm"
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-line">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="flex size-7 items-center justify-center rounded-lg bg-[#25D366]/15 text-[#25D366]">
-                  <WhatsAppIcon size={16} />
-                </span>
-                <h2 id="section-whatsapp-title" className="text-[16px] font-extrabold text-text m-0">
-                  Mensagens de Contato Rápido (1-Clique)
-                </h2>
-              </div>
-              <p className="text-[12px] text-text-3 mt-1 m-0">
-                Personalize os modelos de WhatsApp da equipe {companyName} para disparo ágil no CRM e Scanner.
+              <h2 id="section-whatsapp-title" className="text-[16px] font-extrabold text-text m-0">
+                Modelos de WhatsApp
+              </h2>
+              <p className="text-[12px] text-text-3 mt-0.5 m-0">
+                Textos pré-formatados para contato ágil com candidatos no CRM e leitor.
               </p>
             </div>
 
-            {/* Status Pill do Modelo Ativo */}
-            {isCurrentActiveOutreach ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#25D366]/15 border border-[#25D366]/40 px-3 py-1 text-[11px] font-extrabold text-[#25D366] shrink-0">
-                <Star size={12} className="fill-[#25D366]" />
-                <span>PADRÃO NO 1-CLIQUE ATIVO</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-raised border border-line px-3 py-1 text-[11px] font-semibold text-text-3 shrink-0">
-                <span>Modelo Alternativo</span>
-              </span>
-            )}
+            {/* Status ou Ação do Modelo Selecionado */}
+            <div>
+              {isCurrentActiveOutreach ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-ok/10 border border-ok/30 px-3 py-1 text-[11px] font-bold text-ok shrink-0">
+                  <Check size={12} strokeWidth={2.5} />
+                  <span>Modelo Padrão</span>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleSetAsDefaultTemplate(selectedTemplateId)}
+                  className={btn('secondary', 'min-h-[44px] px-3.5 text-[12px] shrink-0')}
+                  title="Definir este modelo como padrão de disparo"
+                >
+                  <span>Definir como padrão</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Seletor de Modelos de Mensagem em Grid Equilibrado (Sem abas órfãs) */}
+          {/* Seletor de Modelos de Mensagem */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {settings.templates.map((tpl) => {
               const isSelected = tpl.id === selectedTemplateId;
               const isDefault = tpl.id === settings.activeTemplateId;
               const IconComp = TEMPLATE_ICONS[tpl.id] || MessageSquare;
+              const displayTitle = tpl.title.replace(/\s*\(Padrão\)/i, '');
 
               return (
                 <button
@@ -373,123 +355,79 @@ export default function SponsorSettings({
                   type="button"
                   onClick={() => handleSelectTemplate(tpl.id)}
                   aria-pressed={isSelected}
-                  title={tpl.title}
-                  className={`press group relative flex flex-col justify-between items-start gap-1.5 rounded-2xl p-3 text-left transition-all border min-h-[64px] ${
+                  title={displayTitle}
+                  className={`press group relative flex flex-col justify-between items-start gap-1.5 rounded-xl p-3 text-left transition-all border min-h-[64px] ${
                     isSelected
-                      ? 'bg-surface-selected border-link text-text shadow-sm shadow-link/10 ring-1 ring-link/40'
-                      : 'bg-surface-raised border-line text-text-2 hover:bg-surface-raised/80 hover:text-text hover:border-line-2'
+                      ? 'bg-surface-selected border-link text-text shadow-sm ring-1 ring-link/40'
+                      : 'bg-surface-raised border-line text-text-2 hover:bg-surface-raised/80 hover:text-text'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full gap-1">
-                    <IconComp size={15} className={`shrink-0 ${isSelected ? 'text-link' : 'text-text-3 group-hover:text-text'}`} />
+                    <IconComp
+                      size={15}
+                      className={`shrink-0 ${isSelected ? 'text-link' : 'text-text-3 group-hover:text-text'}`}
+                    />
                     {isDefault && (
                       <span
-                        className="inline-flex items-center gap-1 rounded-full bg-[#25D366]/20 border border-[#25D366]/40 px-1.5 py-0.5 text-[9px] font-extrabold text-[#25D366] shrink-0 uppercase"
-                        title="Modelo padrão configurado no 1-Clique"
+                        className="inline-flex items-center rounded-md bg-link/15 border border-link/30 px-1.5 py-0.5 text-[9px] font-bold text-link shrink-0 uppercase tracking-wide"
+                        title="Modelo padrão configurado"
                       >
-                        <Star size={9} className="fill-[#25D366]" />
-                        <span>Padrão 1-Clique</span>
+                        Padrão
                       </span>
                     )}
                   </div>
-                  <span className="text-[12px] font-bold line-clamp-2 leading-snug">{tpl.title}</span>
+                  <span className="text-[12px] font-bold line-clamp-2 leading-snug">{displayTitle}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Banner Educativo & Ação Unificada do Modelo Selecionado (Elimina duplicação e espaço morto) */}
-          {isCurrentActiveOutreach ? (
-            <div className="flex items-start gap-3 rounded-2xl border border-[#25D366]/40 bg-[#25D366]/10 p-3.5">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-[#25D366]/20 text-[#25D366]">
-                <Star size={15} className="fill-[#25D366]" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[12px] font-extrabold text-[#25D366] uppercase tracking-wider">
-                  ⭐ Este é o Modelo Padrão no 1-Clique
-                </div>
-                <p className="m-0 mt-0.5 text-[12px] leading-relaxed text-text">
-                  Toda vez que qualquer recrutador da sua equipe clicar no botão <strong>"WhatsApp 1-Clique"</strong> na ficha de um participante ou no scanner, esta mensagem será aberta pronta para envio com os dados do estudante preenchidos automaticamente.
-                </p>
-                <div className="mt-1 text-[11px] text-text-3">
-                  {currentTemplateObj.description}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-line bg-surface-raised/60 p-3.5">
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-surface text-text-3 border border-line">
-                  <Info size={15} className="text-link" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[12px] font-bold text-text">
-                    Modelo Salvo como Alternativo
-                  </div>
-                  <p className="m-0 mt-0.5 text-[12px] leading-relaxed text-text-3">
-                    {currentTemplateObj.description}. Clique ao lado para torná-lo o modelo disparado automaticamente no botão de 1-Clique.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleSetAsDefaultTemplate(selectedTemplateId)}
-                className="press shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-link/40 bg-link/15 px-3 py-1.5 text-[11px] font-extrabold text-link hover:bg-link/25 hover:border-link transition-all self-start sm:self-auto min-h-[34px]"
-                title="Tornar este modelo o padrão principal disparado no botão de 1-Clique"
-              >
-                <Star size={12} />
-                <span>Definir como Padrão do 1-Clique</span>
-              </button>
-            </div>
-          )}
-
           {/* Chips de Inserção de Variáveis Dinâmicas */}
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-text-3">
-              <span>Variáveis Disponíveis (Clique para Inserir)</span>
-              <span className="text-[10px] text-text-4 font-normal lowercase">insere na posição do cursor</span>
+            <div className="flex items-center justify-between text-[11px] font-bold text-text-3">
+              <span>Inserir variável no texto</span>
             </div>
 
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => handleInsertVariable('{nome}')}
-                className="press inline-flex items-center gap-1.5 rounded-xl border border-link/40 bg-link/10 px-3 py-1.5 text-[12px] font-bold text-link hover:bg-link/20 transition-colors"
-                title="Insere o primeiro nome do participante (ex: Gabriel)"
+                className="press inline-flex items-center gap-1 rounded-lg border border-line bg-surface-raised px-2.5 py-1 text-[12px] font-medium text-text-2 hover:text-text hover:bg-surface-selected transition-colors"
+                title="Insere o primeiro nome do participante"
               >
-                <Plus size={13} />
-                <span>&#123;nome&#125;</span>
-                <span className="text-[10px] text-text-3 font-normal opacity-80">(Primeiro nome)</span>
+                <Plus size={12} className="text-link" />
+                <span className="font-mono text-link">&#123;nome&#125;</span>
+                <span className="text-[11px] text-text-4">Primeiro nome</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleInsertVariable('{empresa}')}
-                className="press inline-flex items-center gap-1.5 rounded-xl border border-warn/40 bg-warn/10 px-3 py-1.5 text-[12px] font-bold text-warn hover:bg-warn/20 transition-colors"
-                title="Insere o nome da sua empresa (ex: Kanastra)"
+                className="press inline-flex items-center gap-1 rounded-lg border border-line bg-surface-raised px-2.5 py-1 text-[12px] font-medium text-text-2 hover:text-text hover:bg-surface-selected transition-colors"
+                title="Insere o nome da sua empresa"
               >
-                <Plus size={13} />
-                <span>&#123;empresa&#125;</span>
-                <span className="text-[10px] text-text-3 font-normal opacity-80">({companyName})</span>
+                <Plus size={12} className="text-link" />
+                <span className="font-mono text-link">&#123;empresa&#125;</span>
+                <span className="text-[11px] text-text-4">Empresa</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleInsertVariable('{curso}')}
-                className="press inline-flex items-center gap-1.5 rounded-xl border border-purple-400/40 bg-purple-500/10 px-3 py-1.5 text-[12px] font-bold text-purple-300 hover:bg-purple-500/20 transition-colors"
-                title="Insere o curso do aluno (ex: Engenharia de Software)"
+                className="press inline-flex items-center gap-1 rounded-lg border border-line bg-surface-raised px-2.5 py-1 text-[12px] font-medium text-text-2 hover:text-text hover:bg-surface-selected transition-colors"
+                title="Insere o curso do aluno"
               >
-                <Plus size={13} />
-                <span>&#123;curso&#125;</span>
-                <span className="text-[10px] text-text-3 font-normal opacity-80">(Curso acadêmico)</span>
+                <Plus size={12} className="text-link" />
+                <span className="font-mono text-link">&#123;curso&#125;</span>
+                <span className="text-[11px] text-text-4">Curso</span>
               </button>
             </div>
           </div>
 
           {/* Campo Textarea do Modelo */}
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-text-3">
-              <label htmlFor="template-text-editor">Texto da Mensagem</label>
+            <div className="flex items-center justify-between text-[11px] font-bold text-text-3">
+              <label htmlFor="template-text-editor">Texto do Modelo</label>
               <span className="text-[11px] font-semibold text-text-4 font-mono">
                 {templateText.length} caracteres
               </span>
@@ -498,14 +436,14 @@ export default function SponsorSettings({
             <textarea
               id="template-text-editor"
               ref={textareaRef}
-              rows={5}
+              rows={4}
               value={templateText}
               onChange={(e) => {
                 setTemplateText(e.target.value);
                 setIsTemplateDirty(true);
               }}
               placeholder="Digite o modelo de mensagem..."
-              className="w-full resize-y rounded-2xl border border-field-line bg-field p-3.5 text-[13px] leading-relaxed text-text placeholder-text-4 focus:border-link focus:outline-none focus:ring-1 focus:ring-link font-sans shadow-inner"
+              className="w-full resize-y rounded-xl border border-field-line bg-field p-3 text-[13px] leading-relaxed text-text placeholder-text-4 focus:border-link focus:outline-none focus:ring-1 focus:ring-link font-sans shadow-inner"
             />
           </div>
 
@@ -514,46 +452,45 @@ export default function SponsorSettings({
             <button
               type="button"
               onClick={handleResetCurrentTemplate}
-              className="press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-raised px-3.5 py-2 text-[12px] font-bold text-text-3 hover:text-text hover:border-line-2 transition-colors min-h-[40px]"
+              className="press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-raised px-3.5 py-2 text-[12px] font-semibold text-text-3 hover:text-text hover:border-line-2 transition-colors min-h-[44px]"
             >
-              <RotateCcw size={14} />
-              <span>Restaurar Texto Padrão</span>
+              <RotateCcw size={13} />
+              <span>Restaurar texto original</span>
             </button>
 
             <button
               type="button"
               onClick={handleSaveTemplate}
               disabled={!isTemplateDirty}
-              className={`press inline-flex items-center gap-2 rounded-xl px-5 py-2 text-[13px] font-bold transition-all min-h-[42px] ${
-                isTemplateDirty
-                  ? 'bg-action text-white shadow-lg shadow-action/25 hover:bg-action-hover'
-                  : 'bg-surface-raised text-text-4 border border-line cursor-not-allowed opacity-60'
-              }`}
+              className={btn(
+                isTemplateDirty ? 'action' : 'secondary',
+                `min-h-[44px] px-4 text-[13px] ${!isTemplateDirty ? 'opacity-50 cursor-not-allowed' : ''}`
+              )}
             >
-              <Save size={15} />
-              <span>Salvar Alterações</span>
+              <Save size={14} />
+              <span>Salvar alterações</span>
             </button>
           </div>
 
           {/* ========================================================================= */}
-          {/* SIMULADOR / LIVE PREVIEW DE WHATSAPP REALISTA                            */}
+          {/* SIMULADOR / LIVE PREVIEW DE WHATSAPP COMPACTO                            */}
           {/* ========================================================================= */}
-          <div className="mt-2 flex flex-col gap-2.5 rounded-2xl border border-line bg-surface-raised p-4">
+          <div className="mt-1 flex flex-col gap-2 rounded-xl border border-line bg-surface-raised/40 p-3.5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Smartphone size={15} className="text-[#25D366]" />
-                <span className="text-[12px] font-extrabold uppercase tracking-wider text-text">
-                  Pré-visualização em Tempo Real (WhatsApp)
+              <div className="flex items-center gap-1.5">
+                <Smartphone size={14} className="text-text-3" />
+                <span className="text-[11px] font-bold uppercase tracking-wider text-text-3">
+                  Pré-visualização (WhatsApp)
                 </span>
               </div>
 
               {/* Seletor de Candidato Exemplo */}
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] text-text-3 font-semibold hidden sm:inline">Exemplo:</span>
+                <span className="text-[11px] text-text-4">Exemplo:</span>
                 <select
                   value={selectedSampleIndex}
                   onChange={(e) => setSelectedSampleIndex(Number(e.target.value))}
-                  className="rounded-lg border border-line bg-surface px-2.5 py-1 text-[11px] font-bold text-text focus:border-link focus:outline-none"
+                  className="rounded-lg border border-line bg-surface px-2 py-0.5 text-[11px] font-medium text-text focus:border-link focus:outline-none"
                   aria-label="Selecionar candidato de teste"
                 >
                   {SAMPLE_CANDIDATES.map((cand, idx) => (
@@ -565,46 +502,23 @@ export default function SponsorSettings({
               </div>
             </div>
 
-            {/* Balão Autêntico de WhatsApp */}
-            <div
-              className="rounded-xl p-4 overflow-hidden border border-[#202C33]"
-              style={{
-                backgroundColor: '#0B141A',
-                backgroundImage:
-                  'radial-gradient(#1B2730 1px, transparent 1px), radial-gradient(#1B2730 1px, #0B141A 1px)',
-                backgroundSize: '24px 24px',
-                backgroundPosition: '0 0, 12px 12px',
-              }}
-            >
-              {/* Header do Chat WhatsApp */}
-              <div className="flex items-center gap-2.5 pb-3 border-b border-[#202C33]/80 mb-3.5">
-                <div className="size-8 rounded-full bg-[#1F2C34] flex items-center justify-center font-bold text-[12px] text-[#00A884]">
+            {/* Balão Autêntico e Compacto de WhatsApp */}
+            <div className="rounded-xl p-3 bg-[#0B141A] border border-[#202C33]">
+              <div className="flex items-center gap-2 pb-2 border-b border-[#202C33]/60 mb-2.5">
+                <div className="size-6 rounded-full bg-[#1F2C34] flex items-center justify-center font-bold text-[10px] text-[#00A884]">
                   {activeSample.name.charAt(0)}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-bold text-[#E9EDEF] truncate">
-                    {activeSample.name}
-                  </div>
-                  <div className="text-[10px] text-[#8696A0] flex items-center gap-1">
-                    <span className="size-1.5 rounded-full bg-[#00A884]" />
-                    <span>online</span>
-                  </div>
+                <div className="text-[12px] font-bold text-[#E9EDEF] truncate">
+                  {activeSample.name}
                 </div>
               </div>
 
-              {/* Balão de Mensagem Enviada (Outgoing Bubble) */}
               <div className="flex justify-end">
-                <div
-                  className="relative max-w-[90%] sm:max-w-[80%] rounded-2xl rounded-tr-xs p-3 text-[13px] leading-relaxed shadow-md"
-                  style={{
-                    backgroundColor: '#005C4B',
-                    color: '#E9EDEF',
-                  }}
-                >
+                <div className="relative max-w-[92%] rounded-xl rounded-tr-none p-2.5 text-[12px] leading-relaxed bg-[#005C4B] text-[#E9EDEF]">
                   <p className="whitespace-pre-wrap m-0 break-words">{interpolatedPreview}</p>
-                  <div className="flex items-center justify-end gap-1 mt-1 text-[10px] text-[#8696A0]">
+                  <div className="flex items-center justify-end gap-1 mt-1 text-[9px] text-[#8696A0]">
                     <span>14:32</span>
-                    <CheckCheck size={13} className="text-[#53BDEB]" />
+                    <CheckCheck size={12} className="text-[#53BDEB]" />
                   </div>
                 </div>
               </div>
@@ -617,32 +531,21 @@ export default function SponsorSettings({
         {/* ========================================================================= */}
         <section
           aria-labelledby="section-tags-title"
-          className="xl:col-span-5 flex flex-col gap-4 rounded-[22px] border border-line bg-surface p-5 shadow-sm"
+          className="xl:col-span-5 flex flex-col gap-4 rounded-[20px] border border-line bg-surface p-5 shadow-sm"
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-line">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="flex size-7 items-center justify-center rounded-lg bg-link/15 text-link">
-                  <Tag size={16} />
-                </span>
-                <h2 id="section-tags-title" className="text-[16px] font-extrabold text-text m-0">
-                  Tags de Qualificação
-                </h2>
-              </div>
-              <p className="text-[12px] text-text-3 mt-1 m-0">
-                Chips usados pelos recrutadores no modal e no split-view para avaliar candidatos.
+              <h2 id="section-tags-title" className="text-[16px] font-extrabold text-text m-0">
+                Tags de Qualificação
+              </h2>
+              <p className="text-[12px] text-text-3 mt-0.5 m-0">
+                Marcadores usados para avaliar candidatos durante o atendimento.
               </p>
             </div>
 
-            <span className="self-start sm:self-auto rounded-full bg-surface-raised border border-line px-2.5 py-0.5 text-[11px] font-extrabold text-text-2">
+            <span className="self-start sm:self-auto rounded-full bg-surface-raised border border-line px-2.5 py-0.5 text-[11px] font-bold text-text-3">
               {activeTags.length} {activeTags.length === 1 ? 'tag' : 'tags'}
             </span>
-          </div>
-
-          {/* Dica operacional */}
-          <div className="rounded-xl border border-line/60 bg-surface-raised/40 p-3 text-[12px] text-text-3 leading-relaxed">
-            Mantenha entre <strong>6 a 12 tags</strong> bem definidas para que os recrutadores no
-            estande consigam classificar com agilidade em poucos toques durante conversas de pico.
           </div>
 
           {/* Formulário de Adição de Nova Tag */}
@@ -655,138 +558,118 @@ export default function SponsorSettings({
                   setNewTagInput(e.target.value);
                   if (tagError) setTagError('');
                 }}
-                placeholder="Ex: Cybersec, Fullstack, IA..."
+                placeholder="Nova tag (ex: IA, Frontend)..."
                 className="flex-1 rounded-xl border border-field-line bg-field px-3.5 py-2.5 text-[13px] text-text placeholder-text-4 focus:border-link focus:outline-none min-h-[44px]"
               />
               <button
                 type="submit"
                 disabled={!newTagInput.trim()}
-                className={btn(
-                  'action',
-                  'h-11 px-4 text-[13px] font-bold shrink-0 shadow-sm disabled:opacity-50'
-                )}
+                className={btn('action', 'min-h-[44px] px-4 text-[13px] shrink-0 disabled:opacity-50')}
               >
-                <Plus size={16} />
+                <Plus size={15} />
                 <span>Adicionar</span>
               </button>
             </div>
             {tagError && (
-              <span className="flex items-center gap-1 text-[11px] font-bold text-warn">
-                <AlertCircle size={13} /> {tagError}
+              <span className="flex items-center gap-1 text-[11px] font-medium text-warn">
+                <AlertCircle size={12} /> {tagError}
               </span>
             )}
           </form>
 
           {/* Lista de Tags Ativas com Chips Interativos */}
-          <div className="flex flex-col gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-text-3">
-              Tags Ativas no Estande ({activeTags.length})
-            </span>
+          <div className="flex flex-wrap gap-2 p-3 rounded-xl border border-line bg-surface-raised/30 min-h-[100px] items-start content-start">
+            {activeTags.length === 0 ? (
+              <div className="flex flex-col items-center justify-center w-full py-4 text-center text-text-4 text-[12px]">
+                <span>Nenhuma tag cadastrada.</span>
+                <button
+                  type="button"
+                  onClick={handleResetTags}
+                  className="mt-1.5 text-link hover:underline font-bold"
+                >
+                  Restaurar tags padrão
+                </button>
+              </div>
+            ) : (
+              activeTags.map((tag, index) => {
+                const isEditingThis = editingTagIndex === index;
 
-            <div className="flex flex-wrap gap-2 p-3 rounded-2xl border border-line bg-surface-raised/50 min-h-[110px] items-start content-start">
-              {activeTags.length === 0 ? (
-                <div className="flex flex-col items-center justify-center w-full py-6 text-center text-text-3 text-[12px]">
-                  <span>Nenhuma tag cadastrada no momento.</span>
-                  <button
-                    type="button"
-                    onClick={handleResetTags}
-                    className="mt-2 text-link underline font-bold"
-                  >
-                    Restaurar tags padrão
-                  </button>
-                </div>
-              ) : (
-                activeTags.map((tag, index) => {
-                  const isEditingThis = editingTagIndex === index;
-
-                  if (isEditingThis) {
-                    return (
-                      <div
-                        key={`edit-${index}`}
-                        className="inline-flex items-center gap-1 rounded-xl border border-link bg-surface px-2 py-1 shadow-sm"
-                      >
-                        <input
-                          type="text"
-                          value={editingTagValue}
-                          onChange={(e) => setEditingTagValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveEditTag(index);
-                            if (e.key === 'Escape') setEditingTagIndex(null);
-                          }}
-                          autoFocus
-                          className="w-24 bg-transparent text-[12px] font-bold text-text focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleSaveEditTag(index)}
-                          className="press p-1 text-ok hover:bg-ok/10 rounded"
-                          title="Salvar"
-                        >
-                          <Check size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingTagIndex(null)}
-                          className="press p-1 text-text-3 hover:bg-surface-raised rounded"
-                          title="Cancelar"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    );
-                  }
-
+                if (isEditingThis) {
                   return (
-                    <span
-                      key={tag}
-                      className="group inline-flex items-center gap-1.5 rounded-xl border border-link/30 bg-surface-selected/80 px-3 py-1.5 text-[12px] font-bold text-text transition-all hover:border-link/60 shadow-xs"
+                    <div
+                      key={`edit-${index}`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-link bg-surface px-2 py-1 shadow-sm"
                     >
-                      <span
-                        className="cursor-pointer hover:underline"
-                        onClick={() => handleStartEditTag(index, tag)}
-                        title="Clique para editar nome da tag"
-                      >
-                        {tag}
-                      </span>
-
-                      {/* Botão de Edição Rápida */}
+                      <input
+                        type="text"
+                        value={editingTagValue}
+                        onChange={(e) => setEditingTagValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveEditTag(index);
+                          if (e.key === 'Escape') setEditingTagIndex(null);
+                        }}
+                        autoFocus
+                        className="w-24 bg-transparent text-[12px] font-bold text-text focus:outline-none"
+                      />
                       <button
                         type="button"
-                        onClick={() => handleStartEditTag(index, tag)}
-                        className="opacity-60 hover:opacity-100 p-0.5 rounded text-text-3 hover:text-text transition-opacity"
-                        aria-label={`Editar tag ${tag}`}
-                        title="Editar tag"
+                        onClick={() => handleSaveEditTag(index)}
+                        className="press p-0.5 text-ok hover:bg-ok/10 rounded"
+                        title="Salvar"
                       >
-                        <Pencil size={11} />
+                        <Check size={13} />
                       </button>
-
-                      {/* Botão de Excluir Tag */}
                       <button
                         type="button"
-                        onClick={() => handleRemoveTag(tag)}
-                        className="opacity-60 hover:opacity-100 p-0.5 rounded text-text-3 hover:text-warn transition-opacity"
-                        aria-label={`Remover tag ${tag}`}
-                        title={`Remover ${tag}`}
+                        onClick={() => setEditingTagIndex(null)}
+                        className="press p-0.5 text-text-3 hover:bg-surface-raised rounded"
+                        title="Cancelar"
                       >
-                        <X size={12} />
+                        <X size={13} />
                       </button>
-                    </span>
+                    </div>
                   );
-                })
-              )}
-            </div>
+                }
+
+                return (
+                  <span
+                    key={tag}
+                    className="group inline-flex items-center gap-1.5 rounded-lg border border-line-2 bg-surface-raised px-2.5 py-1 text-[12px] font-semibold text-text hover:border-link/50 transition-colors"
+                  >
+                    <span>{tag}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditTag(index, tag)}
+                      className="opacity-50 hover:opacity-100 p-0.5 text-text-3 hover:text-text transition-opacity"
+                      aria-label={`Editar tag ${tag}`}
+                      title="Editar tag"
+                    >
+                      <Pencil size={11} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      className="opacity-50 hover:opacity-100 p-0.5 text-text-3 hover:text-warn transition-opacity"
+                      aria-label={`Remover tag ${tag}`}
+                      title={`Remover ${tag}`}
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                );
+              })
+            )}
           </div>
 
           {/* Restaurar Tags Padrão */}
-          <div className="pt-2 border-t border-line flex items-center justify-between">
-            <span className="text-[11px] text-text-4">Padrão de fábrica: 8 tags essenciais</span>
+          <div className="pt-2 border-t border-line flex items-center justify-end">
             <button
               type="button"
               onClick={handleResetTags}
-              className="press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-raised px-3 py-1.5 text-[11px] font-bold text-text-2 hover:text-text hover:border-line-2 transition-colors min-h-[38px]"
+              className="press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-raised px-3.5 py-2 text-[12px] font-medium text-text-3 hover:text-text transition-colors min-h-[44px]"
             >
               <RotateCcw size={13} />
-              <span>Restaurar Tags Padrão</span>
+              <span>Restaurar tags padrão</span>
             </button>
           </div>
         </section>
