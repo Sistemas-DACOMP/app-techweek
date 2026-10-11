@@ -70,6 +70,7 @@ import { btn, Kpi, Chip, TypeTag } from './admin/ui';
 import SponsorLeadModal from '../components/SponsorLeadModal';
 import SponsorSplitView from '../components/sponsor/SponsorSplitView';
 import SponsorRoiDashboard from '../components/sponsor/SponsorRoiDashboard';
+import SponsorSettings from '../components/sponsor/SponsorSettings';
 import SponsorShell from '../components/sponsor/SponsorShell';
 import WhatsAppButton from '../components/WhatsAppButton';
 import Mascot from '../components/Mascot';
@@ -1035,6 +1036,7 @@ export default function Sponsor() {
               {activeTab === 'scanner' && 'Bipar Crachá'}
               {activeTab === 'agenda' && 'Programação da TechWeek'}
               {activeTab === 'feed' && 'Feed da Comunidade'}
+              {activeTab === 'settings' && 'Mensagens & Tags'}
             </h1>
             <div
               style={{
@@ -1548,6 +1550,7 @@ export default function Sponsor() {
                   onSelectLead={setSelectedLead}
                   onUpdateLead={handleUpdateLeadFromSplitView}
                   companyName={sponsorName}
+                  companyId={activeCompanyId}
                   isLoading={isLoadingLeads}
                 />
               </div>
@@ -2267,6 +2270,17 @@ export default function Sponsor() {
             )}
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ABA 6: MENSAGENS & TAGS (CONFIGURAÇÕES DO ESTANDE)                        */}
+      {/* ========================================================================= */}
+      {activeTab === 'settings' && (
+        <SponsorSettings
+          companyId={activeCompanyId}
+          companyName={sponsorName}
+          onSettingsSaved={() => showToast('Configurações salvas e ativas no estande!', 'success')}
+        />
       )}
 
 

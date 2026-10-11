@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   X, 
   Star, 
@@ -19,6 +19,7 @@ import {
 import { GitHubIcon, LinkedInIcon, formatSocialUrl } from './ParticipantCard';
 import WhatsAppButton from './WhatsAppButton';
 import { submitLead, updateLead } from '../lib/sponsorService';
+import { getSponsorSettings, getActiveOutreachMessage } from '../lib/sponsorSettingsService';
 
 /**
  * Tags práticas de recrutamento para estande de tech (Chips Rápidos de 1 toque).
@@ -138,6 +139,8 @@ export default function SponsorLeadModal({
   participant,
   sponsorProfile,
   isExistingLead = false,
+  customTags,
+  customOutreachMessage,
   onClose,
   onLeadCaptured,
   onLeadUpdated,
@@ -230,8 +233,36 @@ export default function SponsorLeadModal({
   const githubUrl = participant.github ? formatSocialUrl('github', participant.github) : null;
   const linkedinUrl = participant.linkedin ? formatSocialUrl('linkedin', participant.linkedin) : null;
 
-  // Mensagem personalizada de recrutador para WhatsApp
-  const recruiterOutreachMessage = `Olá, ${participant.name || 'tudo bem'}! Foi ótimo conversar com você no estande da ${sponsorCompanyName} na TechWeek! Gostaríamos de marcar uma conversa rápida sobre nossas oportunidades. Qual o seu melhor horário?`;
+  // Tags dinâmicas configuradas pelo patrocinador (com fallback nas 8 tags padrão)
+  const effectiveTags = useMemo(() => {
+    if (Array.isArray(customTags) && customTags.length > 0) {
+      return customTags;
+    }
+    if (sponsorCompanyId) {
+      try {
+        const s = getSponsorSettings(sponsorCompanyId);
+        if (Array.isArray(s?.tags) && s.tags.length > 0) {
+          return s.tags;
+        }
+      } catch (_) {}
+    }
+    return QUICK_RECRUITMENT_TAGS;
+  }, [customTags, sponsorCompanyId]);
+
+  // Mensagem personalizada de recrutador para WhatsApp (com suporte ao template ativo do estande)
+  const recruiterOutreachMessage = useMemo(() => {
+    if (customOutreachMessage) return customOutreachMessage;
+    if (sponsorCompanyId) {
+      try {
+        return getActiveOutreachMessage(sponsorCompanyId, {
+          name: participant?.name,
+          companyName: sponsorCompanyName,
+          course: participant?.course,
+        });
+      } catch (_) {}
+    }
+    return `Olá, ${participant?.name || 'tudo bem'}! Foi ótimo conversar com você no estande da ${sponsorCompanyName} na TechWeek! Gostaríamos de marcar uma conversa rápida sobre nossas oportunidades. Qual o seu melhor horário?`;
+  }, [customOutreachMessage, sponsorCompanyId, participant?.name, participant?.course, sponsorCompanyName]);
 
   const handleCopyEmail = async () => {
     const targetEmail = savedLeadData?.email || participant.email;
@@ -1333,7 +1364,7 @@ export default function SponsorLeadModal({
                 </div>
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {QUICK_RECRUITMENT_TAGS.map((tag) => {
+                  {effectiveTags.map((tag) => {
                     const isSelected = isTagSelected(tag);
                     return (
                       <button

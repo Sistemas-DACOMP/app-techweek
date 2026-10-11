@@ -17,6 +17,7 @@ import {
   Camera,
   Layers,
   ChevronRight,
+  SlidersHorizontal,
 } from 'lucide-react';
 import iconeTw from '../../assets/icone.png';
 import { eventDayInfo, LiveChip } from '../../pages/admin/AdminShell';
@@ -54,6 +55,7 @@ const MENU_GROUPS = [
     items: [
       { key: 'home', label: 'Visão Geral', icon: LayoutDashboard },
       { key: 'leads', label: 'Leads do Estande', icon: Users, badgeKey: 'leads' },
+      { key: 'settings', label: 'Mensagens & Tags', icon: SlidersHorizontal, tag: 'Novo' },
       { key: 'roi', label: 'Relatório Executivo ROI', icon: TrendingUp, tag: 'ROI' },
       { key: 'scanner', label: 'Scanner de Crachá', icon: QrCode, tag: 'Bipar' },
     ],
@@ -83,6 +85,10 @@ const CONTEXT_HEADERS = {
   leads: {
     title: 'CRM de Talentos do Estande',
     subtitle: 'Banco de contatos e avaliação de participantes',
+  },
+  settings: {
+    title: 'Configurações do Estande',
+    subtitle: 'Personalize mensagens automáticas de WhatsApp e tags de recrutamento',
   },
   roi: {
     title: 'Relatório Executivo de ROI',

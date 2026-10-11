@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { buildWhatsAppLink, sanitizeBrazilianPhone } from '../../lib/whatsapp';
 import { WhatsAppIcon } from '../WhatsAppButton';
+import { getSponsorSettings, interpolateTemplate } from '../../lib/sponsorSettingsService';
 
 export const WHATSAPP_TEMPLATES = [
   {
@@ -49,6 +50,8 @@ export default function SponsorWhatsAppHub({
   phone,
   participantName = 'Participante',
   companyName = 'Nossa Empresa',
+  companyId,
+  course,
   onSent,
   compact = false,
   className = ''
@@ -73,8 +76,24 @@ export default function SponsorWhatsAppHub({
 
   const activeMessage = useMemo(() => {
     if (customText.trim()) return customText;
+
+    if (companyId) {
+      try {
+        const settings = getSponsorSettings(companyId);
+        const mappedId = selectedTemplateId === 'thanks_jobs' ? 'recruiter_outreach' : selectedTemplateId;
+        const customTpl = settings?.templates?.find((t) => t.id === mappedId);
+        if (customTpl?.text) {
+          return interpolateTemplate(customTpl.text, {
+            name: cleanFirstName,
+            companyName: companyName || 'nossa empresa',
+            course: course || 'Computação',
+          });
+        }
+      } catch (_) {}
+    }
+
     return activeTemplate.template(cleanFirstName, companyName || 'nossa empresa');
-  }, [customText, activeTemplate, cleanFirstName, companyName]);
+  }, [customText, activeTemplate, cleanFirstName, companyName, companyId, selectedTemplateId, course]);
 
   const whatsappUrl = useMemo(() => {
     if (!hasValidPhone) return null;

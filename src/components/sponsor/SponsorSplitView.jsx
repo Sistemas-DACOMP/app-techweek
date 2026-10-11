@@ -35,6 +35,7 @@ export default function SponsorSplitView({
   onSelectLead,
   onUpdateLead,
   companyName = 'Patrocinador',
+  companyId = 'kanastra',
   isLoading = false
 }) {
   const [activeLeadId, setActiveLeadId] = useState(selectedLead?.participantUid || (leads[0]?.participantUid ?? null));
@@ -495,6 +496,8 @@ export default function SponsorSplitView({
               phone={activeLead.phone}
               participantName={activeLead.name}
               companyName={companyName}
+              companyId={companyId}
+              course={activeLead.course}
             />
           </div>
         )}
