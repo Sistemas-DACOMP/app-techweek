@@ -22,6 +22,7 @@ import {
 import iconeTw from '../../assets/icone.png';
 import { eventDayInfo, LiveChip } from '../../pages/admin/AdminShell';
 import RoleSwitcher from '../RoleSwitcher';
+import Mascot from '../Mascot';
 import { btn } from '../../pages/admin/ui';
 
 export function SponsorAvatar({ name = '', initials = '?', avatar = null, size = 38, ring = 2 }) {
@@ -327,13 +328,16 @@ export default function SponsorShell({
       <div className="flex min-w-0 flex-1 flex-col lg:pl-[260px] print:!pl-0">
         {/* Topo Desktop (≥1024px): Contexto + Atalhos Rápidos + Live Status */}
         <header className="hidden items-center justify-between gap-4 border-b border-line/60 bg-bg/80 backdrop-blur-md px-8 py-3.5 lg:flex print:!hidden">
-          <div className="min-w-0">
-            <h1 className="m-0 text-[18px] font-extrabold text-text tracking-tight truncate">
-              {contextMeta.title}
-            </h1>
-            <p className="m-0 mt-0.5 text-[12px] text-text-3 truncate">
-              {contextMeta.subtitle}
-            </p>
+          <div className="flex items-center gap-3.5 min-w-0">
+            <Mascot size={44} name="alan" mood="happy" className="shrink-0" />
+            <div className="min-w-0">
+              <h1 className="m-0 text-[18px] font-extrabold text-text tracking-tight truncate">
+                {contextMeta.title}
+              </h1>
+              <p className="m-0 mt-0.5 text-[12px] text-text-3 truncate">
+                {contextMeta.subtitle}
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">

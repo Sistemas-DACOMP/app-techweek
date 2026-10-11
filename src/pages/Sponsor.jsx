@@ -961,7 +961,7 @@ export default function Sponsor() {
           <div className="mb-4 rounded-[20px] bg-surface border border-line p-4 sm:p-5 flex flex-col gap-3.5 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <Mascot style={{ width: 44, height: 44, animation: 'none', flexShrink: 0 }} isWaving={true} color="blue" />
+                <Mascot size={44} name="alan" mood="happy" className="shrink-0" />
                 <div className="min-w-0 flex-1">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-link block truncate">
                     Estande {sponsorName}
@@ -1059,7 +1059,7 @@ export default function Sponsor() {
           {/* Welcome Hero Desktop */}
           <div className="hidden lg:flex items-center justify-between gap-4 p-5 rounded-[22px] bg-gradient-to-r from-surface via-surface to-surface-raised border border-line shadow-xs">
             <div className="flex items-center gap-4 min-w-0">
-              <Mascot style={{ width: 50, height: 50, animation: 'none', flexShrink: 0 }} isWaving={true} color="blue" />
+              <Mascot size={52} name="alan" mood="happy" className="shrink-0" />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-link">
@@ -1647,7 +1647,7 @@ export default function Sponsor() {
                 {(leadsTab === 'mine' ? myLeads : companyLeads).length === 0 ? (
                   <div className="flex flex-col items-center justify-center rounded-[20px] bg-surface p-5 sm:p-7 text-center border border-line">
                     <div className="mb-2.5">
-                      <Mascot size={56} color="blue" isWaving={true} />
+                      <Mascot size={56} name="alan" mood="waving" className="shrink-0" />
                     </div>
                     <h3 className="mb-1 text-[14px] font-extrabold text-text">
                       {leadsTab === 'mine' ? 'Nenhum lead coletado por você ainda' : 'Nenhum lead registrado pela empresa'}
@@ -2230,7 +2230,7 @@ export default function Sponsor() {
           <div className="flex flex-col gap-3">
             {filteredFeedPosts.length === 0 ? (
               <div className="flex flex-col items-center px-4 pt-10 text-center">
-                <Mascot color="purple" style={{ width: 100, height: 100 }} />
+                <Mascot size={112} name="ada" className="shrink-0" />
                 <p className="mt-4 text-[15px] font-semibold text-text">
                   {FEED_EMPTY_TEXT[feedFilter] || 'Nenhuma publicação neste filtro ainda.'}
                 </p>

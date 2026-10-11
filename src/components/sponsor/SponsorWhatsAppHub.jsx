@@ -9,7 +9,8 @@ import {
   Briefcase,
   Calendar,
   Code2,
-  FileText
+  FileText,
+  Star
 } from 'lucide-react';
 import { buildWhatsAppLink, sanitizeBrazilianPhone } from '../../lib/whatsapp';
 import { WhatsAppIcon } from '../WhatsAppButton';
@@ -74,14 +75,36 @@ export default function SponsorWhatsAppHub({
     return WHATSAPP_TEMPLATES.find((t) => t.id === selectedTemplateId) || WHATSAPP_TEMPLATES[0];
   }, [selectedTemplateId]);
 
+  const sponsorSettings = useMemo(() => {
+    if (!companyId) return null;
+    try {
+      return getSponsorSettings(companyId);
+    } catch (_) {
+      return null;
+    }
+  }, [companyId]);
+
+  const activeDefaultTemplateId = sponsorSettings?.activeTemplateId || 'recruiter_outreach';
+
+  const defaultTemplateTitle = useMemo(() => {
+    const found = sponsorSettings?.templates?.find((t) => t.id === activeDefaultTemplateId);
+    if (found?.title) return found.title;
+    const defaultHubMatch = WHATSAPP_TEMPLATES.find((t) => (t.id === 'thanks_jobs' ? 'recruiter_outreach' : t.id) === activeDefaultTemplateId);
+    return defaultHubMatch?.title || 'Abordagem Geral';
+  }, [sponsorSettings, activeDefaultTemplateId]);
+
+  const isCurrentSelectionDefault = useMemo(() => {
+    const mappedCurrentId = selectedTemplateId === 'thanks_jobs' ? 'recruiter_outreach' : selectedTemplateId;
+    return mappedCurrentId === activeDefaultTemplateId;
+  }, [selectedTemplateId, activeDefaultTemplateId]);
+
   const activeMessage = useMemo(() => {
     if (customText.trim()) return customText;
 
-    if (companyId) {
+    if (companyId && sponsorSettings) {
       try {
-        const settings = getSponsorSettings(companyId);
         const mappedId = selectedTemplateId === 'thanks_jobs' ? 'recruiter_outreach' : selectedTemplateId;
-        const customTpl = settings?.templates?.find((t) => t.id === mappedId);
+        const customTpl = sponsorSettings?.templates?.find((t) => t.id === mappedId);
         if (customTpl?.text) {
           return interpolateTemplate(customTpl.text, {
             name: cleanFirstName,
@@ -93,7 +116,7 @@ export default function SponsorWhatsAppHub({
     }
 
     return activeTemplate.template(cleanFirstName, companyName || 'nossa empresa');
-  }, [customText, activeTemplate, cleanFirstName, companyName, companyId, selectedTemplateId, course]);
+  }, [customText, activeTemplate, cleanFirstName, companyName, companyId, sponsorSettings, selectedTemplateId, course]);
 
   const whatsappUrl = useMemo(() => {
     if (!hasValidPhone) return null;
@@ -155,26 +178,45 @@ export default function SponsorWhatsAppHub({
       </div>
 
       {/* Template Selector Chips */}
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-        {WHATSAPP_TEMPLATES.map((tmpl) => {
-          const isCurrent = tmpl.id === selectedTemplateId;
-          const Icon = tmpl.icon;
-          return (
-            <button
-              key={tmpl.id}
-              type="button"
-              onClick={() => handleSelectTemplate(tmpl.id)}
-              className={`press flex items-center justify-center gap-1.5 rounded-xl border p-2 text-center text-[11px] font-bold transition-all ${
-                isCurrent
-                  ? 'border-link/60 bg-surface-selected text-text shadow-[0_2px_8px_rgba(143,160,255,0.15)]'
-                  : 'border-border/60 bg-surface text-text-3 hover:text-text-2'
-              }`}
-            >
-              <Icon size={13} className={isCurrent ? 'text-link' : 'text-text-4'} />
-              <span className="truncate">{tmpl.title}</span>
-            </button>
-          );
-        })}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between px-0.5">
+          <span className="text-[11px] font-bold text-text-3">Modelos Rápidos:</span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-amber-400/10 px-2 py-0.5 text-[10.5px] font-bold text-amber-300 border border-amber-400/20">
+            <Star size={10} className="fill-amber-400 text-amber-400" />
+            Padrão 1-Clique: {defaultTemplateTitle}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+          {WHATSAPP_TEMPLATES.map((tmpl) => {
+            const isCurrent = tmpl.id === selectedTemplateId;
+            const mappedId = tmpl.id === 'thanks_jobs' ? 'recruiter_outreach' : tmpl.id;
+            const isDefault = mappedId === activeDefaultTemplateId;
+            const Icon = tmpl.icon;
+            return (
+              <button
+                key={tmpl.id}
+                type="button"
+                onClick={() => handleSelectTemplate(tmpl.id)}
+                className={`press relative flex items-center justify-center gap-1 rounded-xl border p-2 text-center text-[11px] font-bold transition-all ${
+                  isCurrent
+                    ? 'border-link/60 bg-surface-selected text-text shadow-[0_2px_8px_rgba(143,160,255,0.15)]'
+                    : 'border-border/60 bg-surface text-text-3 hover:text-text-2'
+                }`}
+              >
+                <Icon size={13} className={isCurrent ? 'text-link' : 'text-text-4'} />
+                <span className="truncate">{tmpl.title}</span>
+                {isDefault && (
+                  <span
+                    className="ml-0.5 inline-flex items-center rounded px-1 py-0.2 text-[8.5px] font-black uppercase tracking-wider bg-amber-400/25 text-amber-300 border border-amber-400/40"
+                    title="Modelo ativo no botão 1-Clique rápido do CRM"
+                  >
+                    ⭐ Padrão
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Editable Message Area */}
@@ -186,8 +228,18 @@ export default function SponsorWhatsAppHub({
           placeholder="Mensagem contextualizada..."
           className="w-full resize-none rounded-xl border border-field-line bg-field p-2.5 text-[12px] leading-relaxed text-text placeholder-text-4 focus:border-link focus:outline-none"
         />
-        <div className="flex justify-between text-[10px] text-text-4">
-          <span>Personalize se desejar antes de enviar</span>
+        <div className="flex items-center justify-between text-[10px] text-text-4">
+          <span className="flex items-center gap-1">
+            {isCurrentSelectionDefault ? (
+              <span className="font-semibold text-emerald-400 flex items-center gap-1">
+                ⚡ Este é o modelo padrão configurado para o 1-Clique rápido
+              </span>
+            ) : (
+              <span className="text-text-3">
+                Modelo alternativo (o 1-Clique rápido usa "{defaultTemplateTitle}")
+              </span>
+            )}
+          </span>
           <span>{activeMessage.length} caracteres</span>
         </div>
       </div>

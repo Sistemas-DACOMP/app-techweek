@@ -2,8 +2,8 @@
   width: 150px;
   height: 150px;
   display: inline-block;
-  /* Floating animation for the whole container */
-  animation: float 4s ease-in-out infinite;
+  /* Floating animation for the whole container (DESIGN.md §8: flutuar 6px em loop de 3s) */
+  animation: float 3s ease-in-out infinite;
   cursor: pointer;
 }
 
@@ -13,10 +13,10 @@
   overflow: visible;
 }
 
-/* Floating keyframes */
+/* Floating keyframes: DESIGN.md §8 (6px de flutuação suave) */
 @keyframes float {
   0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+  50% { transform: translateY(-6px); }
   100% { transform: translateY(0px); }
 }
 
@@ -43,7 +43,7 @@
   50% { transform: rotate(-15deg); }
 }
 
-/* Eye Blinking */
+/* Eye Blinking (DESIGN.md §8: piscar a cada ~4s) */
 .mascot-eye {
   transform-origin: center;
   transform-box: fill-box;
@@ -72,8 +72,35 @@
 }
 
 @keyframes float-fast {
-  0% { transform: translateY(-10px); }
-  50% { transform: translateY(-15px); }
-  100% { transform: translateY(-10px); }
+  0% { transform: translateY(-6px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(-6px); }
 }
-.mascot-arm-waving { animation: wave 1s infinite alternate ease-in-out; } @keyframes wave { 0% { transform: rotate(0deg); } 100% { transform: rotate(25deg); } }
+
+.mascot-arm-waving {
+  animation: wave 1s infinite alternate ease-in-out;
+}
+
+@keyframes wave {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(25deg); }
+}
+
+/* Classes utilitárias para congelar animação se necessário */
+.mascot-still,
+.mascot-no-float {
+  animation: none !important;
+}
+
+/* DESIGN.md §9 e §10: Respeito irrestrito a acessibilidade e movimento reduzido */
+@media (prefers-reduced-motion: reduce) {
+  .mascot-container,
+  .mascot-container:hover,
+  .mascot-arm-left,
+  .mascot-arm-right,
+  .mascot-arm-waving,
+  .mascot-eye {
+    animation: none !important;
+    transition: none !important;
+  }
+}

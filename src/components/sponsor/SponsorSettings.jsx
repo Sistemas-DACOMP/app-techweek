@@ -12,6 +12,7 @@ import {
   Save,
   Pencil,
   Info,
+  Star,
   Briefcase,
   Calendar,
   Code2,
@@ -342,24 +343,25 @@ export default function SponsorSettings({
                 </h2>
               </div>
               <p className="text-[12px] text-text-3 mt-1 m-0">
-                Personalize o que é enviado ao clicar em "Conversar no WhatsApp" no perfil do lead.
+                Personalize o que é enviado ao clicar em "WhatsApp 1-Clique" no perfil do lead ou no scanner.
               </p>
             </div>
 
-            {/* Toggle de Template Ativo como Padrão de 1-Clique */}
+            {/* Toggle / Indicador de Template Ativo como Padrão de 1-Clique */}
             {isCurrentActiveOutreach ? (
-              <span className="inline-flex items-center gap-1.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/40 px-2.5 py-1 text-[11px] font-extrabold text-[#25D366]">
-                <Check size={13} />
-                <span>Padrão no 1-Clique</span>
+              <span className="inline-flex items-center gap-1.5 rounded-xl bg-[#25D366]/20 border border-[#25D366]/60 px-3.5 py-1.5 text-[11px] font-extrabold text-[#25D366] shadow-sm">
+                <Star size={13} className="fill-[#25D366]" />
+                <span>PADRÃO NO 1-CLIQUE ATIVO</span>
               </span>
             ) : (
               <button
                 type="button"
                 onClick={() => handleSetAsDefaultTemplate(selectedTemplateId)}
-                className="press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-raised px-3 py-1 text-[11px] font-bold text-text-2 hover:text-text hover:border-link/50 transition-colors"
-                title="Tornar esta mensagem o padrão principal de abordagem"
+                className="press inline-flex items-center gap-1.5 rounded-xl border border-link/40 bg-link/15 px-3.5 py-1.5 text-[11px] font-extrabold text-link hover:bg-link/25 hover:border-link transition-all shadow-sm"
+                title="Tornar este modelo o padrão principal disparado no botão de 1-Clique"
               >
-                <span>Usar como Padrão 1-Clique</span>
+                <Star size={13} />
+                <span>⭐ Definir como Padrão do 1-Clique</span>
               </button>
             )}
           </div>
@@ -387,15 +389,58 @@ export default function SponsorSettings({
                   <span>{tpl.title}</span>
                   {isDefault && (
                     <span
-                      className="size-2 rounded-full bg-[#25D366]"
-                      title="Modelo padrão de 1-clique"
-                      aria-label="Padrão"
-                    />
+                      className="inline-flex items-center gap-1 rounded-md bg-[#25D366]/20 border border-[#25D366]/50 px-1.5 py-0.5 text-[10px] font-extrabold text-[#25D366] uppercase tracking-wider"
+                      title="Modelo padrão configurado no botão 1-Clique"
+                    >
+                      <Star size={10} className="fill-[#25D366]" />
+                      <span>Padrão 1-Clique</span>
+                    </span>
                   )}
                 </button>
               );
             })}
           </div>
+
+          {/* Banner Educativo / Explicativo do Modelo Padrão no 1-Clique */}
+          {isCurrentActiveOutreach ? (
+            <div className="flex items-start gap-3 rounded-2xl border border-[#25D366]/40 bg-[#25D366]/10 p-3.5">
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-[#25D366]/20 text-[#25D366]">
+                <Star size={15} className="fill-[#25D366]" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[12px] font-extrabold text-[#25D366] uppercase tracking-wider">
+                  ⭐ Este é o Modelo Padrão no 1-Clique
+                </div>
+                <p className="m-0 mt-0.5 text-[12px] leading-relaxed text-text">
+                  Toda vez que qualquer recrutador da sua equipe clicar no botão <strong>"WhatsApp 1-Clique"</strong> na ficha de um participante ou no scanner, esta mensagem será aberta pronta para envio com os dados do estudante preenchidos automaticamente.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-line bg-surface-raised/60 p-3.5">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-surface text-text-3 border border-line">
+                  <Info size={15} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[12px] font-bold text-text-2">
+                    Modelo Salvo como Alternativo
+                  </div>
+                  <p className="m-0 mt-0.5 text-[12px] leading-relaxed text-text-3">
+                    Este modelo está salvo como alternativo. Clique no botão ao lado se quiser que ele seja disparado automaticamente no botão principal de 1-Clique.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSetAsDefaultTemplate(selectedTemplateId)}
+                className="press shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-link/40 bg-link/15 px-3 py-1.5 text-[11px] font-bold text-link hover:bg-link/25 transition-colors self-start sm:self-auto"
+              >
+                <Star size={12} />
+                <span>⭐ Definir como Padrão do 1-Clique</span>
+              </button>
+            </div>
+          )}
 
           {/* Descrição contextual do modelo selecionado */}
           <div className="flex items-center gap-2 rounded-xl bg-surface-raised/60 px-3 py-2 text-[12px] text-text-3 border border-line/60">
