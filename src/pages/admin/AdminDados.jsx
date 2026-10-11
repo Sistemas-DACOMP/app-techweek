@@ -2,7 +2,8 @@ import { useState, useMemo, useId } from 'react';
 import {
   TrendingUp, Users, Calendar, Award, Building2, Flame, AlertTriangle, CheckCircle2,
   RefreshCw, Download, Printer, ChevronRight, Monitor, ArrowUpRight, ArrowDownRight,
-  Sparkles, Filter, Clock, MapPin, Radio, Target, ExternalLink, ShieldCheck, Check
+  Sparkles, Filter, Clock, MapPin, Radio, Target, ExternalLink, ShieldCheck, Check,
+  Zap, Star, ThumbsUp, MessageSquare, Send, X, FileText, Rocket, ThumbsDown
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -24,6 +25,16 @@ import {
   capacityOf, EmptyState, PageHead
 } from './ui';
 import { SPONSORS_CONFIG, TIER_STYLE } from '../../components/PassportTab';
+import {
+  releaseWalkinSeats,
+  getWalkinReleases,
+  cancelWalkinRelease,
+  triggerSponsorBoost,
+  getActiveSponsorBoosts,
+  getMicroPulseRatings,
+  submitMicroPulseRating,
+  calculateMicroPulseAnalytics,
+} from '../../lib/liveOpsService';
 
 const fmtInt = (n) => Number(n || 0).toLocaleString('pt-BR');
 
@@ -471,6 +482,66 @@ export default function AdminDados({
   const [hoveredHourSlot, setHoveredHourSlot] = useState(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const chartId = useId();
+
+  // Estados dos Pilares de Operações em Tempo Real (Live Ops)
+  const [walkinReleases, setWalkinReleases] = useState(() => getWalkinReleases());
+  const [activeBoosts, setActiveBoosts] = useState(() => getActiveSponsorBoosts());
+  const [boosterModalSponsor, setBoosterModalSponsor] = useState(null);
+  const [dossierModalSponsor, setDossierModalSponsor] = useState(null);
+  const [microPulseRatings, setMicroPulseRatings] = useState(() => getMicroPulseRatings());
+  const [simPulseModal, setSimPulseModal] = useState(false);
+  const [simTalkId, setSimTalkId] = useState('');
+  const [simRating, setSimRating] = useState(5);
+  const [simComment, setSimComment] = useState('');
+  const [simTag, setSimTag] = useState('Didática Clara');
+  const [boostDuration, setBoostDuration] = useState(30);
+  const [boostPoints, setBoostPoints] = useState(100);
+
+  const microPulseAnalytics = useMemo(() => {
+    return calculateMicroPulseAnalytics(microPulseRatings);
+  }, [microPulseRatings]);
+
+  const handleReleaseWalkin = (act) => {
+    const seatsToRelease = act.idleSeats || Math.max(10, Math.round((act.capacity || 50) * 0.2));
+    releaseWalkinSeats(act.id, seatsToRelease, act.title || '', act.location || '');
+    setWalkinReleases(getWalkinReleases());
+  };
+
+  const handleCancelWalkin = (actId) => {
+    cancelWalkinRelease(actId);
+    setWalkinReleases(getWalkinReleases());
+  };
+
+  const handleTriggerBoost = (e) => {
+    e.preventDefault();
+    if (!boosterModalSponsor) return;
+    triggerSponsorBoost({
+      sponsorId: boosterModalSponsor.id,
+      sponsorName: boosterModalSponsor.name,
+      durationMinutes: boostDuration,
+      extraPoints: boostPoints,
+      message: `Missão Flash: Visite o estande da ${boosterModalSponsor.name} e ganhe +${boostPoints} XP!`,
+    });
+    setActiveBoosts(getActiveSponsorBoosts());
+    setBoosterModalSponsor(null);
+  };
+
+  const handleSubmitSimPulse = (e) => {
+    e.preventDefault();
+    const targetTalk = activities.find((a) => a.id === simTalkId) || activities[0];
+    submitMicroPulseRating({
+      activityId: targetTalk ? targetTalk.id : 'act_default',
+      activityTitle: targetTalk ? targetTalk.title : 'Palestra TechWeek',
+      rating: Number(simRating),
+      tags: [simTag],
+      comment: simComment.trim() || 'Conteúdo excelente e muito aplicável!',
+      studentName: 'Aluno FACOM / UFU',
+      studentCourse: 'Ciência da Computação (BCC)',
+    });
+    setMicroPulseRatings(getMicroPulseRatings());
+    setSimPulseModal(false);
+    setSimComment('');
+  };
 
   const stats = useDadosAnalytics({ activities, usersList, missionsList, selectedDay });
 
@@ -1012,23 +1083,56 @@ export default function AdminDados({
               ))
             )}
 
-            {/* Ociosidade em Destaque */}
+            {/* Ociosidade em Destaque & No-Show Buster */}
             {stats.idleRooms.length > 0 && (
-              <div className="mt-4 pt-2 border-t border-line">
-                <div className="mb-2 text-[12px] font-bold uppercase tracking-wider text-text-4">
-                  Salas com Vagas Livres (Oportunidade para Walk-ins)
+              <div className="mt-4 pt-3 border-t border-line">
+                <div className="mb-2.5 flex items-center justify-between">
+                  <span className="text-[12px] font-extrabold uppercase tracking-wider text-text-3">
+                    No-Show Buster · Liberação de Walk-ins
+                  </span>
+                  <span className="text-[11px] font-extrabold text-link">
+                    Combate a cadeiras vazias
+                  </span>
                 </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {stats.idleRooms.slice(0, 2).map((act) => (
-                    <div key={act.id} className="rounded-xl bg-surface p-2.5 text-[12px]">
-                      <div className="truncate font-bold text-text">{act.title}</div>
-                      <div className="mt-0.5 text-text-3">{act.location} · {act.time}</div>
-                      <div className="mt-1.5 flex items-center justify-between font-bold text-ok">
-                        <span>{act.idleSeats} vagas livres</span>
-                        <span className="text-text-4">{act.occPct}% ocupada</span>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  {stats.idleRooms.slice(0, 4).map((act) => {
+                    const release = walkinReleases?.[act.id] || (Array.isArray(walkinReleases) ? walkinReleases.find((r) => r.activityId === act.id) : null);
+                    return (
+                      <div key={act.id} className="rounded-xl border border-line bg-surface p-3 text-[12px]">
+                        <div className="truncate font-bold text-text">{act.title}</div>
+                        <div className="mt-0.5 text-text-3">{act.location} · {act.time}</div>
+                        <div className="mt-2 flex items-center justify-between font-bold">
+                          <span className="text-ok">{act.idleSeats} vagas livres</span>
+                          <span className="text-text-4">{act.occPct}% ocupada</span>
+                        </div>
+
+                        <div className="mt-3 pt-2 border-t border-line flex items-center justify-between gap-2">
+                          {release ? (
+                            <div className="flex items-center justify-between w-full">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-black text-ok">
+                                <CheckCircle2 size={13} /> +{release.releasedSeats || release.seatsReleased || 10} vagas liberadas
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCancelWalkin(act.id)}
+                                className="text-[11px] font-bold text-warn hover:underline"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleReleaseWalkin(act)}
+                              className="press w-full rounded-lg bg-link/15 py-1.5 text-center text-[11px] font-extrabold text-link hover:bg-link/25"
+                            >
+                              ⚡ Liberar Walk-in (+{act.idleSeats} vagas)
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1207,54 +1311,206 @@ export default function AdminDados({
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {stats.sponsorStats.map((s, idx) => (
-            <div
-              key={s.id}
-              className="flex flex-col justify-between rounded-2xl border border-line bg-surface-raised p-4 transition-transform hover:-translate-y-0.5"
-            >
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className="inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide"
-                    style={{ background: `${s.tierColor}20`, color: s.tierColor }}
-                  >
-                    {s.tierLabel}
-                  </span>
-                  <span className="text-[12px] font-black text-text-3">#{idx + 1}</span>
+          {stats.sponsorStats.map((s, idx) => {
+            const activeBoost = activeBoosts?.[s.id] || (Array.isArray(activeBoosts) ? activeBoosts.find((b) => b.sponsorId === s.id) : Object.values(activeBoosts || {}).find((b) => b.sponsorId === s.id));
+            return (
+              <div
+                key={s.id}
+                className="flex flex-col justify-between rounded-2xl border border-line bg-surface-raised p-4 transition-transform hover:-translate-y-0.5"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className="inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide"
+                      style={{ background: `${s.tierColor}20`, color: s.tierColor }}
+                    >
+                      {s.tierLabel}
+                    </span>
+                    <span className="text-[12px] font-black text-text-3">#{idx + 1}</span>
+                  </div>
+
+                  <div className="mt-3">
+                    <h3 className="m-0 text-[17px] font-black text-text">{s.name}</h3>
+                    <p className="m-0 mt-0.5 text-[12px] text-text-3 line-clamp-1">{s.badgeDescription}</p>
+                  </div>
+
+                  {activeBoost && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-ok/15 px-2.5 py-1 text-[11px] font-black text-ok animate-pulse">
+                      <Zap size={12} fill="currentColor" />
+                      <span>Boost Ativo (+{activeBoost.extraPoints} XP)</span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-3">
-                  <h3 className="m-0 text-[17px] font-black text-text">{s.name}</h3>
-                  <p className="m-0 mt-0.5 text-[12px] text-text-3 line-clamp-1">{s.badgeDescription}</p>
+                <div className="mt-4 pt-3 border-t border-line space-y-2">
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-text-3">Visitas Passaporte:</span>
+                    <span className="font-black text-text">{fmtInt(s.visits)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-text-3">Leads Coletados:</span>
+                    <span className="font-black text-ok">{fmtInt(s.leads)}</span>
+                  </div>
+
+                  {/* Barra Proporcional de Conversão */}
+                  <div className="pt-1">
+                    <div className="flex justify-between text-[11px] text-text-4">
+                      <span>Alcance do público</span>
+                      <span className="font-bold text-text-2">{s.conversionPct}%</span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${s.conversionPct}%`, background: s.tierColor }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Ações Táticas: Estande Booster & Dossiê Executivo */}
+                  <div className="mt-3 grid grid-cols-2 gap-1.5 pt-2 border-t border-line/60">
+                    <button
+                      type="button"
+                      onClick={() => setBoosterModalSponsor(s)}
+                      className="press flex items-center justify-center gap-1 rounded-xl bg-link/15 py-1.5 text-[11px] font-extrabold text-link hover:bg-link/25"
+                    >
+                      <Zap size={12} /> Boost
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDossierModalSponsor(s)}
+                      className="press flex items-center justify-center gap-1 rounded-xl bg-surface py-1.5 text-[11px] font-bold text-text-2 border border-line hover:text-text"
+                    >
+                      <FileText size={12} /> Dossiê
+                    </button>
+                  </div>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      </Section>
 
-              <div className="mt-4 pt-3 border-t border-line space-y-2">
-                <div className="flex items-center justify-between text-[12px]">
-                  <span className="text-text-3">Visitas Passaporte:</span>
-                  <span className="font-black text-text">{fmtInt(s.visits)}</span>
-                </div>
-                <div className="flex items-center justify-between text-[12px]">
-                  <span className="text-text-3">Leads Coletados:</span>
-                  <span className="font-black text-ok">{fmtInt(s.leads)}</span>
-                </div>
+      {/* BLOCO: Micro-Pulse NPS & Avaliação de Palestras em Tempo Real */}
+      <Section
+        title="Micro-Pulse NPS: Qualidade do Conteúdo em Tempo Real"
+        subtitle="Avaliação instantânea de 1 a 5 estrelas e percepção dos participantes captada após cada palestra."
+        action={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSimPulseModal(true)}
+              className="press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-raised px-3 py-1.5 text-[12px] font-bold text-link hover:border-link"
+            >
+              <Star size={14} className="text-warn" /> + Simular Feedback
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          {/* KPIs do Micro-Pulse */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-2xl border border-line bg-surface-raised p-4">
+              <span className="text-[12px] font-bold text-text-3">Nota Média Geral</span>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-[26px] font-black text-text">{microPulseAnalytics.averageScore}</span>
+                <span className="text-[14px] font-bold text-warn">/ 5.0 ★</span>
+              </div>
+              <span className="mt-1 block text-[11px] text-text-4">Base de avaliações ativas</span>
+            </div>
 
-                {/* Barra Proporcional de Conversão */}
-                <div className="pt-1">
-                  <div className="flex justify-between text-[11px] text-text-4">
-                    <span>Alcance do público</span>
-                    <span className="font-bold text-text-2">{s.conversionPct}%</span>
+            <div className="rounded-2xl border border-line bg-surface-raised p-4">
+              <span className="text-[12px] font-bold text-text-3">Índice de Aprovação</span>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-[26px] font-black text-ok">{microPulseAnalytics.approvalRate}%</span>
+              </div>
+              <span className="mt-1 block text-[11px] text-text-4">Avaliações 4 e 5 estrelas</span>
+            </div>
+
+            <div className="rounded-2xl border border-line bg-surface-raised p-4">
+              <span className="text-[12px] font-bold text-text-3">Total de Avaliações</span>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-[26px] font-black text-link">{microPulseAnalytics.totalRatings}</span>
+              </div>
+              <span className="mt-1 block text-[11px] text-text-4">Feedbacks coletados</span>
+            </div>
+
+            <div className="rounded-2xl border border-line bg-surface-raised p-4">
+              <span className="text-[12px] font-bold text-text-3">NPS Líquido TechWeek</span>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-[26px] font-black text-[#C4B5FD]">
+                  {microPulseAnalytics.netPromoterScore >= 0 ? `+${microPulseAnalytics.netPromoterScore}` : microPulseAnalytics.netPromoterScore}
+                </span>
+              </div>
+              <span className="mt-1 block text-[11px] text-text-4">Excelente aceitação geral</span>
+            </div>
+          </div>
+
+          {/* Tags Mais Frequentes */}
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-surface p-3.5">
+            <span className="text-[12px] font-black text-text-3 mr-1">Tags Mais Citadas:</span>
+            {(microPulseAnalytics?.topTags || []).map((tag) => (
+              <span
+                key={tag.name}
+                className="inline-flex items-center gap-1.5 rounded-full bg-surface-raised px-3 py-1 text-[11px] font-bold text-text border border-line"
+              >
+                <ThumbsUp size={12} className="text-ok" />
+                <span>{tag.name}</span>
+                <span className="text-text-4 font-black">({tag.count})</span>
+              </span>
+            ))}
+          </div>
+
+          {/* Grade de Palestras Ranqueadas & Feedbacks Recentes */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {/* Ranking de Palestras */}
+            <div className="rounded-2xl border border-line bg-surface-raised p-4">
+              <h4 className="m-0 mb-3 text-[14px] font-black text-text">Desempenho por Palestra</h4>
+              <div className="space-y-2.5">
+                {(microPulseAnalytics?.talksRanking || microPulseAnalytics?.rankedActivities || []).map((talk) => (
+                  <div key={talk.activityId} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3">
+                    <div className="min-w-0">
+                      <span className="truncate text-[13px] font-bold text-text block">{talk.title}</span>
+                      <span className="text-[11px] text-text-3">{talk.ratingsCount} avaliações</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="flex items-center gap-1 rounded-lg bg-warn/15 px-2 py-0.5 text-[12px] font-black text-warn">
+                        <Star size={12} fill="currentColor" /> {talk.avgRating}
+                      </span>
+                      <span className="text-[12px] font-bold text-ok">{talk.approvalPct}%</span>
+                    </div>
                   </div>
-                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${s.conversionPct}%`, background: s.tierColor }}
-                    />
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
-          ))}
+
+            {/* Comentários Recentes */}
+            <div className="rounded-2xl border border-line bg-surface-raised p-4">
+              <h4 className="m-0 mb-3 text-[14px] font-black text-text">Feedbacks dos Alunos</h4>
+              <div className="space-y-2.5 max-h-[290px] overflow-y-auto pr-1">
+                {microPulseRatings.slice(0, 4).map((f) => (
+                  <div key={f.id} className="rounded-xl border border-line bg-surface p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[12px] font-bold text-text-2">{f.activityTitle}</span>
+                      <div className="flex items-center gap-0.5 text-warn">
+                        {Array.from({ length: f.rating }).map((_, i) => (
+                          <Star key={i} size={11} fill="currentColor" />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="m-0 mt-1.5 text-[13px] text-text font-medium leading-snug">"{f.comment}"</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {(f.tags || []).map((t) => (
+                        <span key={t} className="rounded-full bg-link/10 px-2 py-0.5 text-[10px] font-bold text-link">
+                          {t}
+                        </span>
+                      ))}
+                      <span className="text-[10px] text-text-4 ml-auto">{f.studentCourse || 'Aluno UFU'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </Section>
 
@@ -1424,6 +1680,345 @@ export default function AdminDados({
           </div>
         </Section>
       </div>
+
+      {/* MODAL 1: Estande Booster (Missão Flash de Gamificação) */}
+      {boosterModalSponsor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-lg rounded-2xl border border-line-2 bg-surface-raised p-6 shadow-2xl relative">
+            <div className="flex items-start justify-between gap-3 border-b border-line pb-4">
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(251,191,36,0.3)] bg-[rgba(251,191,36,0.12)] px-2.5 py-0.5 text-[11px] font-extrabold text-[#FBBF24]">
+                  <Zap size={12} aria-hidden="true" />
+                  Estande Booster · Ao Vivo
+                </span>
+                <h3 className="mt-1 text-[18px] font-black text-text">
+                  Disparar Missão Flash no App
+                </h3>
+                <p className="mt-0.5 text-[12px] text-text-3">
+                  Ative bonificação temporária de XP para direcionar fluxo ao estande da {boosterModalSponsor.name}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBoosterModalSponsor(null)}
+                className="rounded-lg p-2 text-text-3 hover:bg-surface hover:text-text min-h-[44px] min-w-[44px] flex items-center justify-center"
+                title="Fechar"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <form onSubmit={handleTriggerBoost} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-[12px] font-extrabold text-text-2 mb-2">
+                  Duração do Impulso (Tempo Limite)
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[15, 30, 45, 60].map((mins) => (
+                    <button
+                      key={mins}
+                      type="button"
+                      onClick={() => setBoostDuration(mins)}
+                      className={`h-11 rounded-xl text-[13px] font-bold border transition-colors ${
+                        boostDuration === mins
+                          ? 'border-link bg-[rgba(37,99,235,0.15)] text-link'
+                          : 'border-line bg-surface text-text-3 hover:text-text'
+                      }`}
+                    >
+                      {mins} min
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-extrabold text-text-2 mb-2">
+                  Recompensa Adicional de XP
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[50, 100, 150, 200].map((pts) => (
+                    <button
+                      key={pts}
+                      type="button"
+                      onClick={() => setBoostPoints(pts)}
+                      className={`h-11 rounded-xl text-[13px] font-bold border transition-colors ${
+                        boostPoints === pts
+                          ? 'border-[#FBBF24] bg-[rgba(251,191,36,0.15)] text-[#FBBF24]'
+                          : 'border-line bg-surface text-text-3 hover:text-text'
+                      }`}
+                    >
+                      +{pts} XP
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview do Card que aparecerá aos Alunos */}
+              <div className="rounded-xl border border-line bg-surface p-3.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-text-4 block mb-1.5">
+                  Prévia da Missão no App do Participante
+                </span>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-[rgba(251,191,36,0.15)] border border-[rgba(251,191,36,0.3)] flex items-center justify-center shrink-0">
+                    <Rocket size={20} className="text-[#FBBF24]" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-extrabold text-text truncate">
+                      Missão Relâmpago: Estande {boosterModalSponsor.name}
+                    </div>
+                    <div className="text-[12px] text-text-3">
+                      Valide presença no estande pelos próximos {boostDuration} min e receba +{boostPoints} XP!
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => setBoosterModalSponsor(null)}
+                  className={btn('secondary', 'h-11 px-4 text-[13px]')}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className={btn('action', 'h-11 px-5 text-[13px] font-black')}
+                >
+                  <Zap size={16} aria-hidden="true" />
+                  Ativar Booster no App
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Dossiê Executivo de ROI & Talentos (Pronto para Impressão) */}
+      {dossierModalSponsor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-2xl border border-line-2 bg-surface-raised p-6 shadow-2xl relative my-8">
+            <div className="flex items-start justify-between gap-3 border-b border-line pb-4">
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-0.5 text-[11px] font-bold text-text-3">
+                  <FileText size={12} className="text-link" aria-hidden="true" />
+                  Dossiê Executivo de Patrocínio
+                </span>
+                <h3 className="mt-1 text-[20px] font-black text-text">
+                  {dossierModalSponsor.name}
+                </h3>
+                <p className="mt-0.5 text-[12px] text-text-3">
+                  Cota {dossierModalSponsor.tierLabel} · TECHWEEK UFU 2026
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className={btn('secondary', 'h-9 px-3 text-[12px]')}
+                  title="Imprimir Relatório"
+                >
+                  <Printer size={14} aria-hidden="true" />
+                  Imprimir PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDossierModalSponsor(null)}
+                  className="rounded-lg p-2 text-text-3 hover:bg-surface hover:text-text min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  title="Fechar"
+                >
+                  <X size={18} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-5 text-text">
+              {/* KPIs de Performance do Estande */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-xl border border-line bg-surface p-3 text-center">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-text-4">Visitas Estande</div>
+                  <div className="mt-1 text-[20px] font-black text-text">{fmtInt(dossierModalSponsor.visits)}</div>
+                  <div className="text-[11px] text-ok font-semibold">100% validadas</div>
+                </div>
+                <div className="rounded-xl border border-line bg-surface p-3 text-center">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-text-4">Leads Coletados</div>
+                  <div className="mt-1 text-[20px] font-black text-link">{fmtInt(dossierModalSponsor.leads)}</div>
+                  <div className="text-[11px] text-text-3">Com perfil e contato</div>
+                </div>
+                <div className="rounded-xl border border-line bg-surface p-3 text-center">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-text-4">Taxa Conversão</div>
+                  <div className="mt-1 text-[20px] font-black text-[#FBBF24]">{dossierModalSponsor.conversionPct}%</div>
+                  <div className="text-[11px] text-text-3">Visita → Lead</div>
+                </div>
+                <div className="rounded-xl border border-line bg-surface p-3 text-center">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-text-4">Custo Médio / Lead</div>
+                  <div className="mt-1 text-[20px] font-black text-text">R$ 41,20</div>
+                  <div className="text-[11px] text-ok font-semibold">Benchmark ideal</div>
+                </div>
+              </div>
+
+              {/* Distribuição de Talentos por Curso */}
+              <div className="rounded-xl border border-line bg-surface p-4">
+                <div className="text-[13px] font-extrabold text-text mb-3">
+                  Distribuição Acadêmica dos Visitantes
+                </div>
+                <div className="space-y-2">
+                  {stats.academicDistribution.map((course) => (
+                    <div key={course.id} className="flex items-center justify-between text-[12px]">
+                      <span className="text-text-2 font-medium">{course.label}</span>
+                      <span className="font-bold text-text">{course.pct}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Termo de Conformidade LGPD */}
+              <div className="rounded-xl border border-line bg-surface p-3.5 text-[11px] text-text-3 leading-relaxed">
+                <div className="flex items-center gap-1.5 font-bold text-text-2 mb-1">
+                  <ShieldCheck size={14} className="text-ok" aria-hidden="true" />
+                  Conformidade LGPD & Governança UFU
+                </div>
+                Todos os dados de contato foram coletados com autorização prévia e expressa dos alunos participantes
+                no momento do credenciamento e validação de crachá na TECHWEEK UFU 2026.
+              </div>
+
+              <div className="flex justify-end pt-3 border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => setDossierModalSponsor(null)}
+                  className={btn('primary', 'h-10 px-5 text-[13px]')}
+                >
+                  Fechar Dossiê
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: Simulador / Registro de Micro-Pulse NPS */}
+      {simPulseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md rounded-2xl border border-line-2 bg-surface-raised p-6 shadow-2xl relative">
+            <div className="flex items-start justify-between gap-3 border-b border-line pb-4">
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(37,99,235,0.3)] bg-[rgba(37,99,235,0.12)] px-2.5 py-0.5 text-[11px] font-extrabold text-link">
+                  <Star size={12} aria-hidden="true" />
+                  Micro-Pulse NPS
+                </span>
+                <h3 className="mt-1 text-[18px] font-black text-text">
+                  Registrar Avaliação de Palestra
+                </h3>
+                <p className="mt-0.5 text-[12px] text-text-3">
+                  Simule ou registre o feedback rápido emitido por um participante.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSimPulseModal(false)}
+                className="rounded-lg p-2 text-text-3 hover:bg-surface hover:text-text min-h-[44px] min-w-[44px] flex items-center justify-center"
+                title="Fechar"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitSimPulse} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-[12px] font-extrabold text-text-2 mb-1.5">
+                  Palestra / Atividade Avaliada
+                </label>
+                <select
+                  value={simTalkId}
+                  onChange={(e) => setSimTalkId(e.target.value)}
+                  className="w-full h-11 rounded-xl border border-line bg-surface px-3 text-[13px] text-text focus:outline-none focus:border-link"
+                >
+                  {activities.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.title} ({a.location || 'Auditório'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-extrabold text-text-2 mb-1.5">
+                  Nota do Participante (1 a 5 estrelas)
+                </label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setSimRating(star)}
+                      className={`h-11 flex-1 rounded-xl border flex items-center justify-center gap-1 text-[14px] font-black transition-colors ${
+                        simRating >= star
+                          ? 'border-[#FBBF24] bg-[rgba(251,191,36,0.15)] text-[#FBBF24]'
+                          : 'border-line bg-surface text-text-4'
+                      }`}
+                    >
+                      <Star size={16} fill={simRating >= star ? 'currentColor' : 'none'} aria-hidden="true" />
+                      {star}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-extrabold text-text-2 mb-1.5">
+                  Destaque Rápido (Tag)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {['Didática Clara', 'Inovador', 'Mão na Massa', 'Slides Excelentes', 'Conteúdo Denso'].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setSimTag(tag)}
+                      className={`rounded-full px-3 py-1.5 text-[12px] font-bold border transition-colors ${
+                        simTag === tag
+                          ? 'border-link bg-[rgba(37,99,235,0.15)] text-link'
+                          : 'border-line bg-surface text-text-3 hover:text-text'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-extrabold text-text-2 mb-1.5">
+                  Comentário Opcional
+                </label>
+                <input
+                  type="text"
+                  value={simComment}
+                  onChange={(e) => setSimComment(e.target.value)}
+                  placeholder="Ex: Palestrante muito claro e direto ao ponto..."
+                  className="w-full h-11 rounded-xl border border-line bg-surface px-3 text-[13px] text-text placeholder-text-4 focus:outline-none focus:border-link"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => setSimPulseModal(false)}
+                  className={btn('secondary', 'h-11 px-4 text-[13px]')}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className={btn('action', 'h-11 px-5 text-[13px] font-black')}
+                >
+                  <Send size={15} aria-hidden="true" />
+                  Registrar Avaliação
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

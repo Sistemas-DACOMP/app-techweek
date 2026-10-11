@@ -1532,6 +1532,7 @@ export default function Admin() {
               userRoleFilter={userRoleFilter}
               setUserRoleFilter={setUserRoleFilter}
               onChangeRole={handleChangeRole}
+              activities={activities}
             />
           )}
 
@@ -1819,7 +1820,16 @@ export default function Admin() {
         </div>
       )}
 
-      {projectorActivity && <Telao activity={projectorActivity} qrValue={projectorQrValue} onClose={() => setProjectorActivity(null)} />}
+      {projectorActivity && (
+        <Telao
+          activity={projectorActivity}
+          qrValue={projectorQrValue}
+          activities={activities}
+          usersList={usersList}
+          feedPosts={feedPosts}
+          onClose={() => setProjectorActivity(null)}
+        />
+      )}
 
       {/* MODAL: QR CODE DE PRESENÇA */}
       {qrModalActivity && (
