@@ -122,7 +122,7 @@ export default function SponsorRoiDashboard({
         </div>
 
         {/* Seletor de Escopo do Relatório: Toda a Empresa vs Meus Leads */}
-        <div role="tablist" aria-label="Filtrar escopo do relatório" className="flex items-center gap-1.5">
+        <div role="tablist" aria-label="Filtrar escopo do relatório" className="hidden lg:flex items-center gap-1.5">
           <button
             type="button"
             role="tab"
@@ -173,7 +173,7 @@ export default function SponsorRoiDashboard({
         </div>
 
         {showActions && (
-          <div className="flex items-center gap-2">
+          <div className="hidden lg:flex items-center gap-2">
             <button
               type="button"
               onClick={handleExportCsv}

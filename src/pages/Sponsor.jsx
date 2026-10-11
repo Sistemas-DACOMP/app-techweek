@@ -1012,7 +1012,7 @@ export default function Sponsor() {
             <div className="flex items-center gap-2 pt-1 border-t border-line/60">
               <button
                 type="button"
-                className={btn('action', 'flex-1 min-w-[90px] h-10 text-[13px]')}
+                className={btn('action', 'flex-1 h-10 text-[13px]')}
                 onClick={() => setActiveTab('scanner')}
               >
                 <QrCode size={16} aria-hidden="true" />
@@ -1020,53 +1020,34 @@ export default function Sponsor() {
               </button>
               <button
                 type="button"
-                className={btn('secondary', 'flex-1 min-w-[90px] h-10 text-[13px]')}
+                className={btn('secondary', 'flex-1 h-10 text-[13px]')}
                 onClick={() => setActiveTab('leads')}
               >
                 <Users size={16} aria-hidden="true" />
                 <span>Leads ({companyLeads.length})</span>
               </button>
-              <button
-                type="button"
-                className={btn('secondary', 'h-10 px-3 text-[13px]')}
-                onClick={() => setActiveTab('settings')}
-                title="Configurações do Estande e Perfil do Feed"
-              >
-                <SlidersHorizontal size={15} aria-hidden="true" />
-                <span className="hidden sm:inline">Config</span>
-              </button>
-              <button
-                type="button"
-                className={btn('secondary', 'h-10 px-3 text-[13px]')}
-                onClick={handleExportCsv}
-                disabled={companyLeads.length === 0}
-                title="Exportar leads em CSV"
-              >
-                <Download size={15} aria-hidden="true" />
-                <span className="hidden sm:inline">CSV</span>
-              </button>
             </div>
           </div>
         ) : (
-          <div style={{ textAlign: 'center', marginBottom: '14px' }}>
-            <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
-              {activeTab === 'leads' && 'Leads do Estande'}
-              {activeTab === 'roi' && 'Relatório Executivo ROI'}
-              {activeTab === 'scanner' && 'Scanner de Crachá'}
-              {activeTab === 'agenda' && 'Programação da TechWeek'}
-              {activeTab === 'feed' && 'Feed da Comunidade'}
-              {activeTab === 'settings' && 'Configurações do Estande'}
-            </h1>
-            <div
-              style={{
-                width: '28px',
-                height: '4px',
-                borderRadius: '2px',
-                background: 'linear-gradient(90deg, #2563EB, #9B7BFF)',
-                margin: '0 auto',
-              }}
-            />
-          </div>
+          activeTab !== 'leads' && activeTab !== 'roi' && (
+            <div style={{ textAlign: 'center', marginBottom: '14px' }}>
+              <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+                {activeTab === 'scanner' && 'Scanner de Crachá'}
+                {activeTab === 'agenda' && 'Programação da TechWeek'}
+                {activeTab === 'feed' && 'Feed da Comunidade'}
+                {activeTab === 'settings' && 'Configurações do Estande'}
+              </h1>
+              <div
+                style={{
+                  width: '28px',
+                  height: '4px',
+                  borderRadius: '2px',
+                  background: 'linear-gradient(90deg, #2563EB, #9B7BFF)',
+                  margin: '0 auto',
+                }}
+              />
+            </div>
+          )
         )}
       </header>
 
@@ -1213,10 +1194,10 @@ export default function Sponsor() {
                     <button
                       type="button"
                       onClick={() => setActiveTab('leads')}
-                      className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline shrink-0 whitespace-nowrap"
+                      className="inline-flex items-center gap-1 text-[12px] font-bold text-link hover:underline shrink-0 whitespace-nowrap"
                     >
-                      <span>Ver todos ({companyLeads.length})</span>
-                      <ChevronRight size={14} aria-hidden="true" />
+                      <span className="whitespace-nowrap">Ver todos ({companyLeads.length})</span>
+                      <ChevronRight size={14} className="shrink-0" aria-hidden="true" />
                     </button>
                   )}
                 </div>
@@ -1962,10 +1943,19 @@ export default function Sponsor() {
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
+                onClick={() => typeof window !== 'undefined' && window.print()}
+                className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-raised hover:bg-surface-selected px-2.5 text-[12px] font-bold text-text-2 hover:text-text transition-colors"
+                title="Imprimir ou Salvar PDF"
+              >
+                <Printer size={14} aria-hidden="true" />
+                <span>PDF</span>
+              </button>
+              <button
+                type="button"
                 onClick={handleExportCsv}
-                disabled={companyLeads.length === 0}
+                disabled={leadsTab === 'mine' ? myLeads.length === 0 : companyLeads.length === 0}
                 className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-raised hover:bg-surface-selected px-2.5 text-[12px] font-bold text-text-2 hover:text-text disabled:opacity-40 transition-colors"
-                title="Exportar todos os leads em CSV"
+                title="Exportar lista em CSV"
               >
                 <Download size={14} aria-hidden="true" />
                 <span>CSV</span>
@@ -1973,9 +1963,69 @@ export default function Sponsor() {
             </div>
           </div>
 
+          {/* Seletor de Escopo & Controles da Aba de ROI no Mobile */}
+          <div className="lg:hidden flex items-center justify-between gap-2">
+            <div role="tablist" aria-label="Filtrar escopo do relatório" className="flex items-center gap-1.5">
+              <button
+                type="button"
+                role="tab"
+                id="tab-roi-mine"
+                aria-selected={leadsTab === 'mine'}
+                onClick={() => setLeadsTab('mine')}
+                className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
+                  leadsTab === 'mine'
+                    ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
+                    : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
+                }`}
+              >
+                <span>Meus Leads</span>
+                <span
+                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                    leadsTab === 'mine'
+                      ? 'bg-link/20 text-link'
+                      : 'bg-surface-raised text-text-4'
+                  }`}
+                >
+                  {myLeads.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-roi-company"
+                aria-selected={leadsTab === 'company'}
+                onClick={() => setLeadsTab('company')}
+                className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
+                  leadsTab === 'company'
+                    ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
+                    : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
+                }`}
+              >
+                <span>Toda a Empresa</span>
+                <span
+                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                    leadsTab === 'company'
+                      ? 'bg-link/20 text-link'
+                      : 'bg-surface-raised text-text-4'
+                  }`}
+                >
+                  {companyLeads.length}
+                </span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-text-3 font-medium">
+                {leadsTab === 'mine' ? `${myLeads.length} de sua autoria` : `${companyLeads.length} no estande`}
+              </span>
+            </div>
+          </div>
+
           <SponsorRoiDashboard
             allCompanyLeads={companyLeads}
             myLeads={myLeads}
+            scope={leadsTab}
+            onScopeChange={setLeadsTab}
             companyName={sponsorName}
             companyLogo={sponsorLogo}
             totalEventAttendees={600}
