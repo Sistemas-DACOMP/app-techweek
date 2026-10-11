@@ -438,3 +438,4 @@ export function getTicketStats(filters = {}) {
     active: open + inProgress,
   };
 }
+

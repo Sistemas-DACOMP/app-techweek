@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   Plus, Megaphone, Zap, Monitor, AlertTriangle, Ticket, ChevronRight, BarChart3,
   LifeBuoy, Wrench, CheckCircle2, Radio, QrCode, Calendar, Trophy, X, ShieldAlert,
-  Phone, Send, Clock, User, MessageSquare, Check, Sparkles, Building2
+  Send, Clock, User, MessageSquare, Check, Sparkles, Building2
 } from 'lucide-react';
 import Mascot from '../../components/Mascot';
 import iconeTw from '../../assets/icone.png';
@@ -167,9 +167,10 @@ export default function AdminInicio({
   const roomOpenCount = openIncidents.length;
   const totalOpenCount = sponsorOpenCount + staffOpenCount + roomOpenCount;
 
-  const handleDispatchSupport = (id, isTicket = false) => {
+  const handleDispatchSupport = (id, isTicket = false, role = null) => {
     if (isTicket) {
-      updateTicketStatus(id, 'IN_PROGRESS', 'Coordenação TechWeek');
+      const assigned = role === 'SPONSOR' ? 'Responsável Patrocinadores (Rádio)' : 'Apoio Operacional (Rádio)';
+      updateTicketStatus(id, 'IN_PROGRESS', assigned);
       setTickets(getTickets());
     } else {
       dispatchIncidentSupport(id, 'Técnico de Plantão FACOM');
@@ -486,14 +487,24 @@ export default function AdminInicio({
                           </span>
                         )}
                         {item.kind === 'TICKET' && item.role === 'SPONSOR' && (
-                          <span className="inline-flex items-center gap-1 rounded bg-link/15 px-1.5 py-0.5 text-[10px] font-bold text-link">
-                            <Building2 size={11} /> Patrocinador · {item.senderName}
-                          </span>
+                          <>
+                            <span className="inline-flex items-center gap-1 rounded bg-link/15 px-1.5 py-0.5 text-[10px] font-bold text-link">
+                              <Building2 size={11} /> Patrocinador · {item.senderName}
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">
+                              <Radio size={11} /> Rádio: Responsável Patrocinadores
+                            </span>
+                          </>
                         )}
                         {item.kind === 'TICKET' && item.role === 'STAFF' && (
-                          <span className="inline-flex items-center gap-1 rounded bg-[#C4B5FD]/15 px-1.5 py-0.5 text-[10px] font-bold text-[#C4B5FD]">
-                            <User size={11} /> Staff · {item.senderName}
-                          </span>
+                          <>
+                            <span className="inline-flex items-center gap-1 rounded bg-[#C4B5FD]/15 px-1.5 py-0.5 text-[10px] font-bold text-[#C4B5FD]">
+                              <User size={11} /> Staff · {item.senderName}
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded bg-surface px-1.5 py-0.5 text-[10px] font-bold text-text-3 border border-line">
+                              <Radio size={11} /> Rádio Staff
+                            </span>
+                          </>
                         )}
                         <span className="text-[12px] font-extrabold text-text">
                           {item.room}
@@ -553,17 +564,6 @@ export default function AdminInicio({
                     )}
 
                     <div className="mt-2.5 flex flex-wrap items-center justify-end gap-1.5 border-t border-line/60 pt-2">
-                      {item.senderPhone && (
-                        <a
-                          href={`https://wa.me/55${item.senderPhone.replace(/\D/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="press inline-flex items-center gap-1 rounded-lg bg-[#25D366]/15 px-2 py-1 text-[11px] font-bold text-[#25D366] hover:bg-[#25D366]/25"
-                        >
-                          <Phone size={11} /> WhatsApp
-                        </a>
-                      )}
-
                       {item.kind === 'TICKET' && (
                         <button
                           type="button"
@@ -577,7 +577,7 @@ export default function AdminInicio({
                       {item.status === 'open' && (
                         <button
                           type="button"
-                          onClick={() => handleDispatchSupport(item.id, item.kind === 'TICKET')}
+                          onClick={() => handleDispatchSupport(item.id, item.kind === 'TICKET', item.role)}
                           className="press inline-flex items-center gap-1 rounded-lg bg-link/15 px-2.5 py-1 text-[11px] font-bold text-link hover:bg-link/25"
                         >
                           <Wrench size={12} /> Despachar Suporte

@@ -8,30 +8,21 @@ import {
   CheckCircle2,
   AlertTriangle,
   Flame,
-  Phone,
   MapPin,
   Building2,
   Wrench,
   Check,
   MessageSquare,
-  Sparkles,
-  ChevronRight,
-  RefreshCw,
+  Radio,
 } from 'lucide-react';
 import {
   getTickets,
   createTicket,
   addTicketNote,
   updateTicketStatus,
-  SPONSOR_TICKET_CATEGORIES,
-  SPONSOR_PRESETS,
-  STAFF_TICKET_CATEGORIES,
-  STAFF_PRESETS,
   TICKETS_UPDATED_EVENT,
 } from '../lib/ticketService';
 import Mascot from './Mascot';
-
-const CONTACT_PHONE_STORAGE = 'techweek_last_ticket_phone';
 
 const PRIORITY_CONFIG = {
   baixa: { label: 'Baixa', color: 'var(--text-3)', bg: 'rgba(255,255,255,0.06)', border: 'var(--line)' },
@@ -72,26 +63,15 @@ export default function SupportTicketModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successToast, setSuccessToast] = useState('');
 
-  // Form states
-  const [category, setCategory] = useState(role === 'SPONSOR' ? 'infra' : 'crowd');
+  // Form states: escrita livre e direta
   const [priority, setPriority] = useState('media');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState(defaultLocation);
-  const [phone, setPhone] = useState(() => {
-    try {
-      return localStorage.getItem(CONTACT_PHONE_STORAGE) || '';
-    } catch {
-      return '';
-    }
-  });
 
   // Reply note in list
   const [replyTextMap, setReplyTextMap] = useState({});
   const [sendingReplyId, setSendingReplyId] = useState(null);
-
-  const categories = role === 'SPONSOR' ? SPONSOR_TICKET_CATEGORIES : STAFF_TICKET_CATEGORIES;
-  const presets = role === 'SPONSOR' ? SPONSOR_PRESETS : STAFF_PRESETS;
 
   // Carrega e atualiza chamados em tempo real
   const reloadTickets = () => {
@@ -154,22 +134,13 @@ export default function SupportTicketModal({
 
     setIsSubmitting(true);
     try {
-      if (phone.trim()) {
-        try {
-          localStorage.setItem(CONTACT_PHONE_STORAGE, phone.trim());
-        } catch {
-          // ignore
-        }
-      }
-
       createTicket({
         role,
         senderName: senderName || (role === 'SPONSOR' ? 'Representante do Estande' : 'Monitor Staff'),
         senderEmail,
-        senderPhone: phone.trim(),
         entityName: entityName || (role === 'SPONSOR' ? 'Estande Patrocinador' : 'Portaria Staff'),
         location: location.trim() || defaultLocation || 'Local não informado',
-        category,
+        category: role === 'SPONSOR' ? 'patrocinador' : 'staff',
         priority,
         title: title.trim(),
         description: description.trim(),
@@ -177,7 +148,7 @@ export default function SupportTicketModal({
 
       setTitle('');
       setDescription('');
-      setSuccessToast('Chamado registrado com sucesso! A coordenação foi notificada.');
+      setSuccessToast('Chamado registrado com sucesso! Transmitido para a equipe via rádio.');
       setTimeout(() => setSuccessToast(''), 4000);
       setActiveTab('list');
       reloadTickets();
@@ -333,49 +304,32 @@ export default function SupportTicketModal({
           {/* ================================================================= */}
           {activeTab === 'new' && (
             <form onSubmit={handleSubmitTicket} className="space-y-4">
-              {/* Presets Rápidas (1 Toque) */}
-              <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-text-3 mb-1.5">
-                  Sugestões Rápidas (1 Toque)
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {presets.slice(0, 4).map((p, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => handleApplyPreset(p)}
-                      className="press flex items-start gap-2 p-2.5 text-left rounded-xl bg-surface-raised border border-line hover:border-link/50 transition-colors"
-                    >
-                      <Sparkles size={14} className="text-link shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <span className="block text-[12px] font-bold text-text leading-tight truncate">
-                          {p.title}
-                        </span>
-                        <span className="block text-[10px] text-text-3 line-clamp-1 mt-0.5">
-                          {p.description}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+              {/* Aviso Informativo sobre Rádio */}
+              <div className="rounded-xl bg-surface-raised p-3 border border-line flex items-center gap-2.5 text-[12px] text-text-2">
+                <Radio size={16} className={role === 'SPONSOR' ? 'text-warn shrink-0' : 'text-link shrink-0'} />
+                <span>
+                  {role === 'SPONSOR'
+                    ? 'A coordenação possui um responsável exclusivo via rádio dedicado ao atendimento dos estandes.'
+                    : 'A equipe de coordenação e apoio operacional está conectada via rádio na frequência dos portões.'}
+                </span>
               </div>
 
-              {/* Categoria */}
+              {/* Local / Ponto de Apoio */}
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wider text-text-3 mb-1.5">
-                  Categoria da Solicitação
+                  Local / Ponto de Apoio *
                 </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full h-11 px-3.5 rounded-xl bg-surface-raised border border-line text-text text-[13px] font-bold focus:border-link focus:outline-none"
-                >
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id} className="bg-surface text-text">
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <MapPin size={15} className="absolute left-3 top-3 text-text-3" />
+                  <input
+                    type="text"
+                    required
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder={role === 'SPONSOR' ? 'Ex: Estande KANASTRA, Hall Principal...' : 'Ex: Portaria Anfiteatro, Portão 2...'}
+                    className="w-full h-11 pl-9 pr-3 rounded-xl bg-surface-raised border border-line text-text text-[13px] placeholder:text-text-4 focus:border-link focus:outline-none"
+                  />
+                </div>
               </div>
 
               {/* Nível de Urgência / Prioridade */}
@@ -414,52 +368,21 @@ export default function SupportTicketModal({
                 </div>
               </div>
 
-              {/* Localização & Telefone (2 colunas) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-text-3 mb-1.5">
-                    Local / Ponto de Apoio
-                  </label>
-                  <div className="relative">
-                    <MapPin size={15} className="absolute left-3 top-3 text-text-3" />
-                    <input
-                      type="text"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder="Ex: Estande KANASTRA, Sala 5R..."
-                      className="w-full h-11 pl-9 pr-3 rounded-xl bg-surface-raised border border-line text-text text-[13px] placeholder:text-text-4 focus:border-link focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-text-3 mb-1.5">
-                    WhatsApp para Resposta Rápida
-                  </label>
-                  <div className="relative">
-                    <Phone size={15} className="absolute left-3 top-3 text-text-3" />
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="Ex: (34) 99123-4567"
-                      className="w-full h-11 pl-9 pr-3 rounded-xl bg-surface-raised border border-line text-text text-[13px] placeholder:text-text-4 focus:border-link focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Título */}
+              {/* Título / O que você precisa */}
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wider text-text-3 mb-1.5">
-                  Título do Chamado *
+                  O que você precisa? (Título do Chamado) *
                 </label>
                 <input
                   type="text"
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Ex: Falta de extensão de energia / Reforço na portaria"
+                  placeholder={
+                    role === 'SPONSOR'
+                      ? 'Ex: Extensão 220v extra, Wi-Fi oscilando, reposição de água...'
+                      : 'Ex: Fila muito extensa, leitor de crachá travando, falta de pulseiras...'
+                  }
                   className="w-full h-11 px-3.5 rounded-xl bg-surface-raised border border-line text-text text-[13px] font-bold placeholder:text-text-4 placeholder:font-normal focus:border-link focus:outline-none"
                 />
               </div>
@@ -467,13 +390,13 @@ export default function SupportTicketModal({
               {/* Detalhes / Descrição */}
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wider text-text-3 mb-1.5">
-                  Detalhes da Solicitação
+                  Descreva com detalhes o que está acontecendo
                 </label>
                 <textarea
                   rows={3}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descreva o que está acontecendo e do que você precisa com mais detalhes..."
+                  placeholder="Escreva livremente o que sua equipe precisa ou a situação que está enfrentando..."
                   className="w-full p-3 rounded-xl bg-surface-raised border border-line text-text text-[13px] placeholder:text-text-4 focus:border-link focus:outline-none resize-none"
                 />
               </div>
@@ -682,3 +605,4 @@ export default function SupportTicketModal({
     </div>
   );
 }
+
