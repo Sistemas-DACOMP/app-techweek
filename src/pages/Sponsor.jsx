@@ -36,7 +36,8 @@ import {
   Image as ImageIcon,
   Film,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  SlidersHorizontal
 } from 'lucide-react';
 import { GitHubIcon } from '../components/ParticipantCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -101,8 +102,17 @@ export default function Sponsor() {
   const { profile: userProfile } = useUser();
 
   // Role validation: SPONSOR or ADMIN
-  const [devSponsorOverride, setDevSponsorOverride] = useState(false);
-  const actualRole = userProfile?.role || authUser?.role || 'PARTICIPANT';
+  const [devSponsorOverride, setDevSponsorOverride] = useState(() => {
+    if (isDevMode) {
+      try {
+        return sessionStorage.getItem('facom_dev_sponsor_override') === 'true';
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
+  });
+  const actualRole = userProfile?.role || authUser?.role || (devSponsorOverride ? 'SPONSOR' : 'PARTICIPANT');
   const hasAccess = actualRole === 'SPONSOR' || actualRole === 'ADMIN' || devSponsorOverride;
 
   // Perfil e Empresa do Patrocinador (definida no cadastro, sem seletor manual de estande)
@@ -841,7 +851,14 @@ export default function Sponsor() {
           {isDevMode && (
             <button
               type="button"
-              onClick={() => setDevSponsorOverride(true)}
+              onClick={() => {
+                if (isDevMode) {
+                  try {
+                    sessionStorage.setItem('facom_dev_sponsor_override', 'true');
+                  } catch (_) {}
+                }
+                setDevSponsorOverride(true);
+              }}
               style={{
                 background: 'rgba(56, 189, 248, 0.1)',
                 border: '1px solid rgba(56, 189, 248, 0.3)',
