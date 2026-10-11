@@ -19,7 +19,8 @@ export default function SponsorRoiDashboard({
   companyName = 'Patrocinador',
   companyLogo = null,
   totalEventAttendees = 600,
-  onClose
+  onClose,
+  showActions = false
 }) {
   const roi = useMemo(() => {
     return calculateSponsorRoi(leads, totalEventAttendees);
@@ -96,27 +97,29 @@ export default function SponsorRoiDashboard({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-selected px-3 text-[12px] font-bold text-text hover:bg-surface-raised transition-colors"
-            title="Exportar dados de ROI em CSV"
-          >
-            <Download size={14} aria-hidden="true" />
-            <span>Exportar CSV</span>
-          </button>
+        {showActions && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-selected px-3 text-[12px] font-bold text-text hover:bg-surface-raised transition-colors"
+              title="Exportar dados de ROI em CSV"
+            >
+              <Download size={14} aria-hidden="true" />
+              <span>Exportar CSV</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="press inline-flex h-9 items-center gap-1.5 rounded-xl bg-action px-3 text-[12px] font-bold text-white hover:brightness-110 shadow-xs transition-colors"
-            title="Imprimir relatório ou salvar em PDF"
-          >
-            <Printer size={14} aria-hidden="true" />
-            <span>Imprimir / PDF</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="press inline-flex h-9 items-center gap-1.5 rounded-xl bg-action px-3 text-[12px] font-bold text-white hover:brightness-110 shadow-xs transition-colors"
+              title="Imprimir relatório ou salvar em PDF"
+            >
+              <Printer size={14} aria-hidden="true" />
+              <span>Imprimir / PDF</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 4 Executive KPI Cards */}

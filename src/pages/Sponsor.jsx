@@ -14,6 +14,7 @@ import {
   AlertCircle,
   RefreshCw,
   Download,
+  Printer,
   Search,
   CalendarDays,
   MessageSquare,
@@ -524,12 +525,14 @@ export default function Sponsor() {
 
   // Exportar Leads para CSV
   const handleExportCsv = () => {
-    const leadsToExport = leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads;
+    const leadsToExport = leadsViewMode === 'roi'
+      ? (leadsTab === 'mine' ? myLeads : companyLeads)
+      : (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads);
     if (!leadsToExport || leadsToExport.length === 0) {
       showToast('Nenhum lead disponível para exportação com os filtros atuais.', 'warning');
       return;
     }
-    const scopeLabel = leadsTab === 'mine' ? 'meus' : 'todos';
+    const scopeLabel = leadsViewMode === 'roi' ? 'roi_executivo' : (leadsTab === 'mine' ? 'meus' : 'todos');
     const success = exportLeadsToCsv(leadsToExport, sponsorName, scopeLabel);
     if (success) {
       showToast(`Planilha CSV (${leadsToExport.length} ${leadsToExport.length === 1 ? 'lead' : 'leads'}) gerada com sucesso!`, 'success');
@@ -1025,11 +1028,11 @@ export default function Sponsor() {
             <div className="flex items-center gap-2 pt-1 border-t border-line/60">
               <button
                 type="button"
-                className={btn('action', 'flex-1 min-w-[110px] h-10 text-[13px]')}
+                className={btn('action', 'flex-1 min-w-[90px] h-10 text-[13px]')}
                 onClick={() => setActiveTab('scanner')}
               >
                 <QrCode size={16} aria-hidden="true" />
-                <span>Escanear crachá</span>
+                <span>Escanear</span>
               </button>
               <button
                 type="button"
@@ -1220,10 +1223,10 @@ export default function Sponsor() {
 
               {/* Leads Recentes no Estande */}
               <div className="rounded-[20px] bg-surface p-4 border border-line">
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Users size={17} className="text-link" aria-hidden="true" />
-                    <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Users size={17} className="text-link shrink-0" aria-hidden="true" />
+                    <h2 className="m-0 text-[12px] sm:text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA] truncate">
                       Leads Recentes no Estande
                     </h2>
                   </div>
@@ -1234,7 +1237,7 @@ export default function Sponsor() {
                         setActiveTab('leads');
                         setLeadsViewMode('crm');
                       }}
-                      className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
+                      className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline shrink-0 whitespace-nowrap"
                     >
                       <span>Ver todos ({companyLeads.length})</span>
                       <ChevronRight size={14} aria-hidden="true" />
@@ -1449,60 +1452,71 @@ export default function Sponsor() {
       {/* ========================================================================= */}
       {activeTab === 'leads' && (
         <div className="animate-fade-in flex flex-col gap-4">
-          {/* Segmented Control Unificado: CRM de Leads vs Relatório ROI */}
+          {/* Segmented Control Unificado: CRM de Leads vs Relatório ROI + Ações Fixas */}
           <div className="print:hidden flex items-center justify-between gap-2">
             <div
               role="tablist"
               aria-label="Modo de visualização de leads"
-              className="inline-flex h-9 p-0.5 rounded-xl bg-surface-raised border border-border"
+              className="inline-flex h-9 p-0.5 rounded-xl bg-surface-raised border border-border shrink-0"
             >
               <button
                 type="button"
                 role="tab"
                 aria-selected={leadsViewMode === 'crm'}
                 onClick={() => setLeadsViewMode('crm')}
-                className={`press inline-flex items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold transition-all ${
+                className={`press inline-flex items-center gap-1.5 rounded-lg px-2.5 sm:px-3.5 text-[12px] font-bold transition-all ${
                   leadsViewMode === 'crm'
                     ? 'bg-surface-selected text-text shadow-xs'
                     : 'text-text-3 hover:text-text'
                 }`}
               >
                 <Users size={14} aria-hidden="true" />
-                <span>CRM de Leads</span>
+                <span className="hidden sm:inline">CRM de Leads</span>
+                <span className="sm:hidden">CRM</span>
               </button>
               <button
                 type="button"
                 role="tab"
                 aria-selected={leadsViewMode === 'roi'}
                 onClick={() => setLeadsViewMode('roi')}
-                className={`press inline-flex items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold transition-all ${
+                className={`press inline-flex items-center gap-1.5 rounded-lg px-2.5 sm:px-3.5 text-[12px] font-bold transition-all ${
                   leadsViewMode === 'roi'
                     ? 'bg-surface-selected text-text shadow-xs'
                     : 'text-text-3 hover:text-text'
                 }`}
               >
                 <TrendingUp size={14} aria-hidden="true" />
-                <span>Relatório ROI</span>
+                <span className="hidden sm:inline">Relatório ROI</span>
+                <span className="sm:hidden">ROI</span>
               </button>
             </div>
 
-            {leadsViewMode === 'crm' && (
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] text-text-3 font-medium hidden sm:inline">
-                  {companyLeads.length} {companyLeads.length === 1 ? 'lead' : 'leads'}
-                </span>
+            {/* Ações Fixas: CSV ancorado na mesma posição nas duas abas */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={leadsTab === 'mine' ? myLeads.length === 0 : companyLeads.length === 0}
+                className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-raised hover:bg-surface-selected px-2.5 sm:px-3 text-[12px] font-bold text-text-2 hover:text-text disabled:opacity-40 transition-colors shrink-0"
+                title="Exportar lista em CSV"
+              >
+                <Download size={14} aria-hidden="true" />
+                <span>CSV</span>
+              </button>
+
+              {leadsViewMode === 'roi' && (
                 <button
                   type="button"
-                  onClick={handleExportCsv}
-                  disabled={displayedLeads.length === 0}
-                  className="press inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold text-text-2 bg-surface-raised hover:bg-surface-selected border border-border disabled:opacity-40 transition-colors"
-                  title="Baixar lista em CSV"
+                  onClick={() => typeof window !== 'undefined' && window.print()}
+                  className="press inline-flex h-9 items-center gap-1.5 rounded-xl bg-action px-2.5 sm:px-3 text-[12px] font-bold text-white hover:brightness-110 shadow-xs transition-colors shrink-0"
+                  title="Imprimir relatório ou salvar em PDF"
                 >
-                  <Download size={13} aria-hidden="true" />
-                  <span>CSV</span>
+                  <Printer size={14} aria-hidden="true" />
+                  <span className="hidden sm:inline">Imprimir / </span>
+                  <span>PDF</span>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {leadsViewMode === 'roi' ? (
@@ -1511,10 +1525,11 @@ export default function Sponsor() {
               companyName={sponsorName}
               companyLogo={sponsorLogo}
               totalEventAttendees={600}
+              showActions={false}
             />
           ) : (
             <>
-              {/* Seletor de Escopo Discreto (Micro-pills horizontais inline) */}
+              {/* Seletor de Escopo Discreto */}
               <div className="flex items-center justify-between gap-2">
                 <div role="tablist" aria-label="Filtrar escopo dos leads" className="flex items-center gap-1.5">
                   <button
