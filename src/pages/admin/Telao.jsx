@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Maximize2, Minimize2, X, QrCode, Calendar, Trophy, Megaphone,
-  Clock, MapPin, Users, Award, Sparkles, CheckCircle2
+  Clock, MapPin, Users, Award, Sparkles, CheckCircle2, Star, ChevronDown
 } from 'lucide-react';
 import logoTw from '../../assets/logo-tw.png';
 import iconeTw from '../../assets/icone.png';
-import { typeColor, typeLabel, startTime, sessionsOf, liveStatus, dayLabel, firstDate } from './ui';
+import { typeColor, typeLabel, startTime, sessionsOf, liveStatus, dayLabel, firstDate, initials } from './ui';
 import { getStageDisplayMode, setStageDisplayMode, STAGE_MODES } from '../../lib/liveOpsService';
 
 /* 2.07 Telão Multi-Modo Orquestrado: QR fixo, Grade Ao Vivo, Leaderboard XP e Avisos Oficiais */
@@ -21,6 +21,7 @@ export default function Telao({
   const [full, setFull] = useState(false);
   const [mode, setMode] = useState(() => getStageDisplayMode());
   const [now, setNow] = useState(new Date());
+  const [selectedClosingId, setSelectedClosingId] = useState(activity?.id || '');
 
   const color = typeColor(activity?.type);
   const s = (activity ? sessionsOf(activity)[0] : null) || {};
@@ -99,6 +100,18 @@ export default function Telao({
           </button>
           <button
             type="button"
+            onClick={() => handleModeChange('fechamento')}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-bold transition-all ${
+              mode === 'fechamento'
+                ? 'bg-warn text-[#0A0F24] shadow-sm'
+                : 'text-text-3 hover:text-text'
+            }`}
+          >
+            <Star size={14} aria-hidden="true" />
+            <span>Fechamento</span>
+          </button>
+          <button
+            type="button"
             onClick={() => handleModeChange('agenda')}
             className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-bold transition-all ${
               mode === 'agenda'
@@ -158,50 +171,431 @@ export default function Telao({
 
       {/* CONTEÚDO PRINCIPAL DE ACORDO COM O MODO */}
 
-      {/* MODO 1: QR CODE DE PRESENÇA (OFICIAL) */}
-      {mode === 'presenca' && activity && (
-        <main className="mx-auto grid min-h-[calc(100vh-64px)] max-w-[1500px] items-center gap-12 px-8 py-12 lg:grid-cols-[minmax(0,1fr)_minmax(320px,560px)] lg:gap-24 lg:px-20 animate-in fade-in">
-          <div>
-            <img src={logoTw} alt="FACOM Tech Week" className="h-16 w-60 object-contain object-left" />
-            <div className="mt-8 flex flex-wrap items-center gap-3.5 text-[22px] font-extrabold lg:text-[26px]">
-              <span aria-hidden="true" className="h-3.5 w-3.5 rounded-full bg-ok" style={{ boxShadow: '0 0 0 6px rgba(111,216,166,0.25)' }} />
-              <span className="text-ok">{place}</span>
-              <span style={{ color }}>· {typeLabel(activity.type)}</span>
-            </div>
-            <h1 className="m-0 mt-4 text-[38px] font-black leading-[1.05] tracking-[-0.02em] lg:text-[68px]">
-              {activity.title}
-            </h1>
-            <div className="mt-6 flex flex-wrap items-center gap-4 text-[20px] text-text-2 lg:text-[24px]">
-              <span>{startTime(activity)}{end ? ` – ${end}` : ''}</span>
-              <span className="rounded-[16px] bg-[rgba(124,58,237,0.3)] px-[18px] py-1.5 font-extrabold text-white">
-                +{activity.points || 50} pts
-              </span>
-            </div>
-            <ol className="m-0 mt-12 flex list-none flex-wrap gap-6 p-0">
-              {['Abra o app', 'Toque em Crachá', 'Escanear'].map((t, i) => (
-                <li key={t} className="flex items-center gap-3.5 text-[18px] font-bold lg:text-[22px]">
-                  <span
-                    aria-hidden="true"
-                    className="flex h-11 w-11 items-center justify-center rounded-full text-[20px] font-black text-white"
-                    style={{ background: 'var(--brand-gradient)' }}
-                  >
-                    {i + 1}
+      {/* MODO 1: QR CODE DE PRESENÇA (OFICIAL) COM FECHAMENTO, PALESTRANTES E AVALIAÇÃO */}
+      {mode === 'presenca' && activity && (() => {
+        const rawSpeakers = Array.isArray(activity.speakers) && activity.speakers.length > 0
+          ? activity.speakers
+          : activity.speaker
+            ? activity.speaker.split(',').map((n, i) => ({
+                name: n.trim(),
+                role: i === 0 ? activity.speakerRole || '' : '',
+                photo: i === 0 ? activity.speakerPhoto || '' : '',
+              })).filter((s) => s.name)
+            : [];
+        const displaySpeakers = rawSpeakers.length > 0
+          ? rawSpeakers
+          : [{ name: 'Comissão Organizadora FACOM', role: 'FACOM / UFU', photo: '' }];
+
+        return (
+          <main className="relative mx-auto grid min-h-[calc(100vh-70px)] max-w-[1680px] items-center gap-10 px-8 py-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(420px,580px)] lg:gap-16 lg:px-16 animate-in fade-in">
+            {/* Iluminação de Palco Sutil */}
+            <div aria-hidden="true" className="pointer-events-none absolute -left-20 top-1/4 h-[500px] w-[500px] rounded-full bg-[#2563EB]/10 blur-[120px]" />
+            <div aria-hidden="true" className="pointer-events-none absolute right-10 top-1/3 h-[500px] w-[500px] rounded-full bg-[#7C3AED]/15 blur-[140px]" />
+
+            {/* COLUNA ESQUERDA: IDENTIDADE DA PALESTRA, PALESTRANTES E CALL TO ACTION */}
+            <div className="relative z-10 flex flex-col justify-center">
+              {/* Logo e Tag de Sessão */}
+              <div className="flex flex-wrap items-center gap-4">
+                <img src={logoTw} alt="FACOM Tech Week" className="h-12 w-48 object-contain object-left lg:h-14 lg:w-56" />
+                <span className="inline-flex items-center gap-2 rounded-full border border-ok/30 bg-ok/10 px-3.5 py-1 text-[13px] font-black uppercase tracking-wider text-ok">
+                  <span className="h-2.5 w-2.5 rounded-full bg-ok animate-pulse" />
+                  Check-in & Avaliação Aberta
+                </span>
+              </div>
+
+              {/* Local, Tipo e Horário */}
+              <div className="mt-6 flex flex-wrap items-center gap-3 text-[18px] font-extrabold lg:text-[22px]">
+                <span className="inline-flex items-center gap-2 text-ok">
+                  <MapPin size={20} className="shrink-0" />
+                  {place}
+                </span>
+                <span className="text-text-3">·</span>
+                <span style={{ color }}>{typeLabel(activity.type)}</span>
+                <span className="text-text-3">·</span>
+                <span className="inline-flex items-center gap-1.5 text-text-2">
+                  <Clock size={19} className="shrink-0" />
+                  {startTime(activity)}{end ? ` – ${end}` : ''}
+                </span>
+              </div>
+
+              {/* Título da Palestra em Destaque Cinematográfico */}
+              <h1 className="m-0 mt-3 text-[34px] font-black leading-[1.08] tracking-[-0.03em] text-text lg:text-[58px]">
+                {activity.title}
+              </h1>
+
+              {/* PALESTRANTE(S) EM CARDS COMPACTOS E ELEGANTES */}
+              <div className="mt-6">
+                <span className="block text-[12px] font-black uppercase tracking-widest text-text-3">
+                  {displaySpeakers.length > 1 ? 'Palestrantes Convidados' : 'Palestrante Convidado'}
+                </span>
+                <div className="mt-2.5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {displaySpeakers.map((spk, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3.5 rounded-2xl border border-line-2 bg-surface/85 p-3.5 shadow-lg backdrop-blur-md transition-all"
+                    >
+                      {spk.photo ? (
+                        <img
+                          src={spk.photo}
+                          alt={spk.name}
+                          className="h-14 w-14 shrink-0 rounded-full border-2 border-link/60 object-cover shadow-md"
+                        />
+                      ) : (
+                        <div
+                          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-[17px] font-black text-white shadow-md"
+                          style={{ background: 'var(--brand-gradient)' }}
+                        >
+                          {initials(spk.name)}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[17px] font-black leading-snug text-text">
+                          {spk.name}
+                        </div>
+                        {spk.role && (
+                          <div className="truncate text-[13px] font-semibold text-link">
+                            {spk.role}
+                          </div>
+                        )}
+                        {spk.bio && (
+                          <div className="line-clamp-1 mt-0.5 text-[11px] text-text-3">
+                            {spk.bio}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* CARD DE CHAMADA: AVALIE E RESGATE XP */}
+              <div className="mt-8 rounded-2xl border border-you/40 bg-gradient-to-r from-you/20 via-surface to-surface-raised p-5 shadow-xl">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-you/30 text-you-text">
+                      <Sparkles size={20} className="animate-pulse" />
+                    </span>
+                    <div>
+                      <span className="block text-[17px] font-black text-text lg:text-[19px]">
+                        Escaneie para avaliar e resgatar XP
+                      </span>
+                      <span className="block text-[13px] font-medium text-text-2">
+                        Sua nota desbloqueia o certificado e os pontos instantaneamente no crachá
+                      </span>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-you/30 px-4 py-1.5 text-[16px] font-black text-you-text shadow-inner">
+                    +{activity.points || 50} pts XP
                   </span>
-                  {t}
-                </li>
-              ))}
-            </ol>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="rounded-[40px] bg-white p-9" style={{ boxShadow: '0 30px 80px rgba(91,59,224,0.45)' }}>
-              <QRCodeSVG value={qrValue} size={400} level="H" includeMargin={false} />
+                </div>
+
+                {/* 3 Passos Rápidos */}
+                <ol className="m-0 mt-4 grid grid-cols-1 gap-2.5 border-t border-line/60 pt-4 sm:grid-cols-3">
+                  {[
+                    { n: '1', title: 'Abra o App', desc: 'Acesse app TechWeek' },
+                    { n: '2', title: 'Toque em Crachá', desc: 'Aba central > Escanear' },
+                    { n: '3', title: 'Aponte & Avalie', desc: 'Dê sua nota de 1 a 5 ⭐' },
+                  ].map((step) => (
+                    <li key={step.n} className="flex items-center gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[14px] font-black text-white shadow-md"
+                        style={{ background: 'var(--brand-gradient)' }}
+                      >
+                        {step.n}
+                      </span>
+                      <div className="min-w-0">
+                        <span className="block text-[13px] font-bold text-text">{step.title}</span>
+                        <span className="block text-[11px] text-text-3">{step.desc}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
             </div>
-            <p className="m-0 mt-6 text-[20px] font-bold text-text-2 lg:text-[22px]">
-              Aponte a câmera ou o leitor do app TechWeek
-            </p>
-          </div>
-        </main>
-      )}
+
+            {/* COLUNA DIREITA: ESTAÇÃO DO QR CODE CINEMATOGRÁFICO */}
+            <div className="relative z-10 flex flex-col items-center justify-center">
+              <div
+                className="relative rounded-[36px] bg-white p-7 text-center shadow-[0_20px_90px_rgba(61,80,230,0.45)] ring-4 ring-white/10 lg:p-9"
+              >
+                {/* Plaqueta Superior do QR */}
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#0A0F24] px-4 py-1 text-[11px] font-black uppercase tracking-wider text-white">
+                  <CheckCircle2 size={13} className="text-ok" />
+                  Presença & Avaliação Oficial
+                </div>
+
+                {/* QR Code SVG em Alta Resolução */}
+                <div className="flex items-center justify-center">
+                  <QRCodeSVG
+                    value={qrValue}
+                    size={360}
+                    level="H"
+                    includeMargin={false}
+                  />
+                </div>
+
+                {/* Sub-legenda do QR */}
+                <div className="mt-4 border-t border-gray-200 pt-3 text-[13px] font-extrabold text-gray-800">
+                  Válido para check-in nesta sala até o término da sessão
+                </div>
+              </div>
+
+              {/* Reafirmação e Lembrete */}
+              <div className="mt-6 flex flex-col items-center gap-1.5 text-center">
+                <p className="m-0 flex items-center gap-2 text-[17px] font-black text-text lg:text-[20px]">
+                  <Clock size={18} className="text-warn" />
+                  Leia antes de sair da sala
+                </p>
+                <p className="m-0 text-[13px] font-medium text-text-3">
+                  Aponte a câmera do celular ou o leitor integrado do app TechWeek
+                </p>
+              </div>
+            </div>
+          </main>
+        );
+      })()}
+
+      {/* MODO NOVO: QR CODE DE FECHAMENTO & AVALIAÇÃO DA PALESTRA (+10 XP) */}
+      {mode === 'fechamento' && (() => {
+        const closingAct = activities.find((a) => a.id === selectedClosingId) || activity || liveActivities[0] || activities[0] || {
+          id: 'palestra_encerramento',
+          title: 'Palestra de Encerramento TechWeek',
+          type: 'palestra',
+          location: 'Anfiteatro FACOM',
+          points: 50,
+        };
+        const closingColor = typeColor(closingAct?.type);
+        const closingSessions = sessionsOf(closingAct);
+        const cs = closingSessions[0] || {};
+        const closingEnd = cs.endTime || closingAct?.endTime;
+        const closingPlace = cs.location || closingAct?.location || 'Anfiteatro FACOM';
+
+        const rawSpeakers = Array.isArray(closingAct.speakers) && closingAct.speakers.length > 0
+          ? closingAct.speakers
+          : closingAct.speaker
+            ? closingAct.speaker.split(',').map((n, i) => ({
+                name: n.trim(),
+                role: i === 0 ? closingAct.speakerRole || '' : '',
+                photo: i === 0 ? closingAct.speakerPhoto || '' : '',
+              })).filter((s) => s.name)
+            : [];
+        const displaySpeakers = rawSpeakers.length > 0
+          ? rawSpeakers
+          : [{ name: 'Comissão Organizadora FACOM', role: 'FACOM / UFU', photo: '' }];
+
+        const closingQrValue = JSON.stringify({
+          type: 'closing_evaluation',
+          activityId: closingAct.id,
+          lectureId: closingAct.id,
+          title: closingAct.title,
+          action: 'feedback',
+          points: 10,
+          url: `https://techweek.facom.ufu.br/agenda?evaluate=${closingAct.id}`
+        });
+
+        return (
+          <main className="relative mx-auto grid min-h-[calc(100vh-70px)] max-w-[1680px] items-center gap-10 px-8 py-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(420px,580px)] lg:gap-16 lg:px-16 animate-in fade-in">
+            {/* Iluminação de Palco Temática Dourada/Púrpura */}
+            <div aria-hidden="true" className="pointer-events-none absolute -left-20 top-1/4 h-[500px] w-[500px] rounded-full bg-[#F59E0B]/15 blur-[130px]" />
+            <div aria-hidden="true" className="pointer-events-none absolute right-10 top-1/3 h-[500px] w-[500px] rounded-full bg-[#7C3AED]/20 blur-[150px]" />
+
+            {/* COLUNA ESQUERDA: PALESTRA, PALESTRANTES E GUIA DE AVALIAÇÃO */}
+            <div className="relative z-10 flex flex-col justify-center">
+              {/* Logo, Status de Fechamento e Seletor de Palestra */}
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <img src={logoTw} alt="FACOM Tech Week" className="h-12 w-48 object-contain object-left lg:h-14 lg:w-56" />
+                  <span className="inline-flex items-center gap-2 rounded-full border border-warn/40 bg-warn/10 px-3.5 py-1 text-[13px] font-black uppercase tracking-wider text-warn">
+                    <Sparkles size={14} className="text-warn animate-pulse" />
+                    Fechamento & Avaliação de Conteúdo
+                  </span>
+                </div>
+
+                {activities.length > 1 && (
+                  <div className="flex items-center gap-2 rounded-xl border border-line-2 bg-surface/80 px-3 py-1.5 shadow-sm">
+                    <span className="text-[11px] font-bold text-text-3 uppercase">Sessão:</span>
+                    <select
+                      value={closingAct.id}
+                      onChange={(e) => setSelectedClosingId(e.target.value)}
+                      className="bg-transparent text-[13px] font-extrabold text-text outline-none cursor-pointer max-w-[220px] truncate"
+                    >
+                      {activities.map((a) => (
+                        <option key={a.id} value={a.id} className="bg-surface text-text">
+                          {a.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Informações de Local e Horário */}
+              <div className="mt-6 flex flex-wrap items-center gap-3 text-[18px] font-extrabold lg:text-[22px]">
+                <span className="inline-flex items-center gap-2 text-link">
+                  <MapPin size={20} className="shrink-0" />
+                  {closingPlace}
+                </span>
+                <span className="text-text-3">·</span>
+                <span style={{ color: closingColor }}>{typeLabel(closingAct.type)}</span>
+                <span className="text-text-3">·</span>
+                <span className="inline-flex items-center gap-1.5 text-text-2">
+                  <Clock size={19} className="shrink-0" />
+                  {startTime(closingAct)}{closingEnd ? ` – ${closingEnd}` : ''}
+                </span>
+              </div>
+
+              {/* Título da Palestra Encerrada */}
+              <h1 className="m-0 mt-3 text-[34px] font-black leading-[1.08] tracking-[-0.03em] text-text lg:text-[54px]">
+                {closingAct.title}
+              </h1>
+
+              {/* Palestrantes Convidados */}
+              <div className="mt-6">
+                <span className="block text-[12px] font-black uppercase tracking-widest text-text-3">
+                  {displaySpeakers.length > 1 ? 'Palestrantes da Sessão' : 'Palestrante da Sessão'}
+                </span>
+                <div className="mt-2.5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {displaySpeakers.map((spk, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3.5 rounded-2xl border border-line-2 bg-surface/85 p-3.5 shadow-lg backdrop-blur-md"
+                    >
+                      {spk.photo ? (
+                        <img
+                          src={spk.photo}
+                          alt={spk.name}
+                          className="h-14 w-14 shrink-0 rounded-full border-2 border-warn/60 object-cover shadow-md"
+                        />
+                      ) : (
+                        <div
+                          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-[17px] font-black text-white shadow-md"
+                          style={{ background: 'var(--brand-gradient)' }}
+                        >
+                          {initials(spk.name)}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[17px] font-black leading-snug text-text">
+                          {spk.name}
+                        </div>
+                        {spk.role && (
+                          <div className="truncate text-[13px] font-semibold text-warn">
+                            {spk.role}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* JORNADA FLUIDA DE AVALIAÇÃO: ESTRELAS + TAGS + +10 XP */}
+              <div className="mt-8 rounded-3xl border border-warn/35 bg-gradient-to-r from-warn/15 via-surface to-surface-raised p-6 shadow-2xl">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-warn/25 text-warn shadow-inner">
+                      <Star size={22} className="fill-warn text-warn animate-bounce" />
+                    </span>
+                    <div>
+                      <span className="block text-[18px] font-black text-text lg:text-[20px]">
+                        Avalie a Palestra & Resgate +10 XP
+                      </span>
+                      <span className="block text-[13px] font-medium text-text-2">
+                        Seu feedback direciona a premiação de melhores conteúdos e credita pontos na hora
+                      </span>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-warn/25 px-4 py-1.5 text-[16px] font-black text-warn shadow-inner">
+                    +10 pts bônus
+                  </span>
+                </div>
+
+                {/* 5 Estrelas Animadas e Rótulos Semânticos */}
+                <div className="mt-5 rounded-2xl border border-line bg-surface/80 p-4">
+                  <span className="block text-[11px] font-black uppercase tracking-wider text-text-3 mb-2.5">
+                    Nota de 1 a 5 Estrelas
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                    {[
+                      { n: 1, label: 'Regular' },
+                      { n: 2, label: 'Boa' },
+                      { n: 3, label: 'Muito Boa' },
+                      { n: 4, label: 'Excelente' },
+                      { n: 5, label: 'Espetacular!' }
+                    ].map((star) => (
+                      <div key={star.n} className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-raised px-3 py-1.5 shadow-sm">
+                        <Star size={16} className="fill-warn text-warn" />
+                        <span className="text-[12px] font-black text-text">{star.n}</span>
+                        <span className="text-[11px] font-semibold text-text-3 hidden sm:inline">· {star.label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Tags de Percepção em 1 Toque */}
+                  <span className="block text-[11px] font-black uppercase tracking-wider text-text-3 mt-4 mb-2">
+                    Tags de Percepção em 1 Toque
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'Didática Clara',
+                      'Mão na Massa / Prático',
+                      'Inovador & Tendências',
+                      'Slides Excelentes',
+                      'Ritmo Rápido',
+                      'Conteúdo Denso'
+                    ].map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full border border-line-2 bg-surface px-3 py-1 text-[11px] font-bold text-text-2 shadow-xs"
+                      >
+                        ✓ {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* COLUNA DIREITA: QR CODE DE FECHAMENTO CINEMATOGRÁFICO */}
+            <div className="relative z-10 flex flex-col items-center justify-center">
+              <div className="relative rounded-[36px] bg-white p-7 text-center shadow-[0_20px_90px_rgba(245,158,11,0.4)] ring-4 ring-white/10 lg:p-9">
+                {/* Plaqueta Superior */}
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#0A0F24] px-4 py-1 text-[11px] font-black uppercase tracking-wider text-white">
+                  <CheckCircle2 size={13} className="text-warn" />
+                  QR Code Oficial de Fechamento & Avaliação
+                </div>
+
+                {/* QR Code SVG em Alta Resolução */}
+                <div className="flex items-center justify-center">
+                  <QRCodeSVG
+                    value={closingQrValue}
+                    size={360}
+                    level="H"
+                    includeMargin={false}
+                  />
+                </div>
+
+                {/* Sub-legenda */}
+                <div className="mt-4 border-t border-gray-200 pt-3 text-[13px] font-extrabold text-gray-800">
+                  Validação instantânea de presença final e feedback
+                </div>
+              </div>
+
+              {/* Passos Rápidos */}
+              <div className="mt-6 flex flex-col items-center gap-1.5 text-center">
+                <p className="m-0 flex items-center gap-2 text-[17px] font-black text-text lg:text-[20px]">
+                  <Sparkles size={18} className="text-warn" />
+                  Aponte a câmera e garanta seus +10 XP
+                </p>
+                <p className="m-0 text-[13px] font-medium text-text-3">
+                  Compatível com a câmera padrão do celular ou o leitor de Crachá do app
+                </p>
+              </div>
+            </div>
+          </main>
+        );
+      })()}
 
       {/* MODO 2: GRADE AO VIVO (AGENDA DINÂMICA) */}
       {mode === 'agenda' && (

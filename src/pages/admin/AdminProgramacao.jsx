@@ -173,7 +173,14 @@ export default function AdminProgramacao(p) {
                         <button type="button" onClick={() => onEdit(act)} className="mt-1 block text-left text-[15px] font-bold leading-snug text-text hover:text-link">{act.title}</button>
                         <span className="mt-0.5 block text-[13px] text-text-2">{whenOf(act)}</span>
                       </td>
-                      <td className="max-w-[170px] px-3 py-4 text-[14px] text-text-2">{speakerOf(act)}</td>
+                      <td className="max-w-[190px] px-3 py-4 text-[14px] text-text-2">
+                        <div className="truncate font-medium">{speakerOf(act)}</div>
+                        {Array.isArray(act.speakers) && act.speakers.length > 1 && (
+                          <span className="mt-0.5 inline-block rounded-md bg-surface-raised px-1.5 py-0.5 text-[11px] font-bold text-text-3">
+                            {act.speakers.length} palestrantes
+                          </span>
+                        )}
+                      </td>
                       <td className="max-w-[150px] px-3 py-4 text-[14px] text-text-2">{locationOf(act)}</td>
                       <td className="px-3 py-4"><Capacity act={act} /></td>
                       <td className="px-3 py-4"><span className="pts-chip text-[13px]">+{act.points || 50}</span></td>
@@ -209,6 +216,7 @@ export default function AdminProgramacao(p) {
                       </span>
                       <button type="button" onClick={() => onEdit(act)} className="mt-1.5 block text-left text-[16px] font-bold leading-snug text-text">{act.title}</button>
                       <span className="mt-1 block text-[14px] text-text-2">{startTime(act)} · {locationOf(act)}</span>
+                      <span className="mt-0.5 block truncate text-[13px] text-text-3">{speakerOf(act)}</span>
                     </div>
                     <MoreMenu items={[{ label: 'Abrir telão', icon: Monitor, onClick: () => onTelao(act) }, { label: 'Editar', icon: Pencil, onClick: () => onEdit(act) }, ...menuFor(act)]} />
                   </div>

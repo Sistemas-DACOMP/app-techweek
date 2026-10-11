@@ -33,7 +33,7 @@ export function ctaLabel(form) {
   if (form.cardStyle === 'stories') return 'Criar story';
   if (form.triggerMode === 'secret') return 'Desvendar';
   if (form.triggerMode === 'quiz') return 'Fazer quiz';
-  if (form.triggerMode === 'auto') return 'Escanear';
+  if (form.triggerMode === 'auto' || form.triggerMode === 'qr') return 'Escanear';
   if ((form.fields || []).some((f) => f.type === 'photo')) return 'Enviar foto';
   return 'Responder';
 }

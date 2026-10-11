@@ -1,4 +1,6 @@
-import { Check, Plus, Trash2, X } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Plus, Trash2, X, Download, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { btn, ICON_BTN, Section, Field, SwitchRow } from './ui';
 import MissionPreview, { CARD_STYLES } from './MissionPreview';
 
@@ -13,6 +15,7 @@ const TILE_BG = {
 };
 
 export default function MissionForm({ form, setForm, editingId, saving, triggerModes, categories, onSubmit, onCancel }) {
+  const [downloadingQr, setDownloadingQr] = useState(false);
   const set = (patch) => setForm((p) => ({ ...p, ...patch }));
   const opt = (patch) => setForm((p) => ({ ...p, cardStyleOptions: { ...p.cardStyleOptions, ...patch } }));
   const opts = form.cardStyleOptions || {};
@@ -21,14 +24,110 @@ export default function MissionForm({ form, setForm, editingId, saving, triggerM
   const title = editingId ? 'Editar missão' : 'Nova missão';
   const submitLabel = editingId ? 'Salvar alterações' : 'Publicar missão';
 
+  const effectiveQrValue = form.qrCodeValue || (editingId ? `TW_MISSAO_${editingId}` : form.title ? `TW_MISSAO_${form.title.toUpperCase().replace(/[^A-Z0-9]/g, '_')}` : 'TW_MISSAO_TECHWEEK');
+
+  const handleDownloadQrPng = async () => {
+    setDownloadingQr(true);
+    try {
+      const svgElem = document.getElementById('mission-qr-svg-preview');
+      if (!svgElem) {
+        setDownloadingQr(false);
+        return;
+      }
+
+      const svgXml = new XMLSerializer().serializeToString(svgElem);
+      const svgBlob = new Blob([svgXml], { type: 'image/svg+xml;charset=utf-8' });
+      const blobUrl = URL.createObjectURL(svgBlob);
+
+      const canvas = document.createElement('canvas');
+      const width = 1000;
+      const height = 1350;
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+
+      // Fundo escuro premium TechWeek
+      ctx.fillStyle = '#0A0F24';
+      ctx.fillRect(0, 0, width, height);
+
+      // Moldura elegante da marca
+      ctx.strokeStyle = '#2563EB';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(30, 30, width - 60, height - 60);
+
+      // Topo: Cabeçalho
+      ctx.fillStyle = '#8FA0FF';
+      ctx.font = 'bold 28px Montserrat, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('FACOM TECHWEEK 2026', width / 2, 90);
+
+      ctx.fillStyle = '#EEF1FA';
+      ctx.font = '900 44px Montserrat, sans-serif';
+      const cleanTitle = (form.title || 'Missão Especial TechWeek').slice(0, 32);
+      ctx.fillText(cleanTitle, width / 2, 160);
+
+      // Badge de XP Violeta
+      const ptsText = `+${Number(form.points) || 50} PTS XP`;
+      ctx.font = '800 28px Montserrat, sans-serif';
+      const ptsWidth = ctx.measureText(ptsText).width + 60;
+      ctx.fillStyle = '#7C3AED';
+      ctx.beginPath();
+      ctx.roundRect((width - ptsWidth) / 2, 195, ptsWidth, 54, 27);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(ptsText, width / 2, 232);
+
+      // Imagem do QR Code
+      const img = new Image();
+      img.onload = () => {
+        // Placa branca com cantos arredondados
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.roundRect(175, 290, 650, 650, 40);
+        ctx.fill();
+
+        // Desenhar o QR
+        ctx.drawImage(img, 220, 335, 560, 560);
+        URL.revokeObjectURL(blobUrl);
+
+        // Instrução de Escaneamento
+        ctx.fillStyle = '#EEF1FA';
+        ctx.font = 'bold 36px Montserrat, sans-serif';
+        ctx.fillText('Escaneie com o app TechWeek', width / 2, 1020);
+
+        ctx.fillStyle = '#A9B1CC';
+        ctx.font = '600 24px Montserrat, sans-serif';
+        ctx.fillText('Abra o app > Crachá > Escanear', width / 2, 1070);
+
+        // Rodapé
+        ctx.fillStyle = '#6E779A';
+        ctx.font = '500 18px Montserrat, sans-serif';
+        ctx.fillText(`Token de Validação: ${effectiveQrValue}`, width / 2, 1140);
+
+        // Disparar download do PNG
+        const pngUrl = canvas.toDataURL('image/png');
+        const downloadLink = document.createElement('a');
+        downloadLink.download = `qrcode-missao-${(form.title || 'techweek').toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`;
+        downloadLink.href = pngUrl;
+        downloadLink.click();
+        setDownloadingQr(false);
+      };
+      img.src = blobUrl;
+    } catch (err) {
+      console.error('Erro ao gerar PNG do QR Code:', err);
+      setDownloadingQr(false);
+    }
+  };
+
   const pickStyle = (key) => {
     const patch = { cardStyle: key, isFlash: key === 'relampago' };
     if (key === 'secreta') patch.triggerMode = 'secret';
+    else if (key === 'caca-qr') patch.triggerMode = 'qr';
     else if (key === 'quiz') patch.triggerMode = 'quiz';
     else if (form.triggerMode === 'secret') patch.triggerMode = 'form';
     set(patch);
   };
-  const pickTrigger = (mode) => set({ triggerMode: mode, ...(mode === 'secret' ? { cardStyle: 'secreta' } : mode === 'quiz' ? { cardStyle: 'quiz' } : {}) });
+  const pickTrigger = (mode) => set({ triggerMode: mode, ...(mode === 'secret' ? { cardStyle: 'secreta' } : mode === 'qr' ? { cardStyle: 'caca-qr' } : mode === 'quiz' ? { cardStyle: 'quiz' } : {}) });
 
   const setField = (i, patch) => set({ fields: form.fields.map((f, j) => (j === i ? { ...f, ...patch, ...(patch.type === 'select' && !f.options ? { options: ['Opção 1', 'Opção 2'] } : {}) } : f)) });
 
@@ -112,6 +211,73 @@ export default function MissionForm({ form, setForm, editingId, saving, triggerM
                 <Field label="Cota">
                   {(id) => <select id={id} className="field" value={opts.tier || 'diamante'} onChange={(e) => opt({ tier: e.target.value })}>{TIERS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
                 </Field>
+              )}
+
+              {form.triggerMode === 'qr' && (
+                <div className="rounded-2xl border border-line-2 bg-surface p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <div className="text-[14px] font-extrabold text-text">Validação por QR Code Físico</div>
+                      <div className="text-[12px] text-text-3">Imprima e fixe este QR Code no estande ou cartaz do evento.</div>
+                    </div>
+                    <span className="flex items-center gap-1.5 rounded-full bg-action/15 px-2.5 py-1 text-[11px] font-bold text-link">
+                      <QrCode size={13} /> Totem / Estande
+                    </span>
+                  </div>
+
+                  <div className="grid gap-3.5 sm:grid-cols-2">
+                    <Field label="Token ou Código do QR" hint="Identificador único embutido no QR Code">
+                      {(id) => (
+                        <input
+                          id={id}
+                          required
+                          className="field font-mono font-bold tracking-wider"
+                          placeholder="Ex: TW_MISSAO_KANASTRA_STAND"
+                          value={form.qrCodeValue || ''}
+                          onChange={(e) => set({ qrCodeValue: e.target.value.toUpperCase().replace(/\s+/g, '_') })}
+                        />
+                      )}
+                    </Field>
+                    <Field label="Instrução para o Participante" hint="Orientação exibida no app">
+                      {(id) => (
+                        <input
+                          id={id}
+                          className="field"
+                          placeholder="Ex: Escaneie no estande da Kanastra"
+                          value={form.qrInstruction || ''}
+                          onChange={(e) => set({ qrInstruction: e.target.value })}
+                        />
+                      )}
+                    </Field>
+                  </div>
+
+                  <div className="mt-4 flex flex-col items-center justify-center gap-4 rounded-xl border border-line bg-surface-raised p-4 sm:flex-row sm:justify-start">
+                    <div className="flex h-[140px] w-[140px] shrink-0 items-center justify-center rounded-xl bg-white p-2.5 shadow-md">
+                      <QRCodeSVG
+                        id="mission-qr-svg-preview"
+                        value={effectiveQrValue}
+                        size={120}
+                        level="H"
+                        includeMargin={false}
+                      />
+                    </div>
+                    <div className="flex flex-1 flex-col items-start gap-2 text-center sm:text-left">
+                      <div className="text-[13px] font-extrabold text-text">Cartaz / Totem para Impressão</div>
+                      <p className="m-0 text-[12px] leading-relaxed text-text-3">
+                        Gere uma arte de alta resolução (1000x1350px 300DPI) pronta para impressão com moldura TechWeek, pontos em destaque e instruções para o participante.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleDownloadQrPng}
+                        disabled={downloadingQr}
+                        className={btn('action', 'mt-1 text-[13px] font-bold')}
+                      >
+                        <Download size={15} />
+                        {downloadingQr ? 'Gerando PNG...' : 'Baixar QR Code (PNG)'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {form.triggerMode === 'quiz' && (

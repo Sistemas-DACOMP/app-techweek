@@ -95,6 +95,7 @@ export default function ActivityModal({
   useScrollLock(!!activity);
 
   const [isBioExpanded, setIsBioExpanded] = useState(false);
+  const [expandedBios, setExpandedBios] = useState({});
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
@@ -140,6 +141,22 @@ export default function ActivityModal({
   const speakerBio = activity.speaker_bio || activity.speakerBio || '';
   const speakerPhoto = activity.speaker_photo || activity.speakerPhoto || '';
   const description = activity.description || '';
+
+  const speakersList = Array.isArray(activity.speakers) && activity.speakers.length > 0
+    ? activity.speakers.map((s, idx) => ({
+        id: s.id || `spk_${idx}`,
+        name: s.name,
+        role: s.role || s.institution || '',
+        bio: s.bio || '',
+        photo: s.photo || s.photoUrl || ''
+      }))
+    : (speakerName ? [{
+        id: activity.speakerId || 'spk_main',
+        name: speakerName,
+        role: speakerRole,
+        bio: speakerBio,
+        photo: speakerPhoto
+      }] : []);
 
   const day = describeDay(activity.day);
   const endTime = activity.endTime || activity.end_time;
@@ -376,36 +393,59 @@ export default function ActivityModal({
             </div>
           )}
 
-          {speakerName && (
-            <div>
-              <div className="flex items-center gap-3">
-                {speakerPhoto ? (
-                  <img src={speakerPhoto} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
-                ) : (
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-raised text-text-3" aria-hidden="true">
-                    <User size={20} />
+          {speakersList.length > 0 && (
+            <div className="space-y-3.5">
+              {speakersList.length > 1 && (
+                <div className="flex items-center justify-between border-b border-line pb-1.5">
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-text-3">
+                    Palestrantes & Convidados ({speakersList.length})
                   </span>
-                )}
-                <div className="min-w-0">
-                  <p className="text-[15px] font-semibold">{speakerName}</p>
-                  {speakerRole && <p className="text-[13px] text-text-2">{speakerRole}</p>}
                 </div>
-              </div>
-              {speakerBio && (
-                <>
-                  <p className={`mt-3 text-sm leading-[1.5] text-text-2 ${isBioExpanded ? '' : 'line-clamp-2'}`}>{speakerBio}</p>
-                  {speakerBio.length > 100 && (
-                    <button
-                      type="button"
-                      onClick={() => setIsBioExpanded(!isBioExpanded)}
-                      aria-expanded={isBioExpanded}
-                      className="min-h-11 text-[13px] font-bold text-link"
-                    >
-                      {isBioExpanded ? 'Mostrar menos' : 'Ler bio completa'}
-                    </button>
-                  )}
-                </>
               )}
+              {speakersList.map((spk, idx) => {
+                const spkKey = spk.id || idx;
+                const isBioExp = speakersList.length === 1 ? isBioExpanded : !!expandedBios[spkKey];
+                const toggleBioHandler = () => {
+                  if (speakersList.length === 1) {
+                    setIsBioExpanded(!isBioExpanded);
+                  } else {
+                    setExpandedBios((prev) => ({ ...prev, [spkKey]: !prev[spkKey] }));
+                  }
+                };
+
+                return (
+                  <div key={spkKey} className={speakersList.length > 1 ? 'rounded-2xl border border-line bg-surface/40 p-3.5' : ''}>
+                    <div className="flex items-center gap-3">
+                      {spk.photo ? (
+                        <img src={spk.photo} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
+                      ) : (
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-raised font-bold text-[13px] text-text-3" aria-hidden="true">
+                          {spk.name ? spk.name.slice(0, 2).toUpperCase() : <User size={20} />}
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[15px] font-semibold">{spk.name}</p>
+                        {spk.role && <p className="text-[13px] text-text-2">{spk.role}</p>}
+                      </div>
+                    </div>
+                    {spk.bio && (
+                      <>
+                        <p className={`mt-2.5 text-sm leading-[1.5] text-text-2 ${isBioExp ? '' : 'line-clamp-2'}`}>{spk.bio}</p>
+                        {spk.bio.length > 100 && (
+                          <button
+                            type="button"
+                            onClick={toggleBioHandler}
+                            aria-expanded={isBioExp}
+                            className="min-h-11 text-[13px] font-bold text-link"
+                          >
+                            {isBioExp ? 'Mostrar menos' : 'Ler bio completa'}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 

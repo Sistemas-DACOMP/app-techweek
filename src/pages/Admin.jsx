@@ -103,6 +103,7 @@ import MissionForm from './admin/MissionForm';
 import AdminMissoes from './admin/AdminMissoes';
 import AdminConta from './admin/AdminConta';
 import Telao from './admin/Telao';
+import AdminFeed from './admin/AdminFeed';
 import { styleOfMission } from './admin/MissionPreview';
 import '../styles/admin.css';
 
@@ -164,6 +165,7 @@ const MISSION_CATEGORIES = [
 const MISSION_TRIGGER_MODES = [
   { id: 'form', label: 'Formulário & Mídia', desc: 'Respostas em texto, @ de participante ou foto de comprovante' },
   { id: 'secret', label: 'Palavra Secreta', desc: 'Validação presencial com palavra-chave no estande' },
+  { id: 'qr', label: 'QR Code Físico / Estande', desc: 'Validação presencial por leitura de QR impresso no estande ou cartaz' },
   { id: 'quiz', label: 'Quiz / Pergunta', desc: 'Pergunta com opções e gabarito automático' },
   { id: 'auto', label: 'Automático pelo App', desc: 'Concluído por ações do usuário (escanear, check-in)' }
 ];
@@ -375,6 +377,7 @@ export default function Admin() {
     flashDuration: 5,
     flashMaxWinners: '',
     flashMascotDialogue: '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!',
+    qrCodeValue: '',
     cardStyle: 'padrao',
     cardStyleOptions: {}
   };
@@ -515,6 +518,7 @@ export default function Admin() {
       flashDuration: mission.flashConfig?.durationMinutes || 5,
       flashMaxWinners: mission.flashConfig?.maxWinners || '',
       flashMascotDialogue: mission.flashConfig?.mascotDialogue || '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!',
+      qrCodeValue: mission.qrCodeValue || mission.qrCodeConfig?.qrCodeValue || '',
       cardStyle: styleOfMission(mission),
       cardStyleOptions: mission.cardStyleOptions || {}
     });
@@ -543,6 +547,10 @@ export default function Admin() {
         payload.isSecret = true;
         payload.secretConfig = { secretWord: missionForm.secretWord.trim().toUpperCase() };
         payload.fields = [{ id: 'password', type: 'password', label: 'Qual a palavra-chave?', required: true }];
+      } else if (missionForm.triggerMode === 'qr') {
+        const qrVal = (missionForm.qrCodeValue || '').trim() || (editingMissionId ? `TW_MISSAO_${editingMissionId}` : `TW_MISSAO_${(missionForm.title || 'ESPECIAL').toUpperCase().replace(/[^A-Z0-9]/g, '_')}`);
+        payload.qrCodeValue = qrVal;
+        payload.qrCodeConfig = { qrCodeValue: qrVal };
       } else if (missionForm.triggerMode === 'quiz') {
         payload.quizConfig = {
           question: missionForm.quizQuestion,
@@ -1340,187 +1348,26 @@ export default function Admin() {
 
           {/* SEÇÃO: FEED & AVISOS */}
           {view === 'feed' && (
-            <div style={{ maxWidth: '1080px' }}>
-              <div style={{ marginBottom: '20px' }}>
-                <h1 style={{ fontSize: '1.45rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-                  Comunicação & Avisos
-                </h1>
-                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-2)' }}>
-                  Transmita avisos oficiais, fotos e vídeos para o feed do evento e dispare alertas push
-                </p>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '20px', alignItems: 'start' }}>
-                
-                {/* Form Publicar */}
-                <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '8px', padding: '20px' }}>
-                  <h3 style={{ margin: '0 0 14px', fontSize: '0.90rem', fontWeight: 700, color: 'var(--text)' }}>
-                    Criar Publicação Oficial
-                  </h3>
-
-                  <form onSubmit={handlePublishFeed} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Canal de Destino</label>
-                      <select
-                        value={feedChannel}
-                        onChange={(e) => setFeedChannel(e.target.value)}
-                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem' }}
-                      >
-                        <option value="feed">Apenas Feed do App</option>
-                        <option value="broadcast">Notificação Push Geral</option>
-                        <option value="both">Feed + Notificação Push</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Modelos Rápidos</label>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {FEED_TEMPLATES.map((tpl, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => setFeedInput(tpl.text)}
-                            style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid var(--line-2)', backgroundColor: 'var(--surface-raised)', color: 'var(--text-2)', fontSize: '0.72rem', cursor: 'pointer' }}
-                          >
-                            {tpl.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Conteúdo da Mensagem</label>
-                      <textarea
-                        rows={4}
-                        required
-                        placeholder="Escreva a mensagem que os participantes visualizarão..."
-                        value={feedInput}
-                        onChange={(e) => setFeedInput(e.target.value)}
-                        style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box', resize: 'vertical' }}
-                      />
-                    </div>
-
-                    {/* Mídia Anexa */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Anexar Mídia (Foto até 50MB ou Vídeo até 250MB)</label>
-                      <input
-                        type="file"
-                        ref={adminFeedFileInputRef}
-                        accept="image/*,video/*"
-                        onChange={handleAdminFeedFileSelect}
-                        style={{ display: 'none' }}
-                      />
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                          type="button"
-                          onClick={() => adminFeedFileInputRef.current?.click()}
-                          style={{ flex: 1, padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--surface-raised)', color: 'var(--text-2)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                        >
-                          <ImageIcon size={14} />
-                          <span>Selecionar Arquivo</span>
-                        </button>
-                      </div>
-
-                      {feedMediaPreview && (
-                        <div style={{ marginTop: '8px', padding: '8px', backgroundColor: 'var(--bg)', border: '1px solid var(--line-2)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '0.74rem', color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {feedMediaPreview.name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={handleRemoveAdminFeedMedia}
-                            style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '2px' }}
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <input
-                        type="checkbox"
-                        id="pinCheck"
-                        checked={feedIsPinned}
-                        onChange={(e) => setFeedIsPinned(e.target.checked)}
-                      />
-                      <label htmlFor="pinCheck" style={{ fontSize: '0.78rem', color: 'var(--text-2)', cursor: 'pointer' }}>
-                        Fixar este aviso no topo do Feed
-                      </label>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={feedSubmitting || isUploadingFeedMedia}
-                      style={{ padding: '9px', backgroundColor: 'var(--action)', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600, cursor: (feedSubmitting || isUploadingFeedMedia) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '4px' }}
-                    >
-                      {(feedSubmitting || isUploadingFeedMedia) ? <Loader2 size={16} className="animate-spin" /> : <Send size={14} />}
-                      <span>Publicar Transmissão</span>
-                    </button>
-                  </form>
-                </div>
-
-                {/* Lista de Publicações */}
-                <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '8px', padding: '20px' }}>
-                  <h3 style={{ margin: '0 0 14px', fontSize: '0.90rem', fontWeight: 700, color: 'var(--text)' }}>
-                    Publicações Ativas ({feedPosts.length})
-                  </h3>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {feedPosts.map((post) => (
-                      <div key={post.id} style={{ backgroundColor: 'var(--bg)', border: '1px solid var(--line-2)', borderRadius: '6px', padding: '14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text)' }}>{post.author}</span>
-                            {post.pinned && (
-                              <span style={{ fontSize: '0.68rem', backgroundColor: '#1E3A8A', color: 'var(--link)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                                Fixado 📌
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <button
-                              type="button"
-                              onClick={() => handleTogglePinPost(post.id, post.pinned)}
-                              title={post.pinned ? 'Desafixar' : 'Fixar no Topo'}
-                              style={{ background: 'none', border: 'none', color: post.pinned ? 'var(--link)' : '#6B7280', cursor: 'pointer', padding: '4px' }}
-                            >
-                              <Pin size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeletePost(post.id)}
-                              title="Excluir Publicação"
-                              style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px' }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <p style={{ margin: '0 0 8px', fontSize: '0.80rem', color: 'var(--text-2)', lineHeight: '1.4' }}>
-                          {post.content}
-                        </p>
-
-                        {post.videoUrl && (
-                          <div style={{ marginBottom: '8px', maxHeight: '180px', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#000' }}>
-                            <video src={post.videoUrl} controls style={{ width: '100%', maxHeight: '180px', objectFit: 'contain' }} />
-                          </div>
-                        )}
-
-                        {post.imageUrl && !post.videoUrl && (
-                          <img src={post.imageUrl} alt="" style={{ width: '100%', maxHeight: '180px', objectFit: 'cover', borderRadius: '6px', marginBottom: '8px' }} />
-                        )}
-
-                        <span style={{ fontSize: '0.70rem', color: '#6B7280' }}>
-                          {post.formattedTime || 'Recentemente'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AdminFeed
+              feedChannel={feedChannel}
+              setFeedChannel={setFeedChannel}
+              feedInput={feedInput}
+              setFeedInput={setFeedInput}
+              feedTemplates={FEED_TEMPLATES}
+              feedIsPinned={feedIsPinned}
+              setFeedIsPinned={setFeedIsPinned}
+              feedMediaPreview={feedMediaPreview}
+              adminFeedFileInputRef={adminFeedFileInputRef}
+              handleAdminFeedFileSelect={handleAdminFeedFileSelect}
+              handleRemoveAdminFeedMedia={handleRemoveAdminFeedMedia}
+              feedSubmitting={feedSubmitting}
+              isUploadingFeedMedia={isUploadingFeedMedia}
+              handlePublishFeed={handlePublishFeed}
+              feedPosts={feedPosts}
+              handleTogglePinPost={handleTogglePinPost}
+              handleDeletePost={handleDeletePost}
+              currentAdminAvatar={currentAdminAvatar}
+            />
           )}
 
           {/* SEÇÃO: PARTICIPANTES & PERMISSÕES */}

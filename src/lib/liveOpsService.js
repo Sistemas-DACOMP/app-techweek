@@ -560,6 +560,7 @@ export function calculateMicroPulseAnalytics(activitiesOrRatings = [], maybeActi
 
 export const STAGE_MODES = [
   { id: 'presenca', label: 'QR Presença', desc: 'Exibe QR Code oficial para computar presença e pontos' },
+  { id: 'fechamento', label: 'QR Fechamento', desc: 'QR Code de encerramento para avaliação, feedback e +10 XP' },
   { id: 'agenda', label: 'Agenda Ao Vivo', desc: 'Grade de atividades em andamento e próximas do dia' },
   { id: 'ranking', label: 'Top 10 Gamificação', desc: 'Placar de líderes com maior pontuação EXP' },
   { id: 'feed', label: 'Mural de Avisos & Feed', desc: 'Avisos da organização e posts oficiais' },
