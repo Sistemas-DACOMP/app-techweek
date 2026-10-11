@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
+  sendEmailVerification,
+  createUserWithEmailAndPassword,
+  updateProfile,
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
@@ -10,12 +13,24 @@ import {
 vi.mock('firebase/auth', () => ({
   signInWithEmailAndPassword: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
+  sendEmailVerification: vi.fn(),
+  createUserWithEmailAndPassword: vi.fn(),
+  updateProfile: vi.fn(),
   signOut: vi.fn(),
   onAuthStateChanged: vi.fn()
 }));
 
+const { mockCurrentUser } = vi.hoisted(() => ({
+  mockCurrentUser: {
+    uid: 'mock-user-123',
+    email: 'teste@ufu.br',
+    emailVerified: false,
+    reload: vi.fn().mockResolvedValue()
+  }
+}));
+
 vi.mock('./firebase', () => ({
-  auth: { currentUser: { uid: 'mock-user-123', email: 'teste@ufu.br' } }
+  auth: { currentUser: mockCurrentUser }
 }));
 
 import {
@@ -25,7 +40,11 @@ import {
   mapAuthError,
   AUTH_MESSAGES,
   onAuthChange,
-  getCurrentAuthUser
+  getCurrentAuthUser,
+  sendVerificationEmail,
+  reloadCurrentUser,
+  signUpWithEmail,
+  getActionCodeSettings
 } from './auth';
 
 describe('Módulo de Autenticação Firebase (auth.js)', () => {
@@ -179,4 +198,93 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
       expect(user.uid).toBe('mock-user-123');
     });
   });
+
+  describe('Verificação de E-mail (KAN-116)', () => {
+    describe('getActionCodeSettings', () => {
+      it('deve retornar a URL base com /#/login quando window.location estiver disponível', () => {
+        vi.stubGlobal('window', { location: { origin: 'https://techweek.facom.ufu.br' } });
+        expect(getActionCodeSettings()).toEqual({
+          url: 'https://techweek.facom.ufu.br/#/login',
+          handleCodeInApp: false
+        });
+        vi.unstubAllGlobals();
+      });
+
+      it('deve retornar undefined se window ou window.location for ausente', () => {
+        vi.stubGlobal('window', undefined);
+        expect(getActionCodeSettings()).toBeUndefined();
+        vi.unstubAllGlobals();
+      });
+    });
+
+    describe('sendVerificationEmail', () => {
+      it('deve enviar e-mail de confirmação com sucesso para o usuário autenticado', async () => {
+        vi.stubGlobal('window', { location: { origin: 'https://techweek.facom.ufu.br' } });
+        sendEmailVerification.mockResolvedValue();
+
+        const res = await sendVerificationEmail(mockCurrentUser);
+
+        expect(res.success).toBe(true);
+        expect(res.message).toBe(AUTH_MESSAGES.verification_email_sent);
+        expect(sendEmailVerification).toHaveBeenCalledWith(mockCurrentUser, {
+          url: 'https://techweek.facom.ufu.br/#/login',
+          handleCodeInApp: false
+        });
+        vi.unstubAllGlobals();
+      });
+
+      it('deve falhar se nenhum usuário for informado e auth.currentUser for nulo', async () => {
+        const res = await sendVerificationEmail(null);
+
+        expect(res.success).toBe(false);
+        expect(res.error).toBe('Nenhum usuário autenticado para envio do e-mail.');
+      });
+
+      it('deve capturar erro do Firebase no envio e traduzir com mapAuthError', async () => {
+        sendEmailVerification.mockRejectedValue({ code: 'auth/too-many-requests' });
+
+        const res = await sendVerificationEmail(mockCurrentUser);
+
+        expect(res.success).toBe(false);
+        expect(res.error).toBe(AUTH_MESSAGES.too_many_requests);
+      });
+    });
+
+    describe('reloadCurrentUser', () => {
+      it('deve invocar reload() no usuário atual e retorná-lo', async () => {
+        const res = await reloadCurrentUser();
+
+        expect(mockCurrentUser.reload).toHaveBeenCalled();
+        expect(res).toBe(mockCurrentUser);
+      });
+    });
+
+    describe('signUpWithEmail', () => {
+      it('deve invocar sendEmailVerification automaticamente após criar conta com sucesso', async () => {
+        vi.stubGlobal('window', { location: { origin: 'https://techweek.facom.ufu.br' } });
+        const mockNewUser = {
+          uid: 'new-user-456',
+          email: 'novo@ufu.br',
+          emailVerified: false
+        };
+        createUserWithEmailAndPassword.mockResolvedValue({ user: mockNewUser });
+        sendEmailVerification.mockResolvedValue();
+
+        const res = await signUpWithEmail({
+          email: 'novo@ufu.br',
+          password: 'senhaSegura123!',
+          metadata: { firstName: 'Alan', lastName: 'Turing', username: 'alanturing' }
+        });
+
+        expect(res.status).toBe('signed_in');
+        expect(createUserWithEmailAndPassword).toHaveBeenCalledWith(expect.anything(), 'novo@ufu.br', 'senhaSegura123!');
+        expect(sendEmailVerification).toHaveBeenCalledWith(mockNewUser, {
+          url: 'https://techweek.facom.ufu.br/#/login',
+          handleCodeInApp: false
+        });
+        vi.unstubAllGlobals();
+      });
+    });
+  });
 });
+

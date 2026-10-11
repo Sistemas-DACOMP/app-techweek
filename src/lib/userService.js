@@ -17,6 +17,7 @@ import { updateProfile, updateEmail, reauthenticateWithCredential, EmailAuthProv
 import { db, storage, auth } from './firebase';
 import { validateAvatarFile } from './validators';
 import { apiRequest } from './api';
+import { sendVerificationEmail } from './auth';
 
 function fileToDataUrl(file) {
   return new Promise((resolve) => {
@@ -308,6 +309,13 @@ export async function updateUserEmail(uid, newEmail, currentPassword) {
     await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword));
   }
   await updateEmail(user, trimmedEmail);
+
+  // Envia e-mail de confirmação para o novo endereço
+  try {
+    await sendVerificationEmail(user);
+  } catch (verifErr) {
+    console.warn('[userService] Aviso: Falha ao enviar verificação para o novo e-mail:', verifErr);
+  }
 
   // 2. Só depois de o Auth aceitar, grava no Firestore
   await updateUserProfile(uid, { email: trimmedEmail });

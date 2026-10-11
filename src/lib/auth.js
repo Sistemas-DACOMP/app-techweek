@@ -1,6 +1,7 @@
 import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
+  sendEmailVerification,
   signOut,
   onAuthStateChanged,
   createUserWithEmailAndPassword,
@@ -20,6 +21,8 @@ export const AUTH_MESSAGES = {
   too_many_requests: 'Muitas tentativas sem sucesso. Aguarde alguns instantes antes de tentar novamente.',
   network_error: 'Falha de conexão. Verifique sua internet.',
   reset_email_sent: 'E-mail de recuperação enviado com sucesso! Verifique sua caixa de entrada e spam.',
+  verification_email_sent: 'E-mail de confirmação enviado com sucesso! Verifique sua caixa de entrada e spam.',
+  email_not_verified: 'Seu e-mail ainda não foi verificado. Clique no link enviado para sua caixa de entrada (ou pasta de spam) e tente novamente.',
   generic_error: 'Ocorreu um erro na autenticação. Tente novamente em instantes.'
 };
 
@@ -162,6 +165,18 @@ export async function signUpWithEmail({ email, password, metadata }) {
       }
     }
 
+    // Dispara automaticamente o e-mail oficial de confirmação do Firebase Auth
+    try {
+      const actionCodeSettings = getActionCodeSettings();
+      if (actionCodeSettings) {
+        await sendEmailVerification(userCredential.user, actionCodeSettings);
+      } else {
+        await sendEmailVerification(userCredential.user);
+      }
+    } catch (verifErr) {
+      console.warn('Aviso: Falha ao enviar e-mail de verificação inicial:', verifErr);
+    }
+
     return {
       status: 'signed_in',
       message: null,
@@ -177,6 +192,59 @@ export async function signUpWithEmail({ email, password, metadata }) {
       error: err
     };
   }
+}
+
+/**
+ * Retorna as configurações de redirecionamento para o e-mail do Firebase Auth.
+ */
+export function getActionCodeSettings() {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return {
+      url: `${window.location.origin}/#/login`,
+      handleCodeInApp: false
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Dispara o e-mail oficial do Firebase para confirmação de e-mail do usuário autenticado.
+ */
+export async function sendVerificationEmail(user = auth.currentUser) {
+  if (!user) {
+    return {
+      success: false,
+      error: 'Nenhum usuário autenticado para envio do e-mail.'
+    };
+  }
+
+  try {
+    const actionCodeSettings = getActionCodeSettings();
+    if (actionCodeSettings) {
+      await sendEmailVerification(user, actionCodeSettings);
+    } else {
+      await sendEmailVerification(user);
+    }
+    return {
+      success: true,
+      message: AUTH_MESSAGES.verification_email_sent
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: mapAuthError(err) || 'Não foi possível reenviar o e-mail no momento.',
+      rawError: err
+    };
+  }
+}
+
+/**
+ * Recarrega os dados do usuário autenticado no Firebase Auth para sincronizar emailVerified.
+ */
+export async function reloadCurrentUser() {
+  if (!auth.currentUser) return null;
+  await auth.currentUser.reload();
+  return auth.currentUser;
 }
 
 /**
