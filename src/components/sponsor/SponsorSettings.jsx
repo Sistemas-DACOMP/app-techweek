@@ -18,7 +18,6 @@ import {
   Upload,
   Camera,
   Trash2,
-  SlidersHorizontal,
   Building2,
   Heart,
   Share2,
@@ -67,13 +66,14 @@ export default function SponsorSettings({
   companyName = 'Kanastra',
   sponsorLogo = '',
   sponsorTier = 'GOLD',
+  defaultSection = 'feed',
   onSettingsSaved,
 }) {
   // Configurações persistidas
   const [settings, setSettings] = useState(() => getSponsorSettings(companyId));
 
-  // Sub-Aba Ativa: 'feed' | 'whatsapp' | 'tags'
-  const [activeSection, setActiveSection] = useState('feed');
+  // Sub-Aba Ativa: 'feed' | 'messages_tags'
+  const [activeSection, setActiveSection] = useState(defaultSection);
 
   // Estado do Perfil de Feed
   const [feedHandle, setFeedHandle] = useState(
@@ -398,18 +398,11 @@ export default function SponsorSettings({
       description: 'Foto de perfil e @handle no Feed',
     },
     {
-      id: 'whatsapp',
-      label: 'Modelos de WhatsApp',
+      id: 'messages_tags',
+      label: 'Mensagens & Tags',
       icon: MessageSquare,
-      badge: 'Mensagens',
-      description: 'Textos de contato rápido',
-    },
-    {
-      id: 'tags',
-      label: 'Tags de Qualificação',
-      icon: SlidersHorizontal,
       badge: `${activeTags.length} tags`,
-      description: 'Marcadores de talentos',
+      description: 'Modelos de WhatsApp e tags de qualificação',
     },
   ];
 
@@ -438,7 +431,7 @@ export default function SponsorSettings({
         </div>
       </div>
 
-      {/* Navegação entre Sub-Abas */}
+      {/* Navegação entre Sub-Abas (Perfil no Feed | Mensagens & Tags) */}
       <div className="flex items-center gap-2 border-b border-line pb-3 overflow-x-auto">
         {SETTINGS_SECTIONS.map((sec) => {
           const isActive = activeSection === sec.id;
@@ -474,7 +467,7 @@ export default function SponsorSettings({
       </div>
 
       {/* ========================================================================= */}
-      {/* SEÇÃO 1: PERFIL NO FEED (AVATAR E @HANDLE)                                 */}
+      {/* SUB-ABA 1: PERFIL NO FEED (AVATAR E @HANDLE)                              */}
       {/* ========================================================================= */}
       <div
         style={{ display: activeSection === 'feed' ? 'block' : 'none' }}
@@ -755,13 +748,16 @@ export default function SponsorSettings({
       </div>
 
       {/* ========================================================================= */}
-      {/* SEÇÃO 2: MODELOS DE WHATSAPP                                              */}
+      {/* SUB-ABA 2: MENSAGENS DE WHATSAPP E TAGS JUNTAS (LADO A LADO NO DESKTOP)    */}
       {/* ========================================================================= */}
       <div
-        style={{ display: activeSection === 'whatsapp' ? 'block' : 'none' }}
+        style={{ display: activeSection === 'messages_tags' ? 'block' : 'none' }}
         className="w-full"
       >
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          {/* ===================================================================== */}
+          {/* BLOCO A: MODELOS DE WHATSAPP (7 Colunas no Desktop XL)                */}
+          {/* ===================================================================== */}
           <section
             aria-labelledby="section-whatsapp-title"
             className="xl:col-span-7 flex flex-col gap-4 rounded-[20px] border border-line bg-surface p-5 shadow-sm"
@@ -977,20 +973,13 @@ export default function SponsorSettings({
               </div>
             </div>
           </section>
-        </div>
-      </div>
 
-      {/* ========================================================================= */}
-      {/* SEÇÃO 3: TAGS DE QUALIFICAÇÃO DO ESTANDE                                  */}
-      {/* ========================================================================= */}
-      <div
-        style={{ display: activeSection === 'tags' ? 'block' : 'none' }}
-        className="w-full"
-      >
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          {/* ===================================================================== */}
+          {/* BLOCO B: TAGS DE QUALIFICAÇÃO DO ESTANDE (5 Colunas no Desktop XL)    */}
+          {/* ===================================================================== */}
           <section
             aria-labelledby="section-tags-title"
-            className="xl:col-span-8 flex flex-col gap-4 rounded-[20px] border border-line bg-surface p-5 shadow-sm"
+            className="xl:col-span-5 flex flex-col gap-4 rounded-[20px] border border-line bg-surface p-5 shadow-sm"
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-line">
               <div>

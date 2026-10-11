@@ -20,6 +20,7 @@ describe('SponsorSettings UI Component', () => {
       expect(html).toContain('Personalização do Estande');
       expect(html).toContain('Kanastra');
       expect(html).toContain('Perfil no Feed');
+      expect(html).toContain('Mensagens &amp; Tags');
       expect(html).toContain('Modelos de WhatsApp');
       expect(html).toContain('Tags de Qualificação');
       // Design enxuto sem ruído visual
