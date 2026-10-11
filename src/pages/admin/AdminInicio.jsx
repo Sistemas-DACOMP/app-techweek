@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Plus, Megaphone, Zap, Monitor, AlertTriangle, Ticket, ChevronRight } from 'lucide-react';
+import { Plus, Megaphone, Zap, Monitor, AlertTriangle, Ticket, ChevronRight, BarChart3 } from 'lucide-react';
 import Mascot from '../../components/Mascot';
 import iconeTw from '../../assets/icone.png';
 import {
@@ -124,6 +124,7 @@ export default function AdminInicio({ firstName, activities, usersList, missions
           <p className="m-0 mt-0.5 text-[13px] text-text-2 lg:mt-1 lg:text-[14px]">{subtitle}</p>
         </div>
         <div className="hidden flex-wrap gap-2.5 lg:flex">
+          <button type="button" className={btn()} onClick={() => onNavigate('dados')}><BarChart3 size={18} aria-hidden="true" /> Dados & Ao Vivo</button>
           <button type="button" className={btn()} onClick={() => onNavigate('feed')}><Megaphone size={18} aria-hidden="true" /> Publicar aviso</button>
           <button type="button" className={btn()} onClick={onOpenFlash}><Zap size={18} aria-hidden="true" /> Missão relâmpago</button>
           <button type="button" className={btn('action')} onClick={onNewActivity}><Plus size={18} aria-hidden="true" /> Nova atividade</button>
@@ -133,6 +134,7 @@ export default function AdminInicio({ firstName, activities, usersList, missions
       {/* Ações rápidas (celular) */}
       <div className="adm-noscroll -mx-5 mt-[18px] flex gap-2 overflow-x-auto px-5 lg:hidden">
         <button type="button" className={btn('action', 'shrink-0 px-3.5')} onClick={onNewActivity}><Plus size={18} aria-hidden="true" /> Nova atividade</button>
+        <button type="button" className={btn('secondary', 'shrink-0 px-3.5')} onClick={() => onNavigate('dados')}><BarChart3 size={18} aria-hidden="true" /> Dados</button>
         <button type="button" className={btn('secondary', 'shrink-0 px-3.5')} onClick={() => onNavigate('feed')}><Megaphone size={18} aria-hidden="true" /> Aviso</button>
         <button type="button" className={btn('secondary', 'shrink-0 px-3.5')} onClick={onOpenFlash}><Zap size={18} aria-hidden="true" /> Relâmpago</button>
       </div>

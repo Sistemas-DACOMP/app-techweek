@@ -93,6 +93,7 @@ import { subscribeToAllUsers, updateUserRoleInFirestore } from '../lib/userServi
 import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
 import AdminShell from './admin/AdminShell';
 import AdminInicio from './admin/AdminInicio';
+import AdminDados from './admin/AdminDados';
 import AdminProgramacao from './admin/AdminProgramacao';
 import ActivityForm from './admin/ActivityForm';
 import AdminPessoas from './admin/AdminPessoas';
@@ -167,9 +168,10 @@ const MISSION_TRIGGER_MODES = [
   { id: 'auto', label: 'Automático pelo App', desc: 'Concluído por ações do usuário (escanear, check-in)' }
 ];
 
-const VIEW_KEYS = ['inicio', 'programacao', 'feed', 'pessoas', 'missoes', 'config', 'conta'];
+const VIEW_KEYS = ['inicio', 'dados', 'programacao', 'feed', 'pessoas', 'missoes', 'config', 'conta'];
 const MOBILE_TITLES = {
   inicio: 'Visão geral',
+  dados: 'Dados & Ao Vivo',
   programacao: 'Programação',
   feed: 'Feed e avisos',
   pessoas: 'Pessoas',
@@ -1286,6 +1288,17 @@ export default function Admin() {
               onNavigate={goTo}
               onNewActivity={openNewActivity}
               onOpenFlash={() => openFlashModal(null)}
+              onOpenTelao={setProjectorActivity}
+              onEditActivity={handleOpenEditActivity}
+            />
+          )}
+
+          {view === 'dados' && (
+            <AdminDados
+              activities={activities}
+              usersList={usersList}
+              missionsList={missionsList}
+              onNavigate={goTo}
               onOpenTelao={setProjectorActivity}
               onEditActivity={handleOpenEditActivity}
             />

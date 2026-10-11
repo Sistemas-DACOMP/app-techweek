@@ -1,6 +1,6 @@
 import {
   LayoutGrid, CalendarDays, Megaphone, Flag, Users, LogIn, Store, ExternalLink, Settings, Pencil,
-  ArrowLeftRight, Search, MoreHorizontal, ChevronLeft,
+  ArrowLeftRight, Search, MoreHorizontal, ChevronLeft, BarChart3,
 } from 'lucide-react';
 import iconeTw from '../../assets/icone.png';
 import { EVENT_DAYS, isoToday } from './ui';
@@ -10,6 +10,7 @@ import { EVENT_DAYS, isoToday } from './ui';
 const MENU = [
   { group: 'Evento', items: [
     { key: 'inicio', label: 'Visão geral', icon: LayoutGrid },
+    { key: 'dados', label: 'Dados & Ao Vivo', icon: BarChart3 },
     { key: 'programacao', label: 'Programação', icon: CalendarDays },
     { key: 'feed', label: 'Feed e avisos', icon: Megaphone },
     { key: 'missoes', label: 'Missões', icon: Flag },
@@ -70,7 +71,7 @@ export default function AdminShell({
   active, onNavigate, navigate, me, search, onSearch, onSearchSubmit, mobileTitle, mobileBack, mobileAction, hideMobileNav, children,
 }) {
   const info = eventDayInfo();
-  const navKey = active === 'feed' || active === 'config' ? 'inicio' : active;
+  const navKey = active === 'feed' || active === 'config' || active === 'dados' ? 'inicio' : active;
 
   return (
     <div className="flex min-h-dvh bg-bg font-sans text-text">
