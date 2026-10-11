@@ -433,6 +433,12 @@ export async function createMission(missionData) {
     cleanData.fields = missionData.fields;
   }
 
+  if (missionData.triggerMode === 'qr' || missionData.qrCodeConfig || missionData.qrCodeValue) {
+    const val = (missionData.qrCodeConfig?.qrCodeValue || missionData.qrCodeValue || '').trim();
+    cleanData.qrCodeValue = val;
+    cleanData.qrCodeConfig = { qrCodeValue: val };
+  }
+
   if (missionData.triggerMode === 'auto' && missionData.autoConfig) {
     cleanData.autoConfig = missionData.autoConfig;
   }

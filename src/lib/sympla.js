@@ -19,12 +19,16 @@ export function getBadgeQrValue(profile) {
   const ticket = profile?.symplaTicket;
   if (ticket?.qrCodeData) return ticket.qrCodeData;
   if (ticket?.ticketNumber) return ticket.ticketNumber;
-  return JSON.stringify({
+  const payload = {
     username: (profile?.username || 'user').replace(/^@/, ''),
     participantType: profile?.participantType || 'Participante',
     course: profile?.course || '',
     period: profile?.period || null
-  });
+  };
+  if (profile?.uid || profile?.id) payload.uid = profile.uid || profile.id;
+  if (profile?.email) payload.email = profile.email;
+  if (profile?.name || profile?.displayName) payload.name = profile.name || profile.displayName;
+  return JSON.stringify(payload);
 }
 
 const getApiBaseUrl = () => {

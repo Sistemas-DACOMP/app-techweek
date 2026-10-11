@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, AlertCircle, Loader2 } from 'lucide-react';
+import { X, AlertCircle, Loader2, Star } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { checkoutDoubleCheck } from '../lib/activityService';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { stopAllMediaTracks } from '../lib/cameraUtils';
+import { isActivityEvaluated } from '../lib/liveOpsService';
 import Mascot from './Mascot';
+import ActivityFeedbackModal from './ActivityFeedbackModal';
 import '../styles/agenda.css';
 
 function useEscape(onClose) {
@@ -27,8 +29,18 @@ const CONFETTI = [
 ];
 
 /** Bottom sheet "Presença confirmada" (DESIGN.md 1.25, §9 animação pesada). */
-export function PresenceConfirmedSheet({ title, location, points = 0, kicker = 'Check-out feito', onClose }) {
+export function PresenceConfirmedSheet({
+  activity,
+  title,
+  location,
+  points = 0,
+  kicker = 'Check-out feito',
+  onClose,
+  onOpenFeedback
+}) {
   useEscape(onClose);
+  const alreadyEvaluated = activity?.id ? isActivityEvaluated(activity.id) : false;
+
   return (
     <>
       <div className="ds-scrim" aria-hidden="true" onClick={onClose} />
@@ -72,8 +84,23 @@ export function PresenceConfirmedSheet({ title, location, points = 0, kicker = '
           </div>
         )}
 
-        <div className="ag-in mt-[22px]" style={{ '--d': '.85s' }}>
-          <button type="button" onClick={onClose} className="btn btn-primary btn-block min-h-[54px]! text-base!">
+        <div className="ag-in mt-[22px] flex flex-col gap-2.5" style={{ '--d': '.85s' }}>
+          {activity && !alreadyEvaluated && onOpenFeedback && (
+            <button
+              type="button"
+              onClick={onOpenFeedback}
+              className="btn btn-primary btn-block min-h-[52px]! text-[15px]! font-bold flex items-center justify-center gap-2 bg-[linear-gradient(135deg,#7C3AED,#3B82F6)] hover:brightness-110 shadow-md"
+            >
+              <Star size={18} className="fill-white text-white" />
+              Avaliar palestra (+10 XP)
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className={`btn ${alreadyEvaluated || !onOpenFeedback ? 'btn-primary' : 'btn-secondary'} btn-block min-h-[50px]! text-base!`}
+          >
             Continuar
           </button>
         </div>
@@ -122,6 +149,7 @@ export default function ActivityCheckoutScannerModal({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successData, setSuccessData] = useState(null);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   const handleProcessToken = async (token) => {
     if (!token || submitting) return;
@@ -201,14 +229,28 @@ export default function ActivityCheckoutScannerModal({
 
   if (typeof document === 'undefined') return null;
 
+  if (showFeedback && activity) {
+    return createPortal(
+      <ActivityFeedbackModal
+        isOpen={true}
+        activity={activity}
+        onClose={onClose}
+        onSuccess={() => onClose?.()}
+      />,
+      document.body
+    );
+  }
+
   if (successData) {
     return createPortal(
       <PresenceConfirmedSheet
+        activity={activity}
         title={activity?.title}
         location={activity?.location}
         points={successData.pointsCredited || 0}
         kicker="Check-out feito"
         onClose={onClose}
+        onOpenFeedback={() => setShowFeedback(true)}
       />,
       document.body
     );

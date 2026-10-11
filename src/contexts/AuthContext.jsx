@@ -15,7 +15,14 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Timeout de segurança: garante que a aplicação nunca fique travada na tela de splash
+    // se o Firebase Auth demorar ou falhar em responder (ex: rede instável, offline).
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 2500);
+
     const unsubscribe = onAuthChange(async (currentUser) => {
+      clearTimeout(safetyTimer);
       setUser(currentUser);
       if (currentUser) {
         try {
@@ -37,7 +44,10 @@ export function AuthProvider({ children }) {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      unsubscribe();
+    };
   }, []);
 
   const getIdToken = async (forceRefresh = false) => {

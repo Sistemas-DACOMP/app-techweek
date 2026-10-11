@@ -862,3 +862,74 @@ select.field {
   }
   .confetti { display: none !important; }
 }
+
+/* ==========================================================================
+   Print & Executive Report Mode (TechWeek Sponsor OS)
+   Preserva o fundo escuro/azul (#0A0F24), oculta navegações e gera relatório limpo.
+   ========================================================================== */
+@media print {
+  @page {
+    size: auto;
+    margin: 10mm 12mm;
+  }
+
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  html, body, #root {
+    background-color: #0A0F24 !important;
+    color: #EEF1FA !important;
+    width: 100% !important;
+    min-height: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Oculta completamente navegações, menus laterais, modais e controles de tela */
+  aside,
+  header,
+  nav,
+  .bottom-nav-container,
+  [role="dialog"] {
+    display: none !important;
+  }
+
+  /* Ajusta container principal para ocupar 100% sem limites ou paddings mobile */
+  .sponsor-shell,
+  .sponsor-shell main,
+  .portal-wrapper,
+  .app-wrapper {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: transparent !important;
+    border: none !important;
+  }
+
+  /* Cards e painéis executivos do relatório */
+  .sponsor-roi-dashboard {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 16px !important;
+  }
+
+  .sponsor-roi-dashboard > div,
+  .sponsor-roi-dashboard .grid > div {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    background-color: #121A36 !important;
+    border-color: #1C2548 !important;
+  }
+}
+

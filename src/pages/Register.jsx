@@ -49,6 +49,13 @@ const UFU_COURSES = [
   'Outro (especificar)'
 ];
 
+const INSTITUTIONS = [
+  'FACOM',
+  'IME',
+  'FEELT',
+  'Outra'
+];
+
 export default function Register() {
   const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
@@ -59,10 +66,12 @@ export default function Register() {
     phone: '',
     password: '',
     confirmPassword: '',
-    participantType: 'Aluno da UFU',
+    participantType: 'Aluno UFU Graduação',
     course: 'Sistemas de Informação',
     customCourse: '',
     period: '',
+    institution: '',
+    customInstitution: '',
     linkedin: '',
     instagram: '',
     github: '',
@@ -223,9 +232,18 @@ export default function Register() {
       errors.phone = 'Insira um telefone válido com DDD (10 ou 11 dígitos numéricos).';
     }
 
-    const isStudent = formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
+    const isStudent = formData.participantType === 'Aluno UFU Graduação' || formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
     if (isStudent && formData.course === 'Outro (especificar)' && !formData.customCourse.trim()) {
       errors.customCourse = 'Por favor, digite o nome do seu curso.';
+    }
+
+    const isPostgrad = formData.participantType === 'Aluno UFU Pós-graduação' || formData.participantType === 'Pós-graduação';
+    if (isPostgrad) {
+      if (!formData.institution) {
+        errors.institution = 'Por favor, selecione sua instituição.';
+      } else if (formData.institution === 'Outra' && !formData.customInstitution.trim()) {
+        errors.customInstitution = 'Por favor, digite o nome da sua instituição.';
+      }
     }
 
     if (!formData.password || formData.password.length < MIN_PASSWORD_LENGTH) {
@@ -286,9 +304,13 @@ export default function Register() {
       return;
     }
 
-    const isStudent = formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
+    const isStudent = formData.participantType === 'Aluno UFU Graduação' || formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
+    const isPostgrad = formData.participantType === 'Aluno UFU Pós-graduação' || formData.participantType === 'Pós-graduação';
     const finalCourse = isStudent 
       ? (formData.course === 'Outro (especificar)' ? formData.customCourse.trim() : formData.course)
+      : (isPostgrad ? 'Pós-graduação' : '');
+    const finalInstitution = isPostgrad
+      ? (formData.institution === 'Outra' ? formData.customInstitution.trim() : formData.institution)
       : '';
     
     setLoading(true);
@@ -344,6 +366,7 @@ export default function Register() {
         participantType: formData.participantType,
         course: finalCourse,
         period: isStudent ? formData.period : null,
+        institution: finalInstitution,
         linkedin: formData.linkedin,
         instagram: formData.instagram,
         github: formData.github,
@@ -407,7 +430,8 @@ export default function Register() {
   const isCoveringEyes = !isStep2 && isPasswordFocused;
   const isPeeking = !isStep2 && isPasswordFocused && showPassword;
 
-  const isStudent = formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
+  const isStudent = formData.participantType === 'Aluno UFU Graduação' || formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
+  const isPostgrad = formData.participantType === 'Aluno UFU Pós-graduação' || formData.participantType === 'Pós-graduação';
   const cleanUsernameView = formData.username.trim().replace(/^@/, '').toLowerCase();
   const usernameError = fieldErrors.username || (usernameCheck.status === 'taken' ? usernameCheck.message : '');
   const strengthTone = passwordStrength.score >= 3 ? 'var(--ok)' : passwordStrength.score === 2 ? 'var(--warn)' : 'var(--err)';
@@ -522,7 +546,8 @@ export default function Register() {
                   className="field ent-field font-semibold" required
                 >
                   <option value="" disabled>Selecione uma opção</option>
-                  <option value="Aluno da UFU">Aluno da UFU</option>
+                  <option value="Aluno UFU Graduação">Aluno UFU Graduação</option>
+                  <option value="Aluno UFU Pós-graduação">Aluno UFU Pós-graduação</option>
                   <option value="Aluno de outra instituição">Aluno de outra instituição</option>
                   <option value="Servidor / Professor">Servidor ou professor</option>
                   <option value="Comunidade Externa">Comunidade externa</option>
@@ -570,6 +595,45 @@ export default function Register() {
                         required
                       />
                       {fieldErrors.customCourse && <p id="reg-curso-outro-err" className="field-error">{fieldErrors.customCourse}</p>}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {isPostgrad && (
+                <>
+                  <div className="flex flex-col">
+                    <label htmlFor="reg-instituicao" className="field-label">Instituição</label>
+                    <select
+                      id="reg-instituicao" name="institution"
+                      value={formData.institution} onChange={handleChange}
+                      onFocus={() => setFocusedInput('institution')} onBlur={() => setFocusedInput(null)}
+                      className="field ent-field font-semibold"
+                      aria-invalid={fieldErrors.institution ? 'true' : undefined}
+                      aria-describedby={fieldErrors.institution ? 'reg-instituicao-err' : undefined}
+                      required
+                    >
+                      <option value="" disabled>Selecione sua instituição</option>
+                      {INSTITUTIONS.map(inst => (
+                        <option key={inst} value={inst}>{inst}</option>
+                      ))}
+                    </select>
+                    {fieldErrors.institution && <p id="reg-instituicao-err" className="field-error">{fieldErrors.institution}</p>}
+                  </div>
+
+                  {formData.institution === 'Outra' && (
+                    <div className="flex flex-col">
+                      <label htmlFor="reg-instituicao-outra" className="field-label">Qual é a sua instituição?</label>
+                      <input
+                        id="reg-instituicao-outra" name="customInstitution" type="text" placeholder="Nome completo da instituição"
+                        value={formData.customInstitution} onChange={handleChange}
+                        onFocus={() => setFocusedInput('customInstitution')} onBlur={() => setFocusedInput(null)}
+                        className="field ent-field"
+                        aria-invalid={fieldErrors.customInstitution ? 'true' : undefined}
+                        aria-describedby={fieldErrors.customInstitution ? 'reg-instituicao-outra-err' : undefined}
+                        required
+                      />
+                      {fieldErrors.customInstitution && <p id="reg-instituicao-outra-err" className="field-error">{fieldErrors.customInstitution}</p>}
                     </div>
                   )}
                 </>

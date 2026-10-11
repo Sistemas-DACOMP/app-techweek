@@ -56,7 +56,8 @@ function badgeFromProfile(profile) {
     participantType: profile.participantType || profile.participant_type || 'Participante',
     avatarUrl: profile.avatarUrl || profile.avatar_url || profile.photoURL || null,
     symplaTicket: profile.symplaTicket || profile.sympla_ticket || null,
-    uid: profile.uid || profile.id || ''
+    uid: profile.uid || profile.id || '',
+    email: profile.email || ''
   };
 }
 
@@ -209,7 +210,7 @@ function OfflineBadge({ badge }) {
   );
 }
 
-function CameraFrame({ live }) {
+export function CameraFrame({ live }) {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute top-1/2 left-1/2 z-[8] -mt-[120px] -ml-[110px] h-[220px] w-[220px]">
       <svg width="220" height="220" viewBox="0 0 220 220">

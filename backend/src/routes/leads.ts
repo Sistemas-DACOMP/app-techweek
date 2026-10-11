@@ -114,10 +114,24 @@ export function resolveCompanyId(raw?: string | null): SponsorCompanyId | null {
  * Extraído para facilitar testes unitários isolados.
  */
 export async function leadsHandler(req: Request, res: Response): Promise<void> {
-  const { participantUid, notes, rating, companyId: providedCompanyId } = req.body ?? {};
+  const { participantUid, notes, rating, companyId: providedCompanyId, validateOnly, tags } = req.body ?? {};
   const sponsorUid = req.user!.uid;
 
-  if (typeof participantUid !== 'string' || !participantUid || !isValidFirestoreId(participantUid)) {
+  let resolvedUid = participantUid;
+
+  if (typeof resolvedUid === 'string' && resolvedUid.includes('@')) {
+    try {
+      const usersCol = db.collection('users');
+      if (typeof usersCol.where === 'function') {
+        const emailSnap = await usersCol.where('email', '==', resolvedUid.toLowerCase().trim()).limit(1).get();
+        if (emailSnap && !emailSnap.empty) {
+          resolvedUid = emailSnap.docs[0].id;
+        }
+      }
+    } catch {}
+  }
+
+  if (typeof resolvedUid !== 'string' || !resolvedUid || !isValidFirestoreId(resolvedUid)) {
     res.status(400).json({
       error: 'INVALID_PAYLOAD',
       message: 'participantUid é obrigatório e deve ser um ID de documento válido.'
@@ -145,9 +159,17 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const userRef = db.collection('users').doc(participantUid);
-  const leadRef = db.collection('leads').doc(sponsorUid).collection('contacts').doc(participantUid);
-  const pointEventRef = db.collection('pointEvents').doc(`${participantUid}_sponsor_lead_${sponsorUid}`);
+  const sanitizedTags = Array.isArray(tags)
+    ? tags
+        .filter((t): t is string => typeof t === 'string')
+        .map(t => t.trim())
+        .filter(Boolean)
+        .slice(0, 25)
+    : [];
+
+  const userRef = db.collection('users').doc(resolvedUid);
+  const leadRef = db.collection('leads').doc(sponsorUid).collection('contacts').doc(resolvedUid);
+  const pointEventRef = db.collection('pointEvents').doc(`${resolvedUid}_sponsor_lead_${sponsorUid}`);
   const sponsorRef = db.collection('users').doc(sponsorUid);
 
   try {
@@ -182,6 +204,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       const period = userData.period || userData.periodo || null;
       const linkedin = userData.linkedin || null;
       const instagram = userData.instagram || null;
+      const github = userData.github || null;
 
       const birthDateRaw =
         userData.birthDate ||
@@ -281,6 +304,8 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       const leadContactData: Record<string, any> = {
         participantUid,
         sponsorUid,
+        companyId: companyId || null,
+        collectedByEmail: req.user?.email || null,
         name,
         email,
         phone,
@@ -288,7 +313,9 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         period,
         linkedin,
         instagram,
+        github,
         faixaEtaria,
+        tags: sanitizedTags,
         notes: typeof notes === 'string' ? notes.trim() : '',
         rating: typeof rating === 'number' ? rating : null,
         updatedAt: now
@@ -298,7 +325,14 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         leadContactData.createdAt = now;
       }
 
-      tx.set(leadRef, leadContactData, { merge: true });
+      if (!validateOnly) {
+        tx.set(leadRef, leadContactData, { merge: true });
+
+        if (companyId) {
+          const companyLeadRef = db.collection('company_leads').doc(companyId).collection('contacts').doc(participantUid);
+          tx.set(companyLeadRef, leadContactData, { merge: true });
+        }
+      }
 
       const whatsapp = buildWhatsAppPayload(phone, name);
 
@@ -306,6 +340,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         status: alreadyAwarded ? (200 as const) : (201 as const),
         body: {
           success: true,
+          validateOnly: Boolean(validateOnly),
           lead: {
             participantUid,
             sponsorUid,
@@ -317,7 +352,9 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
             period,
             linkedin,
             instagram,
+            github,
             faixaEtaria,
+            tags: leadContactData.tags,
             notes: leadContactData.notes,
             rating: leadContactData.rating,
             pointsAwarded: pointsToIncrement,
@@ -338,8 +375,149 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
   }
 }
 
-// Registro da rota com RBAC: apenas SPONSOR e ADMIN podem capturar leads
+/**
+ * Handler do endpoint GET /api/leads
+ * Retorna os leads capturados pelo usuário logado (myLeads)
+ * e todos os leads da empresa (companyLeads).
+ */
+export async function getLeadsHandler(req: Request, res: Response): Promise<void> {
+  const sponsorUid = req.user!.uid;
+  const queryCompany = req.query?.companyId as string | undefined;
+
+  try {
+    const sponsorSnap = await db.collection('users').doc(sponsorUid).get().catch(() => ({ exists: false, data: () => ({}) }));
+    const sponsorData = ((sponsorSnap && typeof sponsorSnap.data === 'function' ? sponsorSnap.data() : {}) || {}) as Record<string, any>;
+    const companyCandidate = queryCompany || sponsorData.companyId || sponsorData.empresa || sponsorData.company || req.user?.email || '';
+    const companyId = resolveCompanyId(companyCandidate) || (queryCompany ? queryCompany.toLowerCase() : null);
+
+    const myLeadsSnap = await db.collection('leads').doc(sponsorUid).collection('contacts').get();
+    const myLeads: any[] = myLeadsSnap.docs ? myLeadsSnap.docs.map(d => ({ ...d.data(), id: d.id })) : [];
+
+    let companyLeads = [...myLeads];
+    if (companyId) {
+      const compLeadsSnap = await db.collection('company_leads').doc(companyId).collection('contacts').get();
+      if (compLeadsSnap.docs && compLeadsSnap.docs.length > 0) {
+        const map = new Map<string, any>();
+        compLeadsSnap.docs.forEach(d => map.set(d.id, { ...d.data(), id: d.id }));
+        myLeads.forEach(l => map.set(l.participantUid || l.id, { ...map.get(l.participantUid || l.id), ...l }));
+        companyLeads = Array.from(map.values());
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      myLeads,
+      companyLeads,
+      companyId
+    });
+  } catch (error) {
+    console.error('Erro ao buscar leads:', error);
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Não foi possível listar os contatos.'
+    });
+  }
+}
+
+/**
+ * Handler do endpoint PATCH /api/leads/:participantUid
+ * Permite atualizar rating (0 a 5 estrelas) e observações (notes) de um lead capturado.
+ */
+export async function updateLeadHandler(req: Request, res: Response): Promise<void> {
+  const { participantUid } = req.params;
+  const { rating, notes, companyId: providedCompanyId, tags } = req.body ?? {};
+  const sponsorUid = req.user!.uid;
+
+  if (!participantUid || !isValidFirestoreId(participantUid)) {
+    res.status(400).json({
+      error: 'INVALID_PAYLOAD',
+      message: 'participantUid é obrigatório e deve ser válido.'
+    });
+    return;
+  }
+
+  if (notes !== undefined && typeof notes !== 'string') {
+    res.status(400).json({
+      error: 'INVALID_PAYLOAD',
+      message: 'notes deve ser uma string.'
+    });
+    return;
+  }
+
+  if (
+    rating !== undefined &&
+    rating !== null &&
+    (typeof rating !== 'number' || rating < 0 || rating > 5)
+  ) {
+    res.status(400).json({
+      error: 'INVALID_PAYLOAD',
+      message: 'rating deve ser um número entre 0 e 5.'
+    });
+    return;
+  }
+
+  if (tags !== undefined && !Array.isArray(tags)) {
+    res.status(400).json({
+      error: 'INVALID_PAYLOAD',
+      message: 'tags deve ser uma lista de strings.'
+    });
+    return;
+  }
+
+  try {
+    const sponsorSnap = await db.collection('users').doc(sponsorUid).get().catch(() => ({ exists: false, data: () => ({}) }));
+    const sponsorData = ((sponsorSnap && typeof sponsorSnap.data === 'function' ? sponsorSnap.data() : {}) || {}) as Record<string, any>;
+    const companyCandidate = providedCompanyId || sponsorData?.companyId || sponsorData?.empresa || req.user?.email || '';
+    const companyId = resolveCompanyId(companyCandidate);
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const updates: Record<string, any> = { updatedAt: now };
+
+    if (notes !== undefined) {
+      updates.notes = notes.trim();
+    }
+    if (rating !== undefined) {
+      updates.rating = rating === 0 ? null : Math.round(rating);
+    }
+    if (tags !== undefined) {
+      updates.tags = Array.isArray(tags)
+        ? tags
+            .filter((t): t is string => typeof t === 'string')
+            .map(t => t.trim())
+            .filter(Boolean)
+            .slice(0, 25)
+        : [];
+    }
+
+    const leadRef = db.collection('leads').doc(sponsorUid).collection('contacts').doc(participantUid);
+    await leadRef.set(updates, { merge: true });
+
+    if (companyId) {
+      const companyLeadRef = db.collection('company_leads').doc(companyId).collection('contacts').doc(participantUid);
+      await companyLeadRef.set(updates, { merge: true });
+    }
+
+    const updatedSnap = await leadRef.get();
+    res.status(200).json({
+      success: true,
+      lead: {
+        participantUid,
+        ...(updatedSnap && typeof updatedSnap.data === 'function' ? updatedSnap.data() : updates)
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar lead:', error);
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Não foi possível atualizar o lead.'
+    });
+  }
+}
+
+// Registro das rotas com RBAC: apenas SPONSOR e ADMIN podem gerenciar leads
+router.get('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), getLeadsHandler);
 router.post('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), leadsHandler);
+router.patch('/:participantUid', requireAuth, requireRole(['SPONSOR', 'ADMIN']), updateLeadHandler);
 
 export default router;
 

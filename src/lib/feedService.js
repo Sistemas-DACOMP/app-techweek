@@ -38,6 +38,7 @@ export const DEFAULT_FEED_POSTS = [
   {
     id: 'feed-2',
     author: 'Kanastra (Patrocinador Master)',
+    authorHandle: '@kanastra',
     authorRole: 'SPONSOR',
     authorAvatar: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=150&auto=format&fit=crop&q=80',
     content: '⚡️ Nosso estande já está aberto! Venham conversar com nosso time de engenharia sobre backend de alta escala, pegar brindes e descobrir a palavra-chave da Missão Secreta!',
@@ -68,6 +69,7 @@ export const DEFAULT_FEED_POSTS = [
   {
     id: 'feed-4',
     author: 'Sankhya',
+    authorHandle: '@sankhya',
     authorRole: 'SPONSOR',
     authorAvatar: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=150&auto=format&fit=crop&q=80',
     content: '🚀 Dica de ouro para quem quer se destacar no mercado: passem no nosso estande para conhecer nossa Trilha de Carreira em Desenvolvimento!',
@@ -333,12 +335,15 @@ export async function createFeedPost(postData) {
     author: String(postData.author || 'Organização FACOM'),
     authorRole: String(postData.authorRole || 'ORGANIZATION'),
     authorAvatar: String(postData.authorAvatar || ''),
+    authorHandle: postData.authorHandle ? String(postData.authorHandle) : undefined,
     content: String(postData.content || '').trim(),
     imageUrl: String(postData.imageUrl || (mediaType === 'image' ? (postData.mediaUrl || '') : '')),
     videoUrl: String(postData.videoUrl || (mediaType === 'video' ? (postData.mediaUrl || '') : '')),
     mediaUrl: String(postData.mediaUrl || postData.videoUrl || postData.imageUrl || ''),
     mediaType: String(mediaType || ''),
     pinned: Boolean(postData.pinned),
+    sponsorTier: postData.sponsorTier ? String(postData.sponsorTier) : undefined,
+    companyId: postData.companyId ? String(postData.companyId) : undefined,
     likes: [],
     createdAt: nowIso
   };
@@ -349,9 +354,11 @@ export async function createFeedPost(postData) {
     saveLocalFeedPost(finalPost);
     return { success: true, id: docRef.id };
   } catch (err) {
-    console.error('Falha ao gravar no Firestore feed_posts:', err);
-    saveLocalFeedPost({ ...formattedPost, id: `local_post_${Date.now()}` });
-    throw new Error('Erro ao sincronizar com o banco de dados: ' + (err.message || 'Verifique sua conexão ou permissões.'));
+    console.warn('Firestore feed_posts indisponível ou offline. Salvando no cache local compartilhado:', err);
+    const localId = `local_post_${Date.now()}`;
+    const localPost = { ...formattedPost, id: localId };
+    saveLocalFeedPost(localPost);
+    return { success: true, id: localId, offline: true };
   }
 }
 

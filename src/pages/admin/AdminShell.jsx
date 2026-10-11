@@ -1,6 +1,6 @@
 import {
   LayoutGrid, CalendarDays, Megaphone, Flag, Users, LogIn, Store, ExternalLink, Settings, Pencil,
-  ArrowLeftRight, Search, MoreHorizontal, ChevronLeft,
+  ArrowLeftRight, Search, MoreHorizontal, ChevronLeft, BarChart3,
 } from 'lucide-react';
 import iconeTw from '../../assets/icone.png';
 import { EVENT_DAYS, isoToday } from './ui';
@@ -10,6 +10,7 @@ import { EVENT_DAYS, isoToday } from './ui';
 const MENU = [
   { group: 'Evento', items: [
     { key: 'inicio', label: 'Visão geral', icon: LayoutGrid },
+    { key: 'dados', label: 'Dados & Ao Vivo', icon: BarChart3 },
     { key: 'programacao', label: 'Programação', icon: CalendarDays },
     { key: 'feed', label: 'Feed e avisos', icon: Megaphone },
     { key: 'missoes', label: 'Missões', icon: Flag },
@@ -70,12 +71,12 @@ export default function AdminShell({
   active, onNavigate, navigate, me, search, onSearch, onSearchSubmit, mobileTitle, mobileBack, mobileAction, hideMobileNav, children,
 }) {
   const info = eventDayInfo();
-  const navKey = active === 'feed' || active === 'config' ? 'inicio' : active;
+  const navKey = active === 'feed' || active === 'config' || active === 'dados' ? 'inicio' : active;
 
   return (
     <div className="flex min-h-dvh bg-bg font-sans text-text">
       {/* Lateral (desktop) */}
-      <aside aria-label="Menu do painel" className="sticky top-0 hidden h-dvh w-[236px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-nav px-3.5 py-5 lg:flex">
+      <aside aria-label="Menu do painel" className="fixed inset-y-0 left-0 z-30 hidden h-dvh w-[236px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-nav px-3.5 py-5 lg:flex">
         <button type="button" onClick={() => onNavigate('inicio')} className="flex items-center gap-2.5 rounded-xl px-2 pb-[18px] pt-1 text-left">
           <img src={iconeTw} alt="" className="h-8 w-[30px] object-contain" />
           <span>
@@ -131,7 +132,7 @@ export default function AdminShell({
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-[236px] print:!pl-0">
         {/* Topo (desktop): busca + estado do evento */}
         <div className="hidden items-center gap-3 px-8 py-[18px] lg:flex">
           <form role="search" className="flex-[1_1_280px] max-w-[460px]" onSubmit={(e) => { e.preventDefault(); onSearchSubmit(); }}>

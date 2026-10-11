@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMyProfile, updateMascot, uploadAvatar, getMyPointEvents, addPointEvent } from '../lib/gameplay';
 import { onAuthChange } from '../lib/auth';
-import { getCachedUserProfile } from '../lib/userService';
+import { getCachedUserProfile, isAdminEmail } from '../lib/userService';
 import { calculateLevel } from '../lib/level';
 import { useNotifications } from './useNotifications';
 
@@ -206,7 +206,7 @@ export function useUser() {
           }
         }
 
-        if (scannedProfile.participantType && scannedProfile.participantType !== 'Aluno da UFU') {
+        if (scannedProfile.participantType && scannedProfile.participantType !== 'Aluno da UFU' && scannedProfile.participantType !== 'Aluno UFU Graduação') {
           if (!hasCompletedChallenge('network_type')) {
             if (await recordEvent('challenge', 'network_type', 15, targetMeta)) {
               unlockedChallenges.push('network_type');
@@ -300,19 +300,30 @@ export function useUser() {
     };
   };
 
+  const isUserAdmin = Boolean(
+    (profile?.email && isAdminEmail(profile.email)) ||
+    (profile?.role === 'ADMIN')
+  );
+  const effectiveRole = isUserAdmin ? 'ADMIN' : (profile?.role || 'PARTICIPANT');
+
   const hasSymplaTicket = Boolean(
     profile?.hasSymplaTicket ||
     profile?.symplaTicket ||
     profile?.sympla_ticket ||
-    profile?.role === 'ADMIN'
+    effectiveRole === 'ADMIN'
   );
   const symplaTicket = profile?.symplaTicket || profile?.sympla_ticket || null;
 
   return {
-    profile,
-    role: profile?.role || 'PARTICIPANT',
+    profile: profile ? {
+      ...profile,
+      role: effectiveRole,
+      participantType: isUserAdmin ? 'Organizador' : (profile?.participantType || 'Aluno da UFU'),
+      participant_type: isUserAdmin ? 'Organizador' : (profile?.participant_type || 'Aluno da UFU')
+    } : null,
+    role: effectiveRole,
     profileReady,
-    participantType: profile?.participantType || profile?.participant_type || 'Aluno da UFU',
+    participantType: isUserAdmin ? 'Organizador' : (profile?.participantType || profile?.participant_type || 'Aluno da UFU'),
     hasSymplaTicket,
     symplaTicket,
     refreshProfile: load,

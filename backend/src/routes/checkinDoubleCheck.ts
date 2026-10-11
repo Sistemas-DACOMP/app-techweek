@@ -13,8 +13,37 @@ const router = Router();
 // attendanceMode DOUBLE_CHECK (D2 do SPEC KAN-51). Sem isso registrado,
 // o checkout do próprio aluno é recusado (ver ENTRANCE_NOT_FOUND abaixo).
 router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (req: Request, res: Response) => {
-  const { uid, activityId } = req.body ?? {};
+  const rawUid = req.body?.uid || req.body?.participantUid;
+  const { activityId } = req.body ?? {};
   const staffUid = req.user!.uid;
+
+  let uid = typeof rawUid === 'string' ? rawUid.replace(/^mailto:/i, '').trim() : '';
+  if (uid.includes('@')) {
+    try {
+      const cleanEmail = uid.toLowerCase();
+      const userSnap = await db.collection('users').where('email', '==', cleanEmail).limit(1).get();
+      if (!userSnap.empty) {
+        uid = userSnap.docs[0].id;
+      } else {
+        const exactSnap = await db.collection('users').where('email', '==', uid).limit(1).get();
+        if (!exactSnap.empty) {
+          uid = exactSnap.docs[0].id;
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao resolver UID por e-mail em checkinDoubleCheck:', e);
+    }
+  } else if (uid.startsWith('@')) {
+    try {
+      const cleanUsername = uid.replace(/^@/, '').toLowerCase();
+      const userSnap = await db.collection('users').where('username', '==', cleanUsername).limit(1).get();
+      if (!userSnap.empty) {
+        uid = userSnap.docs[0].id;
+      }
+    } catch (e) {
+      console.warn('Erro ao resolver UID por username em checkinDoubleCheck:', e);
+    }
+  }
 
   if (typeof uid !== 'string' || !uid || !isValidFirestoreId(uid)) {
     res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'uid é obrigatório e deve ser um ID válido.' });

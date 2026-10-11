@@ -152,5 +152,51 @@ describe('ParticipantCard (KAN-95)', () => {
       expect(html).toContain('href="https://github.com/dev-fullstack"');
       expect(html).not.toContain('Instagram');
     });
+
+    it('renderiza pós-graduação com instituição (FACOM) sem período', () => {
+      const participant = {
+        name: 'Pesquisador Silva',
+        username: 'pesquisador',
+        participantType: 'Pós-graduação',
+        institution: 'FACOM',
+        period: null
+      };
+
+      const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
+      expect(html).toContain('Pesquisador Silva');
+      expect(html).toContain('Pós-graduação · FACOM');
+      expect(html).not.toContain('período');
+    });
+
+    it('renderiza pós-graduação com instituição customizada', () => {
+      const participant = {
+        name: 'Maria Souza',
+        username: 'mariasouza',
+        participantType: 'Pós-graduação',
+        institution: 'FEELT',
+        course: 'Pós-graduação'
+      };
+
+      const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
+      expect(html).toContain('Maria Souza');
+      expect(html).toContain('Pós-graduação · FEELT');
+      expect(html).not.toContain('período');
+    });
+
+    it('renderiza Aluno UFU Pós-graduação com tag e instituição', () => {
+      const participant = {
+        name: 'Doutorando UFU',
+        username: 'doutorando',
+        participantType: 'Aluno UFU Pós-graduação',
+        institution: 'IME',
+        course: 'Pós-graduação'
+      };
+
+      const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
+      expect(html).toContain('Doutorando UFU');
+      expect(html).toContain('Aluno UFU Pós-graduação');
+      expect(html).toContain('Pós-graduação · IME');
+      expect(html).not.toContain('período');
+    });
   });
 });

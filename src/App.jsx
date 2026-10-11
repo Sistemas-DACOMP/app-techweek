@@ -31,7 +31,7 @@ function AppContent() {
   const { user, loading: authLoading } = useAuth();
   // Papel vindo do token (claim do servidor); enquanto não chega, usa o perfil em cache.
   const [claimRole, setClaimRole] = useState(null);
-  const isPortalPage = location.pathname === '/admin' || location.pathname === '/staff';
+  const isPortalPage = location.pathname === '/admin' || location.pathname === '/staff' || location.pathname === '/sponsor';
   const isAuthPage = location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding' || location.pathname === '/termos';
 
   const [isSplashVisible, setIsSplashVisible] = useState(true);

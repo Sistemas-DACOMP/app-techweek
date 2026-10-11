@@ -1,20 +1,24 @@
 /* Crachá (/scanner) — o que Tailwind não cobre: vídeo do html5-qrcode e a linha de leitura. */
 
-#techweek-camera-viewport {
+#techweek-camera-viewport,
+#sponsor-qr-reader {
   position: absolute !important;
   inset: 0;
   width: 100% !important;
   height: 100% !important;
   border: 0 !important;
 }
-#techweek-camera-viewport video {
+#techweek-camera-viewport video,
+#sponsor-qr-reader video {
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
 }
 /* A moldura de gradiente substitui a sombra/cantos que a biblioteca desenha. */
 #techweek-camera-viewport img,
-#techweek-camera-viewport #qr-shaded-region {
+#techweek-camera-viewport #qr-shaded-region,
+#sponsor-qr-reader img,
+#sponsor-qr-reader #qr-shaded-region {
   display: none !important;
 }
 

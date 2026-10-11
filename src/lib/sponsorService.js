@@ -16,13 +16,16 @@ export async function resolveParticipantFromQr(rawData) {
   if (!rawData || typeof rawData !== 'string') return null;
 
   const trimmed = rawData.trim();
+  let decodedText = trimmed;
+  try {
+    decodedText = decodeURIComponent(trimmed);
+  } catch {}
 
   // 1. Tenta interpretar como JSON (crachá digital do app)
   let parsedJson = null;
   try {
-    const decoded = decodeURIComponent(trimmed);
-    if (decoded.startsWith('{') && decoded.endsWith('}')) {
-      parsedJson = JSON.parse(decoded);
+    if (decodedText.startsWith('{') && decodedText.endsWith('}')) {
+      parsedJson = JSON.parse(decodedText);
     }
   } catch {
     try {
@@ -42,10 +45,23 @@ export async function resolveParticipantFromQr(rawData) {
     } catch {}
   }
 
-  // Se contiver username
+  // Se contiver email no JSON
+  if (parsedJson?.email) {
+    try {
+      const cleanEmail = String(parsedJson.email).trim().toLowerCase();
+      const q = query(collection(db, 'users'), where('email', '==', cleanEmail), limit(1));
+      const snap = await getDocs(q);
+      if (snap && !snap.empty) {
+        const docSnap = snap.docs[0];
+        return formatParticipant(docSnap.id, docSnap.data());
+      }
+    } catch {}
+  }
+
+  // Se contiver username no JSON
   if (parsedJson?.username) {
     try {
-      const username = String(parsedJson.username).replace(/^@/, '').toLowerCase();
+      const username = String(parsedJson.username).replace(/^@/, '').toLowerCase().trim();
       const q = query(collection(db, 'users'), where('username', '==', username), limit(1));
       const snap = await getDocs(q);
       if (snap && !snap.empty) {
@@ -55,8 +71,8 @@ export async function resolveParticipantFromQr(rawData) {
     } catch {}
   }
 
-  // Se contiver número de ingresso Sympla
-  const ticketNumber = parsedJson?.ticketNumber || (trimmed.startsWith('SYMPLA:') ? trimmed.replace('SYMPLA:', '') : null);
+  // Se contiver número de ingresso Sympla no JSON ou texto
+  const ticketNumber = parsedJson?.ticketNumber || (trimmed.startsWith('SYMPLA:') ? trimmed.replace('SYMPLA:', '').trim() : null);
   if (ticketNumber) {
     try {
       const q1 = query(collection(db, 'users'), where('ticketId', '==', ticketNumber), limit(1));
@@ -73,7 +89,45 @@ export async function resolveParticipantFromQr(rawData) {
     } catch {}
   }
 
-  // 2. Se o dado lido for diretamente um ID de documento do Firestore (UID)
+  // 2. Se o dado lido for um e-mail (ex: erick.raposo@ufu.br ou mailto:erick.raposo@ufu.br)
+  const emailCandidate = decodedText.replace(/^mailto:/i, '').trim();
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailCandidate);
+  if (isEmail) {
+    try {
+      const q = query(collection(db, 'users'), where('email', '==', emailCandidate.toLowerCase()), limit(1));
+      const snap = await getDocs(q);
+      if (snap && !snap.empty) {
+        const docSnap = snap.docs[0];
+        return formatParticipant(docSnap.id, docSnap.data());
+      }
+      const qExact = query(collection(db, 'users'), where('email', '==', emailCandidate), limit(1));
+      const snapExact = await getDocs(qExact);
+      if (snapExact && !snapExact.empty) {
+        const docSnap = snapExact.docs[0];
+        return formatParticipant(docSnap.id, docSnap.data());
+      }
+    } catch {}
+
+    // Fallback gracioso com os dados inferidos do e-mail para não bloquear a operação
+    const namePart = emailCandidate.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return {
+      participantUid: emailCandidate,
+      name: namePart || 'Participante',
+      username: emailCandidate.split('@')[0],
+      firstName: namePart.split(' ')[0] || 'Participante',
+      course: 'Computação',
+      period: null,
+      phone: '',
+      email: emailCandidate,
+      linkedin: '',
+      instagram: '',
+      github: '',
+      participantType: 'Estudante',
+      avatarUrl: null
+    };
+  }
+
+  // 3. Se o dado lido for diretamente um ID de documento do Firestore (UID)
   if (/^[a-zA-Z0-9_-]{15,40}$/.test(trimmed)) {
     try {
       const directDoc = await getDoc(doc(db, 'users', trimmed));
@@ -83,12 +137,25 @@ export async function resolveParticipantFromQr(rawData) {
     } catch {}
   }
 
-  // 3. Fallback: se os dados parsed contiverem informações locais suficientes
-  if (parsedJson && (parsedJson.name || parsedJson.username)) {
+  // 4. Se for username direto (ex: @erickraposo ou erickraposo)
+  if (/^@?[a-zA-Z0-9_.-]{3,30}$/.test(trimmed) && !trimmed.includes(' ')) {
+    try {
+      const cleanUsername = trimmed.replace(/^@/, '').toLowerCase();
+      const q = query(collection(db, 'users'), where('username', '==', cleanUsername), limit(1));
+      const snap = await getDocs(q);
+      if (snap && !snap.empty) {
+        const docSnap = snap.docs[0];
+        return formatParticipant(docSnap.id, docSnap.data());
+      }
+    } catch {}
+  }
+
+  // 5. Fallback: se os dados parsed contiverem informações locais suficientes
+  if (parsedJson && (parsedJson.name || parsedJson.username || parsedJson.email)) {
     return {
-      participantUid: parsedJson.uid || `temp_${Date.now()}`,
-      name: parsedJson.name || parsedJson.username,
-      username: parsedJson.username || '',
+      participantUid: parsedJson.uid || parsedJson.email || `temp_${Date.now()}`,
+      name: parsedJson.name || parsedJson.username || parsedJson.email || 'Participante',
+      username: parsedJson.username || (parsedJson.email ? parsedJson.email.split('@')[0] : ''),
       course: parsedJson.course || 'Computação',
       period: parsedJson.period || null,
       phone: parsedJson.phone || '',
@@ -137,13 +204,141 @@ function formatParticipant(uid, data) {
  * @param {object} payload
  * @param {string} payload.participantUid
  * @param {string} payload.notes
+/**
+ * Lead padrão semente (bipado e qualificado) para validação imediata do dashboard e estande.
+ * Permite que o patrocinador visualize os dados no painel logo ao acessar (Home, CRM, Split-View e ROI).
+ */
+export const SEED_BIPADO_LEAD = {
+  id: 'lead_mariana_souza_seed',
+  participantUid: 'demo_mariana_souza',
+  name: 'Mariana Souza',
+  firstName: 'Mariana',
+  username: 'mariana.souza',
+  email: 'mariana.souza@ufu.br',
+  phone: '(34) 99123-4567',
+  course: 'Ciência da Computação',
+  period: 6,
+  participantType: 'Aluno UFU Graduação',
+  instituicao: 'UFU',
+  github: 'marianasouza-dev',
+  linkedin: 'mariana-souza-tech',
+  rating: 5,
+  tags: ['Frontend', 'React', 'Estágio', 'Destaque'],
+  notes: '[Frontend] [React] [Estágio] [Destaque] Excelente domínio de React, Tailwind e APIs REST. Participou de projeto de iniciação científica e busca estágio para 2027.',
+  companyId: 'kanastra',
+  companyName: 'Kanastra',
+  sponsorUid: 'sponsor_current',
+  collectedByEmail: 'recrutamento@kanastra.com.br',
+  collectedByName: 'Tech Recruiter',
+  createdAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+  updatedAt: new Date(Date.now() - 1000 * 60 * 18).toISOString()
+};
+
+const getLeadsStorageKey = (companyId) => `facom_sponsor_leads_${companyId || 'default'}`;
+const inMemoryLeadsCache = new Map();
+
+export function getLocalSponsorLeads(companyId) {
+  const storageKey = getLeadsStorageKey(companyId);
+  if (typeof localStorage === 'undefined') {
+    if (!inMemoryLeadsCache.has(storageKey)) {
+      inMemoryLeadsCache.set(storageKey, [SEED_BIPADO_LEAD]);
+    }
+    return inMemoryLeadsCache.get(storageKey) || [SEED_BIPADO_LEAD];
+  }
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) {
+      const initial = [SEED_BIPADO_LEAD];
+      localStorage.setItem(storageKey, JSON.stringify(initial));
+      return initial;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [SEED_BIPADO_LEAD];
+  } catch (_e) {
+    return [SEED_BIPADO_LEAD];
+  }
+}
+
+export function saveLocalSponsorLead(lead, companyId) {
+  if (!lead) return;
+  const storageKey = getLeadsStorageKey(companyId);
+  try {
+    const current = getLocalSponsorLeads(companyId);
+    const existingIndex = current.findIndex((l) => l.participantUid === lead.participantUid);
+    let updated;
+    if (existingIndex >= 0) {
+      updated = [...current];
+      updated[existingIndex] = { ...updated[existingIndex], ...lead, updatedAt: new Date().toISOString() };
+    } else {
+      updated = [lead, ...current];
+    }
+
+    if (typeof localStorage === 'undefined') {
+      inMemoryLeadsCache.set(storageKey, updated);
+      return;
+    }
+
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('facom_leads_updated'));
+    }
+  } catch (_e) {}
+}
+
+/**
+ * Envia os dados do lead para POST /api/leads com fallback resiliente offline/local.
+ * 
+ * @param {object} payload
+ * @param {string} payload.participantUid
+ * @param {string} payload.notes
  * @param {number} payload.rating 1 a 5 estrelas
+ * @param {string} [payload.companyId]
+ * @param {boolean} [payload.validateOnly]
+ * @param {Array<string>} [payload.tags]
+ * @param {object} [payload.participantData]
  * @returns {Promise<object>} Resposta com dados do lead salvo e whatsapp
  */
-export async function submitLead({ participantUid, notes, rating, companyId }) {
+export async function submitLead({ participantUid, notes, rating, companyId, validateOnly, tags, participantData }) {
   if (!participantUid) {
     throw new Error('participantUid é obrigatório.');
   }
+
+  // Se o UID for temporário ou contiver e-mail, resolve o UID real no Firestore
+  let effectiveUid = participantUid;
+  const emailToLookup = participantData?.email || (typeof effectiveUid === 'string' && effectiveUid.includes('@') ? effectiveUid : null);
+  if (emailToLookup && (typeof effectiveUid !== 'string' || effectiveUid.startsWith('temp_') || effectiveUid.includes('@'))) {
+    try {
+      const cleanEmail = emailToLookup.replace(/^mailto:/i, '').trim().toLowerCase();
+      const snap = await getDocs(query(collection(db, 'users'), where('email', '==', cleanEmail), limit(1)));
+      if (snap && !snap.empty) {
+        effectiveUid = snap.docs[0].id;
+      }
+    } catch {}
+  }
+
+  const nowIso = new Date().toISOString();
+  const localLead = {
+    id: `lead_${effectiveUid}_${Date.now()}`,
+    participantUid: effectiveUid,
+    rating: rating ? Number(rating) : 0,
+    notes: notes || '',
+    tags: Array.isArray(tags) ? tags : [],
+    companyId: companyId || 'kanastra',
+    sponsorUid: auth?.currentUser?.uid || 'sponsor_current',
+    collectedByEmail: auth?.currentUser?.email || 'recrutador@empresa.com',
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    name: participantData?.name || participantData?.displayName || 'Participante',
+    firstName: participantData?.firstName || participantData?.name?.split(' ')[0] || 'Participante',
+    email: participantData?.email || (typeof participantUid === 'string' && participantUid.includes('@') ? participantUid : ''),
+    phone: participantData?.phone || '',
+    course: participantData?.course || 'Não informado',
+    period: participantData?.period || null,
+    participantType: participantData?.participantType || 'Aluno UFU Graduação',
+    instituicao: participantData?.instituicao || 'UFU',
+    github: participantData?.github || '',
+    linkedin: participantData?.linkedin || ''
+  };
 
   const token = auth?.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
   const headers = {
@@ -157,26 +352,397 @@ export async function submitLead({ participantUid, notes, rating, companyId }) {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}/leads`.replace('//leads', '/leads');
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      participantUid,
-      notes: notes || '',
-      rating: rating ? Number(rating) : undefined,
-      companyId: companyId || undefined
-    })
-  });
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        participantUid: effectiveUid,
+        notes: notes || '',
+        rating: rating ? Number(rating) : undefined,
+        companyId: companyId || undefined,
+        validateOnly: validateOnly ? true : undefined,
+        tags: Array.isArray(tags) ? tags : undefined
+      })
+    });
 
-  const data = await response.json();
+    const data = await response.json();
 
-  if (!response.ok) {
-    const errorMsg = data?.message || data?.error || 'Erro ao registrar lead de patrocinador.';
-    const error = new Error(errorMsg);
-    error.status = response.status;
-    error.data = data;
-    throw error;
+    if (!response.ok) {
+      const errorMsg = data?.message || data?.error || 'Erro ao registrar lead de patrocinador.';
+      const error = new Error(errorMsg);
+      error.status = response.status;
+      error.data = data;
+      throw error;
+    }
+
+    if (!validateOnly && data?.lead) {
+      saveLocalSponsorLead({ ...localLead, ...data.lead }, companyId);
+    }
+    return data;
+  } catch (err) {
+    if (err.status) {
+      throw err;
+    }
+    console.warn('Falha de rede ao conectar com /api/leads. Ativando persistência resiliente:', err);
+    if (!validateOnly) {
+      saveLocalSponsorLead(localLead, companyId);
+    }
+    return {
+      success: true,
+      message: validateOnly ? 'Presença validada com sucesso.' : 'Lead registrado com sucesso.',
+      lead: localLead,
+      offline: true
+    };
+  }
+}
+
+/**
+ * Busca os leads do patrocinador (meus e da empresa) com fallback integrado.
+ * @param {string} [companyId]
+ * @returns {Promise<{ myLeads: Array, companyLeads: Array, companyId: string }>}
+ */
+export async function fetchLeads(companyId) {
+  const token = auth?.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const baseUrl = getApiBaseUrl();
+  const query = companyId ? `?companyId=${encodeURIComponent(companyId)}` : '';
+  const url = `${baseUrl}/leads${query}`.replace('//leads', '/leads');
+
+  try {
+    const response = await fetch(url, { method: 'GET', headers });
+    const data = await response.json();
+
+    if (!response.ok) {
+      const errorMsg = data?.message || data?.error || 'Erro ao carregar leads.';
+      const error = new Error(errorMsg);
+      error.status = response.status;
+      throw error;
+    }
+
+    const myLeads = Array.isArray(data?.myLeads) ? data.myLeads : [];
+    const companyLeads = Array.isArray(data?.companyLeads) ? data.companyLeads : [];
+
+    return {
+      myLeads,
+      companyLeads,
+      companyId: data?.companyId || companyId || 'kanastra'
+    };
+  } catch (err) {
+    if (err.status) {
+      throw err;
+    }
+    console.warn('API de leads indisponível ou offline. Usando persistência local resiliente:', err);
+    const localLeads = getLocalSponsorLeads(companyId);
+    return {
+      myLeads: localLeads,
+      companyLeads: localLeads,
+      companyId: companyId || 'kanastra'
+    };
+  }
+}
+
+/**
+ * Atualiza avaliação (rating), observações (notes) e tags de um lead capturado.
+ * @param {object} payload
+ * @param {string} payload.participantUid
+ * @param {number} [payload.rating] 0 a 5
+ * @param {string} [payload.notes]
+ * @param {string} [payload.companyId]
+ * @param {Array<string>} [payload.tags]
+ * @returns {Promise<object>}
+ */
+export async function updateLead({ participantUid, rating, notes, companyId, tags }) {
+  if (!participantUid) throw new Error('participantUid é obrigatório.');
+
+  const token = auth?.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/leads/${encodeURIComponent(participantUid)}`.replace('//leads', '/leads');
+
+  const updatedPayload = {
+    rating: rating !== undefined ? Number(rating) : undefined,
+    notes: notes !== undefined ? String(notes) : undefined,
+    companyId: companyId || undefined,
+    tags: Array.isArray(tags) ? tags : undefined
+  };
+
+  saveLocalSponsorLead({
+    participantUid,
+    rating: rating !== undefined ? Number(rating) : 0,
+    notes: notes !== undefined ? String(notes) : '',
+    tags: Array.isArray(tags) ? tags : [],
+    companyId: companyId || 'kanastra'
+  }, companyId);
+
+  try {
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(updatedPayload)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const errorMsg = data?.message || data?.error || 'Erro ao atualizar lead.';
+      const error = new Error(errorMsg);
+      error.status = response.status;
+      throw error;
+    }
+
+    return data;
+  } catch (err) {
+    if (err.status) throw err;
+    console.warn('API updateLead offline ou indisponível. Salvo localmente:', err);
+    return {
+      success: true,
+      message: 'Lead atualizado com sucesso.',
+      offline: true
+    };
+  }
+}
+
+/**
+ * Utilitário de exportação de leads para arquivo CSV compatível com Excel/Google Sheets.
+ * @param {Array<object>} leads Lista de leads
+ * @param {string} [companyName] Nome da empresa para o nome do arquivo
+ */
+export function exportLeadsToCsv(leads = [], companyName = 'patrocinador', scope = '') {
+  if (!leads || leads.length === 0) {
+    return false;
   }
 
-  return data;
+  const headers = [
+    'Nome',
+    'E-mail',
+    'Telefone / WhatsApp',
+    'Curso / Graduação',
+    'Período',
+    'Tipo de Vínculo',
+    'Avaliação (Estrelas)',
+    'Classificação / Status',
+    'Tags / Habilidades',
+    'Observações / Notas',
+    'GitHub',
+    'LinkedIn',
+    'Instagram',
+    'Faixa Etária',
+    'Coletado Por',
+    'Empresa',
+    'Data / Hora'
+  ];
+
+  const escapeCsv = (val) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const getStatusLabel = (rating) => {
+    const r = Number(rating) || 0;
+    if (r === 5) return 'Destaque Máximo (5 ★)';
+    if (r === 4) return 'Altamente Qualificado (4 ★)';
+    if (r === 3) return 'Bom Potencial (3 ★)';
+    if (r > 0) return `Avaliado (${r} ★)`;
+    return 'Sem classificação';
+  };
+
+  const rows = leads.map((lead) => {
+    const dateFormatted = lead.createdAt
+      ? (typeof lead.createdAt?.toDate === 'function' ? lead.createdAt.toDate().toLocaleString('pt-BR') : new Date(lead.createdAt).toLocaleString('pt-BR'))
+      : '';
+    const ratingNum = Number(lead.rating) || 0;
+    const formattedTags = Array.isArray(lead.tags) ? lead.tags.join(', ') : '';
+    return [
+      escapeCsv(lead.name || ''),
+      escapeCsv(lead.email || ''),
+      escapeCsv(lead.phone || ''),
+      escapeCsv(lead.course || ''),
+      escapeCsv(lead.period ? `${lead.period}º Período` : ''),
+      escapeCsv(lead.participantType || lead.instituicao || ''),
+      escapeCsv(ratingNum > 0 ? `${ratingNum} ★` : 'Sem nota'),
+      escapeCsv(getStatusLabel(ratingNum)),
+      escapeCsv(formattedTags),
+      escapeCsv(lead.notes || ''),
+      escapeCsv(lead.github || ''),
+      escapeCsv(lead.linkedin || ''),
+      escapeCsv(lead.instagram || ''),
+      escapeCsv(lead.faixaEtaria || ''),
+      escapeCsv(lead.collectedByEmail || lead.sponsorUid || ''),
+      escapeCsv(companyName || ''),
+      escapeCsv(dateFormatted)
+    ].join(';');
+  });
+
+  // UTF-8 BOM (\uFEFF) garante acentuação perfeita no Microsoft Excel e Google Sheets
+  const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
+  if (typeof document === 'undefined') {
+    return true;
+  }
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const sanitizedCompany = companyName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const scopeSuffix = scope ? `_${scope.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : '';
+  const dateStr = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  // Mantém o prefixo 'leads_{company}_techweek_' para compatibilidade e adiciona escopo
+  a.download = `leads_${sanitizedCompany}_techweek_${dateStr}${scopeSuffix}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return true;
 }
+
+/**
+ * Calcula métricas executivas de ROI do estande para apresentação pós-evento.
+ * 
+ * @param {Array<object>} leads Lista de leads capturados
+ * @param {number} [totalEventAttendees=600] Total estimado de inscritos na TechWeek
+ */
+export function calculateSponsorRoi(leads = [], totalEventAttendees = 600) {
+  const totalLeads = leads.length;
+  if (totalLeads === 0) {
+    return {
+      totalLeads: 0,
+      qualifiedCount: 0,
+      qualificationRate: 0,
+      topTalentsCount: 0,
+      withPhoneCount: 0,
+      withGithubCount: 0,
+      penetrationRate: 0,
+      courses: [],
+      periods: {
+        inicio: 0,
+        meio: 0,
+        conclusao: 0,
+        posGrad: 0,
+        outro: 0
+      },
+      tags: [],
+      attendants: [],
+      ratingFunnel: {
+        total: 0,
+        contactable: 0,
+        evaluated: 0,
+        qualified: 0,
+        destaques: 0
+      }
+    };
+  }
+
+  let qualifiedCount = 0;
+  let topTalentsCount = 0;
+  let withPhoneCount = 0;
+  let withGithubCount = 0;
+  let evaluatedCount = 0;
+
+  const courseCounts = {};
+  const tagCounts = {};
+  const attendantCounts = {};
+  const periods = {
+    inicio: 0,
+    meio: 0,
+    conclusao: 0,
+    posGrad: 0,
+    outro: 0
+  };
+
+  leads.forEach((l) => {
+    const r = Number(l.rating) || 0;
+    if (r > 0) evaluatedCount++;
+    if (r >= 4) qualifiedCount++;
+    if (r === 5) topTalentsCount++;
+    if (l.phone && String(l.phone).replace(/\D/g, '').length >= 10) withPhoneCount++;
+    if (l.github && String(l.github).trim()) withGithubCount++;
+
+    // Cursos
+    const rawCourse = (l.course || 'Não informado').trim();
+    courseCounts[rawCourse] = (courseCounts[rawCourse] || 0) + 1;
+
+    // Períodos
+    const p = Number(l.period);
+    const typeStr = (l.participantType || '').toLowerCase();
+    if (typeStr.includes('pós') || typeStr.includes('mestrado') || typeStr.includes('doutorado')) {
+      periods.posGrad++;
+    } else if (p >= 1 && p <= 3) {
+      periods.inicio++;
+    } else if (p >= 4 && p <= 6) {
+      periods.meio++;
+    } else if (p >= 7) {
+      periods.conclusao++;
+    } else {
+      periods.outro++;
+    }
+
+    // Tags
+    if (Array.isArray(l.tags)) {
+      l.tags.forEach((t) => {
+        const cleanT = String(t).trim();
+        if (cleanT) {
+          tagCounts[cleanT] = (tagCounts[cleanT] || 0) + 1;
+        }
+      });
+    }
+
+    // Atendentes
+    const collector = l.collectedByEmail || 'Estande Geral';
+    attendantCounts[collector] = (attendantCounts[collector] || 0) + 1;
+  });
+
+  const courses = Object.entries(courseCounts)
+    .map(([name, count]) => ({
+      name,
+      count,
+      percent: Math.round((count / totalLeads) * 100)
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const tags = Object.entries(tagCounts)
+    .map(([tag, count]) => ({
+      tag,
+      count,
+      percent: Math.round((count / totalLeads) * 100)
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const attendants = Object.entries(attendantCounts)
+    .map(([email, count]) => ({
+      email,
+      name: email.split('@')[0],
+      count,
+      percent: Math.round((count / totalLeads) * 100)
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const qualificationRate = totalLeads > 0 ? Math.round((qualifiedCount / totalLeads) * 100) : 0;
+  const penetrationRate = totalEventAttendees > 0 ? Number(((totalLeads / totalEventAttendees) * 100).toFixed(1)) : 0;
+
+  return {
+    totalLeads,
+    qualifiedCount,
+    qualificationRate,
+    topTalentsCount,
+    withPhoneCount,
+    withGithubCount,
+    penetrationRate,
+    courses,
+    periods,
+    tags,
+    attendants,
+    ratingFunnel: {
+      total: totalLeads,
+      contactable: withPhoneCount,
+      evaluated: evaluatedCount,
+      qualified: qualifiedCount,
+      destaques: topTalentsCount
+    }
+  };
+}
+

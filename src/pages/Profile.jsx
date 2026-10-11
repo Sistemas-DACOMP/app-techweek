@@ -39,10 +39,24 @@ const UFU_COURSES = [
 ];
 
 const PARTICIPANT_TYPES = [
-  'Aluno da UFU',
+  'Aluno UFU Graduação',
+  'Aluno UFU Pós-graduação',
   'Aluno de outra instituição',
   'Servidor / Professor',
   'Comunidade Externa'
+];
+
+const normalizeParticipantType = (type) => {
+  if (type === 'Aluno da UFU') return 'Aluno UFU Graduação';
+  if (type === 'Pós-graduação' || type === 'Aluno UFU Pos graduação') return 'Aluno UFU Pós-graduação';
+  return type || 'Aluno UFU Graduação';
+};
+
+const INSTITUTIONS = [
+  'FACOM',
+  'IME',
+  'FEELT',
+  'Outra'
 ];
 
 // Estandes do passaporte (mesma lista do PassportTab — regra OBSERVADA, DESIGN.md §12).
@@ -79,8 +93,9 @@ export default function Profile() {
       lastName: initialLastName,
       phone: cached?.phone || '',
       course: cached?.course || 'Sistemas de Informação',
-      participantType: cached?.participantType || cached?.participant_type || 'Aluno da UFU',
+      participantType: normalizeParticipantType(cached?.participantType || cached?.participant_type),
       period: cached?.period || null,
+      institution: cached?.institution || '',
       avatarUrl: cached?.avatarUrl || cached?.avatar_url || cached?.photoURL || user?.photoURL || '',
       symplaTicket: ticket,
       hasSymplaTicket: !!(cached?.hasSymplaTicket || ticket),
@@ -103,10 +118,12 @@ export default function Profile() {
     lastName: '',
     username: '',
     phone: '',
-    participantType: 'Aluno da UFU',
+    participantType: 'Aluno UFU Graduação',
     course: 'Sistemas de Informação',
     customCourse: '',
     period: '',
+    institution: '',
+    customInstitution: '',
     linkedin: '',
     instagram: '',
     github: '',
@@ -161,8 +178,9 @@ export default function Profile() {
           lastName: data?.lastName || data?.last_name || prev.lastName,
           phone: data?.phone || prev.phone,
           course: data?.course || prev.course,
-          participantType: data?.participantType || data?.participant_type || prev.participantType,
+          participantType: normalizeParticipantType(data?.participantType || data?.participant_type || prev.participantType),
           period: data?.period !== undefined && data?.period !== null ? data.period : prev.period,
+          institution: data?.institution || prev.institution || '',
           avatarUrl: data?.avatarUrl || data?.avatar_url || prev.avatarUrl || data?.photoURL || currentUser?.photoURL || '',
           symplaTicket: data?.symplaTicket || data?.sympla_ticket || prev.symplaTicket,
           hasSymplaTicket: !!(data?.hasSymplaTicket || data?.symplaTicket || data?.sympla_ticket || prev.hasSymplaTicket),
@@ -232,15 +250,19 @@ export default function Profile() {
 
   const fillEditForm = () => {
     const isCustomCourse = profile.course && !UFU_COURSES.slice(0, -1).includes(profile.course);
+    const isKnownInst = ['FACOM', 'IME', 'FEELT'].includes(profile.institution);
+    const isCustomInst = profile.institution && !isKnownInst;
     setEditForm({
       firstName: (profile.firstName || '').replace(/^@/, ''),
       lastName: profile.lastName || '',
       username: (profile.username || '').replace(/^@/, ''),
       phone: profile.phone || '',
-      participantType: profile.participantType || 'Aluno da UFU',
+      participantType: normalizeParticipantType(profile.participantType),
       course: isCustomCourse ? 'Outro (especificar)' : (profile.course || 'Sistemas de Informação'),
       customCourse: isCustomCourse ? profile.course : '',
       period: profile.period ? String(profile.period) : '',
+      institution: isCustomInst ? 'Outra' : (profile.institution || ''),
+      customInstitution: isCustomInst ? profile.institution : '',
       linkedin: profile.linkedin || '',
       instagram: profile.instagram || '',
       github: profile.github || '',
@@ -315,9 +337,13 @@ export default function Profile() {
     const cleanLastName = editForm.lastName.trim();
     const cleanUsername = editForm.username.trim().replace(/^@/, '');
     const cleanEmail = isTicketConfirmed ? (profile.email || '') : editForm.email.trim().toLowerCase();
-    const isStudent = editForm.participantType === 'Aluno da UFU' || editForm.participantType === 'Aluno de outra instituição';
+    const isStudent = editForm.participantType === 'Aluno UFU Graduação' || editForm.participantType === 'Aluno da UFU' || editForm.participantType === 'Aluno de outra instituição';
+    const isPostgrad = editForm.participantType === 'Aluno UFU Pós-graduação' || editForm.participantType === 'Pós-graduação';
     const finalCourse = isStudent 
       ? (editForm.course === 'Outro (especificar)' ? editForm.customCourse.trim() : editForm.course) 
+      : (isPostgrad ? 'Pós-graduação' : '');
+    const finalInstitution = isPostgrad
+      ? (editForm.institution === 'Outra' ? editForm.customInstitution.trim() : editForm.institution)
       : '';
     const cleanPhone = editForm.phone.trim();
     const cleanLinkedin = editForm.linkedin.trim();
@@ -340,6 +366,16 @@ export default function Profile() {
       setEditFeedback({ type: 'error', text: 'Por favor, informe o nome do seu curso.' });
       return;
     }
+    if (isPostgrad) {
+      if (!editForm.institution) {
+        setEditFeedback({ type: 'error', text: 'Por favor, selecione sua instituição.' });
+        return;
+      }
+      if (editForm.institution === 'Outra' && !editForm.customInstitution.trim()) {
+        setEditFeedback({ type: 'error', text: 'Por favor, informe o nome da sua instituição.' });
+        return;
+      }
+    }
 
     setSavingProfile(true);
     setEditFeedback(null);
@@ -354,6 +390,7 @@ export default function Profile() {
         participantType: editForm.participantType,
         course: finalCourse,
         period: isStudent && editForm.period ? Number(editForm.period) : null,
+        institution: finalInstitution,
         linkedin: cleanLinkedin,
         instagram: cleanInstagram,
         github: cleanGithub
@@ -632,10 +669,13 @@ export default function Profile() {
   const fullName = [cleanFirstName, cleanLastName].filter(Boolean).join(' ').trim();
   const cleanUsername = (profile.username || '').replace(/^@/, '');
   const initials = initialsOf(cleanFirstName, cleanLastName);
-  const isStudentProfile = profile.participantType === 'Aluno da UFU' || profile.participantType === 'Aluno de outra instituição';
+  const isStudentProfile = profile.participantType === 'Aluno UFU Graduação' || profile.participantType === 'Aluno da UFU' || profile.participantType === 'Aluno de outra instituição';
+  const isPostgradProfile = profile.participantType === 'Aluno UFU Pós-graduação' || profile.participantType === 'Pós-graduação';
   const academic = isStudentProfile && profile.course
     ? `${profile.course}${profile.period ? `, ${profile.period}º` : ''}`
-    : profile.participantType;
+    : isPostgradProfile
+      ? (profile.institution ? `Pós-graduação · ${profile.institution}` : 'Pós-graduação')
+      : profile.participantType;
   const subtitle = [cleanUsername && `@${cleanUsername}`, academic].filter(Boolean).join(' · ');
 
   const visited = userProfile?.visitedSponsors || {};
@@ -708,7 +748,8 @@ export default function Profile() {
 
   /* ------------------------------------------------------------------ Editar perfil (1.34) */
   if (isEditing) {
-    const isStudent = editForm.participantType === 'Aluno da UFU' || editForm.participantType === 'Aluno de outra instituição';
+    const isStudent = editForm.participantType === 'Aluno UFU Graduação' || editForm.participantType === 'Aluno da UFU' || editForm.participantType === 'Aluno de outra instituição';
+    const isPostgrad = editForm.participantType === 'Aluno UFU Pós-graduação' || editForm.participantType === 'Pós-graduação';
     return (
       <div className="perfil-scroll h-full overflow-y-auto overflow-x-hidden bg-bg text-text">
         <form id="perfil-form" onSubmit={handleSaveProfile} noValidate className="flex min-h-full flex-col">
@@ -790,6 +831,13 @@ export default function Profile() {
               </div>
             </Field>
 
+            <Field id="pf-vem" label="Você vem como">
+              <select id="pf-vem" className="field pf-field" value={normalizeParticipantType(editForm.participantType)}
+                onChange={(e) => setEditForm({ ...editForm, participantType: e.target.value })}>
+                {PARTICIPANT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
+
             {isStudent && (
               <div className="grid grid-cols-[1.6fr_1fr] gap-3">
                 <Field id="pf-curso" label="Curso">
@@ -814,12 +862,22 @@ export default function Profile() {
               </Field>
             )}
 
-            <Field id="pf-vem" label="Você vem como">
-              <select id="pf-vem" className="field pf-field" value={editForm.participantType}
-                onChange={(e) => setEditForm({ ...editForm, participantType: e.target.value })}>
-                {[...new Set([...PARTICIPANT_TYPES, editForm.participantType].filter(Boolean))].map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </Field>
+            {isPostgrad && (
+              <Field id="pf-instituicao" label="Instituição">
+                <select id="pf-instituicao" className="field pf-field" value={editForm.institution}
+                  onChange={(e) => setEditForm({ ...editForm, institution: e.target.value })}>
+                  <option value="" disabled>Selecione sua instituição</option>
+                  {INSTITUTIONS.map((inst) => <option key={inst} value={inst}>{inst}</option>)}
+                </select>
+              </Field>
+            )}
+            {isPostgrad && editForm.institution === 'Outra' && (
+              <Field id="pf-instituicao-outra" label="Qual é a sua instituição?">
+                <input id="pf-instituicao-outra" className="field pf-field" value={editForm.customInstitution} required
+                  placeholder="Nome completo da instituição"
+                  onChange={(e) => setEditForm({ ...editForm, customInstitution: e.target.value })} />
+              </Field>
+            )}
 
             <Field id="pf-phone" label="Telefone ou WhatsApp (opcional)">
               <input id="pf-phone" type="tel" inputMode="tel" autoComplete="tel" className="field pf-field" value={editForm.phone}

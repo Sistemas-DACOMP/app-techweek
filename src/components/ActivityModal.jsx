@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Loader2, ScanLine, User } from 'lucide-react';
+import { X, Check, Loader2, ScanLine, User, Star } from 'lucide-react';
 import { useScrollLock } from '../hooks/useScrollLock';
 import ConfirmModal from './ConfirmModal';
+import ActivityFeedbackModal from './ActivityFeedbackModal';
+import { isActivityEvaluated } from '../lib/liveOpsService';
 import { CATEGORY_STYLES } from './Badge';
 import '../styles/agenda.css';
 
@@ -83,6 +85,7 @@ export default function ActivityModal({
   status = 'NONE',
   isReserving = false,
   isCancelling = false,
+  readOnly = false,
   onClose,
   onReserve,
   onCancelReserve,
@@ -92,9 +95,16 @@ export default function ActivityModal({
   useScrollLock(!!activity);
 
   const [isBioExpanded, setIsBioExpanded] = useState(false);
+  const [expandedBios, setExpandedBios] = useState({});
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [evaluated, setEvaluated] = useState(() => isActivityEvaluated(activity?.id));
+
+  useEffect(() => {
+    setEvaluated(isActivityEvaluated(activity?.id));
+  }, [activity?.id]);
 
   const touchStartY = useRef(0);
   const isDragging = useRef(false);
@@ -124,13 +134,29 @@ export default function ActivityModal({
   const isSoldOut = seatsAvailable <= 0;
   const points = activity.points || 20;
   const isDoubleCheck = activity.attendanceMode === 'DOUBLE_CHECK';
-  const hasSeat = status === 'BOOKED' || status === 'CHECKED_IN' || status === 'COMPLETED';
+  const hasSeat = !readOnly && (status === 'BOOKED' || status === 'CHECKED_IN' || status === 'COMPLETED');
 
   const speakerName = activity.speaker || '';
   const speakerRole = activity.speaker_role || activity.speakerRole || '';
   const speakerBio = activity.speaker_bio || activity.speakerBio || '';
   const speakerPhoto = activity.speaker_photo || activity.speakerPhoto || '';
   const description = activity.description || '';
+
+  const speakersList = Array.isArray(activity.speakers) && activity.speakers.length > 0
+    ? activity.speakers.map((s, idx) => ({
+        id: s.id || `spk_${idx}`,
+        name: s.name,
+        role: s.role || s.institution || '',
+        bio: s.bio || '',
+        photo: s.photo || s.photoUrl || ''
+      }))
+    : (speakerName ? [{
+        id: activity.speakerId || 'spk_main',
+        name: speakerName,
+        role: speakerRole,
+        bio: speakerBio,
+        photo: speakerPhoto
+      }] : []);
 
   const day = describeDay(activity.day);
   const endTime = activity.endTime || activity.end_time;
@@ -189,12 +215,47 @@ export default function ActivityModal({
   ) : null;
 
   let footer;
-  if (status === 'COMPLETED') {
+  if (readOnly) {
     footer = (
-      <p className="flex min-h-[54px] items-center justify-center gap-2 rounded-[14px] bg-surface-raised text-[15px] font-extrabold text-ok" role="status">
-        <Check size={18} strokeWidth={3} aria-hidden="true" />
-        Presença confirmada
-      </p>
+      <div className="flex flex-col gap-3">
+        <div className="flex justify-center">
+          <SeatsLight activity={activity} />
+        </div>
+        <p className="text-center text-xs text-text-3">
+          Modo de visualização da grade • Inscrições apenas para participantes
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="btn btn-secondary btn-block min-h-[48px] text-sm font-semibold"
+        >
+          Fechar detalhes
+        </button>
+      </div>
+    );
+  } else if (status === 'COMPLETED') {
+    footer = (
+      <div className="flex flex-col gap-2.5">
+        <div className="flex min-h-12 items-center justify-center gap-2 rounded-[14px] bg-[rgba(111,216,166,0.12)] text-[14px] font-bold text-ok" role="status">
+          <Check size={18} strokeWidth={3} aria-hidden="true" />
+          Presença confirmada
+        </div>
+        {evaluated ? (
+          <div className="flex items-center justify-center gap-2 rounded-[14px] bg-surface-raised py-2.5 text-xs font-semibold text-text-3">
+            <Star size={14} className="fill-gold text-gold" />
+            Avaliação enviada (+10 XP)
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowFeedbackModal(true)}
+            className="btn btn-primary btn-block min-h-[48px] text-[14px] font-bold flex items-center justify-center gap-2 bg-[linear-gradient(135deg,#7C3AED,#3B82F6)] hover:brightness-110 shadow-md"
+          >
+            <Star size={16} className="fill-white text-white" />
+            Avaliar palestra (+10 XP)
+          </button>
+        )}
+      </div>
     );
   } else if (status === 'CHECKED_IN') {
     footer = (
@@ -332,36 +393,59 @@ export default function ActivityModal({
             </div>
           )}
 
-          {speakerName && (
-            <div>
-              <div className="flex items-center gap-3">
-                {speakerPhoto ? (
-                  <img src={speakerPhoto} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
-                ) : (
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-raised text-text-3" aria-hidden="true">
-                    <User size={20} />
+          {speakersList.length > 0 && (
+            <div className="space-y-3.5">
+              {speakersList.length > 1 && (
+                <div className="flex items-center justify-between border-b border-line pb-1.5">
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-text-3">
+                    Palestrantes & Convidados ({speakersList.length})
                   </span>
-                )}
-                <div className="min-w-0">
-                  <p className="text-[15px] font-semibold">{speakerName}</p>
-                  {speakerRole && <p className="text-[13px] text-text-2">{speakerRole}</p>}
                 </div>
-              </div>
-              {speakerBio && (
-                <>
-                  <p className={`mt-3 text-sm leading-[1.5] text-text-2 ${isBioExpanded ? '' : 'line-clamp-2'}`}>{speakerBio}</p>
-                  {speakerBio.length > 100 && (
-                    <button
-                      type="button"
-                      onClick={() => setIsBioExpanded(!isBioExpanded)}
-                      aria-expanded={isBioExpanded}
-                      className="min-h-11 text-[13px] font-bold text-link"
-                    >
-                      {isBioExpanded ? 'Mostrar menos' : 'Ler bio completa'}
-                    </button>
-                  )}
-                </>
               )}
+              {speakersList.map((spk, idx) => {
+                const spkKey = spk.id || idx;
+                const isBioExp = speakersList.length === 1 ? isBioExpanded : !!expandedBios[spkKey];
+                const toggleBioHandler = () => {
+                  if (speakersList.length === 1) {
+                    setIsBioExpanded(!isBioExpanded);
+                  } else {
+                    setExpandedBios((prev) => ({ ...prev, [spkKey]: !prev[spkKey] }));
+                  }
+                };
+
+                return (
+                  <div key={spkKey} className={speakersList.length > 1 ? 'rounded-2xl border border-line bg-surface/40 p-3.5' : ''}>
+                    <div className="flex items-center gap-3">
+                      {spk.photo ? (
+                        <img src={spk.photo} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
+                      ) : (
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-raised font-bold text-[13px] text-text-3" aria-hidden="true">
+                          {spk.name ? spk.name.slice(0, 2).toUpperCase() : <User size={20} />}
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[15px] font-semibold">{spk.name}</p>
+                        {spk.role && <p className="text-[13px] text-text-2">{spk.role}</p>}
+                      </div>
+                    </div>
+                    {spk.bio && (
+                      <>
+                        <p className={`mt-2.5 text-sm leading-[1.5] text-text-2 ${isBioExp ? '' : 'line-clamp-2'}`}>{spk.bio}</p>
+                        {spk.bio.length > 100 && (
+                          <button
+                            type="button"
+                            onClick={toggleBioHandler}
+                            aria-expanded={isBioExp}
+                            className="min-h-11 text-[13px] font-bold text-link"
+                          >
+                            {isBioExp ? 'Mostrar menos' : 'Ler bio completa'}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -397,6 +481,19 @@ export default function ActivityModal({
           setConfirmingCancel(false);
         }}
       />
+      {showFeedbackModal && (
+        <ActivityFeedbackModal
+          isOpen={true}
+          activity={activity}
+          onClose={() => {
+            setShowFeedbackModal(false);
+            setEvaluated(isActivityEvaluated(activity?.id));
+          }}
+          onSuccess={() => {
+            setEvaluated(true);
+          }}
+        />
+      )}
     </>,
     document.body
   );
