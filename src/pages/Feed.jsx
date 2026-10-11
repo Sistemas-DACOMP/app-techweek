@@ -16,6 +16,7 @@ import {
   Film
 } from 'lucide-react';
 import { subscribeToFeedPosts, createFeedPost, toggleLikeFeedPost, uploadFeedMedia, DEFAULT_FEED_POSTS } from '../lib/feedService';
+import { getSponsorSettings } from '../lib/sponsorSettingsService';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserProfile, getCachedUserProfile } from '../lib/userService';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
@@ -103,7 +104,7 @@ export function PostCard({ post, featured, isLiked, popping, onLike, onPopEnd, o
           {isOrg ? (
             <img src={iconeTw} alt="" className="h-[22px] w-5 object-contain brightness-0 invert" />
           ) : post.authorAvatar ? (
-            <img src={post.authorAvatar} alt="" className="size-full object-contain p-1!" />
+            <img src={post.authorAvatar} alt="" className="size-full object-cover" />
           ) : (
             <Building2 size={18} className="text-text-3" aria-hidden="true" />
           )}
@@ -122,7 +123,15 @@ export function PostCard({ post, featured, isLiked, popping, onLike, onPopEnd, o
               </span>
             )}
           </span>
-          <span className="block text-xs text-text-3">{post.formattedTime || timeAgo(post.createdAt)}</span>
+          <span className="flex items-center gap-1.5 text-xs text-text-3">
+            {post.authorHandle && (
+              <span className="font-semibold text-text-2">
+                {post.authorHandle.startsWith('@') ? post.authorHandle : `@${post.authorHandle}`}
+              </span>
+            )}
+            {post.authorHandle && <span className="opacity-40">•</span>}
+            <span>{post.formattedTime || timeAgo(post.createdAt)}</span>
+          </span>
         </span>
       </div>
 
@@ -345,16 +354,35 @@ export default function Feed() {
       }
 
       const isSponsor = userProfile?.role === 'SPONSOR';
+      const companyId = userProfile?.companyId || 'default';
+      const sponsorSettings = isSponsor ? getSponsorSettings(companyId) : null;
+      const feedProfile = sponsorSettings?.feedProfile || {};
+
+      const finalAuthor = isSponsor
+        ? (feedProfile.displayName?.trim() || userProfile?.companyName || userProfile?.displayName || 'Patrocinador Oficial')
+        : (userProfile?.displayName || 'Organização FACOM');
+
+      const finalHandle = isSponsor
+        ? (feedProfile.handle?.trim() || (userProfile?.companyId ? `@${userProfile.companyId}` : undefined))
+        : undefined;
+
+      const finalAvatar = isSponsor
+        ? (feedProfile.avatarUrl?.trim() || userProfile?.avatarUrl || userProfile?.photoURL || '')
+        : (userProfile?.avatarUrl || userProfile?.photoURL || '');
+
       await createFeedPost({
-        author: userProfile?.companyName || userProfile?.displayName || (isSponsor ? 'Patrocinador Oficial' : 'Organização FACOM'),
+        author: finalAuthor,
+        authorHandle: finalHandle,
         authorRole: isSponsor ? 'SPONSOR' : 'ORGANIZATION',
-        authorAvatar: userProfile?.avatarUrl || userProfile?.photoURL || '',
+        authorAvatar: finalAvatar,
         content: newPostContent.trim(),
         imageUrl: finalMediaType === 'image' ? finalMediaUrl : '',
         videoUrl: finalMediaType === 'video' ? finalMediaUrl : '',
         mediaUrl: finalMediaUrl,
         mediaType: finalMediaType,
-        pinned: false
+        pinned: false,
+        sponsorTier: isSponsor ? (userProfile?.tier || 'GOLD') : undefined,
+        companyId: isSponsor ? companyId : undefined,
       });
 
       setNewPostContent('');

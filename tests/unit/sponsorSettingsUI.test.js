@@ -19,11 +19,62 @@ describe('SponsorSettings UI Component', () => {
 
       expect(html).toContain('Personalização do Estande');
       expect(html).toContain('Kanastra');
+      expect(html).toContain('Perfil no Feed');
       expect(html).toContain('Modelos de WhatsApp');
       expect(html).toContain('Tags de Qualificação');
       // Design enxuto sem ruído visual
       expect(html).not.toContain('1-Clique');
       expect(html).not.toContain('⭐');
+    });
+  });
+
+  describe('Aba: Perfil Público no Feed (Avatar e @handle)', () => {
+    it('renderiza o campo de @ Identificador no Feed e o prefixo @', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(SponsorSettings, defaultProps)
+      );
+
+      expect(html).toContain('@ Identificador no Feed');
+      expect(html).toContain('id="feed-handle-input"');
+      expect(html).toContain('Como os participantes verão sua empresa no Feed');
+    });
+
+    it('renderiza o campo de Nome de Exibição no Feed', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(SponsorSettings, defaultProps)
+      );
+
+      expect(html).toContain('Nome de Exibição no Feed');
+      expect(html).toContain('id="feed-display-name-input"');
+    });
+
+    it('renderiza os botões de ação e upload de foto de perfil', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(SponsorSettings, {
+          ...defaultProps,
+          sponsorLogo: 'https://exemplo.com/logo.png',
+        })
+      );
+
+      expect(html).toContain('Foto de Perfil (Avatar)');
+      expect(html).toContain('Enviar foto');
+      expect(html).toContain('Usar logo oficial');
+      expect(html).toContain('Salvar Perfil do Feed');
+      expect(html).toContain('Restaurar perfil padrão');
+    });
+
+    it('renderiza o card de pré-visualização ao vivo de post do Feed', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(SponsorSettings, {
+          ...defaultProps,
+          sponsorTier: 'DIAMOND',
+        })
+      );
+
+      expect(html).toContain('Pré-visualização no Feed');
+      expect(html).toContain('Patrocinador Diamante');
+      expect(html).toContain('@kanastra');
+      expect(html).toContain('Agora');
     });
   });
 

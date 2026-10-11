@@ -56,7 +56,7 @@ const MENU_GROUPS = [
     items: [
       { key: 'home', label: 'Visão Geral', icon: LayoutDashboard },
       { key: 'leads', label: 'Leads do Estande', icon: Users, badgeKey: 'leads' },
-      { key: 'settings', label: 'Mensagens & Tags', icon: SlidersHorizontal, tag: 'Novo' },
+      { key: 'settings', label: 'Configurações', icon: SlidersHorizontal, tag: 'Perfil & Feed' },
       { key: 'roi', label: 'Relatório Executivo', icon: TrendingUp, tag: 'ROI' },
       { key: 'scanner', label: 'Scanner de Crachá', icon: QrCode, tag: 'Bipar' },
     ],
@@ -89,7 +89,7 @@ const CONTEXT_HEADERS = {
   },
   settings: {
     title: 'Configurações do Estande',
-    subtitle: 'Personalize mensagens automáticas de WhatsApp e tags de recrutamento',
+    subtitle: 'Perfil no feed, mensagens de WhatsApp e tags de recrutamento',
   },
   roi: {
     title: 'Relatório Executivo de ROI',

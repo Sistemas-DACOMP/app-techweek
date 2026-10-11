@@ -9,6 +9,8 @@ import {
   resetTemplatesToDefault,
   interpolateTemplate,
   getActiveOutreachMessage,
+  sanitizeFeedHandle,
+  resetFeedProfileToDefault,
 } from '../../src/lib/sponsorSettingsService';
 
 describe('sponsorSettingsService', () => {
@@ -129,6 +131,59 @@ describe('sponsorSettingsService', () => {
       });
       const reset = resetTemplatesToDefault(companyId);
       expect(reset.templates).toEqual(DEFAULT_WHATSAPP_TEMPLATES);
+    });
+  });
+
+  describe('Perfil Público de Feed (Avatar e @handle)', () => {
+    it('retorna @companyId como handle padrão e avatar vazio', () => {
+      const settings = getSponsorSettings(companyId);
+      expect(settings.feedProfile).toBeDefined();
+      expect(settings.feedProfile.handle).toBe(`@${companyId}`);
+      expect(settings.feedProfile.avatarUrl).toBe('');
+      expect(settings.feedProfile.displayName).toBe('');
+    });
+
+    it('sanitiza o handle removendo caracteres especiais, forçando lowercase e limitando tamanho', () => {
+      expect(sanitizeFeedHandle('Kanastra Tech!')).toBe('@kanastratech');
+      expect(sanitizeFeedHandle('@bayer.agro_2026')).toBe('@bayer.agro_2026');
+      expect(sanitizeFeedHandle('  @aimirim_ai  ')).toBe('@aimirim_ai');
+      expect(sanitizeFeedHandle('handle_muito_longo_que_passa_de_vinte_e_quatro_caracteres')).toHaveLength(25); // @ + 24
+      expect(sanitizeFeedHandle('')).toBe('');
+      expect(sanitizeFeedHandle(null)).toBe('');
+    });
+
+    it('persiste foto de perfil, @handle customizado e nome de exibição', () => {
+      const saved = saveSponsorSettings(companyId, {
+        feedProfile: {
+          handle: '@kanastra_oficial',
+          avatarUrl: 'https://cdn.techweek.com/kanastra-avatar.png',
+          displayName: 'Kanastra Tech Hub',
+        },
+      });
+
+      expect(saved.feedProfile.handle).toBe('@kanastra_oficial');
+      expect(saved.feedProfile.avatarUrl).toBe('https://cdn.techweek.com/kanastra-avatar.png');
+      expect(saved.feedProfile.displayName).toBe('Kanastra Tech Hub');
+
+      const reloaded = getSponsorSettings(companyId);
+      expect(reloaded.feedProfile.handle).toBe('@kanastra_oficial');
+      expect(reloaded.feedProfile.avatarUrl).toBe('https://cdn.techweek.com/kanastra-avatar.png');
+      expect(reloaded.feedProfile.displayName).toBe('Kanastra Tech Hub');
+    });
+
+    it('restaura o perfil de feed para o padrão original', () => {
+      saveSponsorSettings(companyId, {
+        feedProfile: {
+          handle: '@custom_handle',
+          avatarUrl: 'https://exemplo.com/avatar.jpg',
+          displayName: 'Nome Customizado',
+        },
+      });
+
+      const reset = resetFeedProfileToDefault(companyId);
+      expect(reset.feedProfile.handle).toBe(`@${companyId}`);
+      expect(reset.feedProfile.avatarUrl).toBe('');
+      expect(reset.feedProfile.displayName).toBe('');
     });
   });
 });

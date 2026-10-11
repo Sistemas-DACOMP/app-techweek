@@ -42,11 +42,32 @@ export const DEFAULT_WHATSAPP_TEMPLATES = [
   },
 ];
 
+export const DEFAULT_FEED_PROFILE = {
+  handle: '',
+  avatarUrl: '',
+  displayName: '',
+};
+
 export const DEFAULT_SETTINGS = {
   tags: [...DEFAULT_QUALIFICATION_TAGS],
   templates: [...DEFAULT_WHATSAPP_TEMPLATES],
   activeTemplateId: 'recruiter_outreach',
+  feedProfile: { ...DEFAULT_FEED_PROFILE },
 };
+
+/**
+ * Normaliza e sanitiza um handle de patrocinador para o feed (ex: '@kanastra')
+ * @param {string} handle
+ * @returns {string} Handle formatado com prefixo @
+ */
+export function sanitizeFeedHandle(handle = '') {
+  if (!handle || typeof handle !== 'string') return '';
+  let clean = handle.trim().toLowerCase();
+  if (clean.startsWith('@')) clean = clean.substring(1);
+  // Remove caracteres inválidos (permite apenas letras, números, underline e ponto)
+  clean = clean.replace(/[^a-z0-9_.]/g, '').slice(0, 24);
+  return clean ? `@${clean}` : '';
+}
 
 // Fallback em memória para ambientes sem localStorage (SSR, Node/Vitest)
 const memoryStorage = new Map();
@@ -63,6 +84,9 @@ const getStorageKey = (companyId = 'default') => {
  */
 export function getSponsorSettings(companyId = 'default') {
   const key = getStorageKey(companyId);
+  const cleanId = String(companyId || 'default').toLowerCase().trim();
+  const defaultHandle = cleanId && cleanId !== 'default' ? `@${cleanId}` : '';
+
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       const raw = window.localStorage.getItem(key);
@@ -72,6 +96,11 @@ export function getSponsorSettings(companyId = 'default') {
           tags: Array.isArray(parsed.tags) && parsed.tags.length > 0 ? parsed.tags : [...DEFAULT_QUALIFICATION_TAGS],
           templates: Array.isArray(parsed.templates) && parsed.templates.length > 0 ? parsed.templates : [...DEFAULT_WHATSAPP_TEMPLATES],
           activeTemplateId: parsed.activeTemplateId || 'recruiter_outreach',
+          feedProfile: {
+            handle: parsed.feedProfile?.handle !== undefined ? parsed.feedProfile.handle : defaultHandle,
+            avatarUrl: parsed.feedProfile?.avatarUrl || '',
+            displayName: parsed.feedProfile?.displayName || '',
+          },
         };
       }
     }
@@ -81,10 +110,20 @@ export function getSponsorSettings(companyId = 'default') {
 
   // Fallback em memória
   if (memoryStorage.has(key)) {
-    return JSON.parse(JSON.stringify(memoryStorage.get(key)));
+    const mem = memoryStorage.get(key);
+    return {
+      ...JSON.parse(JSON.stringify(mem)),
+      feedProfile: {
+        handle: mem.feedProfile?.handle !== undefined ? mem.feedProfile.handle : defaultHandle,
+        avatarUrl: mem.feedProfile?.avatarUrl || '',
+        displayName: mem.feedProfile?.displayName || '',
+      },
+    };
   }
 
-  return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  const def = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  def.feedProfile.handle = defaultHandle;
+  return def;
 }
 
 /**
@@ -96,11 +135,23 @@ export function getSponsorSettings(companyId = 'default') {
 export function saveSponsorSettings(companyId = 'default', newSettings = {}) {
   const key = getStorageKey(companyId);
   const current = getSponsorSettings(companyId);
+  const cleanId = String(companyId || 'default').toLowerCase().trim();
+  const defaultHandle = cleanId && cleanId !== 'default' ? `@${cleanId}` : '';
+
+  const incomingProfile = newSettings.feedProfile || {};
+  const currentProfile = current.feedProfile || {};
 
   const merged = {
     tags: Array.isArray(newSettings.tags) ? newSettings.tags : current.tags,
     templates: Array.isArray(newSettings.templates) ? newSettings.templates : current.templates,
     activeTemplateId: newSettings.activeTemplateId || current.activeTemplateId || 'recruiter_outreach',
+    feedProfile: {
+      handle: incomingProfile.handle !== undefined
+        ? (sanitizeFeedHandle(incomingProfile.handle) || defaultHandle)
+        : (currentProfile.handle || defaultHandle),
+      avatarUrl: incomingProfile.avatarUrl !== undefined ? incomingProfile.avatarUrl.trim() : (currentProfile.avatarUrl || ''),
+      displayName: incomingProfile.displayName !== undefined ? incomingProfile.displayName.trim() : (currentProfile.displayName || ''),
+    },
   };
 
   try {
@@ -133,7 +184,11 @@ export function saveSponsorSettings(companyId = 'default', newSettings = {}) {
  * @returns {object}
  */
 export function resetSponsorSettings(companyId = 'default') {
-  return saveSponsorSettings(companyId, JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
+  const cleanId = String(companyId || 'default').toLowerCase().trim();
+  const defaultHandle = cleanId && cleanId !== 'default' ? `@${cleanId}` : '';
+  const def = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  def.feedProfile.handle = defaultHandle;
+  return saveSponsorSettings(companyId, def);
 }
 
 /**
@@ -159,6 +214,26 @@ export function resetTemplatesToDefault(companyId = 'default') {
   return saveSponsorSettings(companyId, {
     ...current,
     templates: [...DEFAULT_WHATSAPP_TEMPLATES],
+  });
+}
+
+/**
+ * Restaura apenas o perfil público de feed para o padrão.
+ * @param {string} companyId
+ * @returns {object}
+ */
+export function resetFeedProfileToDefault(companyId = 'default') {
+  const current = getSponsorSettings(companyId);
+  const cleanId = String(companyId || 'default').toLowerCase().trim();
+  const defaultHandle = cleanId && cleanId !== 'default' ? `@${cleanId}` : '';
+
+  return saveSponsorSettings(companyId, {
+    ...current,
+    feedProfile: {
+      handle: defaultHandle,
+      avatarUrl: '',
+      displayName: '',
+    },
   });
 }
 

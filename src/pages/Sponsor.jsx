@@ -71,6 +71,7 @@ import SponsorLeadModal from '../components/SponsorLeadModal';
 import SponsorSplitView from '../components/sponsor/SponsorSplitView';
 import SponsorRoiDashboard from '../components/sponsor/SponsorRoiDashboard';
 import SponsorSettings from '../components/sponsor/SponsorSettings';
+import { getSponsorSettings } from '../lib/sponsorSettingsService';
 import SponsorShell from '../components/sponsor/SponsorShell';
 import WhatsAppButton from '../components/WhatsAppButton';
 import Mascot from '../components/Mascot';
@@ -769,10 +770,17 @@ export default function Sponsor() {
         setIsUploadingMedia(false);
       }
 
+      const sponsorSettings = getSponsorSettings(activeCompanyId);
+      const feedProfile = sponsorSettings?.feedProfile || {};
+      const finalAuthor = feedProfile.displayName?.trim() || sponsorName;
+      const finalHandle = feedProfile.handle?.trim() || `@${activeCompanyId}`;
+      const finalAvatar = feedProfile.avatarUrl?.trim() || userProfile?.avatarUrl || userProfile?.photoURL || sponsorLogo || '';
+
       await createFeedPost({
-        author: sponsorName,
+        author: finalAuthor,
+        authorHandle: finalHandle,
         authorRole: 'SPONSOR',
-        authorAvatar: userProfile?.avatarUrl || userProfile?.photoURL || '',
+        authorAvatar: finalAvatar,
         content: newPostContent.trim(),
         imageUrl: finalMediaType === 'image' ? finalMediaUrl : '',
         videoUrl: finalMediaType === 'video' ? finalMediaUrl : '',
@@ -1020,6 +1028,15 @@ export default function Sponsor() {
               <button
                 type="button"
                 className={btn('secondary', 'h-10 px-3 text-[13px]')}
+                onClick={() => setActiveTab('settings')}
+                title="Configurações do Estande e Perfil do Feed"
+              >
+                <SlidersHorizontal size={15} aria-hidden="true" />
+                <span className="hidden sm:inline">Config</span>
+              </button>
+              <button
+                type="button"
+                className={btn('secondary', 'h-10 px-3 text-[13px]')}
                 onClick={handleExportCsv}
                 disabled={companyLeads.length === 0}
                 title="Exportar leads em CSV"
@@ -1036,7 +1053,7 @@ export default function Sponsor() {
               {activeTab === 'scanner' && 'Bipar Crachá'}
               {activeTab === 'agenda' && 'Programação da TechWeek'}
               {activeTab === 'feed' && 'Feed da Comunidade'}
-              {activeTab === 'settings' && 'Mensagens & Tags'}
+              {activeTab === 'settings' && 'Configurações do Estande'}
             </h1>
             <div
               style={{
@@ -2273,12 +2290,14 @@ export default function Sponsor() {
       )}
 
       {/* ========================================================================= */}
-      {/* ABA 6: MENSAGENS & TAGS (CONFIGURAÇÕES DO ESTANDE)                        */}
+      {/* ABA 6: CONFIGURAÇÕES DO ESTANDE (PERFIL DO FEED, WHATSAPP E TAGS)          */}
       {/* ========================================================================= */}
       {activeTab === 'settings' && (
         <SponsorSettings
           companyId={activeCompanyId}
           companyName={sponsorName}
+          sponsorLogo={sponsorLogo}
+          sponsorTier={sponsorTierInfo?.tier || 'GOLD'}
           onSettingsSaved={() => showToast('Configurações salvas e ativas no estande!', 'success')}
         />
       )}
