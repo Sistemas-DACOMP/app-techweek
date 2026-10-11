@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, AlertTriangle, X, Plus, ArrowRight, Trash2 } from 'lucide-react';
+import { Check, AlertTriangle, X, Plus, ArrowRight, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import Mascot from '../../components/Mascot';
 import { btn, ICON_BTN, Section, Field, Stepper, SwitchRow, EVENT_DAYS, dayLabel, typeColor, typeLabel, initials } from './ui';
 
@@ -31,7 +31,7 @@ function findConflict(activities, editingId, row) {
   return null;
 }
 
-function AgendaPreview({ form, speakersSel }) {
+function AgendaPreview({ form, speakersSel = [] }) {
   const row = form.scheduleRows[0] || {};
   const color = typeColor(form.type);
   return (
@@ -46,7 +46,26 @@ function AgendaPreview({ form, speakersSel }) {
         {dayLabel(row.date)} · {row.startTime}{row.endTime ? ` – ${row.endTime}` : ''}
         <span className="ml-3">{row.location}</span>
       </div>
-      {speakersSel.length > 0 && <div className="mt-1 text-[13px] text-text-3">{speakersSel.map((s) => s.name).join(', ')}</div>}
+      {speakersSel.length > 0 && (
+        <div className="mt-2 flex items-center gap-2">
+          {speakersSel.length > 1 && (
+            <div className="flex -space-x-1.5 overflow-hidden">
+              {speakersSel.slice(0, 3).map((s, i) => (
+                s.photo ? (
+                  <img key={i} src={s.photo} alt="" className="inline-block h-6 w-6 rounded-full ring-2 ring-surface object-cover" />
+                ) : (
+                  <span key={i} className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#2A3570] text-[9px] font-black text-text ring-2 ring-surface">
+                    {initials(s.name)}
+                  </span>
+                )
+              ))}
+            </div>
+          )}
+          <div className="truncate text-[13px] font-medium text-text-3">
+            {speakersSel.map((s) => s.name).filter(Boolean).join(', ')}
+          </div>
+        </div>
+      )}
       <div className="mt-2.5 flex items-center justify-between text-[14px]">
         <span className="font-bold text-link">{form.requiresRegistration ? 'Reservar vaga' : 'Entrada livre'}</span>
         <span className="text-text-2">{form.hasCapacityLimit ? `${form.capacity} vagas` : 'Sem limite'}</span>
@@ -55,7 +74,7 @@ function AgendaPreview({ form, speakersSel }) {
   );
 }
 
-function OpenPreview({ form, speakersSel }) {
+function OpenPreview({ form, speakersSel = [] }) {
   const row = form.scheduleRows[0] || {};
   return (
     <div className="overflow-hidden rounded-[18px] bg-surface">
@@ -69,12 +88,26 @@ function OpenPreview({ form, speakersSel }) {
       </div>
       <div className="p-4">
         <p className="m-0 text-[14px] leading-normal text-text-2">{form.description || 'Descrição da atividade.'}</p>
-        {speakersSel.map((s) => (
-          <div key={s.id} className="mt-3 flex items-center gap-2.5">
-            {s.photo ? <img src={s.photo} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2A3570] text-[12px] font-extrabold">{initials(s.name)}</span>}
-            <span className="text-[14px] font-bold">{s.name}</span>
+        {speakersSel.length > 0 && (
+          <div className="mt-4 flex flex-col gap-2.5 border-t border-line pt-3">
+            <span className="text-[12px] font-extrabold uppercase text-text-3">Palestrantes convidados ({speakersSel.length})</span>
+            {speakersSel.map((s, idx) => (
+              <div key={s.id || idx} className="flex items-center gap-2.5">
+                {s.photo ? (
+                  <img src={s.photo} alt="" className="h-9 w-9 rounded-full border border-line-2 object-cover" />
+                ) : (
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2A3570] text-[12px] font-extrabold text-text">
+                    {initials(s.name)}
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <span className="block truncate text-[14px] font-bold text-text">{s.name || 'Nome do Palestrante'}</span>
+                  {s.role && <span className="block truncate text-[12px] text-text-3">{s.role}</span>}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
@@ -120,13 +153,93 @@ export default function ActivityForm({ form, setForm, editingId, types, speakers
     return { ...prev, scheduleRows, isMultiSession: scheduleRows.length > 1 };
   });
 
-  const speakersSel = (form.selectedSpeakerIds || []).map((id) => speakers.find((s) => s.id === id)).filter(Boolean);
-  const toggleSpeaker = (id) => setForm((prev) => {
-    const cur = prev.selectedSpeakerIds || [];
-    return { ...prev, selectedSpeakerIds: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] };
-  });
+  // Inicialização da lista dinâmica de palestrantes
+  const initialSpeakersList = useMemo(() => {
+    if (Array.isArray(form.speakersList) && form.speakersList.length > 0) {
+      return form.speakersList;
+    }
+    if (Array.isArray(form.selectedSpeakerIds) && form.selectedSpeakerIds.length > 0) {
+      const fromIds = form.selectedSpeakerIds.map((id) => {
+        const s = speakers.find((x) => x.id === id);
+        return s ? { id: s.id, name: s.name, role: s.role || s.institution || '', photo: s.photo || '', bio: s.bio || '' } : null;
+      }).filter(Boolean);
+      if (fromIds.length > 0) return fromIds;
+    }
+    if (form.speakerName || form.speaker) {
+      return [{
+        id: form.speakerId || `spk_${Date.now()}`,
+        name: form.speakerName || form.speaker,
+        role: form.speakerRole || '',
+        photo: form.speakerPhoto || '',
+        bio: ''
+      }];
+    }
+    return [];
+  }, []);
+
+  const [speakersList, setSpeakersList] = useState(initialSpeakersList);
+
+  const updateSpeakers = (newList) => {
+    setSpeakersList(newList);
+    const names = newList.map((s) => s.name).filter(Boolean);
+    const ids = newList.map((s) => s.id).filter(Boolean);
+    setForm((prev) => ({
+      ...prev,
+      speakersList: newList,
+      selectedSpeakerIds: ids,
+      speaker: names.join(', '),
+      speakerName: names[0] || '',
+      speakerRole: newList[0]?.role || '',
+      speakerPhoto: newList[0]?.photo || '',
+      speakerId: newList[0]?.id || ''
+    }));
+  };
+
+  const addEmptySpeaker = () => {
+    const newSpk = {
+      id: `spk_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      name: '',
+      role: '',
+      photo: '',
+      bio: ''
+    };
+    updateSpeakers([...speakersList, newSpk]);
+  };
+
+  const addExistingSpeaker = (s) => {
+    if (speakersList.some((x) => x.id === s.id)) return;
+    const newSpk = {
+      id: s.id,
+      name: s.name,
+      role: s.role || s.institution || '',
+      photo: s.photo || '',
+      bio: s.bio || ''
+    };
+    updateSpeakers([...speakersList, newSpk]);
+    setSpkQuery('');
+  };
+
+  const updateSpeakerField = (index, field, value) => {
+    const updated = speakersList.map((s, i) => (i === index ? { ...s, [field]: value } : s));
+    updateSpeakers(updated);
+  };
+
+  const moveSpeaker = (fromIndex, toIndex) => {
+    if (toIndex < 0 || toIndex >= speakersList.length) return;
+    const item = speakersList[fromIndex];
+    const updated = [...speakersList];
+    updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, item);
+    updateSpeakers(updated);
+  };
+
+  const removeSpeaker = (index) => {
+    const updated = speakersList.filter((_, i) => i !== index);
+    updateSpeakers(updated);
+  };
+
   const matches = spkQuery.trim()
-    ? speakers.filter((s) => !speakersSel.includes(s) && `${s.name} ${s.institution || ''} ${s.role || ''}`.toLowerCase().includes(spkQuery.toLowerCase())).slice(0, 6)
+    ? speakers.filter((s) => !speakersList.some((x) => x.id === s.id) && `${s.name} ${s.institution || ''} ${s.role || ''}`.toLowerCase().includes(spkQuery.toLowerCase())).slice(0, 6)
     : [];
 
   const conflict = useMemo(() => findConflict(activities, editingId, row0), [activities, editingId, row0]);
@@ -138,7 +251,7 @@ export default function ActivityForm({ form, setForm, editingId, types, speakers
     { ok: !!(form.title && form.description), text: 'Título, tipo e descrição' },
     { ok: !!(row0.date && dur), text: 'Dia e horário' },
     conflict ? { ok: false, text: `Conflito de sala no ${row0.location}` } : { ok: true, text: 'Sala livre no horário' },
-    speakersSel.length === 0 ? { ok: false, text: 'Nenhum palestrante escolhido' } : speakersSel.some((s) => !s.photo) ? { ok: false, text: 'Palestrante sem foto' } : { ok: true, text: 'Palestrante com foto' },
+    speakersList.length === 0 ? { ok: false, text: 'Nenhum palestrante escolhido' } : speakersList.some((s) => !s.photo) ? { ok: false, text: 'Palestrante sem foto' } : { ok: true, text: 'Palestrante com foto' },
   ];
 
   const title = editingId ? 'Editar atividade' : 'Nova atividade';
@@ -255,38 +368,210 @@ export default function ActivityForm({ form, setForm, editingId, types, speakers
                 <span>O {row0.location} já tem <strong className="text-text">{conflict.act.title}</strong> das {conflict.start}{conflict.end ? ` às ${conflict.end}` : ''} neste dia. Escolha outro horário ou local.</span>
               </p>
             )}
-            <div className="mt-4">
-              <Field label="Palestrante">
-                {(id) => (
-                  <div className="rounded-xl border-[1.5px] border-field-line bg-field p-1.5 focus-within:border-link">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {speakersSel.map((s) => (
-                        <span key={s.id} className="inline-flex items-center gap-2 rounded-full bg-surface-selected py-1 pl-1 pr-1">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#2A3570] text-[11px] font-extrabold">{initials(s.name)}</span>
-                          <span className="text-[14px] font-bold">{s.name}</span>
-                          <button type="button" aria-label={`Remover ${s.name}`} onClick={() => toggleSpeaker(s.id)} className="flex h-8 w-8 items-center justify-center rounded-full text-text-2"><X size={14} aria-hidden="true" /></button>
-                        </span>
-                      ))}
-                      <input id={id} value={spkQuery} onChange={(e) => setSpkQuery(e.target.value)} placeholder="Buscar convidado" autoComplete="off"
-                        className="min-h-10 min-w-[140px] flex-1 border-0 bg-transparent px-2 text-[16px] text-text outline-none placeholder:text-text-4" />
-                    </div>
+            <div className="mt-5 space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="m-0 text-[15px] font-bold text-text">Palestrantes e Convidados ({speakersList.length})</h3>
+                  <p className="m-0 text-[12px] text-text-3">Adicione um ou mais palestrantes para esta atividade</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={addEmptySpeaker}
+                    className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-line-2 bg-surface-raised px-3 py-1.5 text-[13px] font-bold text-text hover:border-link hover:text-link"
+                  >
+                    <Plus size={15} aria-hidden="true" /> + Convidado Personalizado
+                  </button>
+                </div>
+              </div>
+
+              {/* Seletor rápido de convidados da base */}
+              <div className="relative">
+                <div className="rounded-xl border-[1.5px] border-field-line bg-field p-2 focus-within:border-link">
+                  <input
+                    value={spkQuery}
+                    onChange={(e) => setSpkQuery(e.target.value)}
+                    placeholder="Buscar e vincular convidado cadastrado na base..."
+                    autoComplete="off"
+                    className="w-full border-0 bg-transparent px-2 text-[14px] text-text outline-none placeholder:text-text-4"
+                  />
+                </div>
+                {matches.length > 0 && (
+                  <ul className="absolute left-0 right-0 top-full z-20 m-0 mt-1 max-h-56 list-none overflow-y-auto rounded-xl border border-line-2 bg-surface-selected p-1.5 shadow-xl">
+                    {matches.map((s) => (
+                      <li key={s.id}>
+                        <button
+                          type="button"
+                          onClick={() => addExistingSpeaker(s)}
+                          className="flex min-h-11 w-full items-center gap-3 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-raised"
+                        >
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#2A3570] text-[12px] font-extrabold text-white">
+                            {s.photo ? (
+                              <img src={s.photo} alt={s.name} className="h-full w-full object-cover" />
+                            ) : (
+                              initials(s.name)
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate text-[14px] font-bold text-text">{s.name}</span>
+                            <span className="block truncate text-[12px] text-text-3">{s.institution || s.role || 'Convidado'}</span>
+                          </div>
+                          <span className="text-[12px] font-bold text-link">+ Vincular</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {spkQuery.trim() && matches.length === 0 && (
+                  <div className="mt-1 flex items-center justify-between rounded-lg bg-surface-raised px-3 py-2 text-[13px] text-text-3">
+                    <span>Nenhum palestrante cadastrado encontrado.</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newSpk = {
+                          id: `spk_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+                          name: spkQuery.trim(),
+                          role: '',
+                          photo: '',
+                          bio: ''
+                        };
+                        updateSpeakers([...speakersList, newSpk]);
+                        setSpkQuery('');
+                      }}
+                      className="font-bold text-link hover:underline"
+                    >
+                      Adicionar "{spkQuery.trim()}"
+                    </button>
                   </div>
                 )}
-              </Field>
-              {matches.length > 0 && (
-                <ul className="m-0 mt-1.5 list-none rounded-xl bg-surface-selected p-1.5">
-                  {matches.map((s) => (
-                    <li key={s.id}>
-                      <button type="button" onClick={() => { toggleSpeaker(s.id); setSpkQuery(''); }} className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-left hover:bg-surface-raised">
-                        <span className="text-[14px] font-bold">{s.name}</span>
-                        <span className="truncate text-[13px] text-text-3">{s.institution || s.role}</span>
-                      </button>
-                    </li>
+              </div>
+
+              {/* Lista dinâmica de palestrantes */}
+              {speakersList.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line-2 bg-surface/40 p-6 text-center">
+                  <p className="m-0 text-[14px] text-text-3">Nenhum palestrante adicionado ainda.</p>
+                  <p className="m-0 mt-1 text-[12px] text-text-4">Busque acima ou clique para adicionar manualmente.</p>
+                  <button
+                    type="button"
+                    onClick={addEmptySpeaker}
+                    className="mt-3 inline-flex min-h-[36px] items-center gap-1.5 rounded-xl bg-action px-3.5 py-1.5 text-[13px] font-bold text-white hover:opacity-90"
+                  >
+                    <Plus size={15} aria-hidden="true" /> Adicionar Palestrante
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {speakersList.map((spk, idx) => (
+                    <div
+                      key={spk.id || idx}
+                      className="rounded-2xl border border-line-2 bg-surface-raised p-4 transition-all hover:border-link/40"
+                    >
+                      {/* Top bar do card: Avatar + Ordem + Ações */}
+                      <div className="flex items-center justify-between border-b border-line pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line-2 bg-[#2A3570] text-[13px] font-bold text-white">
+                            {spk.photo ? (
+                              <img src={spk.photo} alt={spk.name || 'Palestrante'} className="h-full w-full object-cover" />
+                            ) : (
+                              initials(spk.name || '?')
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-[12px] font-extrabold uppercase tracking-wide text-text-3">
+                              Palestrante #{idx + 1} {idx === 0 ? '· Principal' : ''}
+                            </span>
+                            <div className="text-[14px] font-bold text-text truncate max-w-[200px] sm:max-w-[280px]">
+                              {spk.name || 'Nome não preenchido'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Botões de reordenação e exclusão */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            title="Subir na ordem"
+                            disabled={idx === 0}
+                            onClick={() => moveSpeaker(idx, idx - 1)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-2 hover:bg-surface-selected hover:text-text disabled:opacity-30 disabled:pointer-events-none"
+                          >
+                            <ChevronUp size={16} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Descer na ordem"
+                            disabled={idx === speakersList.length - 1}
+                            onClick={() => moveSpeaker(idx, idx + 1)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-2 hover:bg-surface-selected hover:text-text disabled:opacity-30 disabled:pointer-events-none"
+                          >
+                            <ChevronDown size={16} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Remover palestrante"
+                            onClick={() => removeSpeaker(idx)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-err/80 hover:bg-err/10 hover:text-err"
+                          >
+                            <Trash2 size={16} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Inputs do palestrante */}
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-text-3 mb-1">
+                            Nome Completo *
+                          </label>
+                          <input
+                            type="text"
+                            value={spk.name || ''}
+                            onChange={(e) => updateSpeakerField(idx, 'name', e.target.value)}
+                            placeholder="Ex: Dra. Ana Paula Costa"
+                            className="w-full rounded-xl border border-field-line bg-field px-3 py-2 text-[14px] text-text outline-none focus:border-link"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-text-3 mb-1">
+                            Cargo / Empresa / Instituição
+                          </label>
+                          <input
+                            type="text"
+                            value={spk.role || ''}
+                            onChange={(e) => updateSpeakerField(idx, 'role', e.target.value)}
+                            placeholder="Ex: Staff Engineer · Nubank"
+                            className="w-full rounded-xl border border-field-line bg-field px-3 py-2 text-[14px] text-text outline-none focus:border-link"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-text-3 mb-1">
+                            URL da Foto (Avatar)
+                          </label>
+                          <input
+                            type="url"
+                            value={spk.photo || ''}
+                            onChange={(e) => updateSpeakerField(idx, 'photo', e.target.value)}
+                            placeholder="https://... link da foto pública"
+                            className="w-full rounded-xl border border-field-line bg-field px-3 py-2 text-[14px] text-text outline-none focus:border-link"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-text-3 mb-1">
+                            Mini-Bio / Apresentação
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={spk.bio || ''}
+                            onChange={(e) => updateSpeakerField(idx, 'bio', e.target.value)}
+                            placeholder="Breve resumo da trajetória ou especialidade do palestrante..."
+                            className="w-full resize-y rounded-xl border border-field-line bg-field px-3 py-2 text-[13px] text-text outline-none focus:border-link"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
-              {spkQuery.trim() && matches.length === 0 && <p className="m-0 mt-1.5 text-[13px] text-text-3">Ninguém com esse nome.</p>}
-              <button type="button" onClick={onNewSpeaker} className="mt-2 min-h-11 text-[14px] font-bold text-link">Cadastrar novo convidado</button>
             </div>
           </Section>
 
@@ -331,8 +616,8 @@ export default function ActivityForm({ form, setForm, editingId, types, speakers
               <button type="button" role="tab" className="ds-tab" aria-selected={previewTab === 'aberta'} onClick={() => setPreviewTab('aberta')}>Ao abrir</button>
             </div>
             <div className="rounded-[18px] bg-bg p-2.5">
-              <div className={previewTab === 'aberta' ? 'hidden lg:block' : ''}><AgendaPreview form={form} speakersSel={speakersSel} /></div>
-              <div className={`lg:hidden ${previewTab === 'aberta' ? '' : 'hidden'}`}><OpenPreview form={form} speakersSel={speakersSel} /></div>
+              <div className={previewTab === 'aberta' ? 'hidden lg:block' : ''}><AgendaPreview form={form} speakersSel={speakersList} /></div>
+              <div className={`lg:hidden ${previewTab === 'aberta' ? '' : 'hidden'}`}><OpenPreview form={form} speakersSel={speakersList} /></div>
             </div>
           </section>
           <div className="hidden lg:block"><Checklist items={checklist} /></div>

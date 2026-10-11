@@ -304,6 +304,7 @@ export default function Admin() {
     scheduleRows: [
       { date: '2026-10-21', startTime: '14:00', endTime: '15:30', location: 'Anfiteatro FACOM' }
     ],
+    speakersList: [],
     selectedSpeakerIds: [],
     speakerId: '',
     speakerName: '',
@@ -875,13 +876,27 @@ export default function Admin() {
     const dayFormatted = firstSchedule.date ? firstSchedule.date.split('-').reverse().slice(0, 2).join('/') : '21/10';
 
     // Resolver palestrantes vinculados
-    const selectedSpeakersList = (activityForm.selectedSpeakerIds || []).map(id => {
-      const spk = speakers.find(s => s.id === id);
-      return spk ? { id: spk.id, name: spk.name, role: spk.role || spk.institution || '', photo: spk.photo || '', classification: spk.classification || '' } : null;
-    }).filter(Boolean);
+    let finalSpeakers = [];
+    if (Array.isArray(activityForm.speakersList) && activityForm.speakersList.length > 0) {
+      finalSpeakers = activityForm.speakersList;
+    } else {
+      finalSpeakers = (activityForm.selectedSpeakerIds || []).map(id => {
+        const spk = speakers.find(s => s.id === id);
+        return spk ? { id: spk.id, name: spk.name, role: spk.role || spk.institution || '', photo: spk.photo || '', classification: spk.classification || '' } : null;
+      }).filter(Boolean);
+      if (finalSpeakers.length === 0 && (activityForm.speakerName || activityForm.speaker)) {
+        finalSpeakers = [{
+          id: activityForm.speakerId || `spk_${Date.now()}`,
+          name: activityForm.speakerName || activityForm.speaker,
+          role: activityForm.speakerRole || '',
+          photo: activityForm.speakerPhoto || '',
+          bio: ''
+        }];
+      }
+    }
 
-    const primarySpeaker = selectedSpeakersList[0] || null;
-    const speakerNamesJoined = selectedSpeakersList.map(s => s.name).join(', ') || activityForm.speakerName || 'Comissão Organizadora FACOM';
+    const primarySpeaker = finalSpeakers[0] || null;
+    const speakerNamesJoined = finalSpeakers.map(s => s.name).filter(Boolean).join(', ') || activityForm.speakerName || 'Comissão Organizadora FACOM';
 
     const maxCap = activityForm.hasCapacityLimit ? Number(activityForm.capacity || 100) : 9999;
 
@@ -913,8 +928,8 @@ export default function Admin() {
       speakerRole: primarySpeaker?.role || activityForm.speakerRole || '',
       speakerPhoto: primarySpeaker?.photo || activityForm.speakerPhoto || '',
       speakerId: primarySpeaker?.id || activityForm.speakerId || '',
-      speakers: selectedSpeakersList,
-      speakerIds: activityForm.selectedSpeakerIds || [],
+      speakers: finalSpeakers,
+      speakerIds: finalSpeakers.map(s => s.id).filter(Boolean),
       location: firstSchedule.location || activityForm.location || 'Anfiteatro FACOM',
       tags: activityForm.tags,
       hidden: activityForm.hidden,
@@ -952,13 +967,26 @@ export default function Admin() {
         }))
       : [{ date: act.date || '2026-10-21', startTime: act.time || '14:00', endTime: act.endTime || '15:30', location: act.location || 'Anfiteatro FACOM' }];
 
-    let speakerIds = Array.isArray(act.speakerIds) ? act.speakerIds : [];
-    if (speakerIds.length === 0 && Array.isArray(act.speakers) && act.speakers.length > 0) {
-      speakerIds = act.speakers.map(s => s.id).filter(Boolean);
+    let speakersList = [];
+    if (Array.isArray(act.speakers) && act.speakers.length > 0) {
+      speakersList = act.speakers;
+    } else if (Array.isArray(act.speakerIds) && act.speakerIds.length > 0) {
+      speakersList = act.speakerIds.map(id => {
+        const s = speakers.find(x => x.id === id);
+        return s ? { id: s.id, name: s.name, role: s.role || s.institution || '', photo: s.photo || '', bio: s.bio || '' } : null;
+      }).filter(Boolean);
+    } else if (act.speaker || act.speakerName) {
+      const names = (act.speaker || act.speakerName).split(',').map(s => s.trim()).filter(Boolean);
+      speakersList = names.map((name, i) => ({
+        id: i === 0 && act.speakerId ? act.speakerId : `spk_${i}_${Date.now()}`,
+        name,
+        role: i === 0 ? (act.speakerRole || '') : '',
+        photo: i === 0 ? (act.speakerPhoto || '') : '',
+        bio: ''
+      }));
     }
-    if (speakerIds.length === 0 && act.speakerId) {
-      speakerIds = [act.speakerId];
-    }
+
+    const speakerIds = speakersList.map(s => s.id).filter(Boolean);
 
     setActivityForm({
       title: act.title || '',
@@ -972,11 +1000,12 @@ export default function Admin() {
       points: Number(act.points || 50),
       duration: act.duration || (rows.length > 1 ? `${rows.length} dias` : 'Um dia'),
       scheduleRows: rows,
+      speakersList,
       selectedSpeakerIds: speakerIds,
-      speakerId: act.speakerId || '',
-      speakerName: act.speaker || '',
-      speakerRole: act.speakerRole || '',
-      speakerPhoto: act.speakerPhoto || '',
+      speakerId: act.speakerId || (speakersList[0]?.id || ''),
+      speakerName: act.speaker || (speakersList.map(s => s.name).join(', ') || ''),
+      speakerRole: act.speakerRole || (speakersList[0]?.role || ''),
+      speakerPhoto: act.speakerPhoto || (speakersList[0]?.photo || ''),
       materials: act.materials || [],
       showExtraDetails: true,
       location: act.location || 'Anfiteatro FACOM',

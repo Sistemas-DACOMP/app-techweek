@@ -5,7 +5,7 @@ import ActivityBroadcastModal from '../../components/ActivityBroadcastModal';
 import { LinkedinIcon, GithubIcon, InstagramIcon } from './SocialIcons';
 import {
   btn, ICON_BTN, Chip, PageHead, TypeTag, OccBar, MoreMenu, EmptyState, typeColor, typeLabel, sessionsOf, firstDate, startTime,
-  dayLabel, liveStatus, capacityOf, isoToday,
+  dayLabel, liveStatus, capacityOf, isoToday, initials,
 } from './ui';
 
 /* 2.02 Programação (desktop) e 2.09 (celular). Operações iguais às de antes: editar, excluir, QR, telão, exportar. */
@@ -25,6 +25,57 @@ function PresenceTag({ act }) {
     <span className={`whitespace-nowrap rounded-[10px] px-2.5 py-1 text-[12px] font-bold ${two ? 'bg-[rgba(103,212,232,0.14)] text-[#67D4E8]' : 'bg-surface-raised text-[#C3C9DE]'}`}>
       {presenceLabel(act)}
     </span>
+  );
+}
+
+function SpeakersCell({ act }) {
+  const spkList = Array.isArray(act.speakers) && act.speakers.length > 0
+    ? act.speakers
+    : (act.speaker ? act.speaker.split(',').map((s, idx) => ({ id: `spk_${idx}`, name: s.trim() })) : []);
+
+  if (spkList.length === 0) {
+    return <span className="text-[13px] text-text-3">Comissão FACOM</span>;
+  }
+
+  const shownAvatars = spkList.slice(0, 3);
+  const extraCount = spkList.length - 3;
+
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="flex -space-x-2 overflow-hidden shrink-0">
+        {shownAvatars.map((s, idx) => (
+          <div
+            key={s.id || idx}
+            title={s.name}
+            className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-[#2A3570] text-[10px] font-extrabold text-white overflow-hidden shadow-sm"
+          >
+            {s.photo ? (
+              <img src={s.photo} alt={s.name} className="h-full w-full object-cover" />
+            ) : (
+              initials(s.name)
+            )}
+          </div>
+        ))}
+        {extraCount > 0 && (
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-surface-raised text-[10px] font-bold text-text-2">
+            +{extraCount}
+          </div>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-semibold text-text text-[13px]" title={spkList.map((s) => s.name).join(', ')}>
+          {spkList.map((s) => s.name).join(', ')}
+        </div>
+        {spkList.length > 1 ? (
+          <span className="inline-block rounded-md bg-surface-raised px-1.5 py-0.5 text-[10px] font-bold text-link">
+            {spkList.length} palestrantes
+          </span>
+        ) : spkList[0]?.role ? (
+          <div className="truncate text-[11px] text-text-3">{spkList[0].role}</div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -173,13 +224,8 @@ export default function AdminProgramacao(p) {
                         <button type="button" onClick={() => onEdit(act)} className="mt-1 block text-left text-[15px] font-bold leading-snug text-text hover:text-link">{act.title}</button>
                         <span className="mt-0.5 block text-[13px] text-text-2">{whenOf(act)}</span>
                       </td>
-                      <td className="max-w-[190px] px-3 py-4 text-[14px] text-text-2">
-                        <div className="truncate font-medium">{speakerOf(act)}</div>
-                        {Array.isArray(act.speakers) && act.speakers.length > 1 && (
-                          <span className="mt-0.5 inline-block rounded-md bg-surface-raised px-1.5 py-0.5 text-[11px] font-bold text-text-3">
-                            {act.speakers.length} palestrantes
-                          </span>
-                        )}
+                      <td className="max-w-[210px] px-3 py-4 text-[14px]">
+                        <SpeakersCell act={act} />
                       </td>
                       <td className="max-w-[150px] px-3 py-4 text-[14px] text-text-2">{locationOf(act)}</td>
                       <td className="px-3 py-4"><Capacity act={act} /></td>
@@ -216,7 +262,9 @@ export default function AdminProgramacao(p) {
                       </span>
                       <button type="button" onClick={() => onEdit(act)} className="mt-1.5 block text-left text-[16px] font-bold leading-snug text-text">{act.title}</button>
                       <span className="mt-1 block text-[14px] text-text-2">{startTime(act)} · {locationOf(act)}</span>
-                      <span className="mt-0.5 block truncate text-[13px] text-text-3">{speakerOf(act)}</span>
+                      <div className="mt-1.5">
+                        <SpeakersCell act={act} />
+                      </div>
                     </div>
                     <MoreMenu items={[{ label: 'Abrir telão', icon: Monitor, onClick: () => onTelao(act) }, { label: 'Editar', icon: Pencil, onClick: () => onEdit(act) }, ...menuFor(act)]} />
                   </div>
