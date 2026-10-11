@@ -1,11 +1,12 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   Download, 
   Printer, 
   TrendingUp, 
   GraduationCap, 
   Layers,
-  Building2
+  Building2,
+  Users
 } from 'lucide-react';
 import iconeTw from '../../assets/icone.png';
 import { calculateSponsorRoi, exportLeadsToCsv } from '../../lib/sponsorService';
@@ -16,18 +17,41 @@ import { calculateSponsorRoi, exportLeadsToCsv } from '../../lib/sponsorService'
  */
 export default function SponsorRoiDashboard({
   leads = [],
+  allCompanyLeads,
+  myLeads = [],
   companyName = 'Patrocinador',
   companyLogo = null,
   totalEventAttendees = 600,
+  scope: initialScope = 'company',
+  onScopeChange,
   onClose,
-  showActions = false
+  showActions = true,
+  onExportCsv
 }) {
+  const companyList = allCompanyLeads || leads || [];
+  const [internalScope, setInternalScope] = useState(initialScope);
+  const activeScope = onScopeChange ? initialScope : internalScope;
+
+  const handleScopeSelect = (newScope) => {
+    if (onScopeChange) {
+      onScopeChange(newScope);
+    } else {
+      setInternalScope(newScope);
+    }
+  };
+
+  const activeLeads = activeScope === 'mine' ? (myLeads || []) : companyList;
+
   const roi = useMemo(() => {
-    return calculateSponsorRoi(leads, totalEventAttendees);
-  }, [leads, totalEventAttendees]);
+    return calculateSponsorRoi(activeLeads, totalEventAttendees);
+  }, [activeLeads, totalEventAttendees]);
 
   const handleExportCsv = () => {
-    exportLeadsToCsv(leads, companyName, 'roi_executivo');
+    if (onExportCsv) {
+      onExportCsv(activeLeads, activeScope);
+    } else {
+      exportLeadsToCsv(activeLeads, companyName, activeScope === 'mine' ? 'roi_meus_leads' : 'roi_empresa');
+    }
   };
 
   const handlePrint = () => {
@@ -52,7 +76,7 @@ export default function SponsorRoiDashboard({
               Performance de Talentos • {companyName}
             </h1>
             <div className="mt-0.5 text-[11px] text-text-3">
-              Métricas consolidadas do estande • {roi.totalLeads} {roi.totalLeads === 1 ? 'conexão capturada' : 'conexões capturadas'}
+              Métricas consolidadas do estande • {activeScope === 'mine' ? 'Meus Leads' : 'Toda a Empresa'} • {roi.totalLeads} {roi.totalLeads === 1 ? 'conexão capturada' : 'conexões capturadas'}
             </div>
           </div>
         </div>
@@ -97,12 +121,64 @@ export default function SponsorRoiDashboard({
           </p>
         </div>
 
+        {/* Seletor de Escopo do Relatório: Toda a Empresa vs Meus Leads */}
+        <div role="tablist" aria-label="Filtrar escopo do relatório" className="flex items-center gap-1.5">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeScope === 'company'}
+            onClick={() => handleScopeSelect('company')}
+            className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-bold transition-all ${
+              activeScope === 'company'
+                ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
+                : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
+            }`}
+          >
+            <Building2 size={13} className={activeScope === 'company' ? 'text-link' : 'text-text-3'} />
+            <span>Toda a Empresa</span>
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                activeScope === 'company'
+                  ? 'bg-link/20 text-link'
+                  : 'bg-surface-raised text-text-4'
+              }`}
+            >
+              {companyList.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeScope === 'mine'}
+            onClick={() => handleScopeSelect('mine')}
+            className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-bold transition-all ${
+              activeScope === 'mine'
+                ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
+                : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
+            }`}
+          >
+            <Users size={13} className={activeScope === 'mine' ? 'text-link' : 'text-text-3'} />
+            <span>Meus Leads</span>
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                activeScope === 'mine'
+                  ? 'bg-link/20 text-link'
+                  : 'bg-surface-raised text-text-4'
+              }`}
+            >
+              {myLeads.length}
+            </span>
+          </button>
+        </div>
+
         {showActions && (
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleExportCsv}
-              className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-selected px-3 text-[12px] font-bold text-text hover:bg-surface-raised transition-colors"
+              disabled={activeLeads.length === 0}
+              className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-selected px-3 text-[12px] font-bold text-text hover:bg-surface-raised disabled:opacity-40 transition-colors"
               title="Exportar dados de ROI em CSV"
             >
               <Download size={14} aria-hidden="true" />

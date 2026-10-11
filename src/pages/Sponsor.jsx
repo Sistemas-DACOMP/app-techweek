@@ -147,7 +147,7 @@ export default function Sponsor() {
     };
   }, [activeCompanyId, userProfile, sponsorName]);
 
-  // Tab State: 'home' | 'leads' | 'scanner' | 'agenda' | 'feed'
+  // Tab State: 'home' | 'leads' | 'roi' | 'scanner' | 'agenda' | 'feed' | 'settings'
   const [activeTab, setActiveTab] = useState('home');
 
   // Leads CRM State (com SEED_BIPADO_LEAD para validação imediata do dashboard)
@@ -158,27 +158,11 @@ export default function Sponsor() {
   const [leadsSearch, setLeadsSearch] = useState('');
   const [starFilter, setStarFilter] = useState('all'); // 'all' | '5' | '4' | '3'
   const [leadSortBy, setLeadSortBy] = useState('recent'); // 'recent' | 'rating' | 'name'
-  const [leadsViewMode, setLeadsViewMode] = useState('crm'); // 'crm' | 'roi'
 
   // Chave de navegação ativa unificada para Desktop Shell
-  const activeNavKey = useMemo(() => {
-    if (activeTab === 'leads') {
-      return leadsViewMode === 'roi' ? 'roi' : 'leads';
-    }
-    return activeTab;
-  }, [activeTab, leadsViewMode]);
+  const activeNavKey = activeTab;
 
   const handleNavigate = useCallback((key) => {
-    if (key === 'roi') {
-      setActiveTab('leads');
-      setLeadsViewMode('roi');
-      return;
-    }
-    if (key === 'leads') {
-      setActiveTab('leads');
-      setLeadsViewMode('crm');
-      return;
-    }
     setActiveTab(key);
   }, []);
 
@@ -525,14 +509,14 @@ export default function Sponsor() {
 
   // Exportar Leads para CSV
   const handleExportCsv = () => {
-    const leadsToExport = leadsViewMode === 'roi'
+    const leadsToExport = activeTab === 'roi'
       ? (leadsTab === 'mine' ? myLeads : companyLeads)
       : (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads);
     if (!leadsToExport || leadsToExport.length === 0) {
       showToast('Nenhum lead disponível para exportação com os filtros atuais.', 'warning');
       return;
     }
-    const scopeLabel = leadsViewMode === 'roi' ? 'roi_executivo' : (leadsTab === 'mine' ? 'meus' : 'todos');
+    const scopeLabel = activeTab === 'roi' ? 'roi_executivo' : (leadsTab === 'mine' ? 'meus' : 'todos');
     const success = exportLeadsToCsv(leadsToExport, sponsorName, scopeLabel);
     if (success) {
       showToast(`Planilha CSV (${leadsToExport.length} ${leadsToExport.length === 1 ? 'lead' : 'leads'}) gerada com sucesso!`, 'success');
@@ -1037,10 +1021,7 @@ export default function Sponsor() {
               <button
                 type="button"
                 className={btn('secondary', 'flex-1 min-w-[90px] h-10 text-[13px]')}
-                onClick={() => {
-                  setActiveTab('leads');
-                  setLeadsViewMode('crm');
-                }}
+                onClick={() => setActiveTab('leads')}
               >
                 <Users size={16} aria-hidden="true" />
                 <span>Leads ({companyLeads.length})</span>
@@ -1070,6 +1051,7 @@ export default function Sponsor() {
           <div style={{ textAlign: 'center', marginBottom: '14px' }}>
             <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
               {activeTab === 'leads' && 'Leads do Estande'}
+              {activeTab === 'roi' && 'Relatório Executivo ROI'}
               {activeTab === 'scanner' && 'Scanner de Crachá'}
               {activeTab === 'agenda' && 'Programação da TechWeek'}
               {activeTab === 'feed' && 'Feed da Comunidade'}
@@ -1136,10 +1118,7 @@ export default function Sponsor() {
               <button
                 type="button"
                 className={btn('secondary', 'h-11 px-4 text-[13px] font-bold')}
-                onClick={() => {
-                  setActiveTab('leads');
-                  setLeadsViewMode('crm');
-                }}
+                onClick={() => setActiveTab('leads')}
               >
                 <Users size={16} aria-hidden="true" />
                 <span>Ver Leads ({companyLeads.length})</span>
@@ -1233,10 +1212,7 @@ export default function Sponsor() {
                   {companyLeads.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setActiveTab('leads');
-                        setLeadsViewMode('crm');
-                      }}
+                      onClick={() => setActiveTab('leads')}
                       className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline shrink-0 whitespace-nowrap"
                     >
                       <span>Ver todos ({companyLeads.length})</span>
@@ -1451,145 +1427,124 @@ export default function Sponsor() {
       {/* ABA 2: LEADS (CRM DO ESTANDE)                                            */}
       {/* ========================================================================= */}
       {activeTab === 'leads' && (
-        <div className="animate-fade-in flex flex-col gap-4">
-          {/* Segmented Control Unificado: CRM de Leads vs Relatório ROI + Ações Fixas */}
-          <div className="print:hidden flex items-center justify-between gap-2">
+        <div className="animate-fade-in flex flex-col gap-3 sm:gap-4">
+          {/* Sub-navegação Mobile: Alternar entre CRM de Leads e Relatório ROI */}
+          <div className="lg:hidden print:hidden flex items-center justify-between gap-2 pb-0.5">
             <div
               role="tablist"
-              aria-label="Modo de visualização de leads"
+              aria-label="Modo de visualização"
               className="inline-flex h-9 p-0.5 rounded-xl bg-surface-raised border border-border shrink-0"
             >
               <button
                 type="button"
                 role="tab"
-                aria-selected={leadsViewMode === 'crm'}
-                onClick={() => setLeadsViewMode('crm')}
-                className={`press inline-flex items-center gap-1.5 rounded-lg px-2.5 sm:px-3.5 text-[12px] font-bold transition-all ${
-                  leadsViewMode === 'crm'
-                    ? 'bg-surface-selected text-text shadow-xs'
-                    : 'text-text-3 hover:text-text'
-                }`}
+                aria-selected={true}
+                className="press inline-flex items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold bg-surface-selected text-text shadow-xs"
               >
                 <Users size={14} aria-hidden="true" />
-                <span className="hidden sm:inline">CRM de Leads</span>
-                <span className="sm:hidden">CRM</span>
+                <span>CRM</span>
               </button>
               <button
                 type="button"
                 role="tab"
-                aria-selected={leadsViewMode === 'roi'}
-                onClick={() => setLeadsViewMode('roi')}
-                className={`press inline-flex items-center gap-1.5 rounded-lg px-2.5 sm:px-3.5 text-[12px] font-bold transition-all ${
-                  leadsViewMode === 'roi'
-                    ? 'bg-surface-selected text-text shadow-xs'
-                    : 'text-text-3 hover:text-text'
-                }`}
+                aria-selected={false}
+                onClick={() => setActiveTab('roi')}
+                className="press inline-flex items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold text-text-3 hover:text-text transition-all"
               >
                 <TrendingUp size={14} aria-hidden="true" />
-                <span className="hidden sm:inline">Relatório ROI</span>
-                <span className="sm:hidden">ROI</span>
+                <span>ROI</span>
               </button>
             </div>
 
-            {/* Ações Fixas: CSV ancorado na mesma posição nas duas abas */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={handleExportCsv}
                 disabled={leadsTab === 'mine' ? myLeads.length === 0 : companyLeads.length === 0}
-                className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-raised hover:bg-surface-selected px-2.5 sm:px-3 text-[12px] font-bold text-text-2 hover:text-text disabled:opacity-40 transition-colors shrink-0"
+                className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-raised hover:bg-surface-selected px-2.5 text-[12px] font-bold text-text-2 hover:text-text disabled:opacity-40 transition-colors"
                 title="Exportar lista em CSV"
               >
                 <Download size={14} aria-hidden="true" />
                 <span>CSV</span>
               </button>
-
-              {leadsViewMode === 'roi' && (
-                <button
-                  type="button"
-                  onClick={() => typeof window !== 'undefined' && window.print()}
-                  className="press inline-flex h-9 items-center gap-1.5 rounded-xl bg-action px-2.5 sm:px-3 text-[12px] font-bold text-white hover:brightness-110 shadow-xs transition-colors shrink-0"
-                  title="Imprimir relatório ou salvar em PDF"
-                >
-                  <Printer size={14} aria-hidden="true" />
-                  <span className="hidden sm:inline">Imprimir / </span>
-                  <span>PDF</span>
-                </button>
-              )}
             </div>
           </div>
 
-          {leadsViewMode === 'roi' ? (
-            <SponsorRoiDashboard
-              leads={leadsTab === 'mine' ? myLeads : companyLeads}
-              companyName={sponsorName}
-              companyLogo={sponsorLogo}
-              totalEventAttendees={600}
-              showActions={false}
-            />
-          ) : (
-            <>
-              {/* Seletor de Escopo Discreto */}
-              <div className="flex items-center justify-between gap-2">
-                <div role="tablist" aria-label="Filtrar escopo dos leads" className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    role="tab"
-                    id="tab-leads-mine"
-                    aria-selected={leadsTab === 'mine'}
-                    aria-controls="panel-leads-content"
-                    onClick={() => setLeadsTab('mine')}
-                    className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
-                      leadsTab === 'mine'
-                        ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
-                        : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
-                    }`}
-                  >
-                    <span>Meus Leads</span>
-                    <span
-                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                        leadsTab === 'mine'
-                          ? 'bg-link/20 text-link'
-                          : 'bg-surface-raised text-text-4'
-                      }`}
-                    >
-                      {myLeads.length}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    id="tab-leads-company"
-                    aria-selected={leadsTab === 'company'}
-                    aria-controls="panel-leads-content"
-                    onClick={() => setLeadsTab('company')}
-                    className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
-                      leadsTab === 'company'
-                        ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
-                        : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
-                    }`}
-                  >
-                    <span>Toda a Empresa</span>
-                    <span
-                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                        leadsTab === 'company'
-                          ? 'bg-link/20 text-link'
-                          : 'bg-surface-raised text-text-4'
-                      }`}
-                    >
-                      {companyLeads.length}
-                    </span>
-                  </button>
-                </div>
-
-                <span className="text-[11px] text-text-3 font-medium">
-                  {leadsSearch.trim() || starFilter !== 'all' ? (
-                    <>Filtrando <strong>{displayedLeads.length}</strong> de {leadsTab === 'mine' ? myLeads.length : companyLeads.length}</>
-                  ) : (
-                    <>{displayedLeads.length} {displayedLeads.length === 1 ? 'contato' : 'contatos'}</>
-                  )}
+          {/* Seletor de Escopo & Controles da Aba de Leads */}
+          <div className="flex items-center justify-between gap-2">
+            <div role="tablist" aria-label="Filtrar escopo dos leads" className="flex items-center gap-1.5">
+              <button
+                type="button"
+                role="tab"
+                id="tab-leads-mine"
+                aria-selected={leadsTab === 'mine'}
+                aria-controls="panel-leads-content"
+                onClick={() => setLeadsTab('mine')}
+                className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
+                  leadsTab === 'mine'
+                    ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
+                    : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
+                }`}
+              >
+                <span>Meus Leads</span>
+                <span
+                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                    leadsTab === 'mine'
+                      ? 'bg-link/20 text-link'
+                      : 'bg-surface-raised text-text-4'
+                  }`}
+                >
+                  {myLeads.length}
                 </span>
-              </div>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-leads-company"
+                aria-selected={leadsTab === 'company'}
+                aria-controls="panel-leads-content"
+                onClick={() => setLeadsTab('company')}
+                className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
+                  leadsTab === 'company'
+                    ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
+                    : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
+                }`}
+              >
+                <span>Toda a Empresa</span>
+                <span
+                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                    leadsTab === 'company'
+                      ? 'bg-link/20 text-link'
+                      : 'bg-surface-raised text-text-4'
+                  }`}
+                >
+                  {companyLeads.length}
+                </span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-text-3 font-medium hidden sm:inline">
+                {leadsSearch.trim() || starFilter !== 'all' ? (
+                  <>Filtrando <strong>{displayedLeads.length}</strong> de {leadsTab === 'mine' ? myLeads.length : companyLeads.length}</>
+                ) : (
+                  <>{displayedLeads.length} {displayedLeads.length === 1 ? 'contato' : 'contatos'}</>
+                )}
+              </span>
+
+              {/* Botão de CSV no Desktop */}
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={leadsTab === 'mine' ? myLeads.length === 0 : companyLeads.length === 0}
+                className="hidden lg:inline-flex press h-8 items-center gap-1.5 rounded-xl border border-border bg-surface-raised hover:bg-surface-selected px-2.5 text-[12px] font-bold text-text-2 hover:text-text disabled:opacity-40 transition-colors"
+                title="Exportar lista em CSV"
+              >
+                <Download size={14} aria-hidden="true" />
+                <span>CSV</span>
+              </button>
+            </div>
+          </div>
 
               {/* Desktop / Tablet Booth OS: Split-View Master-Detail (visível em telas grandes: hidden lg:block) */}
               <div className="hidden lg:block">
@@ -1968,10 +1923,68 @@ export default function Sponsor() {
             )}
           </div>
         </div>
-      </>
+      </div>
     )}
-  </div>
-)}
+
+      {/* ========================================================================= */}
+      {/* ABA: RELATÓRIO EXECUTIVO ROI                                              */}
+      {/* ========================================================================= */}
+      {activeTab === 'roi' && (
+        <div className="animate-fade-in flex flex-col gap-3 sm:gap-4">
+          {/* Sub-navegação Mobile: Alternar entre CRM de Leads e Relatório ROI */}
+          <div className="lg:hidden print:hidden flex items-center justify-between gap-2 pb-0.5">
+            <div
+              role="tablist"
+              aria-label="Modo de visualização"
+              className="inline-flex h-9 p-0.5 rounded-xl bg-surface-raised border border-border shrink-0"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={false}
+                onClick={() => setActiveTab('leads')}
+                className="press inline-flex items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold text-text-3 hover:text-text transition-all"
+              >
+                <Users size={14} aria-hidden="true" />
+                <span>CRM</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={true}
+                className="press inline-flex items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold bg-surface-selected text-text shadow-xs"
+              >
+                <TrendingUp size={14} aria-hidden="true" />
+                <span>ROI</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={companyLeads.length === 0}
+                className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-raised hover:bg-surface-selected px-2.5 text-[12px] font-bold text-text-2 hover:text-text disabled:opacity-40 transition-colors"
+                title="Exportar todos os leads em CSV"
+              >
+                <Download size={14} aria-hidden="true" />
+                <span>CSV</span>
+              </button>
+            </div>
+          </div>
+
+          <SponsorRoiDashboard
+            allCompanyLeads={companyLeads}
+            myLeads={myLeads}
+            companyName={sponsorName}
+            companyLogo={sponsorLogo}
+            totalEventAttendees={600}
+            showActions={true}
+            onExportCsv={handleExportCsv}
+          />
+        </div>
+      )}
+
 
       {/* ========================================================================= */}
       {/* ABA 3: SCANNER DE CRACHÁ                                                  */}
