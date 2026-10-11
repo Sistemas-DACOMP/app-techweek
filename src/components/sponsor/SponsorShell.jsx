@@ -163,7 +163,7 @@ export default function SponsorShell({
       {/* ========================================================================= */}
       <aside
         aria-label="Menu do Patrocinador"
-        className="sticky top-0 hidden h-dvh w-[260px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-line bg-nav px-3.5 py-5 lg:flex print:!hidden"
+        className="fixed inset-y-0 left-0 z-30 hidden h-dvh w-[260px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-line bg-nav px-3.5 py-5 lg:flex print:!hidden"
       >
         {/* Topo da Sidebar: Tech Week 2026 */}
         <button
@@ -324,7 +324,7 @@ export default function SponsorShell({
       {/* ========================================================================= */}
       {/* ÁREA PRINCIPAL DE CONTEÚDO                                               */}
       {/* ========================================================================= */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-[260px] print:!pl-0">
         {/* Topo Desktop (≥1024px): Contexto + Atalhos Rápidos + Live Status */}
         <header className="hidden items-center justify-between gap-4 border-b border-line/60 bg-bg/80 backdrop-blur-md px-8 py-3.5 lg:flex print:!hidden">
           <div className="min-w-0">
