@@ -13,7 +13,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { db, storage, auth } from './firebase';
 
 /**
  * Posts padrão para o Feed da FACOM TechWeek 2026.
@@ -332,6 +332,9 @@ export async function createFeedPost(postData) {
   const nowIso = new Date().toISOString();
 
   const formattedPost = {
+    // As regras do Firestore exigem authorUid == uid de quem escreve; é também o que
+    // permite o autor apagar o próprio post.
+    authorUid: auth?.currentUser?.uid || '',
     author: String(postData.author || 'Organização FACOM'),
     authorRole: String(postData.authorRole || 'ORGANIZATION'),
     authorAvatar: String(postData.authorAvatar || ''),

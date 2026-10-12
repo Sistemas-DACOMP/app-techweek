@@ -102,12 +102,45 @@ service cloud.firestore {
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
-    // Regras do Feed de Notícias e Comunidade
+    // Patrocinador: papel vem do claim OU do doc do usuário (o doc só é escrito pelo
+    // backend, ver regra de /users), porque contas antigas podem ter o papel só no doc.
+    function isSponsorUser() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'SPONSOR' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SPONSOR')
+      );
+    }
+
+    // Likes: o único campo que qualquer autenticado pode mexer, e só o próprio uid.
+    function onlyOwnLikeChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
+        request.resource.data.likes is list &&
+        request.resource.data.likes.toSet().difference(resource.data.get('likes', []).toSet()).hasOnly([request.auth.uid]) &&
+        resource.data.get('likes', []).toSet().difference(request.resource.data.likes.toSet()).hasOnly([request.auth.uid]);
+    }
+
+    // Regras do Feed de Notícias e Comunidade.
+    // Antes: read/create/update/delete eram `if true`, ou seja, qualquer pessoa, até
+    // sem login, podia criar, editar e apagar posts. Agora:
+    //  - leitura: só autenticado;
+    //  - criar: ADMIN/STAFF (posts da organização) ou patrocinador (posts de patrocinador),
+    //    sempre com authorUid == uid de quem escreve e authorRole coerente com o papel;
+    //  - editar: ADMIN (fixar etc.) ou qualquer autenticado só pra curtir/descurtir;
+    //  - apagar: ADMIN, ou o próprio autor (patrocinador apagando o que postou).
     match /feed_posts/{postId} {
-      allow read: if true;
-      allow create: if true;
-      allow update: if isAuthenticated() || true;
-      allow delete: if isAuthenticated() || true;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated()
+        && request.resource.data.authorUid == request.auth.uid
+        && (
+          (isStaffOrAdmin() && request.resource.data.authorRole == 'ORGANIZATION')
+          || (isSponsorUser() && request.resource.data.authorRole == 'SPONSOR')
+        )
+        && request.resource.data.content is string
+        && request.resource.data.content.size() <= 2000
+        && (!('likes' in request.resource.data) || request.resource.data.likes.size() == 0);
+      allow update: if isAdmin() || (isAuthenticated() && onlyOwnLikeChanged());
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.get('authorUid', '') == request.auth.uid);
     }
 
     // Regras de Ranking / Leaderboard consolidado
