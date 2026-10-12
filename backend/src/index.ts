@@ -13,10 +13,12 @@ import pointsRouter from './routes/points';
 import adminRouter from './routes/admin';
 import entranceRouter from './routes/entrance';
 
+import { corsOptions } from './config/cors';
+
 const app = express();
 
 // Middlewares padrão
-app.use(cors({ origin: true }));
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Rotas de cadastro/autenticação (finalização de perfil pós Firebase Auth)
@@ -77,11 +79,13 @@ app.use(['/api/points', '/points'], pointsRouter);
 // Gestão de papéis de usuário por ADMIN (KAN-60) — PUT /api/admin/users/:uid/role
 app.use(['/api/admin', '/admin'], adminRouter);
 
+export { app };
+
 // Exporta a Cloud Function 2nd Gen na região us-east1 (Free Tier)
 export const api = onRequest(
   {
     region: 'us-east1',
-    cors: true,
+    cors: false,
     memory: '256MiB',
     maxInstances: 10
   },
