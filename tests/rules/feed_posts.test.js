@@ -160,7 +160,7 @@ describe('Regras de Segurança do Firestore — Coleção /feed_posts', () => {
         content: 'Post para testar curtidas',
         likes: ['outro-usuario'],
       });
-      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT' }).firestore();
+      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT', email_verified: true }).firestore();
 
       // Curtir adicionando próprio UID
       await assertSucceeds(
@@ -181,7 +181,7 @@ describe('Regras de Segurança do Firestore — Coleção /feed_posts', () => {
       await seedPost('post-legado', {
         content: 'Post legado sem campo likes',
       });
-      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT' }).firestore();
+      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT', email_verified: true }).firestore();
 
       // Curtir post legado que não tinha 'likes'
       await assertSucceeds(
@@ -260,7 +260,7 @@ describe('Regras de Segurança do Firestore — Coleção /feed_posts', () => {
         content: 'Post com curtidas alheias',
         likes: ['user-vitima', 'user-1'],
       });
-      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT' }).firestore();
+      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT', email_verified: true }).firestore();
 
       // user-1 tenta remover a curtida de user-vitima
       await assertFails(
@@ -275,7 +275,7 @@ describe('Regras de Segurança do Firestore — Coleção /feed_posts', () => {
         content: 'Post com curtida forjada',
         likes: [],
       });
-      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT' }).firestore();
+      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT', email_verified: true }).firestore();
 
       // user-1 tenta curtir em nome de outro usuário
       await assertFails(
@@ -290,7 +290,7 @@ describe('Regras de Segurança do Firestore — Coleção /feed_posts', () => {
         content: 'Post original',
         likes: [],
       });
-      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT' }).firestore();
+      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT', email_verified: true }).firestore();
 
       await assertFails(
         updateDoc(doc(userDb, 'feed_posts', 'post-mixed-update'), {
@@ -412,11 +412,28 @@ describe('Regras de Segurança do Firestore — Coleção /feed_posts', () => {
       await seedPost('post-legado-hack', {
         content: 'Post legado',
       });
-      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT' }).firestore();
+      const userDb = testEnv.authenticatedContext('user-1', { role: 'PARTICIPANT', email_verified: true }).firestore();
 
       await assertFails(
         updateDoc(doc(userDb, 'feed_posts', 'post-legado-hack'), {
           likes: ['outro-usuario'],
+        })
+      );
+    });
+
+    it('participante com email_verified: false tentando curtir post (deve falhar com assertFails)', async () => {
+      await seedPost('post-like-test', {
+        content: 'Post para teste de like sem email verificado',
+        likes: [],
+      });
+      const unverifiedDb = testEnv.authenticatedContext('user-unverified', {
+        role: 'PARTICIPANT',
+        email_verified: false,
+      }).firestore();
+
+      await assertFails(
+        updateDoc(doc(unverifiedDb, 'feed_posts', 'post-like-test'), {
+          likes: ['user-unverified'],
         })
       );
     });

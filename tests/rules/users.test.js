@@ -87,12 +87,33 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
       );
     });
 
+    it('criação de perfil inicial por participante com email_verified: false (onboarding imediato)', async () => {
+      const authDb = testEnv.authenticatedContext('user-unverified', {
+        email: 'unverified@ufu.br',
+        email_verified: false,
+      }).firestore();
+      await assertSucceeds(
+        setDoc(doc(authDb, 'users', 'user-unverified'), {
+          uid: 'user-unverified',
+          email: 'unverified@ufu.br',
+          firstName: 'Novo',
+          lastName: 'Aluno',
+          role: 'PARTICIPANT',
+          totalPoints: 0,
+          pontuacaoTotal: 0,
+          termsAcceptedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
     it('atualização de dados pessoais da whitelist pelo próprio participante', async () => {
       await seedUser('user-1', {
         firstName: 'Carlos',
         username: 'carlos_silva',
       });
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertSucceeds(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           firstName: 'Carlos Eduardo',
@@ -109,7 +130,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
     it('atualização do próprio e-mail quando sincronizado com o token de Auth', async () => {
       await seedUser('user-1', { email: 'antigo@ufu.br' });
       // Usuário com token já atualizado
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'novo@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'novo@ufu.br', email_verified: true }).firestore();
       await assertSucceeds(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           email: 'novo@ufu.br',
@@ -141,7 +162,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
         participantType: 'Aluno UFU Graduação',
         participant_type: 'Aluno UFU Graduação'
       });
-      const authDb = testEnv.authenticatedContext('user-part-update', { email: 'part@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-part-update', { email: 'part@ufu.br', email_verified: true }).firestore();
       await assertSucceeds(
         updateDoc(doc(authDb, 'users', 'user-part-update'), {
           participantType: 'Aluno UFU Pós-graduação',
@@ -304,7 +325,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
 
     it('participante tentando atualizar companyId (vulnerabilidade de blacklist atual)', async () => {
       await seedUser('user-1', {});
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           companyId: 'kanastra',
@@ -315,7 +336,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
 
     it('participante tentando atualizar tier (vulnerabilidade de blacklist atual)', async () => {
       await seedUser('user-1', {});
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           tier: 'DIAMOND',
@@ -326,7 +347,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
 
     it('participante tentando atualizar visitedSponsors ou goldenTicketAwarded', async () => {
       await seedUser('user-1', {});
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           goldenTicketAwarded: true,
@@ -338,7 +359,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
 
     it('participante tentando atualizar role', async () => {
       await seedUser('user-1', {});
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           role: 'ADMIN',
@@ -349,7 +370,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
 
     it('participante tentando atualizar pontuação (totalPoints/pontuacaoTotal)', async () => {
       await seedUser('user-1', {});
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           totalPoints: 1000,
@@ -361,7 +382,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
     it('participante tentando atualizar e-mail para um endereço diferente do token de Auth', async () => {
       await seedUser('user-1', { email: 'original@ufu.br' });
       // Token diz 'original@ufu.br', mas update tenta trocar para 'hacker@ufu.br'
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'original@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'original@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           email: 'hacker@ufu.br',
@@ -372,7 +393,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
 
     it('participante tentando atualizar perfil de outro usuário', async () => {
       await seedUser('user-2', {});
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-2'), {
           firstName: 'Invasor',
@@ -394,7 +415,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
 
     it('update sem atualizar updatedAt com request.time deve ser negado', async () => {
       await seedUser('user-1', {});
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           firstName: 'Carlos',
@@ -406,7 +427,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
 
     it('update com username inválido (caracteres especiais ou tamanho impróprio)', async () => {
       await seedUser('user-1', {});
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           username: 'user<script>',
@@ -417,7 +438,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
 
     it('update com campo fora da whitelist (campo arbitrário)', async () => {
       await seedUser('user-1', {});
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           arbitraryField: 'valor_injetado',
@@ -445,7 +466,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
 
     it('atualização com participantType fora do enum permitido (ex: ADMIN) deve falhar', async () => {
       await seedUser('user-1', {});
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           participantType: 'ADMIN',
@@ -456,7 +477,7 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
 
     it('atualização com participant_type fora do enum permitido (ex: Hacker) deve falhar', async () => {
       await seedUser('user-1', {});
-      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
       await assertFails(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           participant_type: 'Hacker',
@@ -530,6 +551,21 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
       await seedUser('user-2', {});
       const adminDb = testEnv.authenticatedContext('admin-1', { role: 'ADMIN', email: 'admin@ufu.br' }).firestore();
       await assertFails(deleteDoc(doc(adminDb, 'users', 'user-2')));
+    });
+
+    it('tentativa de atualização de perfil por participante com email_verified: false (deve falhar com assertFails)', async () => {
+      await seedUser('user-unverified', { firstName: 'Carlos' });
+      const authDb = testEnv.authenticatedContext('user-unverified', {
+        email: 'unverified@ufu.br',
+        email_verified: false,
+      }).firestore();
+
+      await assertFails(
+        updateDoc(doc(authDb, 'users', 'user-unverified'), {
+          firstName: 'Carlos Tentativa',
+          updatedAt: serverTimestamp(),
+        })
+      );
     });
   });
 });
