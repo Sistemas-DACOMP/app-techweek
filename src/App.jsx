@@ -16,6 +16,7 @@ import Admin from './pages/Admin';
 import InstagramMission from './pages/InstagramMission';
 import Sponsor from './pages/Sponsor';
 import Terms from './pages/Terms';
+import TvProgramacao from './pages/TvProgramacao';
 import BottomNavigation from './components/BottomNavigation';
 import logoTw from './assets/logo-tw.png';
 import Mascot from './components/Mascot';
@@ -129,6 +130,7 @@ function AppContent() {
         <Route path="/sponsor" element={<Sponsor />} />
         <Route path="/staff" element={<Staff />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/tv/programacao" element={<TvProgramacao />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       
