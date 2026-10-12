@@ -10,6 +10,7 @@ vi.mock('../config/firebaseAdmin', () => ({
 
 import router, { calculateAgeGroup, buildWhatsAppPayload, leadsHandler } from './leads';
 import { db } from '../config/firebaseAdmin';
+import { requireVerifiedEmail } from '../middlewares/authMiddleware';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -18,7 +19,7 @@ function makeRes() {
   return res as Response;
 }
 
-function makeReq(body: any = {}, user: any = { uid: 'sponsor-123', role: 'SPONSOR', email: 'sponsor@company.com' }) {
+function makeReq(body: any = {}, user: any = { uid: 'sponsor-123', role: 'SPONSOR', email: 'sponsor@company.com', emailVerified: true }) {
   return {
     body,
     user
@@ -601,7 +602,9 @@ describe('leads route middleware configuration', () => {
       (layer) => layer.route?.path === '/' && layer.route?.methods?.post
     );
     expect(postRoute).toBeDefined();
-    expect(postRoute.route.stack.length).toBeGreaterThanOrEqual(3); // requireAuth, requireRole, leadsHandler
+    expect(postRoute.route.stack.length).toBeGreaterThanOrEqual(4); // requireAuth, requireRole, requireVerifiedEmail, leadsHandler
+    const handles = postRoute.route.stack.map((l: any) => l.handle);
+    expect(handles).toContain(requireVerifiedEmail);
   });
 
   it('registra a rota GET / com middleware de autenticação e papel restrito', () => {

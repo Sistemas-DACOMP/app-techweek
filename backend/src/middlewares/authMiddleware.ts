@@ -134,3 +134,35 @@ export async function requireSymplaTicket(req: Request, res: Response, next: Nex
   }
 }
 
+/**
+ * Middleware para exigir confirmação de e-mail (KAN-116).
+ * Impede reservas de vagas, resgate de pontos e outras ações críticas
+ * de participantes que ainda não confirmaram o endereço de e-mail.
+ * Nota: Usuários com role 'ADMIN' sempre possuem permissão irrestrita.
+ */
+export function requireVerifiedEmail(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user) {
+    res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Usuário não autenticado.'
+    });
+    return;
+  }
+
+  // ADMIN sempre possui acesso total
+  if (req.user.role === 'ADMIN') {
+    next();
+    return;
+  }
+
+  if (req.user.emailVerified !== true) {
+    res.status(403).json({
+      error: 'EMAIL_NOT_VERIFIED',
+      message: 'É necessário confirmar seu endereço de e-mail antes de realizar esta ação.'
+    });
+    return;
+  }
+
+  next();
+}
+

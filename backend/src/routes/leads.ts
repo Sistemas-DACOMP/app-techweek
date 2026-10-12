@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
 import * as admin from 'firebase-admin';
-import { requireAuth, requireRole } from '../middlewares/authMiddleware';
+import { requireAuth, requireRole, requireVerifiedEmail } from '../middlewares/authMiddleware';
 import { isValidFirestoreId } from '../lib/firestoreId';
 
 const router = Router();
@@ -521,7 +521,7 @@ export async function updateLeadHandler(req: Request, res: Response): Promise<vo
 
 // Registro das rotas com RBAC: apenas SPONSOR e ADMIN podem gerenciar leads
 router.get('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), getLeadsHandler);
-router.post('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), leadsHandler);
+router.post('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), requireVerifiedEmail, leadsHandler);
 router.patch('/:participantUid', requireAuth, requireRole(['SPONSOR', 'ADMIN']), updateLeadHandler);
 
 export default router;
