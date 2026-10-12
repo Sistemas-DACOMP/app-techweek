@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import SponsorSettings from '../../src/components/sponsor/SponsorSettings';
-import SponsorWhatsAppHub from '../../src/components/sponsor/SponsorWhatsAppHub';
+import LeadDossier from '../../src/pages/sponsor/LeadDossier';
 import SponsorLeadModal from '../../src/components/SponsorLeadModal';
 
 describe('WhatsApp Modelo Padrão Clarity & Design System', () => {
@@ -37,20 +37,20 @@ describe('WhatsApp Modelo Padrão Clarity & Design System', () => {
     });
   });
 
-  describe('SponsorWhatsAppHub (Hub de Mensagens Rápidas)', () => {
-    it('exibe badge visual sóbrio de "Padrão" sem emojis e sem 1-Clique', () => {
+  describe('LeadDossier (Mensagem pronta)', () => {
+    it('exibe "Padrão" sóbrio no modelo ativo, sem emojis e sem 1-Clique', () => {
       const html = renderToStaticMarkup(
-        React.createElement(SponsorWhatsAppHub, {
+        React.createElement(LeadDossier, {
+          lead: { participantUid: 'p1', name: 'Lucas Lima', phone: '34999998888', course: 'Sistemas de Informação', rating: 4, tags: [] },
           companyId: 'test-hub-sponsor',
           companyName: 'TechCorp',
-          phone: '34999998888',
-          participantName: 'Lucas Lima',
-          course: 'Sistemas de Informação'
+          onUpdate: async () => {}
         })
       );
 
-      expect(html).toContain('Padrão:');
-      expect(html).toContain('Modelo padrão configurado');
+      expect(html).toContain('Mensagem pronta');
+      expect(html).toContain('Padrão');
+      expect(html).toContain('Enviar pelo WhatsApp');
       expect(html).not.toContain('⭐');
       expect(html).not.toContain('⚡');
       expect(html).not.toContain('1-Clique');

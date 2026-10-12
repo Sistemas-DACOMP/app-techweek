@@ -29,6 +29,9 @@
 .adm-switch[aria-checked="true"]::after { transform: translateX(18px); }
 .adm-switch:disabled { opacity: .5; cursor: not-allowed; }
 
+/* Raiz ocupa a largura da tela: sem isso o body (flex) a dimensiona pelo conteúdo mais largo e o celular estoura. */
+.adm-root { width: 100%; min-width: 0; }
+
 /* Barra rolável sem trilho visível (chips de dia/estilo no celular) */
 .adm-noscroll { scrollbar-width: none; }
 .adm-noscroll::-webkit-scrollbar { display: none; }

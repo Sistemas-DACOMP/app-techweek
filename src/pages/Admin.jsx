@@ -97,6 +97,7 @@ import AdminDados from './admin/AdminDados';
 import AdminProgramacao from './admin/AdminProgramacao';
 import ActivityForm from './admin/ActivityForm';
 import AdminPessoas from './admin/AdminPessoas';
+import AdminPatrocinadores from './admin/patrocinadores/AdminPatrocinadores';
 import { ROLE_LABELS } from '../components/RoleSwitcher';
 import { Toast } from './admin/ui';
 import MissionForm from './admin/MissionForm';
@@ -170,13 +171,14 @@ const MISSION_TRIGGER_MODES = [
   { id: 'auto', label: 'Automático pelo App', desc: 'Concluído por ações do usuário (escanear, check-in)' }
 ];
 
-const VIEW_KEYS = ['inicio', 'dados', 'programacao', 'feed', 'pessoas', 'missoes', 'config', 'conta'];
+const VIEW_KEYS = ['inicio', 'dados', 'programacao', 'feed', 'pessoas', 'patrocinadores', 'missoes', 'config', 'conta'];
 const MOBILE_TITLES = {
   inicio: 'Visão geral',
   dados: 'Dados & Ao Vivo',
   programacao: 'Programação',
   feed: 'Feed e avisos',
   pessoas: 'Pessoas',
+  patrocinadores: 'Patrocinadores',
   missoes: 'Missões',
   config: 'Configurações',
   conta: 'Sua conta',
@@ -1306,6 +1308,7 @@ export default function Admin() {
         active={view}
         onNavigate={goTo}
         navigate={navigate}
+        onLogout={handleAdminLogout}
         me={me}
         search={sectionSearch ? sectionSearch[0] : globalSearch}
         onSearch={sectionSearch ? sectionSearch[1] : setGlobalSearch}
@@ -1398,6 +1401,8 @@ export default function Admin() {
               currentAdminAvatar={currentAdminAvatar}
             />
           )}
+
+          {view === 'patrocinadores' && <AdminPatrocinadores />}
 
           {/* SEÇÃO: PARTICIPANTES & PERMISSÕES */}
           {view === 'pessoas' && (

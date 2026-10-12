@@ -16,6 +16,8 @@ import Admin from './pages/Admin';
 import InstagramMission from './pages/InstagramMission';
 import Sponsor from './pages/Sponsor';
 import Terms from './pages/Terms';
+import TvProgramacao from './pages/TvProgramacao';
+import SponsorInvite from './pages/SponsorInvite';
 import BottomNavigation from './components/BottomNavigation';
 import logoTw from './assets/logo-tw.png';
 import Mascot from './components/Mascot';
@@ -32,7 +34,8 @@ function AppContent() {
   // Papel vindo do token (claim do servidor); enquanto não chega, usa o perfil em cache.
   const [claimRole, setClaimRole] = useState(null);
   const isPortalPage = location.pathname === '/admin' || location.pathname === '/staff' || location.pathname === '/sponsor';
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding' || location.pathname === '/termos';
+  const isInvitePage = location.pathname.startsWith('/sponsor/invite/');
+  const isAuthPage = isInvitePage || location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding' || location.pathname === '/termos';
 
   const [isSplashVisible, setIsSplashVisible] = useState(true);
 
@@ -111,12 +114,13 @@ function AppContent() {
   }
 
   return (
-    <div className={isPortalPage ? "portal-wrapper" : "app-wrapper"}>
+    <div className={isPortalPage || isInvitePage ? "portal-wrapper" : "app-wrapper"}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/cadastro" element={<Register />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/termos" element={<Terms />} />
+        <Route path="/sponsor/invite/:token" element={<SponsorInvite />} />
         
         <Route path="/" element={<Dashboard />} />
         <Route path="/feed" element={<Feed />} />
@@ -129,6 +133,7 @@ function AppContent() {
         <Route path="/sponsor" element={<Sponsor />} />
         <Route path="/staff" element={<Staff />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/tv/programacao" element={<TvProgramacao />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       

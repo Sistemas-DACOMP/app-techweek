@@ -1,6 +1,6 @@
 import {
-  LayoutGrid, CalendarDays, Megaphone, Flag, Users, LogIn, Store, ExternalLink, Settings, Pencil,
-  ArrowLeftRight, Search, MoreHorizontal, ChevronLeft, BarChart3,
+  Briefcase, LayoutGrid, CalendarDays, Megaphone, Flag, Users, LogIn, Store, ExternalLink, Settings, Pencil,
+  ArrowLeftRight, LogOut, Search, MoreHorizontal, ChevronLeft, BarChart3,
 } from 'lucide-react';
 import iconeTw from '../../assets/icone.png';
 import { EVENT_DAYS, isoToday } from './ui';
@@ -10,15 +10,19 @@ import { EVENT_DAYS, isoToday } from './ui';
 const MENU = [
   { group: 'Evento', items: [
     { key: 'inicio', label: 'Visão geral', icon: LayoutGrid },
-    { key: 'dados', label: 'Dados & Ao Vivo', icon: BarChart3 },
+    { key: 'dados', label: 'Dados e ao vivo', icon: BarChart3 },
     { key: 'programacao', label: 'Programação', icon: CalendarDays },
     { key: 'feed', label: 'Feed e avisos', icon: Megaphone },
     { key: 'missoes', label: 'Missões', icon: Flag },
   ] },
   { group: 'Pessoas', items: [
     { key: 'pessoas', label: 'Participantes e papéis', icon: Users },
+    { key: 'patrocinadores', label: 'Patrocinadores', icon: Briefcase },
     { key: 'staff', label: 'Portaria (Staff)', icon: LogIn, path: '/staff' },
     { key: 'sponsor', label: 'Estandes (Patrocinadores)', icon: Store, path: '/sponsor' },
+  ] },
+  { group: 'Sistema', items: [
+    { key: 'config', label: 'Configurações', icon: Settings },
   ] },
 ];
 
@@ -47,7 +51,7 @@ function LiveChip({ info, compact }) {
       className={`flex shrink-0 items-center gap-2 rounded-full font-bold ${compact ? 'h-[30px] px-2.5 text-[12px]' : 'h-[34px] px-3 text-[13px]'}`}
       style={info.live ? { background: 'rgba(111,216,166,0.12)', color: 'var(--ok)' } : { background: 'var(--surface)', color: 'var(--text-2)' }}
     >
-      <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ background: info.live ? 'var(--ok)' : 'var(--text-3)', boxShadow: info.live ? '0 0 0 3px rgba(111,216,166,0.25)' : 'none' }} />
+      <span aria-hidden="true" className={`h-2 w-2 rounded-full ${info.live ? 'tw-live' : ''}`} style={{ background: info.live ? 'var(--ok)' : 'var(--text-3)', boxShadow: info.live ? '0 0 0 3px rgba(111,216,166,0.25)' : 'none' }} />
       {compact ? info.short : info.label}
     </span>
   );
@@ -68,10 +72,10 @@ export function AdminAvatar({ name, initials, avatar, size = 36, ring = 2 }) {
 }
 
 export default function AdminShell({
-  active, onNavigate, navigate, me, search, onSearch, onSearchSubmit, mobileTitle, mobileBack, mobileAction, hideMobileNav, children,
+  active, onNavigate, navigate, onLogout, me, search, onSearch, onSearchSubmit, mobileTitle, mobileBack, mobileAction, hideMobileNav, children,
 }) {
   const info = eventDayInfo();
-  const navKey = active === 'feed' || active === 'config' || active === 'dados' ? 'inicio' : active;
+  const navKey = active === 'feed' || active === 'config' || active === 'dados' ? 'inicio' : active === 'patrocinadores' ? 'pessoas' : active;
 
   return (
     <div className="flex min-h-dvh bg-bg font-sans text-text">
@@ -106,14 +110,6 @@ export default function AdminShell({
           </div>
         ))}
         <div className="mt-auto flex flex-col gap-1 pt-[18px]">
-          <button
-            type="button"
-            aria-current={active === 'config' ? 'page' : undefined}
-            onClick={() => onNavigate('config')}
-            className={`flex min-h-[42px] items-center gap-3 rounded-xl px-3 text-[14px] ${active === 'config' ? 'bg-surface-selected font-bold text-text' : 'font-semibold text-text-2 hover:bg-surface'}`}
-          >
-            <Settings size={18} aria-hidden="true" strokeWidth={1.9} /> Configurações
-          </button>
           <div className="flex items-center gap-2.5 rounded-[14px] bg-surface p-3">
             <AdminAvatar {...me} />
             <span className="min-w-0 flex-1">
@@ -129,6 +125,9 @@ export default function AdminShell({
               <ArrowLeftRight size={13} aria-hidden="true" /> Trocar conta
             </button>
           </div>
+          <button type="button" onClick={onLogout} className="press mt-1.5 flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-[rgba(245,154,154,0.08)] text-[12px] font-bold text-err">
+            <LogOut size={14} aria-hidden="true" /> Sair da conta
+          </button>
         </div>
       </aside>
 
@@ -173,7 +172,9 @@ export default function AdminShell({
           </span>
         </header>
 
-        <main className={`min-w-0 flex-1 px-5 pt-6 lg:px-8 lg:pb-12 lg:pt-2.5 ${hideMobileNav ? 'pb-32' : 'pb-28'}`}>{children}</main>
+        <main className={`min-w-0 flex-1 px-5 pt-6 lg:px-8 lg:pb-12 lg:pt-2.5 ${hideMobileNav ? 'pb-32' : 'pb-28'}`}>
+          <div key={active} className="tw-page">{children}</div>
+        </main>
 
         {!hideMobileNav && (
           <nav aria-label="Painel" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-nav px-1.5 pb-[max(14px,env(safe-area-inset-bottom))] pt-1.5 lg:hidden">
