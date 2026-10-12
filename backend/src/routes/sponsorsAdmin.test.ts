@@ -84,7 +84,7 @@ describe('POST /api/admin/sponsors', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     const body = sent(res);
     expect(body.invites).toHaveLength(2);
-    expect(body.invites.every((i: any) => i.emailSent === false && i.link.startsWith('https://app.example/sponsor/invite/'))).toBe(true);
+    expect(body.invites.every((i: any) => i.emailSent === false && i.link.startsWith('https://app.example/#/sponsor/invite/'))).toBe(true);
     const sponsor = fake.store.get(`sponsors/${body.sponsorId}`)!;
     expect(sponsor).toMatchObject({ name: 'Acme', tier: 'OURO', teamLimit: 4, legacyCompanyId: null });
     const stored = JSON.stringify([...fake.store.entries()]);

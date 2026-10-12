@@ -2,7 +2,11 @@
 // dependência nova). Variáveis de ambiente (NUNCA versionar valores reais):
 //   RESEND_API_KEY  chave da API do Resend. Se ausente, o envio é pulado.
 //   EMAIL_FROM      remetente, ex: "TechWeek <convite@dominio-verificado.com>".
-//   APP_BASE_URL    origem pública do app, usada pra montar o link do convite.
+//   APP_BASE_URL    endereço público do app, usado pra montar o link do convite.
+//                   Inclui o caminho se o app não está na raiz (ex: GitHub Pages em
+//                   https://sistemas-dacomp.github.io/app-techweek). O app usa HashRouter,
+//                   por isso o link leva `/#/` (e o token fica no fragmento, que o
+//                   navegador não manda ao servidor).
 //
 // Nunca loga token nem link: só o resultado do envio.
 
@@ -10,7 +14,7 @@ const RESEND_URL = 'https://api.resend.com/emails';
 
 export function buildInviteLink(token: string): string {
   const base = (process.env.APP_BASE_URL || '').trim().replace(/\/+$/, '');
-  return `${base}/sponsor/invite/${token}`;
+  return `${base}/#/sponsor/invite/${token}`;
 }
 
 function escapeHtml(value: string): string {
