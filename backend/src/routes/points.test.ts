@@ -21,7 +21,7 @@ vi.mock('../config/firebaseAdmin', async () => {
 import router from './points';
 import { db } from '../config/firebaseAdmin';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
-import { requireSymplaTicket } from '../middlewares/authMiddleware';
+import { requireSymplaTicket, requireVerifiedEmail } from '../middlewares/authMiddleware';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -31,7 +31,7 @@ function makeRes() {
 }
 
 function makeReq(body: any = {}, uid = 'user-1') {
-  return { body, user: { uid } } as unknown as Request;
+  return { body, user: { uid, role: 'PARTICIPANT', emailVerified: true } } as unknown as Request;
 }
 
 // points.ts só exporta o router default — mesma técnica de booking.test.ts:
@@ -65,6 +65,16 @@ it('KAN-84: requireSymplaTicket está montado na rota real, antes do handler fin
   const handles = layer.route.stack.map((l: any) => l.handle);
   expect(handles).toContain(requireSymplaTicket);
   expect(handles.indexOf(requireSymplaTicket)).toBeLessThan(handles.length - 1);
+});
+
+// KAN-116: prova que requireVerifiedEmail está montado na rota real, antes do handler final
+it('KAN-116: requireVerifiedEmail está montado na rota real, antes do handler final', () => {
+  const layer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/claim'
+  );
+  const handles = layer.route.stack.map((l: any) => l.handle);
+  expect(handles).toContain(requireVerifiedEmail);
+  expect(handles.indexOf(requireVerifiedEmail)).toBeLessThan(handles.length - 1);
 });
 
 

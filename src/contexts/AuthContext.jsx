@@ -1,12 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthChange, logoutUser } from '../lib/auth';
+import { onAuthChange, logoutUser, reloadCurrentUser, sendVerificationEmail } from '../lib/auth';
 
 const AuthContext = createContext({
   user: null,
   token: null,
   loading: true,
+  isEmailVerified: false,
   logout: async () => {},
   getIdToken: async () => null,
+  reloadUser: async () => null,
+  resendVerification: async () => ({ success: false }),
 });
 
 export function AuthProvider({ children }) {
@@ -62,6 +65,27 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const reloadUser = async () => {
+    try {
+      const refreshed = await reloadCurrentUser();
+      if (refreshed) {
+        setUser({ ...refreshed, emailVerified: refreshed.emailVerified });
+        const idToken = await refreshed.getIdToken(true);
+        setToken(idToken);
+      }
+      return refreshed;
+    } catch (err) {
+      console.error('[AuthContext] Erro ao recarregar usuário:', err);
+      return null;
+    }
+  };
+
+  const resendVerification = async () => {
+    return await sendVerificationEmail(user);
+  };
+
+  const isEmailVerified = Boolean(user && user.emailVerified);
+
   const logout = async () => {
     setLoading(true);
     await logoutUser();
@@ -71,7 +95,16 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, logout, getIdToken }}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      loading,
+      isEmailVerified,
+      logout,
+      getIdToken,
+      reloadUser,
+      resendVerification
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -253,33 +253,43 @@ describe('Sponsor Service & Innovation Features', () => {
     });
 
     it('submitLead salva localmente e retorna sucesso com offline: true quando API não estiver disponível', async () => {
-      const result = await submitLead({
-        participantUid: 'demo_user_offline_test',
-        notes: 'Lead salvo em modo teste resiliente',
-        rating: 5,
-        companyId: 'test_company_offline',
-        tags: ['Frontend', 'Destaque'],
-        participantData: {
-          name: 'Lucas Teste',
-          course: 'Sistemas de Informação',
-          phone: '(34) 98888-7777',
-          email: 'lucas@ufu.br'
-        }
-      });
+      const fetchSpy = vi.spyOn(global, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+      try {
+        const result = await submitLead({
+          participantUid: 'demo_user_offline_test',
+          notes: 'Lead salvo em modo teste resiliente',
+          rating: 5,
+          companyId: 'test_company_offline',
+          tags: ['Frontend', 'Destaque'],
+          participantData: {
+            name: 'Lucas Teste',
+            course: 'Sistemas de Informação',
+            phone: '(34) 98888-7777',
+            email: 'lucas@ufu.br'
+          }
+        });
 
-      expect(result.success).toBe(true);
-      expect(result.lead).toBeDefined();
-      expect(result.lead.participantUid).toBe('demo_user_offline_test');
-      expect(result.lead.name).toBe('Lucas Teste');
-      expect(result.lead.rating).toBe(5);
+        expect(result.success).toBe(true);
+        expect(result.lead).toBeDefined();
+        expect(result.lead.participantUid).toBe('demo_user_offline_test');
+        expect(result.lead.name).toBe('Lucas Teste');
+        expect(result.lead.rating).toBe(5);
+      } finally {
+        fetchSpy.mockRestore();
+      }
     });
 
     it('fetchLeads retorna leads da empresa com o lead semente quando não houver conexão com backend', async () => {
-      const data = await fetchLeads('test_fetch_company');
-      expect(data).toBeDefined();
-      expect(data.companyLeads).toBeDefined();
-      expect(data.companyLeads.length).toBeGreaterThanOrEqual(1);
-      expect(data.companyLeads[0].name).toBe('Mariana Souza');
+      const fetchSpy = vi.spyOn(global, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+      try {
+        const data = await fetchLeads('test_fetch_company');
+        expect(data).toBeDefined();
+        expect(data.companyLeads).toBeDefined();
+        expect(data.companyLeads.length).toBeGreaterThanOrEqual(1);
+        expect(data.companyLeads[0].name).toBe('Mariana Souza');
+      } finally {
+        fetchSpy.mockRestore();
+      }
     });
   });
 });

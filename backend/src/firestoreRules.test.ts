@@ -9,7 +9,7 @@ const usersBlock = rules.slice(rules.indexOf('match /users/{userId}'), rules.ind
 describe('firestore.rules users (KAN-124 A1)', () => {
   it('create do dono bloqueia vínculo de empresa e termo', () => {
     const create = usersBlock.slice(usersBlock.indexOf('allow create'), usersBlock.indexOf('allow update'));
-    for (const f of ['sponsorId', 'companyId', 'company', 'empresa', 'companyName', 'termsAcceptedAt']) {
+    for (const f of ['sponsorId', 'companyId', 'company', 'empresa', 'companyName', 'sponsorTermsVersion']) {
       expect(create).toContain(`!('${f}' in request.resource.data)`);
     }
   });

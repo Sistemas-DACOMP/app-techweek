@@ -2,13 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { auth, db } from '../config/firebaseAdmin';
 import { UserRole, AuthUser } from '../types/express';
 
-export const ADMIN_EMAILS = ['sam03amorim@gmail.com'];
-
-export function isAdminEmail(email?: string | null): boolean {
-  if (!email || typeof email !== 'string') return false;
-  return ADMIN_EMAILS.includes(email.trim().toLowerCase());
-}
-
 /**
  * Middleware para validar o token JWT emitido pelo Firebase Auth.
  * Espera o header: Authorization: Bearer <token>
@@ -41,7 +34,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const decodedToken = await auth.verifyIdToken(token, true);
 
     const tokenRole = decodedToken.role as UserRole | undefined;
-    const isUserAdmin = Boolean(decodedToken.email && isAdminEmail(decodedToken.email));
+    const isUserAdmin = Boolean(tokenRole === 'ADMIN' || decodedToken.admin === true);
     const userRole: UserRole = isUserAdmin ? 'ADMIN' : (tokenRole || 'PARTICIPANT');
 
     const user: AuthUser = {
@@ -139,5 +132,37 @@ export async function requireSymplaTicket(req: Request, res: Response, next: Nex
       message: 'Erro interno ao validar ingresso do participante.'
     });
   }
+}
+
+/**
+ * Middleware para exigir confirmação de e-mail (KAN-116).
+ * Impede reservas de vagas, resgate de pontos e outras ações críticas
+ * de participantes que ainda não confirmaram o endereço de e-mail.
+ * Nota: Usuários com role 'ADMIN' sempre possuem permissão irrestrita.
+ */
+export function requireVerifiedEmail(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user) {
+    res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Usuário não autenticado.'
+    });
+    return;
+  }
+
+  // ADMIN sempre possui acesso total
+  if (req.user.role === 'ADMIN') {
+    next();
+    return;
+  }
+
+  if (req.user.emailVerified !== true) {
+    res.status(403).json({
+      error: 'EMAIL_NOT_VERIFIED',
+      message: 'É necessário confirmar seu endereço de e-mail antes de realizar esta ação.'
+    });
+    return;
+  }
+
+  next();
 }
 

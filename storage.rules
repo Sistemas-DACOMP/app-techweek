@@ -3,39 +3,77 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isAuthenticated() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isVerifiedOwner(userId) {
+      return isOwner(userId) && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (request.auth.token.role == 'ADMIN' || request.auth.token.admin == true);
+    }
+
+    function isStaffOrAdmin() {
+      return isAuthenticated() && (isAdmin() || request.auth.token.role == 'STAFF');
+    }
+
+    function isSponsorOrStaffOrAdmin() {
+      return isAuthenticated() && (isStaffOrAdmin() || request.auth.token.role == 'SPONSOR');
+    }
+
+    function isValidImage() {
+      return request.resource.contentType in ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+    }
+
+    function isValidVideo() {
+      return request.resource.contentType in ['video/mp4', 'video/webm', 'video/quicktime'];
+    }
+
     // Avatar do participante. Path: /avatars/{userId}/{fileName}
-    // KAN-73 (reimplementação Firebase do que o PR #23 fazia no Supabase):
-    // o limite de 2MB e a lista de tipos aceitos precisam valer aqui, não só
-    // no front (src/lib/validators.js). Lista fechada de content-type pra
-    // bater exatamente com o validador do front e não abrir brecha pra tipo
-    // perigoso (ex: image/svg+xml, que pode carregar script).
+    // KAN-73: Limite de 2MB e lista fechada de content-type seguros.
+    // Decomposição create/update vs delete para evitar request.resource == null.
     match /avatars/{userId}/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.auth.uid == userId
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId)
         && request.resource.size < 2 * 1024 * 1024
-        && request.resource.contentType in ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+        && isValidImage();
+      allow delete: if isOwner(userId) || isStaffOrAdmin();
     }
 
     // Foto de comprovação de missão. Path: /mission_photos/{userId}/{fileName}
-    // REG-MISSION-002: Limite de 5MB e formatos de imagem seguros.
+    // REG-MISSION-002: Limite corrigido de 5MB e formatos de imagem seguros.
+    // KAN-116: Exige email_verified == true para pontuação de missão.
+    // Decomposição create/update vs delete para evitar request.resource == null.
     match /mission_photos/{userId}/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.auth.uid == userId
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType in ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+      allow read: if isAuthenticated();
+      allow create, update: if isVerifiedOwner(userId)
+        && request.resource.size < 5 * 1024 * 1024
+        && isValidImage();
+      allow delete: if isOwner(userId) || isStaffOrAdmin();
     }
 
     // Mídias do Feed (fotos e vídeos de alta qualidade / pesados)
+    // Upload restrito a ADMIN, STAFF ou SPONSOR.
+    // Vídeos: até 250MB (MP4, WebM, QuickTime/MOV).
+    // Imagens: até 50MB (PNG, JPEG, WebP, GIF), alinhado com src/lib/feedService.js.
     match /feed/{mediaType}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
-        && request.resource.size < 250 * 1024 * 1024
+      allow create, update: if isSponsorOrStaffOrAdmin()
         && (
-          request.resource.contentType.matches('image/.*')
-          || request.resource.contentType.matches('video/.*')
+          (isValidVideo() && request.resource.size < 250 * 1024 * 1024)
+          || (isValidImage() && request.resource.size < 50 * 1024 * 1024)
         );
+      allow delete: if isSponsorOrStaffOrAdmin();
     }
   }
 }

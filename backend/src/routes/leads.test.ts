@@ -10,6 +10,7 @@ vi.mock('../config/firebaseAdmin', () => ({
 
 import router, { calculateAgeGroup, buildWhatsAppPayload, leadsHandler } from './leads';
 import { db } from '../config/firebaseAdmin';
+import { requireVerifiedEmail } from '../middlewares/authMiddleware';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -18,7 +19,7 @@ function makeRes() {
   return res as Response;
 }
 
-function makeReq(body: any = {}, user: any = { uid: 'sponsor-123', role: 'SPONSOR', email: 'sponsor@company.com' }) {
+function makeReq(body: any = {}, user: any = { uid: 'sponsor-123', role: 'SPONSOR', email: 'sponsor@company.com', emailVerified: true }) {
   return {
     body,
     user
@@ -235,7 +236,7 @@ describe('POST /api/leads handler (KAN-55)', () => {
             })
           });
         }
-        if (ref.path.startsWith('pointEvents/')) {
+        if (ref.path.includes('sponsor_lead')) {
           return Promise.resolve({
             exists: true,
             data: () => ({ points: 50 })
@@ -465,6 +466,69 @@ describe('POST /api/leads handler (KAN-55)', () => {
       })
     );
   });
+
+  it('não duplica os 100 pontos do Bilhete Dourado se pointEvents/part-1_passport_golden_ticket já existe', async () => {
+    const req = makeReq(
+      { participantUid: 'part-1', companyId: 'hyperflow' },
+      { uid: 'sponsor-hf', role: 'SPONSOR', email: 'lead@hyperflow.com' }
+    );
+    const res = makeRes();
+
+    const mockTx = {
+      get: vi.fn((ref: { path: string }) => {
+        if (ref.path === 'users/part-1') {
+          return Promise.resolve({
+            exists: true,
+            data: () => ({
+              name: 'Aluno Completo',
+              visitedSponsors: {
+                kanastra: { visitedAt: '2026-09-28' },
+                bayer: { visitedAt: '2026-09-28' },
+                aimirim: { visitedAt: '2026-09-28' },
+                bip: { visitedAt: '2026-09-28' }
+              },
+              goldenTicketAwarded: false // campo no doc do usuário desincronizado
+            })
+          });
+        }
+        if (ref.path === 'pointEvents/part-1_passport_golden_ticket') {
+          return Promise.resolve({
+            exists: true,
+            data: () => ({ points: 100 })
+          });
+        }
+        if (ref.path === 'pointEvents/part-1_sponsor_lead_sponsor-hf') {
+          return Promise.resolve({ exists: false }); // lead inédito no estande
+        }
+        return Promise.resolve({ exists: false, data: () => ({}) });
+      }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
+
+    await leadsHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    // Deve conceder apenas os 50 pontos do estande, reconciliando goldenTicketAwarded: true
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        lead: expect.objectContaining({
+          goldenTicketAwarded: true,
+          pointsAwarded: 50
+        })
+      })
+    );
+
+    // mockTx.set NÃO deve ser chamado para o golden ticket
+    const setCalls = mockTx.set.mock.calls;
+    const goldenTicketSetCall = setCalls.find(
+      ([ref]: any) => ref?.path === 'pointEvents/part-1_passport_golden_ticket'
+    );
+    expect(goldenTicketSetCall).toBeUndefined();
+  });
 });
 
 describe('GET /api/leads handler', () => {
@@ -600,7 +664,9 @@ describe('leads route middleware configuration', () => {
       (layer) => layer.route?.path === '/' && layer.route?.methods?.post
     );
     expect(postRoute).toBeDefined();
-    expect(postRoute.route.stack.length).toBeGreaterThanOrEqual(3); // requireAuth, requireRole, leadsHandler
+    expect(postRoute.route.stack.length).toBeGreaterThanOrEqual(4); // requireAuth, requireRole, requireVerifiedEmail, leadsHandler
+    const handles = postRoute.route.stack.map((l: any) => l.handle);
+    expect(handles).toContain(requireVerifiedEmail);
   });
 
   it('registra a rota GET / com middleware de autenticação e papel restrito', () => {

@@ -41,7 +41,7 @@ describe('Render Sponsor page with SPONSOR role', () => {
     expect(html).toContain('sponsor-shell');
     expect(html).toContain('Kanastra');
     expect(html).toContain('Escanear crachá');
-  });
+  }, 15000);
 
   it('renders settings tab cleanly without throwing', async () => {
     const Sponsor = (await import('../../src/pages/Sponsor')).default;

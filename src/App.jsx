@@ -19,6 +19,7 @@ import Terms from './pages/Terms';
 import TvProgramacao from './pages/TvProgramacao';
 import SponsorInvite from './pages/SponsorInvite';
 import BottomNavigation from './components/BottomNavigation';
+import EmailVerificationGate from './components/EmailVerificationGate';
 import logoTw from './assets/logo-tw.png';
 import Mascot from './components/Mascot';
 import './styles/entrada.css';
@@ -30,7 +31,7 @@ import { stopAllMediaTracks } from './lib/cameraUtils';
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isEmailVerified } = useAuth();
   // Papel vindo do token (claim do servidor); enquanto não chega, usa o perfil em cache.
   const [claimRole, setClaimRole] = useState(null);
   const isPortalPage = location.pathname === '/admin' || location.pathname === '/staff' || location.pathname === '/sponsor';
@@ -73,12 +74,12 @@ function AppContent() {
     if (!isSplashVisible && !authLoading) {
       if (!user && !isAuthPage && !isPortalPage) {
         navigate('/login', { replace: true });
-      } else if (user && location.pathname === '/login') {
+      } else if (user && isEmailVerified && (location.pathname === '/login' || location.pathname === '/cadastro')) {
         const hasOnboarding = localStorage.getItem('facom_onboarding_completed') === 'true';
         navigate(hasOnboarding ? '/' : '/onboarding', { replace: true });
       }
     }
-  }, [user, authLoading, isSplashVisible, isAuthPage, isPortalPage, navigate, location.pathname]);
+  }, [user, authLoading, isSplashVisible, isAuthPage, isPortalPage, navigate, location.pathname, isEmailVerified]);
 
   if (isSplashVisible || authLoading) {
     // Abertura (EstAbertura, DESIGN.md §6/§9): única tela com animação em tela cheia.
@@ -109,6 +110,21 @@ function AppContent() {
             <span className="size-2 rounded-full bg-[#B794FF]" />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Intercepta qualquer usuário autenticado cujo e-mail ainda não tenha sido confirmado no Firebase.
+  // Permite acesso livre apenas a /termos para consulta da política do evento.
+  if (user && !isEmailVerified && location.pathname !== '/termos') {
+    return (
+      <div className={isPortalPage ? "portal-wrapper" : "app-wrapper"}>
+        <EmailVerificationGate
+          onVerified={() => {
+            const hasOnboarding = localStorage.getItem('facom_onboarding_completed') === 'true';
+            navigate(hasOnboarding ? '/' : '/onboarding', { replace: true });
+          }}
+        />
       </div>
     );
   }
