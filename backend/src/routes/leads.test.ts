@@ -352,6 +352,68 @@ describe('POST /api/leads handler (KAN-55)', () => {
     expect(mockTx.set).toHaveBeenCalledTimes(1);
   });
 
+  // KAN-124: a empresa vem do vínculo do servidor, nunca do body.
+  function runLead(body: any, user: any, sponsorUserDoc: any, sponsorsDoc?: any) {
+    const mockTx = {
+      get: vi.fn((ref: { path: string }) => {
+        if (ref.path === 'users/part-1') {
+          return Promise.resolve({ exists: true, data: () => ({ name: 'Maria', visitedSponsors: {} }) });
+        }
+        if (ref.path === `users/${user.uid}`) {
+          return Promise.resolve({ exists: true, data: () => sponsorUserDoc });
+        }
+        if (ref.path === 'sponsors/sp-bayer' && sponsorsDoc) {
+          return Promise.resolve({ exists: true, data: () => sponsorsDoc });
+        }
+        return Promise.resolve({ exists: false, data: () => ({}) });
+      }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
+    const res = makeRes();
+    return leadsHandler(makeReq(body, user), res).then(() => ({ res, mockTx }));
+  }
+
+  it('KAN-124: companyId do body é ignorado (SPONSOR não se passa por outra empresa)', async () => {
+    const { res, mockTx } = await runLead(
+      { participantUid: 'part-1', companyId: 'kanastra' },
+      { uid: 'sp-x', role: 'SPONSOR', email: 'rh@semempresa.com' },
+      {}
+    );
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ lead: expect.objectContaining({ companyId: null }) })
+    );
+    expect(mockTx.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.not.objectContaining({ visitedSponsors: expect.anything() })
+    );
+  });
+
+  it('KAN-124: com sponsorId usa sponsors/{id}.legacyCompanyId, mesmo com body e e-mail apontando outra empresa', async () => {
+    const { res } = await runLead(
+      { participantUid: 'part-1', companyId: 'kanastra' },
+      { uid: 'sp-b', role: 'SPONSOR', email: 'x@kanastra.com.br' },
+      { sponsorId: 'sp-bayer' },
+      { legacyCompanyId: 'bayer' }
+    );
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ lead: expect.objectContaining({ companyId: 'bayer' }) })
+    );
+  });
+
+  it('KAN-124: com sponsorId sem legacyCompanyId não cai no fallback legado', async () => {
+    const { res } = await runLead(
+      { participantUid: 'part-1' },
+      { uid: 'sp-b', role: 'SPONSOR', email: 'x@kanastra.com.br' },
+      { sponsorId: 'sp-bayer', companyId: 'kanastra' },
+      { name: 'Nova Empresa' }
+    );
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ lead: expect.objectContaining({ companyId: null }) })
+    );
+  });
+
   it('libera o Bilhete Dourado (+100 pts) quando todas as 5 empresas forem visitadas', async () => {
     const req = makeReq(
       { participantUid: 'part-1', companyId: 'hyperflow' },
