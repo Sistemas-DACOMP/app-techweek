@@ -17,8 +17,11 @@ import sponsorInvitesRouter from './routes/sponsorInvites';
 
 const app = express();
 
-// Atrás do front do Google (1 hop): req.ip passa a ser o IP real do cliente,
-// necessário pro rate limit por IP das rotas públicas de convite (KAN-124).
+// Rate limit por IP das rotas públicas de convite (KAN-124) precisa do IP real do
+// cliente. O valor 1 supõe Cloud Function direto (1 hop do Google); se houver
+// Vercel/Hosting na frente a topologia muda e o número de hops também. NÃO
+// confirmado: validar em homolog com DEBUG_CLIENT_IP=1 (loga req.ip e
+// x-forwarded-for uma vez, ver middlewares/rateLimiter.ts) antes de produção.
 app.set('trust proxy', 1);
 
 // Middlewares padrão

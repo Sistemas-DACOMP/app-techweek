@@ -66,13 +66,29 @@ export const adminSponsorLimiter = rateLimit({
 
 // KAN-124: rotas PÚBLICAS de convite (sem auth no GET, auth só depois no
 // accept): chave = IP (padrão do express-rate-limit, sem keyGenerator de uid).
-// Exige `app.set('trust proxy', 1)` em index.ts pra req.ip ser o cliente real
-// atrás do front do Google. Teto estrito pra dificultar adivinhação de token.
+// 60 req/15min por IP (CGNAT/Wi-Fi do evento junta muita gente num IP só).
+// ATENÇÃO: `trust proxy` (index.ts) depende da topologia real: Cloud Function
+// direto (1 hop do Google), ou Vercel/Hosting na frente (mais hops). Se estiver
+// errado, req.ip vira o IP do proxy (todo mundo no mesmo balde) ou fica
+// spoofável via X-Forwarded-For. Validar em homolog ligando DEBUG_CLIENT_IP=1
+// (ver debugClientIp) e comparando req.ip com x-forwarded-for.
 // ponytail: store em memória por instância (ver nota acima).
 export const sponsorInviteIpLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler,
   windowMs: 15 * 60 * 1000,
-  limit: 20
+  limit: 60
 });
+
+// Log temporário pra validar a topologia do proxy em homolog: só liga com
+// DEBUG_CLIENT_IP=1 (desligado por padrão), loga UMA vez por instância e
+// nunca o path/URL (o token do convite vai na URL).
+let clientIpLogged = false;
+export function debugClientIp(req: Request, _res: Response, next: () => void): void {
+  if (process.env.DEBUG_CLIENT_IP === '1' && !clientIpLogged) {
+    clientIpLogged = true;
+    console.warn('DEBUG_CLIENT_IP req.ip=', req.ip, 'x-forwarded-for=', req.headers['x-forwarded-for']);
+  }
+  next();
+}
