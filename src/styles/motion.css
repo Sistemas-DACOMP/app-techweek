@@ -59,3 +59,26 @@
   .tw-up, .tw-fade, .tw-growx, .tw-growy, .tw-draw, .tw-pulse { animation: none !important; }
   .tw-draw { stroke-dasharray: none; }
 }
+
+/* --- Patrocinador: classes proprias (.tw-growx/.tw-fade/.tw-pulse ja vem do bloco acima) --- */
+@keyframes twPop { 0% { opacity: 0; transform: scale(.5); } 70% { opacity: 1; transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes twIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes twSheet { from { opacity: 0; transform: translateY(48px); } to { opacity: 1; transform: none; } }
+@keyframes twModal { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+
+.tw-rise { animation: twUp .55s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+.tw-pop { animation: twPop .45s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.tw-slide { animation: twIn .4s cubic-bezier(.2, .8, .2, 1) both; }
+.tw-sheet { animation: twSheet .5s cubic-bezier(.2, .8, .2, 1) both; }
+.tw-modal { animation: twModal .4s cubic-bezier(.2, .8, .2, 1) both; }
+
+.tw-press, .tw-lift { transition: transform .18s ease, filter .18s ease, opacity .18s ease, background-color .18s ease; }
+.tw-press:hover { transform: translateY(-1px); filter: brightness(1.12); }
+.tw-press:active { transform: scale(.97); }
+.tw-lift:hover { transform: translateY(-2px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-rise, .tw-pop, .tw-slide, .tw-sheet, .tw-modal { animation: none !important; }
+  .tw-press, .tw-lift { transition: none !important; }
+  .tw-press:hover, .tw-press:active, .tw-lift:hover { transform: none !important; filter: none !important; }
+}
