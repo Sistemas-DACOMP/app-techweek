@@ -7,26 +7,12 @@ import {
   uploadUserAvatar,
   updateUserProfile,
   getUserPointEvents,
-  getLeaderboardUsers
+  getLeaderboardUsers,
+  isAdminEmail
 } from './userService';
 
 export async function getMyProfile() {
-  let firebaseUser = auth?.currentUser;
-
-  // Fallback para sessão local de teste se não houver usuário no Firebase Auth
-  if (!firebaseUser && typeof localStorage !== 'undefined') {
-    const testSessionStr = localStorage.getItem('facom_test_session');
-    if (testSessionStr) {
-      try {
-        const testSession = JSON.parse(testSessionStr);
-        firebaseUser = {
-          uid: testSession.uid,
-          email: testSession.email,
-          displayName: testSession.email === 'admin@admin.com' ? 'Administrador Geral' : (testSession.email === 'staff@techweek.com' ? 'Staff Portaria' : 'Aluno UFU')
-        };
-      } catch (_e) {}
-    }
-  }
+  const firebaseUser = auth?.currentUser;
 
   if (!firebaseUser) return null;
 
@@ -38,6 +24,7 @@ export async function getMyProfile() {
   };
 
   const defaultName = formatFirstName(firebaseUser.email, firebaseUser.displayName);
+  const isUserAdmin = isAdminEmail(firebaseUser.email);
 
   try {
     const fsProfile = await getUserProfile(firebaseUser.uid);
@@ -45,6 +32,8 @@ export async function getMyProfile() {
       return {
         ...fsProfile,
         id: firebaseUser.uid,
+        role: isUserAdmin || isAdminEmail(fsProfile.email) ? 'ADMIN' : (fsProfile.role || 'PARTICIPANT'),
+        participantType: isUserAdmin || isAdminEmail(fsProfile.email) ? 'Organizador' : (fsProfile.participantType || 'Aluno da UFU'),
         first_name: fsProfile.firstName || fsProfile.displayName?.split(' ')[0] || fsProfile.username || defaultName,
         last_name: fsProfile.lastName || '',
         username: fsProfile.username || fsProfile.email?.split('@')[0] || '',
@@ -58,7 +47,10 @@ export async function getMyProfile() {
       last_name: '',
       username: firebaseUser.email?.split('@')[0] || '',
       avatar_url: firebaseUser.photoURL || null,
-      mascot: 'blue'
+      mascot: 'blue',
+      role: isUserAdmin ? 'ADMIN' : 'PARTICIPANT',
+      participantType: isUserAdmin ? 'Organizador' : 'Aluno da UFU',
+      email: firebaseUser.email
     };
   } catch (e) {
     console.warn('[gameplay] Erro ao buscar perfil no Firestore:', e);
@@ -68,7 +60,10 @@ export async function getMyProfile() {
       last_name: '',
       username: firebaseUser.email?.split('@')[0] || '',
       avatar_url: firebaseUser.photoURL || null,
-      mascot: 'blue'
+      mascot: 'blue',
+      role: isUserAdmin ? 'ADMIN' : 'PARTICIPANT',
+      participantType: isUserAdmin ? 'Organizador' : 'Aluno da UFU',
+      email: firebaseUser.email
     };
   }
 }

@@ -3,6 +3,7 @@ import { db, FieldValue } from '../config/firebaseAdmin';
 import { requireAuth, requireSymplaTicket } from '../middlewares/authMiddleware';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
+import { validateMissionProof } from '../lib/missionProofValidator';
 
 const router = Router();
 
@@ -138,6 +139,24 @@ router.post('/claim', requireAuth, participantActionLimiter, requireSymplaTicket
         // Catálogo mal formado (dado de seed/edição manual quebrado) — erro de
         // integridade de dado, não payload do client, por isso 500 e não 400.
         throw new Error(`Catálogo de missões com valor inválido para ${missionRef.path}: ${String(missionPoints)}`);
+      }
+
+      // Validação de comprovação de cumprimento da missão (KAN-80)
+      const proofResult = await validateMissionProof(tx, {
+        uid,
+        missionId,
+        eventType,
+        referenceId,
+        metadata,
+        userSnap,
+        missionSnap
+      });
+
+      if (!proofResult.valid) {
+        return {
+          status: proofResult.statusCode ?? 400,
+          body: { error: proofResult.error, message: proofResult.message }
+        };
       }
 
       tx.set(eventRef, {

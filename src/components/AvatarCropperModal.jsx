@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { ZoomIn, ZoomOut, RotateCcw, Check, X, Move } from 'lucide-react';
+import { useState, useRef, useCallback, useId } from 'react';
+import { ZoomIn, ZoomOut, RotateCcw, Check, X } from 'lucide-react';
+import '../styles/perfil.css';
 
 export default function AvatarCropperModal({ imageSrc, onCropComplete, onClose }) {
   const [zoom, setZoom] = useState(1);
@@ -9,6 +10,7 @@ export default function AvatarCropperModal({ imageSrc, onCropComplete, onClose }
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
 
   const containerRef = useRef(null);
+  const titleId = useId();
   const imageRef = useRef(null);
   const CROP_SIZE = 240; // Tamanho do viewport de corte em pixels
 
@@ -110,178 +112,103 @@ export default function AvatarCropperModal({ imageSrc, onCropComplete, onClose }
     }, 'image/jpeg', 0.92);
   };
 
+  // Teclado: setas movem a foto, +/- dão zoom (o arraste não é a única forma de ajustar — DESIGN.md §10).
+  const handleKeyDown = (e) => {
+    const step = 10;
+    const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    if (moves[e.key]) {
+      e.preventDefault();
+      setPosition((p) => clampPosition(p.x + moves[e.key][0], p.y + moves[e.key][1], zoom));
+    } else if (e.key === '+' || e.key === '=') handleZoomChange(zoom + 0.2);
+    else if (e.key === '-') handleZoomChange(zoom - 0.2);
+    else if (e.key === 'Escape') onClose();
+  };
+
   return (
-    <div 
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0, 0, 0, 0.85)',
-        backdropFilter: 'blur(8px)',
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px'
-      }}
-    >
-      <div 
-        className="login-glass-card animate-scale-up"
-        style={{
-          width: '100%',
-          maxWidth: '380px',
-          padding: '20px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          position: 'relative'
-        }}
+    <div className="modal-overlay-fixed ds-dialog-scrim p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="modal-card-fixed ds-dialog relative flex w-full max-w-[380px] flex-col items-center rounded-[26px] border border-line-2 bg-surface px-5 pb-5 pt-6 text-text"
       >
         <button
           type="button"
           onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '16px',
-            right: '16px',
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer'
-          }}
+          aria-label="Fechar"
+          className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full text-text-3"
         >
-          <X size={20} />
+          <X size={20} aria-hidden="true" />
         </button>
 
-        <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '4px' }}>
-          Ajustar Foto de Perfil
-        </h3>
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <Move size={14} /> Arraste para mover e use a barra para zoom
-        </p>
+        <h2 id={titleId} className="text-[19px] font-extrabold">Ajustar foto</h2>
+        <p className="mb-4 mt-1 text-center text-[13px] text-text-2">Arraste para posicionar e use a barra para dar zoom.</p>
 
-        {/* Viewport de Corte com Máscara Circular */}
-        <div 
+        {/* Viewport de corte com máscara circular */}
+        <div
           ref={containerRef}
+          tabIndex={0}
+          role="application"
+          aria-label="Área de corte. Use as setas para mover e + ou - para zoom."
+          onKeyDown={handleKeyDown}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
+          className={`relative touch-none select-none overflow-hidden rounded-full bg-bg ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           style={{
             width: `${CROP_SIZE}px`,
             height: `${CROP_SIZE}px`,
-            borderRadius: '50%',
-            overflow: 'hidden',
-            position: 'relative',
-            cursor: isDragging ? 'grabbing' : 'grab',
-            border: '3px solid var(--primary-color, #00d2ff)',
-            boxShadow: '0 0 20px rgba(0, 210, 255, 0.3)',
-            touchAction: 'none',
-            userSelect: 'none',
-            background: '#111'
+            boxShadow: '0 0 0 3px var(--bg), 0 0 0 6px #5B3BE0'
           }}
         >
           <img
             ref={imageRef}
             src={imageSrc}
-            alt="Para recortar"
+            alt=""
             onLoad={handleImageLoad}
             draggable={false}
+            className="pointer-events-none absolute left-1/2 top-1/2 select-none"
             style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
               width: `${currentWidth}px`,
               height: `${currentHeight}px`,
               maxWidth: 'none',
               maxHeight: 'none',
-              transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px))`,
-              pointerEvents: 'none',
-              userSelect: 'none'
+              transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px))`
             }}
           />
         </div>
 
-        {/* Controles de Zoom e Reset */}
-        <div style={{ width: '100%', marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <button
-              type="button"
-              onClick={() => handleZoomChange(zoom - 0.2)}
-              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}
-            >
-              <ZoomOut size={18} />
-            </button>
-            <input 
-              type="range"
-              min="1"
-              max="3"
-              step="0.05"
-              value={zoom}
-              onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-              style={{
-                flex: 1,
-                accentColor: 'var(--primary-color, #00d2ff)',
-                cursor: 'pointer'
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => handleZoomChange(zoom + 0.2)}
-              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}
-            >
-              <ZoomIn size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              title="Resetar posição e zoom"
-              style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: 'none',
-                color: 'var(--text-secondary)',
-                borderRadius: '6px',
-                padding: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              <RotateCcw size={16} />
-            </button>
-          </div>
+        {/* Zoom e reset */}
+        <div className="mt-5 flex w-full items-center gap-1">
+          <button type="button" onClick={() => handleZoomChange(zoom - 0.2)} aria-label="Diminuir zoom" className="flex h-11 w-11 items-center justify-center rounded-full text-text-2">
+            <ZoomOut size={18} aria-hidden="true" />
+          </button>
+          <input
+            type="range"
+            min="1"
+            max="3"
+            step="0.05"
+            value={zoom}
+            aria-label="Zoom"
+            onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
+            className="h-11 flex-1 cursor-pointer accent-[#5B3BE0]"
+          />
+          <button type="button" onClick={() => handleZoomChange(zoom + 0.2)} aria-label="Aumentar zoom" className="flex h-11 w-11 items-center justify-center rounded-full text-text-2">
+            <ZoomIn size={18} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={handleReset} aria-label="Voltar ao enquadramento original" className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-raised text-text-2">
+            <RotateCcw size={16} aria-hidden="true" />
+          </button>
+        </div>
 
-          {/* Botões de Ação */}
-          <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              className="login-btn"
-              style={{
-                flex: 1,
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                marginTop: '0'
-              }}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmCrop}
-              className="login-btn"
-              style={{
-                flex: 2,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                marginTop: '0'
-              }}
-            >
-              <Check size={18} /> Aplicar Corte
-            </button>
-          </div>
+        <div className="mt-3 flex w-full gap-2">
+          <button type="button" onClick={onClose} className="btn btn-secondary flex-1">Cancelar</button>
+          <button type="button" onClick={handleConfirmCrop} className="btn btn-primary flex-[2]">
+            <Check size={18} aria-hidden="true" /> Usar foto
+          </button>
         </div>
       </div>
     </div>
   );
 }
-

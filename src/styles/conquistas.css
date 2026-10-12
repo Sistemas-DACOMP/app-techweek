@@ -1,0 +1,51 @@
+/* Conquistas (Missões · Ranking · Passaporte) — DESIGN.md §6, §9.
+   Só o que Tailwind não cobre: keyframes, pseudo-elementos e override do .page-container.
+   Reduced motion já é global (index.css). */
+
+/* Tela sem padding lateral: o banner de ingresso fica de ponta a ponta e o conteúdo usa px-5. */
+.page-container.conq-page { padding: 0 0 132px; }
+.page-container.conq-page.conq-page--footer { padding-bottom: 210px; }
+
+/* Anel de progresso do resumo */
+.conq-ring-fill { animation: conqRingFill 1.1s var(--ease-out) .2s both; }
+@keyframes conqRingFill { from { stroke-dashoffset: 126; } }
+
+/* Relâmpago: raio pulsando + onda, barra de tempo */
+.conq-bolt { animation: dsPulse 1.6s ease-in-out infinite; }
+.conq-wave { animation: conqWave 1.6s ease-out infinite; }
+@keyframes conqWave { from { transform: scale(.8); opacity: .7; } to { transform: scale(1.9); opacity: 0; } }
+.conq-drain { transform-origin: left center; transition: transform 1s linear; }
+
+/* Secreta: "?" flutuando e brilhinhos */
+.conq-float { --r: -12deg; animation: dsFloat 4s ease-in-out infinite; }
+.conq-twinkle { animation: conqTwinkle 2.4s ease-in-out infinite; }
+@keyframes conqTwinkle {
+  0%, 100% { opacity: .15; transform: scale(.6) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(45deg); }
+}
+.conq-dots { background-image: radial-gradient(rgba(196, 181, 253, .18) 1px, transparent 1px); background-size: 12px 12px; }
+
+/* Caça ao QR: radar girando */
+.conq-radar {
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(245, 158, 11, .19) 50deg, transparent 70deg);
+  animation: dsSpin 2.6s linear infinite;
+}
+
+/* Passaporte: reflexo a cada 6 s nos cartões Diamante e Ouro */
+.conq-sheen { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; }
+.conq-sheen::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 45%;
+  background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, .13) 50%, transparent 100%);
+  transform: translateX(-120%) skewX(-20deg);
+  animation: dsSheen 6s ease-in-out 1s infinite;
+}
+@media (prefers-reduced-motion: reduce) { .conq-sheen { display: none; } }
+
+/* Ranking: rodapé fixo com a sua posição, acima da barra inferior */
+.conq-me-footer { bottom: calc(max(10px, env(safe-area-inset-bottom)) + 74px); }
+

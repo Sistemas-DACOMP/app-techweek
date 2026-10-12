@@ -1,109 +1,29 @@
-import React from 'react';
-import { 
-  Mic, 
-  Terminal, 
-  Wrench, 
-  Store, 
-  Calendar, 
-  CheckCircle2, 
-  Clock, 
-  Bookmark, 
-  AlertCircle 
-} from 'lucide-react';
+import { Mic, Terminal, Wrench, Store, Trophy, CheckCircle2, Clock, Bookmark, AlertCircle } from 'lucide-react';
 
 /**
- * Mapeamento canônico das categorias de atividades.
- * Cores sóbrias e de alto contraste (WCAG AA) - sem glow amador.
+ * Cores das categorias de atividade (DESIGN.md §2.3) e dos status (§2.4).
+ * accent = cor do tipo (ponto 7–9 px ou faixa lateral 4 px, nunca fundo inteiro);
+ * bg/border/text = selo pequeno sobre --surface (tinta de 16% / 45% / clareada).
+ * Mudou uma cor aqui? Mude também em formatActivityType (activityService) e no token --cat-* do index.css.
  */
 const CATEGORY_STYLES = {
-  palestra: {
-    label: 'Palestra',
-    icon: Mic,
-    accent: '#38BDF8',
-    bg: '#0C2B40',
-    text: '#7DD3FC',
-    border: '#0369A1',
-  },
-  minicurso: {
-    label: 'Minicurso',
-    icon: Terminal,
-    accent: '#A855F7',
-    bg: '#2E1065',
-    text: '#D8B4FE',
-    border: '#7E22CE',
-  },
-  workshop: {
-    label: 'Workshop',
-    icon: Wrench,
-    accent: '#F59E0B',
-    bg: '#451A03',
-    text: '#FCD34D',
-    border: '#B45309',
-  },
-  ativacao: {
-    label: 'Ativação',
-    icon: Store,
-    accent: '#10B981',
-    bg: '#064E3B',
-    text: '#6EE7B7',
-    border: '#047857',
-  },
-  feira: {
-    label: 'Feira / Estande',
-    icon: Store,
-    accent: '#10B981',
-    bg: '#064E3B',
-    text: '#6EE7B7',
-    border: '#047857',
-  },
+  palestra: { label: 'Palestra', icon: Mic, accent: '#8FA0FF', bg: '#262F56', text: '#A5B3FF', border: '#4A5690' },
+  workshop: { label: 'Workshop', icon: Wrench, accent: '#B9A6F5', bg: '#2D3055', text: '#C7B8F7', border: '#5D598C' },
+  minicurso: { label: 'Minicurso', icon: Terminal, accent: '#67D4E8', bg: '#203852', text: '#85DDED', border: '#386E86' },
+  ativacao: { label: 'Ativação', icon: Store, accent: '#F2C46A', bg: '#36353E', text: '#F5D088', border: '#77674D' },
+  hackathon: { label: 'Hackathon', icon: Trophy, accent: '#F59AC0', bg: '#362E4C', text: '#F7AECD', border: '#785474' },
+  feira: { label: 'Feira / Estande', icon: Store, accent: '#F2C46A', bg: '#36353E', text: '#F5D088', border: '#77674D' },
 };
 
-/**
- * Mapeamento dos estados de presença do participante.
- */
+/** Status de presença do participante (DESIGN.md §2.4). */
 const STATUS_STYLES = {
-  BOOKED: {
-    label: 'Inscrito',
-    icon: Bookmark,
-    bg: '#1E293B',
-    text: '#60A5FA',
-    border: 'rgba(59, 130, 246, 0.35)',
-  },
-  CHECKED_IN: {
-    label: 'Entrada Validada',
-    icon: Clock,
-    bg: 'rgba(69, 26, 3, 0.55)',
-    text: '#FCD34D',
-    border: 'rgba(245, 158, 11, 0.45)',
-  },
-  COMPLETED: {
-    label: 'Presença Concluída',
-    icon: CheckCircle2,
-    bg: 'rgba(6, 78, 59, 0.55)',
-    text: '#6EE7B7',
-    border: 'rgba(16, 185, 129, 0.45)',
-  },
-  WAITING_LIST: {
-    label: 'Fila de Espera',
-    icon: AlertCircle,
-    bg: '#1E1B4B',
-    text: '#C084FC',
-    border: 'rgba(168, 85, 247, 0.4)',
-  },
+  BOOKED: { label: 'Reservado', icon: Bookmark, bg: '#262F56', text: '#8FA0FF', border: '#4A5690' },
+  CHECKED_IN: { label: 'Entrada registrada', icon: Clock, bg: '#213848', text: '#6FD8A6', border: '#3C7068' },
+  COMPLETED: { label: 'Presença confirmada', icon: CheckCircle2, bg: '#213848', text: '#6FD8A6', border: '#3C7068' },
+  WAITING_LIST: { label: 'Lista de espera', icon: AlertCircle, bg: '#36353E', text: '#F2C46A', border: '#77674D' },
 };
 
-/**
- * Componente Badge / Tag Semântica Padronizado.
- *
- * @param {'category' | 'status' | 'neutral' | 'points'} variant
- * @param {string} type Tipo da categoria (ex: 'palestra', 'minicurso', etc.)
- * @param {string} status Estado da presença (ex: 'BOOKED', 'CHECKED_IN', 'COMPLETED')
- * @param {'sm' | 'md'} size Tamanho da tag (sm: 20px de altura, md: 24px)
- * @param {boolean} showIcon Exibe ícone vetorial correspondente
- * @param {React.ReactNode} children Conteúdo textual opcional
- * @param {string} className Classes CSS adicionais
- * @param {React.CSSProperties} style Estilos inline opcionais
- */
+/** Selo pequeno de categoria ou status. */
 export default function Badge({
   variant = 'category',
   type = 'palestra',
@@ -115,64 +35,21 @@ export default function Badge({
   style = {},
   ...props
 }) {
-  const normType = String(type).toLowerCase().trim();
-  let resolvedConfig = null;
-  let IconComponent = null;
-
-  if (variant === 'category') {
-    resolvedConfig = CATEGORY_STYLES[normType] || CATEGORY_STYLES.palestra;
-    IconComponent = resolvedConfig.icon;
-  } else if (variant === 'status') {
-    resolvedConfig = STATUS_STYLES[status] || null;
-    if (resolvedConfig) {
-      IconComponent = resolvedConfig.icon;
-    }
-  }
-
-  // Fallback neutro
-  if (!resolvedConfig) {
-    resolvedConfig = {
-      label: children || 'Evento',
-      bg: '#1E293B',
-      text: '#94A3B8',
-      border: '#334155',
-    };
-  }
-
-  const isSmall = size === 'sm';
-  const labelText = children || resolvedConfig.label;
+  const config = variant === 'status'
+    ? STATUS_STYLES[status]
+    : CATEGORY_STYLES[String(type).toLowerCase().trim()] || CATEGORY_STYLES.palestra;
+  const resolved = config || { label: children || 'Evento', bg: '#1A2347', text: '#A9B1CC', border: '#232D52' };
+  const Icon = config?.icon;
+  const small = size === 'sm';
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 font-medium tracking-wide uppercase select-none ${className}`}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: isSmall ? '4px' : '6px',
-        padding: isSmall ? '2px 8px' : '3px 10px',
-        fontSize: isSmall ? '10.5px' : '11.5px',
-        lineHeight: 1.2,
-        fontWeight: 600,
-        fontFamily: "'Inter', system-ui, sans-serif",
-        borderRadius: '6px',
-        backgroundColor: resolvedConfig.bg,
-        color: resolvedConfig.text,
-        border: `1px solid ${resolvedConfig.border}`,
-        letterSpacing: '0.03em',
-        whiteSpace: 'nowrap',
-        ...style,
-      }}
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-[10px] border font-bold ${small ? 'px-2 py-0.5 text-[12px]' : 'px-2.5 py-1 text-[12px]'} ${className}`}
+      style={{ backgroundColor: resolved.bg, color: resolved.text, borderColor: resolved.border, ...style }}
       {...props}
     >
-      {showIcon && IconComponent && (
-        <IconComponent
-          size={isSmall ? 12 : 13}
-          strokeWidth={1.75}
-          style={{ flexShrink: 0 }}
-          aria-hidden="true"
-        />
-      )}
-      <span>{labelText}</span>
+      {showIcon && Icon && <Icon size={small ? 12 : 13} strokeWidth={2} aria-hidden="true" />}
+      <span>{children || resolved.label}</span>
     </span>
   );
 }

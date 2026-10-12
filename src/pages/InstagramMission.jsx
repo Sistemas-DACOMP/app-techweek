@@ -6,6 +6,8 @@ import SymplaRequirementModal from '../components/SymplaRequirementModal';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
 import logoTw from '../assets/logo-tw.png';
 import { stopAllMediaTracks } from '../lib/cameraUtils';
+import { uploadMissionPhoto } from '../lib/gameplay';
+import '../styles/conquistas.css';
 
 const alanSvgString = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bB" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2563eb" /><stop offset="100%" stop-color="#1e3a8a" /></linearGradient><linearGradient id="aB" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1e3a8a" stop-opacity="0.4" /><stop offset="100%" stop-color="#2563eb" stop-opacity="0" /></linearGradient><linearGradient id="eB" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e2e8f0" /><stop offset="100%" stop-color="#94a3b8" /></linearGradient><clipPath id="cB"><rect x="40" y="40" width="120" height="120" rx="16" /></clipPath></defs><g><path d="M 40 100 L 15 70 L 30 30" fill="none" stroke="#1e3a8a" stroke-width="16" stroke-linejoin="bevel" stroke-linecap="square"/><rect x="20" y="20" width="20" height="20" rx="6" fill="#2563eb"/></g><g><path d="M 160 100 L 185 130 L 170 180" fill="none" stroke="#1e3a8a" stroke-width="16" stroke-linejoin="bevel" stroke-linecap="square"/><rect x="160" y="170" width="20" height="20" rx="6" fill="#2563eb"/></g><rect x="40" y="40" width="120" height="120" rx="16" fill="url(#bB)"/><g clip-path="url(#cB)"><path d="M 40 160 L 160 40 L 160 160 Z" fill="url(#aB)"/><path d="M 40 100 L 100 40 L 160 40 L 40 160 Z" fill="rgba(255,255,255,0.08)"/></g><g><rect x="53" y="63" width="44" height="44" rx="10" fill="url(#eB)"/><rect x="63" y="73" width="24" height="24" rx="6" fill="#0f172a"/><rect x="77" y="77" width="6" height="6" rx="2" fill="#fff"/></g><g><rect x="103" y="63" width="44" height="44" rx="10" fill="url(#eB)"/><rect x="113" y="73" width="24" height="24" rx="6" fill="#0f172a"/><rect x="127" y="77" width="6" height="6" rx="2" fill="#fff"/></g></svg>`;
 
@@ -291,7 +293,7 @@ export default function InstagramMission() {
 
     // Texto do Header
     ctx.save();
-    ctx.font = 'bold 18px "Space Grotesk", sans-serif';
+    ctx.font = 'bold 18px "Montserrat", sans-serif';
     ctx.fillStyle = '#F8FAFC';
     ctx.letterSpacing = '3px';
     ctx.textAlign = 'center';
@@ -370,6 +372,7 @@ export default function InstagramMission() {
     if (!canvas) return;
 
     canvas.toBlob(async (blob) => {
+      if (!blob) return;
       const file = new File([blob], 'techweek-story.png', { type: 'image/png' });
 
       if (!isComplete) {
@@ -377,9 +380,21 @@ export default function InstagramMission() {
           setShowSymplaModal(true);
           return;
         } else {
-          const res = await completeChallenge('instagram_story', 50);
-          if (res && (res === true || res.success || res.alreadyCompleted)) {
-            setIsComplete(true);
+          setIsProcessing(true);
+          try {
+            const photoUrl = await uploadMissionPhoto(file, 'instagram_story');
+            const res = await completeChallenge('instagram_story', 50, {
+              photo_url: photoUrl,
+              photo: photoUrl,
+              submitted_at: new Date().toISOString()
+            });
+            if (res && (res === true || res.success || res.alreadyCompleted)) {
+              setIsComplete(true);
+            }
+          } catch (uploadErr) {
+            console.error("Erro ao enviar foto para comprovação:", uploadErr);
+          } finally {
+            setIsProcessing(false);
           }
         }
       }
@@ -410,177 +425,119 @@ export default function InstagramMission() {
   };
 
   return (
-    <div className="page-container animate-fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', overflowY: 'auto', padding: '24px 24px 120px 24px', zIndex: 10, position: 'relative' }}>
+    <div className="page-container conq-page animate-fade-in flex flex-col">
       <SymplaStickyBanner />
-      
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+
+      <div className="flex flex-1 flex-col px-5">
+        <header className="relative pt-[18px]">
           <button
             type="button"
             onClick={() => navigate('/challenges')}
-            aria-label="Voltar para os desafios"
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              backgroundColor: '#0F141F',
-              border: '1px solid #1E293B',
-              color: '#F8FAFC',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              flexShrink: 0
-            }}
+            aria-label="Voltar para as missões"
+            className="absolute left-[-8px] top-3 flex h-11 w-11 items-center justify-center rounded-full border-0 bg-transparent text-text"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={22} aria-hidden="true" />
           </button>
-          <div>
-            <h1
-              style={{
-                fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif",
-                fontSize: '1.75rem',
-                fontWeight: 800,
-                color: '#F8FAFC',
-                margin: 0,
-                letterSpacing: '-0.03em',
-                lineHeight: 1.15
-              }}
-            >
-              Missão Stories
-            </h1>
-            <p
-              style={{
-                fontSize: '0.80rem',
-                color: '#94A3B8',
-                margin: '3px 0 0',
-                fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
-              }}
-            >
-              Gere seu card oficial e compartilhe
-            </p>
+          <h1 className="screen-title mb-0! text-[22px]!">Post no Stories</h1>
+          <p className="mt-3 text-center text-[13px] text-text-2">Tire a foto com a moldura oficial e compartilhe.</p>
+        </header>
+
+        <div className="mt-6 flex flex-1 flex-col items-center">
+          <div className="relative flex aspect-[9/16] w-full max-w-[300px] items-center justify-center overflow-hidden rounded-[18px] border-2 border-dashed border-line-2 bg-surface">
+            <video
+              ref={videoRef}
+              playsInline
+              autoPlay
+              muted
+              className="h-full w-full object-cover"
+              style={{ display: isCameraOpen && !image ? 'block' : 'none' }}
+            />
+
+            <canvas
+              ref={canvasRef}
+              className="h-full w-full object-contain"
+              style={{ display: image ? 'block' : 'none' }}
+            />
+
+            {!isCameraOpen && !image && !isProcessing && (
+              <div className="p-5 text-center">
+                <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl p-0.5" style={{ background: 'linear-gradient(45deg, #F58529, #DD2A7B, #8134AF)' }}>
+                  <span className="flex h-full w-full items-center justify-center rounded-[14px] bg-surface">
+                    <Camera size={26} color="#F59AC0" aria-hidden="true" />
+                  </span>
+                </span>
+                <p className="text-sm text-text-2">Sorria para a foto da Tech Week!</p>
+              </div>
+            )}
+
+            {isProcessing && (
+              <div className="absolute inset-0 flex items-center justify-center bg-[rgba(5,8,20,0.5)]">
+                <Loader2 className="animate-spin" size={32} color="white" aria-label="Enviando" />
+              </div>
+            )}
+          </div>
+
+          <input
+            type="file"
+            accept="image/*"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleImageUpload}
+          />
+
+          <div className="mt-6 flex w-full max-w-[300px] flex-col gap-2.5">
+            {!isCameraOpen && !image && (
+              <>
+                <button type="button" className="btn btn-primary btn-block" onClick={startCamera}>
+                  <Camera size={20} aria-hidden="true" />
+                  Tirar foto agora
+                </button>
+                <button type="button" className="btn btn-secondary btn-block" onClick={() => fileInputRef.current?.click()}>
+                  <ImageIcon size={20} aria-hidden="true" />
+                  Escolher da galeria
+                </button>
+              </>
+            )}
+
+            {isCameraOpen && !image && (
+              <button type="button" className="btn btn-primary btn-block" onClick={captureFromVideo}>
+                <Camera size={20} aria-hidden="true" />
+                Capturar
+              </button>
+            )}
+
+            {image && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-block"
+                  onClick={shareOrDownload}
+                  disabled={isProcessing}
+                  style={{ background: 'linear-gradient(45deg, #F58529, #DD2A7B, #8134AF)' }}
+                >
+                  {isProcessing ? <Loader2 size={20} className="animate-spin" aria-hidden="true" /> : <Share2 size={20} aria-hidden="true" />}
+                  {isProcessing ? 'Enviando...' : 'Postar no Stories'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-block"
+                  onClick={() => {
+                    setImage(null);
+                    startCamera();
+                  }}
+                >
+                  Tirar outra foto
+                </button>
+              </>
+            )}
+
+            {isComplete && (
+              <p role="status" className="mt-1 text-center text-sm font-bold text-ok">
+                Missão concluída · +50 pts
+              </p>
+            )}
           </div>
         </div>
-      </div>
-
-      {!hasSymplaTicket && (
-        <div
-          style={{
-            marginBottom: '16px',
-            padding: '12px 16px',
-            borderRadius: '12px',
-            background: 'rgba(234, 179, 8, 0.15)',
-            border: '1px solid rgba(234, 179, 8, 0.3)',
-            color: '#fef08a',
-            fontSize: '0.85rem',
-            textAlign: 'center'
-          }}
-        >
-          ⚠️ <strong>Ingresso Sympla Pendente:</strong> você pode gerar e salvar a foto, mas precisa vincular seu ingresso no perfil para pontuar no ranking.
-        </div>
-      )}
-
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-        
-        <div style={{ width: '100%', maxWidth: '300px', aspectRatio: '9/16', background: 'rgba(255,255,255,0.05)', borderRadius: '16px', overflow: 'hidden', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px dashed rgba(255,255,255,0.2)' }}>
-          
-          <video 
-            ref={videoRef} 
-            playsInline 
-            autoPlay 
-            muted 
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: isCameraOpen && !image ? 'block' : 'none' }} 
-          />
-
-          <canvas 
-            ref={canvasRef} 
-            style={{ width: '100%', height: '100%', objectFit: 'contain', display: image ? 'block' : 'none' }}
-          />
-          
-          {!isCameraOpen && !image && !isProcessing && (
-            <div style={{ textAlign: 'center', padding: '20px' }}>
-              <Camera size={48} color="rgba(255,255,255,0.5)" style={{ marginBottom: '16px' }} />
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Sorria para a foto da TechWeek!</p>
-            </div>
-          )}
-
-          {isProcessing && (
-            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
-              <Loader2 className="animate-spin" size={32} color="white" />
-            </div>
-          )}
-        </div>
-
-        <input 
-          type="file" 
-          accept="image/*" 
-          ref={fileInputRef}
-          style={{ display: 'none' }}
-          onChange={handleImageUpload}
-        />
-
-        <div style={{ marginTop: '32px', width: '100%', maxWidth: '300px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          
-          {!isCameraOpen && !image && (
-            <>
-              <button 
-                className="login-btn"
-                onClick={startCamera}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '16px' }}
-              >
-                <Camera size={20} />
-                Tirar Foto na Hora
-              </button>
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', color: 'white', cursor: 'pointer', fontFamily: "'Inter', sans-serif", fontWeight: '600' }}
-              >
-                <ImageIcon size={20} />
-                Escolher da Galeria
-              </button>
-            </>
-          )}
-
-          {isCameraOpen && !image && (
-            <button 
-              className="login-btn"
-              onClick={captureFromVideo}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '16px', background: '#10b981' }}
-            >
-              <Camera size={20} />
-              Capturar
-            </button>
-          )}
-
-          {image && (
-            <>
-              <button 
-                className="login-btn"
-                onClick={shareOrDownload}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '16px', background: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)' }}
-              >
-                <Share2 size={20} />
-                Postar no Story
-              </button>
-              <button 
-                onClick={() => {
-                  setImage(null);
-                  startCamera();
-                }}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', color: 'white', cursor: 'pointer', fontFamily: "'Inter', sans-serif", fontWeight: '600' }}
-              >
-                Tirar outra foto
-              </button>
-            </>
-          )}
-
-          {isComplete && (
-            <div style={{ textAlign: 'center', color: '#10b981', fontSize: '0.9rem', marginTop: '8px', fontWeight: 'bold' }}>
-              ✨ Missão concluída! (+50 pts)
-            </div>
-          )}
-        </div>
-
       </div>
 
       <SymplaRequirementModal

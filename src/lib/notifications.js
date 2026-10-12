@@ -109,7 +109,16 @@ export function markAllAsRead() {
   triggerUpdate();
 }
 
-export function addNotification({ title, message, type = 'system', actionUrl = null, actionLabel = null }) {
+export function addNotification({
+  title,
+  message,
+  type = 'system',
+  actionUrl = null,
+  actionLabel = null,
+  urgent = false,
+  activityId = null,
+  targetAudience = null,
+}) {
   if (typeof window === 'undefined') return null;
   const notifications = getNotifications();
   const newNotification = {
@@ -119,6 +128,9 @@ export function addNotification({ title, message, type = 'system', actionUrl = n
     type,
     actionUrl,
     actionLabel,
+    urgent: !!urgent,
+    activityId,
+    targetAudience,
     timestamp: new Date().toISOString(),
     read: false
   };

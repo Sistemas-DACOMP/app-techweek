@@ -19,12 +19,16 @@ export function getBadgeQrValue(profile) {
   const ticket = profile?.symplaTicket;
   if (ticket?.qrCodeData) return ticket.qrCodeData;
   if (ticket?.ticketNumber) return ticket.ticketNumber;
-  return JSON.stringify({
+  const payload = {
     username: (profile?.username || 'user').replace(/^@/, ''),
     participantType: profile?.participantType || 'Participante',
     course: profile?.course || '',
     period: profile?.period || null
-  });
+  };
+  if (profile?.uid || profile?.id) payload.uid = profile.uid || profile.id;
+  if (profile?.email) payload.email = profile.email;
+  if (profile?.name || profile?.displayName) payload.name = profile.name || profile.displayName;
+  return JSON.stringify(payload);
 }
 
 const getApiBaseUrl = () => {
@@ -130,6 +134,14 @@ export async function verifySymplaTicket({ email, ticketNumber }) {
     if (response.ok) {
       const json = await response.json();
       if (json && json.verified) return json;
+    } else if (response.status === 409) {
+      // Ingresso já vinculado a outra conta (KAN-108): não tenta o fallback direto
+      const json = await response.json().catch(() => ({}));
+      return {
+        status: 'conflict',
+        verified: false,
+        message: json?.message || 'Este ingresso já está vinculado a outra conta.'
+      };
     }
   } catch (_backendErr) {
     // Backend offline, timeout ou 404 - fallback direto garantido

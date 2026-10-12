@@ -37,11 +37,14 @@ vi.mock('../../backend/src/config/firebaseAdmin', () => ({
   },
   auth: {
     verifyIdToken: vi.fn()
+  },
+  FieldValue: {
+    increment: vi.fn((val) => ({ _method: 'increment', val }))
   }
 }));
 
 import router from '../../backend/src/routes/entrance';
-import { db } from '../../backend/src/config/firebaseAdmin';
+import { db, FieldValue } from '../../backend/src/config/firebaseAdmin';
 
 function makeRes() {
   const res = {};
@@ -424,8 +427,53 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
           createdAt: expect.any(Date)
         })
       );
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'users/aluno-999' },
+        expect.objectContaining({
+          totalPoints: expect.anything(),
+          pontuacaoTotal: expect.anything()
+        }),
+        { merge: true }
+      );
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({ success: true, points: 50 });
+    });
+
+    it('deve usar activity.points se activity.entrancePoints nao estiver definido', async () => {
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ points: 25, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({
+        participantUid: 'aluno-sem-entrance-points',
+        activityId: 'palestra-normal',
+        staffUid: 'staff-maria'
+      });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/aluno-sem-entrance-points_entrance_palestra-normal' },
+        expect.objectContaining({
+          points: 25
+        })
+      );
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'users/aluno-sem-entrance-points' },
+        expect.objectContaining({
+          totalPoints: expect.anything(),
+          pontuacaoTotal: expect.anything()
+        }),
+        { merge: true }
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({ success: true, points: 25 });
     });
 
     it('deve atribuir 0 pontos como fallback se activity.entrancePoints nao for numero', async () => {

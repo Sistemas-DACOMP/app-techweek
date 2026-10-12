@@ -32,8 +32,8 @@ estado "cada tela parece feita por uma IA diferente".
 Antes de criar/alterar UI: ler `DESIGN.md` → componente existente → token existente → padrão
 existente → só então propor algo novo. Antes de redesign: ler `DESIGN-AUDIT.md`. Mudou o Design
 System → atualiza `DESIGN.md`. Descoberta/decisão/pendência relevante → considera
-`DESIGN-AUDIT.md`. Não atualizar artificialmente a cada mudança mínima. **Nenhum dos dois existe
-ainda (2026-10-02)** - a primeira missão relevante é auditoria + redesign global, que cria ambos.
+`DESIGN-AUDIT.md`. Não atualizar artificialmente a cada mudança mínima. **Os dois existem desde
+2026-10-04** (redesign aprovado pelo Fabio no canvas de design; ver seção "Design aprovado" abaixo).
 `DESIGN.md` é fonte da dimensão visual, não de requisito/regra de negócio/segurança/arquitetura.
 Figma (MCP da conta, se conectado) também não é fonte única: divergência Figma × `DESIGN.md` →
 identificar, não escolher em silêncio, consultar ADR/Product, atualizar a fonte certa após
@@ -106,7 +106,7 @@ desenhado deliberadamente por equipe profissional? Se não, não finalize.
 
 ## Processo
 
-1. Não codar imediatamente: entender, ler `DESIGN.md`/`DESIGN-AUDIT.md` quando existirem.
+1. Não codar imediatamente: entender, ler `DESIGN.md` (sempre) e `DESIGN-AUDIT.md` (em redesign/auditoria).
 2. Auditar antes de alterar: `src/index.css` + `src/App.css` + CSS da tela tocada.
 3. Mudança pequena pós-redesign: não refazer design - implementa dentro do padrão, valida,
    checa regressão.
@@ -167,9 +167,29 @@ reutilização, correção óbvia, token existente, a11y evidente.
 nunca vira regra global sozinha) · **SUPOSIÇÃO** (por falta de informação, marcada) ·
 **DESCONHECIDO** (não verificável agora). Nunca promover INFERÊNCIA/SUPOSIÇÃO a FATO em silêncio.
 
-## Pendências conhecidas (2026-10-02)
+## Design aprovado (2026-10-04) - resumo, a fonte é `DESIGN.md`
 
-- `DESIGN.md` e `DESIGN-AUDIT.md` não existem - criar na primeira missão de redesign.
+- **Direção**: escuro (`#0A0F24`), "azul é o evento, violeta é você", Montserrat única, títulos
+  centralizados com traço de gradiente 28×4, Alan e Ada (SVG original) com função, menos info por tela.
+- **Navegação participante**: Início · Agenda · Crachá (central) · Feed · Conquistas (Missões ·
+  Ranking · Passaporte); Perfil pelo avatar. Crachá: abas Escanear · Meu QR.
+- **Sem ingresso Sympla**: Início vira checklist de primeiros passos; demais telas têm bloco dourado
+  fixo; faltando só instalar o app → Início normal + card único.
+- **Padrões novos**: semáforo de vagas (só pra quem não tem vaga), "A seguir" em tira enxuta,
+  cotas de patrocínio por estrutura (Diamante/Ouro/Prata), pódio com cores da develop, missões
+  com estilos de card (Secreta, Caça ao QR, Relâmpago, Patrocinador, Quiz, Stories) configuráveis
+  no admin com prévia, Trocar de conta com cor por papel, Editar perfil, QR do telão fixo.
+- **Movimento**: pesada (recompensa) / média (feedback, onboarding) / suave (navegação), tokens e
+  `prefers-reduced-motion` obrigatório (DESIGN.md §9).
+- **Regras que o design assume** (semáforo, lista de espera, toggle de redes, troca de conta...)
+  estão classificadas em DESIGN.md §12 - nunca implementar INFERIDA/NÃO DEFINIDA como regra sem o Fabio.
+- **Implementação ainda não começou** (código segue o design antigo). Ordem: tokens DESIGN.md §2-4
+  em `src/index.css` → primitivos → telas, validando cada tela com Playwright contra o canvas.
+  Capturas da develop e scripts em `docs/redesign/screens/` + `e2e/`.
+
+## Pendências conhecidas (2026-10-04)
+
+- Telas do Patrocinador e momento do Bilhete Dourado ainda não desenhados.
 - 21st/Magic MCP, Impeccable, Taste Skill não confirmados; Figma MCP depende de conector da conta
   (e de existir arquivo Figma de produto - `FIGMA_PROMPT_TECHWEEK.md` na raiz não prova isso).
 - `claude-in-chrome` intermitente; chrome-devtools/playwright MCP exigem sessão reiniciada.

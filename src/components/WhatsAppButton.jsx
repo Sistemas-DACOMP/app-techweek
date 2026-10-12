@@ -65,7 +65,7 @@ export default function WhatsAppButton({
       className={`whatsapp-button ${className}`}
       title={isAvailable ? 'Abrir conversa no WhatsApp' : 'Telefone não disponível ou inválido'}
       style={{
-        fontFamily: "'Inter', sans-serif",
+        fontFamily: 'Montserrat, sans-serif',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',

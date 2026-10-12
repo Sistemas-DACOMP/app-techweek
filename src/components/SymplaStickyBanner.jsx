@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, ArrowRight } from 'lucide-react';
+import { Ticket } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
 import SymplaRequirementModal from './SymplaRequirementModal';
 
+/**
+ * Bloco dourado fixo no topo das telas para quem ainda não vinculou o ingresso (DESIGN.md §5).
+ * Sem animação (§9 "Não animar"). Abre o sheet "Vincule seu ingresso".
+ */
 export default function SymplaStickyBanner() {
   const { hasSymplaTicket, profile } = useUser();
-  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
 
   // Não exibe se o usuário não estiver logado ou já tiver ingresso
@@ -14,57 +16,26 @@ export default function SymplaStickyBanner() {
 
   return (
     <>
-      <div
-        style={{
-          background: 'linear-gradient(90deg, #1E1B4B 0%, #172554 100%)',
-          borderBottom: '1px solid rgba(234, 179, 8, 0.3)',
-          padding: '10px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          fontSize: '0.78rem',
-          color: '#E0E7FF',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 900
-        }}
+      <button
+        type="button"
+        onClick={() => setShowModal(true)}
+        className="sticky top-0 z-[900] flex w-full cursor-pointer items-center gap-3 border-0 border-b border-solid border-[rgba(242,196,106,0.5)] bg-[linear-gradient(90deg,#3B2B07,#241B07)] px-4 py-3 text-left font-sans text-text"
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-          <ShieldAlert size={18} color="#FACC15" style={{ flexShrink: 0 }} />
-          <span style={{ lineHeight: '1.3' }}>
-            <strong style={{ color: '#FACC15' }}>Modo de Leitura:</strong> Vincule seu ingresso Sympla para liberar reservas, QR Code e missões!
-          </span>
-        </div>
-
-        <button
-          onClick={() => setShowModal(true)}
-          style={{
-            background: '#FACC15',
-            color: '#0F172A',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '6px 12px',
-            fontSize: '0.75rem',
-            fontWeight: 800,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            whiteSpace: 'nowrap',
-            flexShrink: 0
-          }}
-        >
-          <span>Ativar</span>
-          <ArrowRight size={12} />
-        </button>
-      </div>
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[rgba(242,196,106,0.2)]">
+          <Ticket size={18} strokeWidth={2} className="text-warn" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-extrabold text-warn">Ingresso não vinculado</span>
+          <span className="mt-px block text-xs leading-[1.35] text-[#E7E2CF]">Sem ele você não reserva vagas nem pontua.</span>
+        </span>
+        <span className="flex h-[34px] shrink-0 items-center rounded-[10px] bg-warn px-3.5 text-[13px] font-extrabold text-[#2A1F05]">
+          Vincular
+        </span>
+      </button>
 
       <SymplaRequirementModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
-        featureName="o aplicativo completo"
       />
     </>
   );

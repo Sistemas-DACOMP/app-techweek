@@ -1,19 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import {
-  CheckCheck,
-  Trash2,
-  X,
-  Calendar,
-  Award,
-  Sparkles,
-  Target,
-  Inbox
-} from 'lucide-react';
+import { ChevronLeft, CalendarCheck, Zap, Trophy, MessageSquare } from 'lucide-react';
 import { useNotifications } from '../hooks/useNotifications';
 import { useScrollLock } from '../hooks/useScrollLock';
-import './NotificationModal.css';
+import Mascot from './Mascot';
 
 export function formatTimestamp(isoString) {
   try {
@@ -38,53 +29,55 @@ export function formatTimestamp(isoString) {
   }
 }
 
-function getNotificationIcon(type) {
-  switch (type) {
-    case 'trophy':
-    case 'points':
-      // Amarelo somente para ícones de conquista
-      return <Award size={16} color="#FBBF24" />;
-    case 'mission':
-      // Purple como pequeno acento
-      return <Target size={16} color="#A855F7" />;
-    case 'lecture':
-      // Cyan
-      return <Calendar size={16} color="#38BDF8" />;
-    case 'system':
-    default:
-      // Azul elétrico
-      return <Sparkles size={16} color="#3B82F6" />;
-  }
+// Ícone e cor por tipo de aviso (DESIGN.md §2.4: verde = confirmado, dourado = missão, violeta = seus pontos)
+const TYPE_STYLE = {
+  lecture: { Icon: CalendarCheck, cls: 'bg-[rgba(111,216,166,0.16)] text-ok' },
+  mission: { Icon: Zap, cls: 'bg-[rgba(242,196,106,0.16)] text-warn', fill: true },
+  points: { Icon: Trophy, cls: 'bg-you-soft text-you-text' },
+  trophy: { Icon: Trophy, cls: 'bg-you-soft text-you-text' },
+  system: { Icon: MessageSquare, cls: 'bg-[rgba(143,160,255,0.16)] text-link' }
+};
+
+function dayKey(date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
+function groupLabel(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Antes';
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (dayKey(d) === dayKey(today)) return 'Hoje';
+  if (dayKey(d) === dayKey(yesterday)) return 'Ontem';
+  return 'Antes';
+}
+
+function timeLabel(iso) {
+  const d = new Date(iso);
+  if (groupLabel(iso) === 'Hoje') {
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+  return formatTimestamp(iso);
+}
+
+/** Tela "Avisos" (board Avisos). Abre pelo sino do Início. */
 export default function NotificationModal({ isOpen, onClose }) {
   useScrollLock(isOpen);
 
   const navigate = useNavigate();
-  const {
-    notifications,
-    unreadCount,
-    markAsRead,
-    markAllAsRead,
-    removeNotification,
-    clearAllNotifications
-  } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const backRef = useRef(null);
 
-  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'unread'
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    backRef.current?.focus();
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
-  const filteredNotifications = activeTab === 'unread'
-    ? notifications.filter((n) => !n.read)
-    : notifications;
-
-  const handleActionClick = (notification) => {
-    markAsRead(notification.id);
-    if (notification.actionUrl) {
-      onClose();
-      navigate(notification.actionUrl);
-    }
-  };
+  if (!isOpen || typeof document === 'undefined') return null;
 
   const handleItemClick = (notification) => {
     if (!notification.read) {
@@ -96,164 +89,103 @@ export default function NotificationModal({ isOpen, onClose }) {
     }
   };
 
-  if (typeof document === 'undefined') return null;
+  const groups = [];
+  notifications.forEach((n) => {
+    const label = groupLabel(n.timestamp);
+    const group = groups.find((g) => g.label === label);
+    if (group) group.items.push(n);
+    else groups.push({ label, items: [n] });
+  });
 
   return createPortal(
-    <div className="notification-backdrop animate-fade-in" onClick={onClose}>
-      <div
-        className="notification-panel"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* HEADER */}
-        <div className="notification-header">
-          <div>
-            <h3 className="notification-title">Notificações</h3>
-            <p className="notification-subtitle">
-              {unreadCount > 0 ? `${unreadCount} não lida${unreadCount > 1 ? 's' : ''}` : 'Nenhuma não lida'}
-            </p>
-          </div>
+    <div
+      className="fixed inset-0 z-[2000] overflow-y-auto bg-bg font-sans text-text"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="avisos-title"
+      style={{ animation: 'dsFade 200ms var(--ease-out)' }}
+    >
+      <div className="mx-auto max-w-[430px] pb-10">
+        <header className="sticky top-0 z-10 flex items-center justify-between bg-bg pl-2 pr-3 pt-2.5">
           <button
+            ref={backRef}
             type="button"
-            className="notification-close-btn"
             onClick={onClose}
-            aria-label="Fechar notificações"
+            aria-label="Voltar"
+            className="flex size-11 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-text"
           >
-            <X size={18} />
+            <ChevronLeft size={24} strokeWidth={2} aria-hidden="true" />
           </button>
-        </div>
-
-        {/* CONTROLE SEGMENTADO */}
-        <div className="notification-segmented-wrap">
-          <div className="notification-segmented-control">
+          <h1 id="avisos-title" className="m-0 text-lg font-extrabold">Avisos</h1>
+          {unreadCount > 0 ? (
             <button
               type="button"
-              className={`notification-segment-btn ${activeTab === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveTab('all')}
+              onClick={markAllAsRead}
+              className="h-11 cursor-pointer border-0 bg-transparent px-2 font-sans text-sm font-bold text-link"
             >
-              Todas ({notifications.length})
+              Ler todos
             </button>
-            <button
-              type="button"
-              className={`notification-segment-btn ${activeTab === 'unread' ? 'active' : ''}`}
-              onClick={() => setActiveTab('unread')}
-            >
-              Não lidas ({unreadCount})
-            </button>
-          </div>
-        </div>
-
-        {/* AÇÕES SECUNDÁRIAS DISCRETAS */}
-        {(unreadCount > 0 || notifications.length > 0) && (
-          <div className="notification-secondary-actions">
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                className="notification-text-action"
-                onClick={markAllAsRead}
-              >
-                <CheckCheck size={13} />
-                <span>Ler todas</span>
-              </button>
-            )}
-            {notifications.length > 0 && (
-              <button
-                type="button"
-                className="notification-text-action danger"
-                onClick={() => {
-                  if (window.confirm('Deseja limpar todo o histórico de notificações?')) {
-                    clearAllNotifications();
-                  }
-                }}
-              >
-                <Trash2 size={13} />
-                <span>Limpar</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* LISTA DE NOTIFICAÇÕES NO ESTILO INBOX */}
-        <div className="notification-list">
-          {filteredNotifications.length === 0 ? (
-            <div className="notification-empty-state">
-              <Inbox size={32} color="#64748B" />
-              <p className="notification-empty-title">
-                Nenhuma notificação {activeTab === 'unread' ? 'não lida' : 'por aqui'}
-              </p>
-              <p className="notification-empty-subtitle">
-                {activeTab === 'unread'
-                  ? 'Você já leu todas as notificações recentes.'
-                  : 'Fique ligado na programação e novidades da FACOM TechWeek.'}
-              </p>
-            </div>
           ) : (
-            filteredNotifications.map((notification) => {
-              const isUnread = !notification.read;
-              const actionLabel = notification.actionLabel || (notification.actionUrl?.includes('ranking') ? 'Ver ranking' : 'Ver detalhes');
-
-              return (
-                <div
-                  key={notification.id}
-                  className={`notification-inbox-item ${isUnread ? 'is-unread' : 'is-read'}`}
-                  onClick={() => handleItemClick(notification)}
-                >
-                  {/* Ícone */}
-                  <div className="notification-inbox-icon">
-                    {getNotificationIcon(notification.type)}
-                  </div>
-
-                  {/* Conteúdo */}
-                  <div className="notification-inbox-body">
-                    <div className="notification-inbox-header">
-                      <div className="notification-inbox-title-row">
-                        {isUnread && <span className="notification-blue-dot" />}
-                        <span className="notification-inbox-title">
-                          {notification.title}
-                        </span>
-                      </div>
-                      <span className="notification-inbox-time">
-                        {formatTimestamp(notification.timestamp)}
-                      </span>
-                    </div>
-
-                    <p className="notification-inbox-desc">
-                      {notification.message}
-                    </p>
-
-                    {/* Link textual discreto se houver ação */}
-                    {notification.actionUrl && (
-                      <div className="notification-inbox-action-wrap">
-                        <span
-                          className="notification-inbox-text-link"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleActionClick(notification);
-                          }}
-                        >
-                          {actionLabel} →
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Botão sutil de excluir */}
-                  <button
-                    type="button"
-                    className="notification-inbox-delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeNotification(notification.id);
-                    }}
-                    title="Excluir notificação"
-                    aria-label="Excluir notificação"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              );
-            })
+            <span className="w-11" aria-hidden="true" />
           )}
-        </div>
+        </header>
+
+        {notifications.length === 0 ? (
+          <div className="flex flex-col items-center px-8 pt-16 text-center">
+            <Mascot color="blue" style={{ width: 112, height: 112 }} />
+            <p className="m-0 mt-5 text-[17px] font-extrabold">Nenhum aviso por enquanto</p>
+            <p className="m-0 mt-1.5 text-sm leading-[1.45] text-text-2">
+              Quando sua vaga for confirmada ou sair uma missão nova, avisamos aqui.
+            </p>
+            <button type="button" onClick={onClose} className="btn btn-secondary btn-sm mt-6">
+              Voltar ao Início
+            </button>
+          </div>
+        ) : (
+          groups.map((group) => (
+            <section key={group.label} aria-label={group.label}>
+              <h2 className="mx-5 mb-2 mt-[18px] text-[13px] font-bold text-text-3">{group.label}</h2>
+              <ul className="m-0 flex list-none flex-col gap-2 px-5">
+                {group.items.map((n) => {
+                  const unread = !n.read;
+                  const { Icon, cls, fill } = TYPE_STYLE[n.type] || TYPE_STYLE.system;
+                  return (
+                    <li key={n.id}>
+                      <button
+                        type="button"
+                        onClick={() => handleItemClick(n)}
+                        className={`press grid w-full cursor-pointer grid-cols-[40px_1fr] gap-3 rounded-2xl border-0 p-3.5 text-left font-sans text-text ${
+                          unread ? 'bg-[#161F45]' : 'bg-surface'
+                        }`}
+                      >
+                        <span className={`flex size-10 items-center justify-center rounded-full ${cls}`}>
+                          <Icon size={20} strokeWidth={2} fill={fill ? 'currentColor' : 'none'} aria-hidden="true" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="flex justify-between gap-2">
+                            <span className={`text-[15px] ${unread ? 'font-bold' : 'font-semibold'}`}>{n.title}</span>
+                            <span className="flex shrink-0 items-center gap-1.5 text-xs text-text-3">
+                              {timeLabel(n.timestamp)}
+                              {unread && (
+                                <>
+                                  <span className="size-2 rounded-full bg-you" aria-hidden="true" />
+                                  <span className="sr-only">não lido</span>
+                                </>
+                              )}
+                            </span>
+                          </span>
+                          {n.message && (
+                            <span className="mt-0.5 block text-sm leading-[1.45] text-text-2">{n.message}</span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))
+        )}
       </div>
     </div>,
     document.body

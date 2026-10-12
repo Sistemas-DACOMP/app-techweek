@@ -70,7 +70,8 @@ function makeTx(snaps: { bookingSnap: any; activitySnap: any }) {
       throw new Error(`ref inesperada no mock: ${ref.path}`);
     }),
     set: vi.fn(),
-    update: vi.fn()
+    update: vi.fn(),
+    delete: vi.fn()
   };
 }
 
@@ -205,5 +206,56 @@ describe('POST /:activityId/reserve (KAN-49)', () => {
       error: 'INTERNAL_ERROR',
       message: 'Não foi possível processar a reserva.'
     });
+  });
+});
+
+function getCancelHandler() {
+  const layer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/:activityId/cancel'
+  );
+  const routeStack = layer.route.stack;
+  return routeStack[routeStack.length - 1].handle as (req: Request, res: Response) => Promise<void>;
+}
+
+describe('POST /:activityId/cancel (KAN-110)', () => {
+  const cancel = getCancelHandler();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (db.collection as any).mockImplementation((name: string) => ({
+      doc: (id: string) => ({ path: `${name}/${id}` })
+    }));
+  });
+
+  it('cancelar reserva confirmada devolve a vaga', async () => {
+    const tx = makeTx({
+      bookingSnap: { exists: true, data: () => ({ status: 'CONFIRMED' }) },
+      activitySnap: { exists: true, data: () => ({ vagas_disponiveis: 2, total_inscritos: 8 }) }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+    const res = makeRes();
+    await cancel(makeReq(), res);
+
+    expect(tx.delete).toHaveBeenCalledWith({ path: 'bookings/user-1_lecture-1' });
+    expect(tx.update).toHaveBeenCalledWith(
+      { path: 'activities/lecture-1' },
+      { vagas_disponiveis: 3, total_inscritos: 7 }
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('sair da lista de espera diminui total_espera e não mexe nas vagas', async () => {
+    const tx = makeTx({
+      bookingSnap: { exists: true, data: () => ({ status: 'WAITING_LIST' }) },
+      activitySnap: { exists: true, data: () => ({ vagas_disponiveis: 0, total_espera: 3 }) }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+    const res = makeRes();
+    await cancel(makeReq(), res);
+
+    expect(tx.delete).toHaveBeenCalledWith({ path: 'bookings/user-1_lecture-1' });
+    expect(tx.update).toHaveBeenCalledTimes(1);
+    expect(tx.update).toHaveBeenCalledWith({ path: 'activities/lecture-1' }, { total_espera: 2 });
+    expect(res.status).toHaveBeenCalledWith(200);
   });
 });

@@ -286,6 +286,12 @@ const cancelBookingHandler = async (req: Request, res: Response) => {
 
       tx.delete(bookingRef);
 
+      if (activitySnap.exists && bookingData.status === 'WAITING_LIST') {
+        const actData = activitySnap.data() ?? {};
+        const espera = typeof actData.total_espera === 'number' ? actData.total_espera : 1;
+        tx.update(activityRef, { total_espera: Math.max(0, espera - 1) });
+      }
+
       if (activitySnap.exists && wasConfirmed) {
         const actData = activitySnap.data() ?? {};
         const available = typeof actData.vagas_disponiveis === 'number' ? actData.vagas_disponiveis : 0;

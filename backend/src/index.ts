@@ -12,8 +12,17 @@ import checkinDoubleCheckRouter from './routes/checkinDoubleCheck';
 import pointsRouter from './routes/points';
 import adminRouter from './routes/admin';
 import entranceRouter from './routes/entrance';
+import sponsorsAdminRouter from './routes/sponsorsAdmin';
+import sponsorInvitesRouter from './routes/sponsorInvites';
 
 const app = express();
+
+// Rate limit por IP das rotas públicas de convite (KAN-124) precisa do IP real do
+// cliente. O valor 1 supõe Cloud Function direto (1 hop do Google); se houver
+// Vercel/Hosting na frente a topologia muda e o número de hops também. NÃO
+// confirmado: validar em homolog com DEBUG_CLIENT_IP=1 (loga req.ip e
+// x-forwarded-for uma vez, ver middlewares/rateLimiter.ts) antes de produção.
+app.set('trust proxy', 1);
 
 // Middlewares padrão
 app.use(cors({ origin: true }));
@@ -76,6 +85,10 @@ app.use(['/api/points', '/points'], pointsRouter);
 
 // Gestão de papéis de usuário por ADMIN (KAN-60) — PUT /api/admin/users/:uid/role
 app.use(['/api/admin', '/admin'], adminRouter);
+
+// Patrocinadores e convites (KAN-124): gestão pelo ADMIN + rotas públicas de aceite
+app.use(['/api/admin', '/admin'], sponsorsAdminRouter);
+app.use(['/api/sponsor-invites', '/sponsor-invites'], sponsorInvitesRouter);
 
 // Exporta a Cloud Function 2nd Gen na região us-east1 (Free Tier)
 export const api = onRequest(

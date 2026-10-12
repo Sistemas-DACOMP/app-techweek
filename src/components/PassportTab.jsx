@@ -1,101 +1,70 @@
 import { useState, useEffect } from 'react';
-import { 
-  CheckCircle2, 
-  Sparkles, 
-  Trophy, 
-  Star, 
-  ShieldCheck, 
-  Clock, 
-  ExternalLink, 
-  Award,
-  AlertCircle
-} from 'lucide-react';
+import { Check } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
+import Mascot from './Mascot';
+import '../styles/conquistas.css';
 
+// Regras do passaporte (DESIGN.md §12, OBSERVADA): Kanastra e Bayer obrigatórias, +50 por estande,
+// sorteio = Kanastra + Bayer + 1 parceira, Bilhete Dourado com os 5.
 export const SPONSORS_CONFIG = {
-  kanastra: {
-    id: 'kanastra',
-    name: 'Kanastra',
-    tier: 'DIAMOND',
-    tierLabel: 'Patrocinadora Diamante',
-    required: true,
-    logo: '/patrocinadores/Kanastra-Logo-Edited.png',
-    accentColor: '#38BDF8',
-    glowColor: 'rgba(56, 189, 248, 0.25)',
-    bgGradient: 'linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%)',
-    borderColor: 'rgba(56, 189, 248, 0.45)',
-    tagBg: 'rgba(56, 189, 248, 0.15)',
-    tagText: '#38BDF8',
-    badgeDescription: 'Stand Principal na Área Tech',
-    points: 50
-  },
-  bayer: {
-    id: 'bayer',
-    name: 'Bayer',
-    tier: 'GOLD',
-    tierLabel: 'Patrocinadora Ouro',
-    required: true,
-    logo: '/patrocinadores/LogoBayer.png',
-    accentColor: '#F59E0B',
-    glowColor: 'rgba(245, 158, 11, 0.25)',
-    bgGradient: 'linear-gradient(135deg, rgba(245, 158, 11, 0.10) 0%, rgba(15, 23, 42, 0.95) 100%)',
-    borderColor: 'rgba(245, 158, 11, 0.45)',
-    tagBg: 'rgba(245, 158, 11, 0.15)',
-    tagText: '#FBBF24',
-    badgeDescription: 'Stand Inovação & AgroTech',
-    points: 50
-  },
-  aimirim: {
-    id: 'aimirim',
-    name: 'Aimirim',
-    tier: 'SILVER',
-    tierLabel: 'Patrocinadora Prata',
-    required: false,
-    logo: '/patrocinadores/aimirim-logo.png',
-    fallbackLogo: '/patrocinadores/W_Aimirim_med .png',
-    accentColor: '#94A3B8',
-    glowColor: 'rgba(148, 163, 184, 0.15)',
-    bgGradient: 'linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 20, 31, 0.9) 100%)',
-    borderColor: 'rgba(148, 163, 184, 0.25)',
-    tagBg: 'rgba(148, 163, 184, 0.12)',
-    tagText: '#CBD5E1',
-    badgeDescription: 'Stand Inteligência Industrial',
-    points: 50
-  },
-  bip: {
-    id: 'bip',
-    name: 'Bip',
-    tier: 'SILVER',
-    tierLabel: 'Patrocinadora Prata',
-    required: false,
-    logo: '/patrocinadores/logo-bip-consulting-white.png',
-    accentColor: '#94A3B8',
-    glowColor: 'rgba(148, 163, 184, 0.15)',
-    bgGradient: 'linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 20, 31, 0.9) 100%)',
-    borderColor: 'rgba(148, 163, 184, 0.25)',
-    tagBg: 'rgba(148, 163, 184, 0.12)',
-    tagText: '#CBD5E1',
-    badgeDescription: 'Stand Consultoria & Transformação Digital',
-    points: 50
-  },
-  hyperflow: {
-    id: 'hyperflow',
-    name: 'HyperFlow',
-    tier: 'SILVER',
-    tierLabel: 'Patrocinadora Prata',
-    required: false,
-    logo: '/patrocinadores/hyperflow-logo-secundario.png',
-    accentColor: '#94A3B8',
-    glowColor: 'rgba(148, 163, 184, 0.15)',
-    bgGradient: 'linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 20, 31, 0.9) 100%)',
-    borderColor: 'rgba(148, 163, 184, 0.25)',
-    tagBg: 'rgba(148, 163, 184, 0.12)',
-    tagText: '#CBD5E1',
-    badgeDescription: 'Stand Cloud & Automação High-Scale',
-    points: 50
-  }
+  kanastra: { id: 'kanastra', name: 'Kanastra', tier: 'DIAMOND', required: true, logo: '/patrocinadores/Kanastra-Logo-Edited.png', badgeDescription: 'Stand principal · Área Tech', points: 50 },
+  bayer: { id: 'bayer', name: 'Bayer', tier: 'GOLD', required: true, logo: '/patrocinadores/LogoBayer.png', badgeDescription: 'Stand Inovação e AgroTech', points: 50 },
+  aimirim: { id: 'aimirim', name: 'Aimirim', tier: 'SILVER', required: false, logo: '/patrocinadores/aimirim-logo.png', fallbackLogo: '/patrocinadores/W_Aimirim_med .png', badgeDescription: 'Stand Inteligência Industrial', points: 50 },
+  bip: { id: 'bip', name: 'Bip Consulting', tier: 'SILVER', required: false, logo: '/patrocinadores/logo-bip-consulting-white.png', badgeDescription: 'Stand Consultoria e Transformação Digital', points: 50 },
+  hyperflow: { id: 'hyperflow', name: 'HyperFlow', tier: 'SILVER', required: false, logo: '/patrocinadores/hyperflow-logo-secundario.png', badgeDescription: 'Stand Cloud e Automação', points: 50 },
 };
+
+// Cores das cotas (DESIGN.md §2.6) — tokens em index.css.
+export const TIER_STYLE = {
+  DIAMOND: { label: 'Diamante', bar: 'var(--tier-diamante)', line: 'var(--tier-diamante-line)', text: 'var(--tier-diamante-text)', soft: 'rgba(34,211,238,0.14)', tint: 'rgba(34,211,238,0.10)', cardLine: 'rgba(103,232,249,0.35)', dot: 'radial-gradient(circle at 30% 30%, #ECFEFF, #22D3EE 45%, #8B5CF6 100%)' },
+  GOLD: { label: 'Ouro', bar: 'var(--tier-ouro)', line: 'var(--tier-ouro-line)', text: 'var(--tier-ouro-text)', soft: 'rgba(251,191,36,0.14)', tint: 'rgba(251,191,36,0.10)', cardLine: 'rgba(251,191,36,0.35)', dot: 'radial-gradient(circle at 30% 30%, #FFF7D6, #FBBF24 45%, #B45309 100%)' },
+  SILVER: { label: 'Prata', bar: 'var(--tier-prata)', line: 'var(--tier-prata-line)', text: 'var(--tier-prata-text)', soft: 'rgba(203,213,225,0.12)', tint: null, cardLine: null, dot: 'radial-gradient(circle at 30% 30%, #FFFFFF, #CBD5E1 45%, #64748B 100%)' },
+};
+
+const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const formatVisitDate = (visitedAt) => {
+  const date = visitedAt?.toDate ? visitedAt.toDate() : new Date(visitedAt);
+  if (!visitedAt || isNaN(date.getTime())) return 'Visitado';
+  return `Visitado · ${date.getDate()} ${MONTHS[date.getMonth()]}`;
+};
+
+function VisitStatus({ visit }) {
+  if (!visit) {
+    return (
+      <span className="text-[13px] font-semibold text-text-2">
+        Ainda não visitado · <b className="text-you-text">+50 pts</b>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-ok">
+      <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#10B981]">
+        <Check size={11} color="#fff" strokeWidth={3.2} aria-hidden="true" />
+      </span>
+      {formatVisitDate(visit.visitedAt)}
+    </span>
+  );
+}
+
+function TierHeading({ tier, note }) {
+  const t = TIER_STYLE[tier];
+  return (
+    <div className="mb-3 mt-[26px] flex items-center gap-2.5">
+      <span
+        aria-hidden="true"
+        className="h-3.5 w-3.5 shrink-0 rounded-full"
+        style={{ background: t.dot, boxShadow: `0 0 0 2px var(--bg), 0 0 0 3px ${t.line}` }}
+      />
+      <h2 className="m-0 text-base font-extrabold" style={{ color: t.text }}>{t.label}</h2>
+      <span className="ml-auto text-xs font-semibold text-text-3">{note}</span>
+    </div>
+  );
+}
+
+const tierBar = (tier) => (
+  <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px]" style={{ background: TIER_STYLE[tier].bar }} />
+);
 
 export default function PassportTab({ userProfile }) {
   const [liveProfile, setLiveProfile] = useState(userProfile || {});
@@ -126,573 +95,145 @@ export default function PassportTab({ userProfile }) {
 
   const kanastraVisited = !!visitedSponsors?.kanastra;
   const bayerVisited = !!visitedSponsors?.bayer;
-  const aimirimVisited = !!visitedSponsors?.aimirim;
-  const bipVisited = !!visitedSponsors?.bip;
-  const hyperflowVisited = !!visitedSponsors?.hyperflow;
-
-  const totalVisited = [kanastraVisited, bayerVisited, aimirimVisited, bipVisited, hyperflowVisited].filter(Boolean).length;
-  const mandatoryCount = [kanastraVisited, bayerVisited].filter(Boolean).length;
-  const partnerCount = [aimirimVisited, bipVisited, hyperflowVisited].filter(Boolean).length;
+  const partnerCount = ['aimirim', 'bip', 'hyperflow'].filter((id) => !!visitedSponsors?.[id]).length;
+  const totalVisited = Object.keys(SPONSORS_CONFIG).filter((id) => !!visitedSponsors?.[id]).length;
 
   // Elegível aos prêmios: Kanastra + Bayer (obrigatórias) + pelo menos 1 parceira
   const isEligibleForPrizes = kanastraVisited && bayerVisited && partnerCount >= 1;
   const isFullPassport = totalVisited === 5 || isGoldenTicket;
+  const missingForDraw = [!kanastraVisited && 'Kanastra', !bayerVisited && 'Bayer', partnerCount < 1 && '1 prata'].filter(Boolean);
 
-  const progressPercent = (totalVisited / 5) * 100;
-
-  const formatVisitDate = (visitedAt) => {
-    if (!visitedAt) return 'Visitado';
-    try {
-      const date = new Date(visitedAt);
-      if (isNaN(date.getTime())) return 'Visitado';
-      return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ' de ' + date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-    } catch {
-      return 'Visitado';
-    }
-  };
+  const { kanastra, bayer } = SPONSORS_CONFIG;
+  const silvers = [SPONSORS_CONFIG.aimirim, SPONSORS_CONFIG.bip, SPONSORS_CONFIG.hyperflow];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }} className="animate-fade-in">
-      {/* 1. HERO DO PASSAPORTE */}
+    <div className="flex flex-col">
+      {/* Cartão de topo */}
       <section
-        style={{
-          background: 'linear-gradient(135deg, #0F172A 0%, #1E1B4B 50%, #0F172A 100%)',
-          borderRadius: '20px',
-          border: '1px solid rgba(139, 92, 246, 0.3)',
-          padding: '20px',
-          position: 'relative',
-          overflow: 'hidden',
-          boxShadow: '0 12px 36px rgba(0, 0, 0, 0.4)'
-        }}
+        aria-label="Seu passaporte"
+        className="mt-5 grid grid-cols-[1fr_76px] items-center gap-2 rounded-[20px] border border-[#2A3460] py-[18px] pl-[18px] pr-4"
+        style={{ background: 'linear-gradient(135deg, #1B2160, var(--surface) 70%)' }}
       >
-        {/* Glow de fundo */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '-40px',
-            right: '-40px',
-            width: '150px',
-            height: '150px',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 70%)',
-            pointerEvents: 'none'
-          }}
-        />
-
-        <h2
-          style={{
-            fontFamily: "'Space Grotesk', -apple-system, sans-serif",
-            fontSize: '1.4rem',
-            fontWeight: 800,
-            color: '#FFFFFF',
-            margin: '0 0 6px',
-            letterSpacing: '-0.02em',
-            lineHeight: 1.2
-          }}
-        >
-          Roteiro dos Patrocinadores
-        </h2>
-
-        <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: '#94A3B8', lineHeight: 1.45 }}>
-          Visite os estandes das empresas parceiras para ser escaneado. Cada visita garante <strong>+50 pontos</strong> no ranking e, ao escanear todas as empresas, você ainda <strong>libera uma pontuação extra</strong> (+100 pts bônus com o Bilhete Dourado)!
-        </p>
-
-        {/* Barra de Progresso Geral */}
-        <div style={{ backgroundColor: 'rgba(0, 0, 0, 0.35)', padding: '12px 14px', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.78rem' }}>
-            <span style={{ color: '#E2E8F0', fontWeight: 600 }}>Carimbos Coletados</span>
-            <span style={{ color: '#38BDF8', fontWeight: 800, fontFamily: "'Space Grotesk', sans-serif" }}>
-              {totalVisited} de 5 empresas
+        <div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[34px] font-black leading-none">
+              {totalVisited}<span className="text-xl text-text-3">/5</span>
             </span>
+            <span className="text-sm font-bold text-[#C3C9DE]">estandes visitados</span>
           </div>
-
-          <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: '999px', overflow: 'hidden' }}>
-            <div
-              style={{
-                width: `${progressPercent}%`,
-                height: '100%',
-                background: isFullPassport
-                  ? 'linear-gradient(90deg, #F59E0B, #EAB308, #FDE047)'
-                  : 'linear-gradient(90deg, #38BDF8, #818CF8, #C084FC)',
-                borderRadius: '999px',
-                transition: 'width 0.4s ease'
-              }}
-            />
+          <div className="mt-3 flex gap-1" aria-hidden="true">
+            {Object.values(SPONSORS_CONFIG).map((s) => (
+              <span
+                key={s.id}
+                className="h-2 rounded"
+                style={{
+                  flex: s.tier === 'DIAMOND' ? 1.4 : s.tier === 'GOLD' ? 1.2 : 1,
+                  background: visitedSponsors?.[s.id] ? TIER_STYLE[s.tier].bar : 'var(--surface-raised)',
+                }}
+              />
+            ))}
           </div>
-
-          {/* Status de Premiação */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '0.74rem' }}>
-            {isFullPassport ? (
-              <span style={{ color: '#FDE047', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <Trophy size={14} color="#FDE047" />
-                <span>Passaporte Completo! Bilhete Dourado ativo (+100 pts bônus)</span>
-              </span>
-            ) : isEligibleForPrizes ? (
-              <span style={{ color: '#34D399', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <CheckCircle2 size={14} color="#34D399" />
-                <span>Elegível aos Sorteios! Escaneie todas para liberar a pontuação extra (+100 pts).</span>
-              </span>
-            ) : (
-              <span style={{ color: '#94A3B8', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <AlertCircle size={13} color="#F59E0B" />
-                <span>Obrigatório: Kanastra ({kanastraVisited ? '✓' : '0/1'}) + Bayer ({bayerVisited ? '✓' : '0/1'}) + 1 parceira. Ao escanear todas, libera pontuação extra!</span>
-              </span>
-            )}
+          {isEligibleForPrizes ? (
+            <div className="mt-3 flex items-center gap-1.5 text-[13px] font-bold text-ok">
+              <Check size={14} strokeWidth={2.8} aria-hidden="true" />
+              Concorrendo aos sorteios
+            </div>
+          ) : (
+            <div className="mt-3 text-[13px] font-semibold text-text-2">
+              Para os sorteios, falta: <b className="text-text">{missingForDraw.join(' · ')}</b>
+            </div>
+          )}
+          <div className="mt-1 text-[13px] text-text-2">
+            <b className="text-warn">Bilhete Dourado</b>
+            {isFullPassport ? ': garantido · +100' : `: faltam ${5 - totalVisited} · +100`}
           </div>
+        </div>
+        <div className="flex justify-center">
+          <Mascot color="purple" className="animate-none! h-[76px]! w-[76px]!" />
         </div>
       </section>
 
-      {/* 2. CARD DO BILHETE DOURADO (SE COMPLETO) */}
-      {isFullPassport && (
-        <section
-          style={{
-            background: 'linear-gradient(135deg, #78350F 0%, #B45309 50%, #D97706 100%)',
-            borderRadius: '18px',
-            border: '2px solid #FDE047',
-            padding: '18px',
-            color: '#FFFFFF',
-            boxShadow: '0 8px 30px rgba(245, 158, 11, 0.35)',
-            position: 'relative',
-            overflow: 'hidden'
-          }}
-          className="animate-fade-in"
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div
-              style={{
-                width: '52px',
-                height: '52px',
-                borderRadius: '14px',
-                backgroundColor: '#FEF08A',
-                color: '#78350F',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-              }}
-            >
-              <Award size={32} />
-            </div>
-
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 800, letterSpacing: '0.06em', color: '#FEF08A', textTransform: 'uppercase' }}>
-                RECOMPENSA MÁXIMA DESBLOQUEADA
-              </div>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '2px 0 4px', color: '#FFFFFF', fontFamily: "'Space Grotesk', sans-serif" }}>
-                🎟️ Bilhete Dourado TechWeek
-              </h3>
-              <p style={{ margin: 0, fontSize: '0.78rem', color: '#FEF9C3', lineHeight: 1.4 }}>
-                Você visitou todos os 5 estandes! Bônus de <strong>+100 pontos</strong> creditado no seu ranking e participação garantida em todos os sorteios de prêmios especiais.
-              </p>
-            </div>
+      {/* Diamante: cartão grande com o logo em destaque */}
+      <TierHeading tier="DIAMOND" note="obrigatória · +50 pts" />
+      <article
+        className="relative overflow-hidden rounded-[18px] border"
+        style={{
+          background: 'linear-gradient(160deg, #0E3550, var(--surface) 50%, #26195A)',
+          borderColor: TIER_STYLE.DIAMOND.line,
+          boxShadow: '0 14px 38px -10px rgba(34,211,238,0.5), 0 0 0 1px rgba(167,139,250,0.2)',
+        }}
+      >
+        {tierBar('DIAMOND')}
+        <div className="p-4">
+          <div className="flex h-[104px] items-center justify-center rounded-[14px] bg-[#F4F5FA]">
+            <img src={kanastra.logo} alt="Kanastra" className="h-[46px] w-[176px] object-contain" />
           </div>
-        </section>
-      )}
-
-      {/* ============================================================ */}
-      {/* 3. TIER 1 - DIAMANTE: KANASTRA (CARD MASTER EM DESTAQUE)      */}
-      {/* ============================================================ */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', padding: '0 4px' }}>
-          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#38BDF8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            💎 Categoria Diamante
-          </span>
-          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94A3B8' }}>
-            +50 Pontos
-          </span>
-        </div>
-
-        <div
-          style={{
-            background: SPONSORS_CONFIG.kanastra.bgGradient,
-            border: `1.5px solid ${kanastraVisited ? '#10B981' : SPONSORS_CONFIG.kanastra.borderColor}`,
-            borderRadius: '20px',
-            padding: '20px',
-            boxShadow: kanastraVisited 
-              ? '0 10px 30px rgba(16, 185, 129, 0.2)' 
-              : '0 10px 30px rgba(56, 189, 248, 0.15)',
-            position: 'relative',
-            overflow: 'hidden'
-          }}
-        >
-          {/* Top Bar do Card */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-              <span
-                style={{
-                  backgroundColor: SPONSORS_CONFIG.kanastra.tagBg,
-                  color: SPONSORS_CONFIG.kanastra.tagText,
-                  padding: '4px 10px',
-                  borderRadius: '10px',
-                  fontSize: '0.68rem',
-                  fontWeight: 800,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                  border: '1px solid rgba(56, 189, 248, 0.3)'
-                }}
-              >
-                PATROCINADORA DIAMANTE
-              </span>
-
-              <span
-                style={{
-                  backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                  color: '#38BDF8',
-                  border: '1px solid rgba(56, 189, 248, 0.35)',
-                  padding: '4px 8px',
-                  borderRadius: '10px',
-                  fontSize: '0.68rem',
-                  fontWeight: 800,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <span>★</span>
-                <span>OBRIGATÓRIO</span>
-              </span>
-            </div>
-
-            {/* Carimbo Visual */}
-            {kanastraVisited ? (
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  backgroundColor: 'rgba(16, 185, 129, 0.18)',
-                  border: '1px solid #10B981',
-                  color: '#34D399',
-                  padding: '6px 12px',
-                  borderRadius: '12px',
-                  fontWeight: 800,
-                  fontSize: '0.75rem',
-                  boxShadow: '0 0 16px rgba(16, 185, 129, 0.3)'
-                }}
-              >
-                <CheckCircle2 size={16} color="#34D399" />
-                <span>CARIMBADO ✓</span>
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#94A3B8',
-                  padding: '5px 10px',
-                  borderRadius: '10px',
-                  fontSize: '0.72rem',
-                  fontWeight: 600
-                }}
-              >
-                <Clock size={13} />
-                <span>Pendente</span>
-              </div>
-            )}
-          </div>
-
-          {/* Logo da Kanastra em Destaque Expandido */}
-          <div
-            style={{
-              backgroundColor: 'rgba(15, 23, 42, 0.75)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '16px',
-              padding: '24px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '16px',
-              minHeight: '110px'
-            }}
-          >
-            <img
-              src={SPONSORS_CONFIG.kanastra.logo}
-              alt="Kanastra"
-              style={{
-                maxHeight: '52px',
-                maxWidth: '85%',
-                objectFit: 'contain',
-                filter: 'brightness(0) invert(1)'
-              }}
-            />
-          </div>
-
-          {/* Footer do Card */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.76rem' }}>
-            <span style={{ color: '#94A3B8' }}>{SPONSORS_CONFIG.kanastra.badgeDescription}</span>
-            <span style={{ color: kanastraVisited ? '#34D399' : '#64748B', fontWeight: 600 }}>
-              {kanastraVisited ? formatVisitDate(visitedSponsors.kanastra?.visitedAt) : 'Visita pendente no estande'}
-            </span>
+          <div className="mt-3.5 text-[17px] font-extrabold">{kanastra.name}</div>
+          <div className="mt-0.5 text-[13px] text-text-2">{kanastra.badgeDescription}</div>
+          <div className="mt-3 border-t border-[#1F2747] pt-3">
+            <VisitStatus visit={visitedSponsors.kanastra} />
           </div>
         </div>
-      </div>
+        <span className="conq-sheen" aria-hidden="true" />
+      </article>
 
-      {/* ============================================================ */}
-      {/* 4. TIER 2 - OURO: BAYER (CARD HIGH TIER)                      */}
-      {/* ============================================================ */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', padding: '0 4px' }}>
-          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#F59E0B', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            🥇 Categoria Ouro
-          </span>
-          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94A3B8' }}>
-            +50 Pontos
-          </span>
-        </div>
-
-        <div
-          style={{
-            background: SPONSORS_CONFIG.bayer.bgGradient,
-            border: `1.5px solid ${bayerVisited ? '#10B981' : SPONSORS_CONFIG.bayer.borderColor}`,
-            borderRadius: '18px',
-            padding: '18px',
-            boxShadow: bayerVisited 
-              ? '0 8px 24px rgba(16, 185, 129, 0.2)' 
-              : '0 8px 24px rgba(245, 158, 11, 0.12)',
-            position: 'relative'
-          }}
-        >
-          {/* Top Bar Bayer */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-              <span
-                style={{
-                  backgroundColor: SPONSORS_CONFIG.bayer.tagBg,
-                  color: SPONSORS_CONFIG.bayer.tagText,
-                  padding: '4px 10px',
-                  borderRadius: '10px',
-                  fontSize: '0.68rem',
-                  fontWeight: 800,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                  border: '1px solid rgba(245, 158, 11, 0.3)'
-                }}
-              >
-                PATROCINADORA OURO
-              </span>
-
-              <span
-                style={{
-                  backgroundColor: 'rgba(245, 158, 11, 0.12)',
-                  color: '#FBBF24',
-                  border: '1px solid rgba(245, 158, 11, 0.35)',
-                  padding: '4px 8px',
-                  borderRadius: '10px',
-                  fontSize: '0.68rem',
-                  fontWeight: 800,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <span>★</span>
-                <span>OBRIGATÓRIO</span>
-              </span>
-            </div>
-
-            {/* Carimbo Visual */}
-            {bayerVisited ? (
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  backgroundColor: 'rgba(16, 185, 129, 0.18)',
-                  border: '1px solid #10B981',
-                  color: '#34D399',
-                  padding: '5px 10px',
-                  borderRadius: '10px',
-                  fontWeight: 800,
-                  fontSize: '0.74rem'
-                }}
-              >
-                <CheckCircle2 size={15} color="#34D399" />
-                <span>CARIMBADO ✓</span>
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#94A3B8',
-                  padding: '4px 8px',
-                  borderRadius: '8px',
-                  fontSize: '0.70rem',
-                  fontWeight: 600
-                }}
-              >
-                <Clock size={12} />
-                <span>Pendente</span>
-              </div>
-            )}
+      {/* Ouro: cartão médio em linha */}
+      <TierHeading tier="GOLD" note="obrigatória · +50 pts" />
+      <article
+        className="relative overflow-hidden rounded-[18px] border"
+        style={{
+          background: 'linear-gradient(160deg, #3A2A0A, var(--surface) 58%)',
+          borderColor: TIER_STYLE.GOLD.line,
+          boxShadow: '0 12px 30px -12px rgba(251,191,36,0.5)',
+        }}
+      >
+        {tierBar('GOLD')}
+        <div className="grid grid-cols-[76px_1fr] items-center gap-3.5 p-4">
+          <div className="flex h-[76px] w-[76px] items-center justify-center rounded-[14px] bg-[#F4F5FA]">
+            <img src={bayer.logo} alt="Bayer" className="h-14 w-14 object-contain" />
           </div>
-
-          {/* Logo da Bayer */}
-          <div
-            style={{
-              backgroundColor: 'rgba(15, 23, 42, 0.75)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '14px',
-              padding: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '14px',
-              minHeight: '85px'
-            }}
-          >
-            <img
-              src={SPONSORS_CONFIG.bayer.logo}
-              alt="Bayer"
-              style={{
-                maxHeight: '46px',
-                maxWidth: '80%',
-                objectFit: 'contain'
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.74rem' }}>
-            <span style={{ color: '#94A3B8' }}>{SPONSORS_CONFIG.bayer.badgeDescription}</span>
-            <span style={{ color: bayerVisited ? '#34D399' : '#64748B', fontWeight: 600 }}>
-              {bayerVisited ? formatVisitDate(visitedSponsors.bayer?.visitedAt) : 'Visita pendente no estande'}
-            </span>
+          <div>
+            <div className="text-base font-extrabold">{bayer.name}</div>
+            <div className="mt-0.5 text-[13px] text-text-2">{bayer.badgeDescription}</div>
+            <div className="mt-2.5"><VisitStatus visit={visitedSponsors.bayer} /></div>
           </div>
         </div>
-      </div>
+        <span className="conq-sheen" aria-hidden="true" />
+      </article>
 
-      {/* ============================================================ */}
-      {/* 5. TIER 3 - PRATA: AIMIRIM, BIP, HYPERFLOW (MESMO DESTAQUE)   */}
-      {/* ============================================================ */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', padding: '0 4px' }}>
-          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#94A3B8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            🥈 Categoria Prata (Parceiras de Tecnologia)
-          </span>
-          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94A3B8' }}>
-            +50 Pontos cada
-          </span>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
-          {[SPONSORS_CONFIG.aimirim, SPONSORS_CONFIG.bip, SPONSORS_CONFIG.hyperflow].map((sponsor) => {
-            const isVisited = !!visitedSponsors[sponsor.id];
-
+      {/* Prata: lista compacta num cartão só */}
+      <TierHeading tier="SILVER" note="escolha 1 ou mais · +50 cada" />
+      <article className="relative overflow-hidden rounded-[18px] border bg-surface pt-[3px]" style={{ borderColor: TIER_STYLE.SILVER.line }}>
+        {tierBar('SILVER')}
+        <ul className="m-0 list-none p-0">
+          {silvers.map((s, i) => {
+            const visit = visitedSponsors[s.id];
             return (
-              <div
-                key={sponsor.id}
-                style={{
-                  background: sponsor.bgGradient,
-                  border: `1.5px solid ${isVisited ? '#10B981' : sponsor.borderColor}`,
-                  borderRadius: '16px',
-                  padding: '16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  boxShadow: isVisited ? '0 4px 16px rgba(16, 185, 129, 0.15)' : 'none',
-                  transition: 'transform 0.2s ease'
-                }}
+              <li
+                key={s.id}
+                className={`grid grid-cols-[72px_1fr] items-center gap-3.5 px-4 py-3 ${i < silvers.length - 1 ? 'border-b border-[#1F2747]' : ''}`}
               >
-                {/* Topo do Card Prata */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                  <span
-                    style={{
-                      backgroundColor: sponsor.tagBg,
-                      color: sponsor.tagText,
-                      padding: '3px 8px',
-                      borderRadius: '8px',
-                      fontSize: '0.65rem',
-                      fontWeight: 700,
-                      textTransform: 'uppercase'
-                    }}
-                  >
-                    PATROCINADORA PRATA
-                  </span>
-
-                  {isVisited ? (
-                    <div
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        backgroundColor: 'rgba(16, 185, 129, 0.18)',
-                        border: '1px solid #10B981',
-                        color: '#34D399',
-                        padding: '3px 8px',
-                        borderRadius: '8px',
-                        fontWeight: 700,
-                        fontSize: '0.70rem'
-                      }}
-                    >
-                      <CheckCircle2 size={13} color="#34D399" />
-                      <span>VISITADO ✓</span>
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        color: '#64748B',
-                        fontSize: '0.68rem',
-                        fontWeight: 600
-                      }}
-                    >
-                      <Clock size={12} />
-                      <span>Pendente</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Logo */}
-                <div
-                  style={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    border: '1px solid rgba(255, 255, 255, 0.06)',
-                    borderRadius: '12px',
-                    padding: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minHeight: '70px',
-                    marginBottom: '12px'
-                  }}
-                >
+                <div className="flex h-11 w-[72px] items-center justify-center rounded-[10px] bg-surface-raised">
                   <img
-                    src={sponsor.logo}
-                    alt={sponsor.name}
-                    onError={(e) => {
-                      if (sponsor.fallbackLogo) {
-                        e.currentTarget.src = sponsor.fallbackLogo;
-                      }
-                    }}
-                    style={{
-                      maxHeight: '38px',
-                      maxWidth: '75%',
-                      objectFit: 'contain'
-                    }}
+                    src={s.logo}
+                    alt=""
+                    onError={(e) => { if (s.fallbackLogo) e.currentTarget.src = s.fallbackLogo; }}
+                    className={`max-h-[22px] max-w-[60px] object-contain ${visit ? '' : 'opacity-60'}`}
                   />
                 </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.70rem', color: '#94A3B8' }}>
-                  <span>{sponsor.name}</span>
-                  <span style={{ color: isVisited ? '#34D399' : '#64748B', fontWeight: isVisited ? 700 : 500 }}>
-                    {isVisited ? formatVisitDate(visitedSponsors[sponsor.id]?.visitedAt) : 'Estande no evento'}
-                  </span>
+                <div>
+                  <div className="text-[15px] font-bold">{s.name}</div>
+                  <div className="mt-[3px]"><VisitStatus visit={visit} /></div>
                 </div>
-              </div>
+              </li>
             );
           })}
-        </div>
-      </div>
+        </ul>
+      </article>
 
+      <p className="mx-6 mb-1 mt-4 text-center text-xs leading-normal text-text-4">
+        O carimbo entra quando o estande lê o seu crachá.
+      </p>
     </div>
   );
 }

@@ -1,0 +1,31 @@
+/* Portaria (Staff) — DESIGN.md §6 "Conta Staff e Admin" e telas 3.01–3.08.
+   Só o que Tailwind não cobre: vídeo da câmera, telas cheias de resultado e a barra de contagem. */
+
+/* Atividade "agora" (DESIGN.md §6, cartão de atividade) */
+.staff-now { background: #161F45; }
+
+/* Área da câmera: o html5-qrcode injeta <video>/<canvas> dentro de #staff-reader */
+.staff-camera { background: radial-gradient(120% 90% at 50% 40%, #2B3157 0%, #11152A 70%); }
+#staff-reader { position: absolute !important; inset: 0; border: 0 !important; }
+#staff-reader video { display: block; width: 100% !important; height: 100% !important; object-fit: cover; }
+#staff-reader img, #staff-reader canvas { display: none; }
+
+/* Mascote parado (loop só em onboarding, login, abertura e estados vazios — DESIGN.md §8) */
+.staff-still, .staff-still * { animation: none !important; }
+
+/* Resultado da leitura em tela cheia (3.03 · 3.04 · 3.05) */
+.staff-result { --c: #7EF0B6; background: linear-gradient(180deg, #0F4A33 0%, #0A2A20 100%); }
+.staff-result[data-kind="warn"] { --c: #FFD36E; background: linear-gradient(180deg, #4A3A0C 0%, #2A2008 100%); }
+.staff-result[data-kind="err"] { --c: #FF9AA8; background: linear-gradient(180deg, #4D1520 0%, #2A0C12 100%); }
+.staff-result-icon { background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--c); animation: dsPop 380ms var(--spring) both; }
+.staff-result-title { color: var(--c); }
+
+/* Banner do último resultado no desktop (3.08) */
+.staff-banner { --c: #7EF0B6; background: #0F4A33; }
+.staff-banner[data-kind="warn"] { --c: #FFD36E; background: #4A3A0C; }
+.staff-banner[data-kind="err"] { --c: #FF9AA8; background: #4D1520; }
+
+/* Contagem até a próxima leitura: só transform */
+.staff-countdown { background: var(--c); transform-origin: left; animation: staffCountdown var(--t, 3000ms) linear both; }
+@keyframes staffCountdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+

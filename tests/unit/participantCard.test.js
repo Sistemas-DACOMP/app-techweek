@@ -82,7 +82,6 @@ describe('ParticipantCard (KAN-95)', () => {
 
       const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
       expect(html).not.toContain('alt="Lucas Silva"');
-      expect(html).toContain('alt="FACOM TechWeek"');
       expect(html).toContain('LS');
       expect(html).toContain('Lucas Silva');
       expect(html).toContain('@lucas_silva');
@@ -122,7 +121,7 @@ describe('ParticipantCard (KAN-95)', () => {
       };
 
       const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
-      expect(html).toContain('O usuário não cadastrou redes sociais.');
+      expect(html).toContain('Esta pessoa ainda não adicionou redes ao crachá.');
     });
 
     it('renderiza corretamente apenas o GitHub quando nenhuma outra rede for informada (KAN-96)', () => {
@@ -137,7 +136,7 @@ describe('ParticipantCard (KAN-95)', () => {
       expect(html).toContain('torvalds');
       expect(html).not.toContain('Instagram');
       expect(html).not.toContain('LinkedIn');
-      expect(html).not.toContain('O usuário não cadastrou redes sociais.');
+      expect(html).not.toContain('Esta pessoa ainda não adicionou redes ao crachá.');
     });
 
     it('renderiza combinação de duas redes sociais (GitHub e LinkedIn) (KAN-96)', () => {
@@ -152,6 +151,52 @@ describe('ParticipantCard (KAN-95)', () => {
       expect(html).toContain('href="https://linkedin.com/in/dev-fullstack"');
       expect(html).toContain('href="https://github.com/dev-fullstack"');
       expect(html).not.toContain('Instagram');
+    });
+
+    it('renderiza pós-graduação com instituição (FACOM) sem período', () => {
+      const participant = {
+        name: 'Pesquisador Silva',
+        username: 'pesquisador',
+        participantType: 'Pós-graduação',
+        institution: 'FACOM',
+        period: null
+      };
+
+      const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
+      expect(html).toContain('Pesquisador Silva');
+      expect(html).toContain('Pós-graduação · FACOM');
+      expect(html).not.toContain('período');
+    });
+
+    it('renderiza pós-graduação com instituição customizada', () => {
+      const participant = {
+        name: 'Maria Souza',
+        username: 'mariasouza',
+        participantType: 'Pós-graduação',
+        institution: 'FEELT',
+        course: 'Pós-graduação'
+      };
+
+      const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
+      expect(html).toContain('Maria Souza');
+      expect(html).toContain('Pós-graduação · FEELT');
+      expect(html).not.toContain('período');
+    });
+
+    it('renderiza Aluno UFU Pós-graduação com tag e instituição', () => {
+      const participant = {
+        name: 'Doutorando UFU',
+        username: 'doutorando',
+        participantType: 'Aluno UFU Pós-graduação',
+        institution: 'IME',
+        course: 'Pós-graduação'
+      };
+
+      const html = renderToStaticMarkup(React.createElement(ParticipantCard, { participant }));
+      expect(html).toContain('Doutorando UFU');
+      expect(html).toContain('Aluno UFU Pós-graduação');
+      expect(html).toContain('Pós-graduação · IME');
+      expect(html).not.toContain('período');
     });
   });
 });

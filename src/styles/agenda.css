@@ -1,0 +1,38 @@
+/* Agenda, painel da atividade e presença (DESIGN.md §6, §9).
+   Só transform/opacity/stroke-dashoffset; reduced-motion é global (index.css). */
+
+/* Presença confirmada — animação pesada, dispara uma vez */
+@keyframes agMascotUp {
+  0% { opacity: 0; transform: translateY(60px) scale(.6); }
+  65% { opacity: 1; transform: translateY(-6px) scale(1.06); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes agBurst {
+  0% { opacity: 0; transform: translate(0, 0) scale(.3); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(1) rotate(var(--rr, 220deg)); }
+}
+.ag-mascot-up { animation: agMascotUp 800ms var(--spring) 300ms both; }
+.ag-burst { animation: agBurst 900ms cubic-bezier(.15, .7, .3, 1) var(--d, .35s) both; }
+.ag-draw path { stroke-dasharray: 30; stroke-dashoffset: 30; animation: dsDraw 450ms var(--ease-out) 550ms forwards; }
+.ag-in { animation: dsFadeUp 500ms var(--ease-out) var(--d, 0s) both; }
+.ag-pop { display: inline-block; animation: dsPop 550ms var(--spring) var(--d, 1s) both; }
+.ag-pulse { animation: dsPulse 600ms var(--ease-out) 1.1s 2 both; }
+
+/* Linha de leitura do scanner (transform em vez de top) */
+@keyframes agScan { 0%, 100% { transform: translateY(6%); } 50% { transform: translateY(94%); } }
+.ag-scanline { position: absolute; inset: 0; pointer-events: none; animation: agScan 2.6s ease-in-out infinite; }
+.ag-scanline::before {
+  content: ''; position: absolute; left: 12px; right: 12px; top: 0; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #8FA0FF 30%, #9B7BFF 70%, transparent);
+}
+
+/* html5-qrcode injeta vídeo e moldura próprios — vídeo cobre a área, moldura dele some */
+.ag-reader { width: 100%; height: 100%; }
+.ag-reader > div { width: 100% !important; height: 100% !important; border: 0 !important; }
+.ag-reader video { width: 100% !important; height: 100% !important; object-fit: cover !important; }
+.ag-reader img,
+.ag-reader [id$="__scan_region"] > img,
+.ag-reader [id$="__dashboard"],
+.ag-reader [id$="__header_message"] { display: none !important; }
+

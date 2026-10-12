@@ -11,14 +11,16 @@ export default function NotificationBell({ className = '' }) {
     <>
       <button
         type="button"
-        className={`notification-bell-btn ${className} ${unreadCount > 0 ? 'has-unread' : ''}`}
+        className={`relative flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-text press ${className}`}
         onClick={() => setIsModalOpen(true)}
-        aria-label={`Notificações: ${unreadCount} não lidas`}
-        title="Notificações"
+        aria-label={unreadCount > 0 ? `Avisos, ${unreadCount} ${unreadCount > 1 ? 'novos' : 'novo'}` : 'Avisos'}
       >
-        <Bell size={20} className="notification-bell-icon" />
+        <Bell size={22} strokeWidth={1.9} aria-hidden="true" />
         {unreadCount > 0 && (
-          <span className="notification-badge" aria-hidden="true">
+          <span
+            className="absolute right-[9px] top-[9px] flex h-4 min-w-4 items-center justify-center rounded-lg bg-you px-1 text-[10px] font-bold text-white"
+            aria-hidden="true"
+          >
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
