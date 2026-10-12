@@ -13,7 +13,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { db, storage, auth } from './firebase';
 
 /**
  * Posts padrão para o Feed da FACOM TechWeek 2026.
@@ -331,11 +331,13 @@ export async function createFeedPost(postData) {
   const mediaType = postData.mediaType || (postData.videoUrl ? 'video' : (postData.imageUrl ? 'image' : ''));
   const nowIso = new Date().toISOString();
 
+  const currentUid = postData.authorId || auth?.currentUser?.uid || undefined;
   const formattedPost = {
     author: String(postData.author || 'Organização FACOM'),
     authorRole: String(postData.authorRole || 'ORGANIZATION'),
     authorAvatar: String(postData.authorAvatar || ''),
     authorHandle: postData.authorHandle ? String(postData.authorHandle) : undefined,
+    authorId: currentUid ? String(currentUid) : undefined,
     content: String(postData.content || '').trim(),
     imageUrl: String(postData.imageUrl || (mediaType === 'image' ? (postData.mediaUrl || '') : '')),
     videoUrl: String(postData.videoUrl || (mediaType === 'video' ? (postData.mediaUrl || '') : '')),

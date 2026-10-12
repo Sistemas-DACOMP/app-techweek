@@ -21,6 +21,10 @@ service cloud.firestore {
       return isAdmin() || (isAuthenticated() && request.auth.token.role == 'STAFF');
     }
 
+    function isSponsor() {
+      return isAuthenticated() && request.auth.token.role == 'SPONSOR';
+    }
+
     // Regras de Usuários: Todos autenticados leem; só o próprio dono cria/atualiza dados pessoais
     match /users/{userId} {
       allow read: if isAuthenticated();
@@ -105,9 +109,33 @@ service cloud.firestore {
     // Regras do Feed de Notícias e Comunidade
     match /feed_posts/{postId} {
       allow read: if true;
-      allow create: if true;
-      allow update: if isAuthenticated() || true;
-      allow delete: if isAuthenticated() || true;
+
+      // Criação: Staff/Admin (tolerante para legado sem authorId) ou Patrocinador (authorId obrigatório e sem campos reservados)
+      // TODO: tornar authorId obrigatório após deploy do front
+      allow create: if (
+        (isStaffOrAdmin() && (!('authorId' in request.resource.data) || request.resource.data.authorId == request.auth.uid))
+        ||
+        (isSponsor()
+          && ('authorId' in request.resource.data && request.resource.data.authorId == request.auth.uid)
+          && request.resource.data.authorRole == 'SPONSOR'
+          && (!('pinned' in request.resource.data) || request.resource.data.pinned == false)
+          && request.resource.data.get('likes', []).size() == 0
+          && request.resource.data.get('likesCount', 0) == 0)
+      );
+
+      // Edição: Staff/Admin (livre) ou participante logado alterando unicamente o próprio like
+      allow update: if isStaffOrAdmin() || (
+        isAuthenticated()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+        && request.resource.data.get('likes', []) is list
+        && request.resource.data.get('likes', []).toSet()
+             .difference(resource.data.get('likes', []).toSet()).hasOnly([request.auth.uid])
+        && resource.data.get('likes', []).toSet()
+             .difference(request.resource.data.get('likes', []).toSet()).hasOnly([request.auth.uid])
+      );
+
+      // Exclusão: Exclusivo para Staff/Admin
+      allow delete: if isStaffOrAdmin();
     }
 
     // Regras de Ranking / Leaderboard consolidado
