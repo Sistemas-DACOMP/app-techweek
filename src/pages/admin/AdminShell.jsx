@@ -1,5 +1,5 @@
 import {
-  LayoutGrid, CalendarDays, Megaphone, Flag, Users, LogIn, Store, ExternalLink, Settings, Pencil,
+  Briefcase, LayoutGrid, CalendarDays, Megaphone, Flag, Users, LogIn, Store, ExternalLink, Settings, Pencil,
   ArrowLeftRight, LogOut, Search, MoreHorizontal, ChevronLeft, BarChart3,
 } from 'lucide-react';
 import iconeTw from '../../assets/icone.png';
@@ -17,6 +17,7 @@ const MENU = [
   ] },
   { group: 'Pessoas', items: [
     { key: 'pessoas', label: 'Participantes e papéis', icon: Users },
+    { key: 'patrocinadores', label: 'Patrocinadores', icon: Briefcase },
     { key: 'staff', label: 'Portaria (Staff)', icon: LogIn, path: '/staff' },
     { key: 'sponsor', label: 'Estandes (Patrocinadores)', icon: Store, path: '/sponsor' },
   ] },
@@ -74,7 +75,7 @@ export default function AdminShell({
   active, onNavigate, navigate, onLogout, me, search, onSearch, onSearchSubmit, mobileTitle, mobileBack, mobileAction, hideMobileNav, children,
 }) {
   const info = eventDayInfo();
-  const navKey = active === 'feed' || active === 'config' || active === 'dados' ? 'inicio' : active;
+  const navKey = active === 'feed' || active === 'config' || active === 'dados' ? 'inicio' : active === 'patrocinadores' ? 'pessoas' : active;
 
   return (
     <div className="flex min-h-dvh bg-bg font-sans text-text">

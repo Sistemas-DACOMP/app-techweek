@@ -82,3 +82,24 @@
   .tw-press, .tw-lift { transition: none !important; }
   .tw-press:hover, .tw-press:active, .tw-lift:hover { transform: none !important; filter: none !important; }
 }
+
+/* --- Cadastro de patrocinador / admin: classes mo-* --- */
+/* Movimento compartilhado: entrada escalonada e hover sutil.
+   Só transform e opacity. Uso: className="mo-up" style={{ '--i': índice }}.
+   Reduced-motion desliga tudo (também há regra global em index.css). */
+
+@keyframes moUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes moFade { from { opacity: 0; } to { opacity: 1; } }
+
+.mo-up { animation: moUp 450ms var(--ease-out, cubic-bezier(.2, .8, .2, 1)) both; animation-delay: calc(var(--i, 0) * 60ms); }
+.mo-fade { animation: moFade 300ms ease both; animation-delay: calc(var(--i, 0) * 60ms); }
+
+.mo-hover { transition: transform 180ms var(--ease-out, cubic-bezier(.2, .8, .2, 1)), opacity 180ms ease; }
+.mo-hover:hover { transform: translateY(-1px); }
+.mo-hover:active { transform: scale(.98); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mo-up, .mo-fade { animation: none; }
+  .mo-hover { transition: none; }
+  .mo-hover:hover, .mo-hover:active { transform: none; }
+}
