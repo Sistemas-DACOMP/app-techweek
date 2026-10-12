@@ -22,7 +22,7 @@ service cloud.firestore {
     
     function isAdmin() {
       return isAuthenticated() && 
-        (request.auth.token.role == 'ADMIN' || request.auth.token.admin == true || (request.auth.token.email != null && request.auth.token.email in ['sam03amorim@gmail.com']));
+        (request.auth.token.role == 'ADMIN' || request.auth.token.admin == true);
     }
 
     function isStaffOrAdmin() {

@@ -15,13 +15,6 @@ export interface RegisterProfileData {
   photoURL?: string;
 }
 
-export const ADMIN_EMAILS = ['sam03amorim@gmail.com'];
-
-function isAdminEmail(email?: string | null): boolean {
-  if (!email || typeof email !== 'string') return false;
-  return ADMIN_EMAILS.includes(email.trim().toLowerCase());
-}
-
 export type RegisterUserResult =
   | { status: 'already-registered' }
   | { status: 'created'; user: { uid: string; email: string | null; role: 'PARTICIPANT' | 'ADMIN'; profile?: RegisterProfileData } };
@@ -58,8 +51,7 @@ export async function registerUser(
           ? admin.firestore.FieldValue.serverTimestamp()
           : new Date().toISOString());
 
-    const isUserAdmin = isAdminEmail(email) || isAdminEmail(existingData.email);
-    userRole = isUserAdmin ? 'ADMIN' : (existingData.role || 'PARTICIPANT');
+    userRole = existingData.role || 'PARTICIPANT';
 
     const docData: Record<string, any> = {
       uid,

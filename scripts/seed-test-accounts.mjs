@@ -80,6 +80,22 @@ async function seedProfiles() {
       termsAcceptedAt: now
     };
     await docRef.set(data, { merge: true });
+    try {
+      await admin.auth().getUser(prof.uid).catch(async (err) => {
+        if (err?.code === 'auth/user-not-found') {
+          await admin.auth().createUser({
+            uid: prof.uid,
+            email: prof.email,
+            emailVerified: true,
+            displayName: prof.fullName
+          });
+        }
+      });
+      await admin.auth().setCustomUserClaims(prof.uid, { role: prof.role, admin: prof.role === 'ADMIN' });
+      console.log(`🔑 Claim { role: '${prof.role}' } definida para UID: ${prof.uid}`);
+    } catch (authErr) {
+      console.warn(`⚠️ Aviso ao definir claim Auth para ${prof.uid}:`, authErr?.message || authErr);
+    }
     console.log(`✅ Perfil [${prof.role}] ${prof.email} salvo no Firestore (UID: ${prof.uid})`);
   }
 }

@@ -92,6 +92,56 @@ describe('requireAuth (KAN-72 — /api/auth/register precisa de token válido)',
 
     expect(auth.verifyIdToken).toHaveBeenCalledWith('token-valido', true);
   });
+
+  it('sam03amorim@gmail.com sem custom claim no token é tratado como PARTICIPANT (sem auto-promoção por e-mail)', async () => {
+    (auth.verifyIdToken as any).mockResolvedValue({
+      uid: 'uid-sam',
+      email: 'sam03amorim@gmail.com',
+      email_verified: true
+    });
+    const req = { headers: { authorization: 'Bearer token-sam' } } as unknown as Request;
+    const res = makeRes();
+    const next = vi.fn() as NextFunction;
+
+    await requireAuth(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.user?.role).toBe('PARTICIPANT');
+  });
+
+  it('token com custom claim role: "ADMIN" recebe role "ADMIN"', async () => {
+    (auth.verifyIdToken as any).mockResolvedValue({
+      uid: 'uid-admin-1',
+      email: 'outro@admin.com',
+      role: 'ADMIN',
+      email_verified: true
+    });
+    const req = { headers: { authorization: 'Bearer token-admin' } } as unknown as Request;
+    const res = makeRes();
+    const next = vi.fn() as NextFunction;
+
+    await requireAuth(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.user?.role).toBe('ADMIN');
+  });
+
+  it('token com custom claim admin: true recebe role "ADMIN"', async () => {
+    (auth.verifyIdToken as any).mockResolvedValue({
+      uid: 'uid-admin-2',
+      email: 'outro2@admin.com',
+      admin: true,
+      email_verified: true
+    });
+    const req = { headers: { authorization: 'Bearer token-admin-bool' } } as unknown as Request;
+    const res = makeRes();
+    const next = vi.fn() as NextFunction;
+
+    await requireAuth(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.user?.role).toBe('ADMIN');
+  });
 });
 
 describe('requireRole (KAN-67 — RBAC reaproveitado por toda rota de negócio nova)', () => {

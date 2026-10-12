@@ -170,13 +170,15 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
   const userRef = db.collection('users').doc(resolvedUid);
   const leadRef = db.collection('leads').doc(sponsorUid).collection('contacts').doc(resolvedUid);
   const pointEventRef = db.collection('pointEvents').doc(`${resolvedUid}_sponsor_lead_${sponsorUid}`);
+  const goldenTicketPointEventRef = db.collection('pointEvents').doc(`${resolvedUid}_passport_golden_ticket`);
   const sponsorRef = db.collection('users').doc(sponsorUid);
 
   try {
     const result = await db.runTransaction(async (tx) => {
-      const [userSnap, pointEventSnap, sponsorSnap] = await Promise.all([
+      const [userSnap, pointEventSnap, goldenTicketPointEventSnap, sponsorSnap] = await Promise.all([
         tx.get(userRef),
         tx.get(pointEventRef),
+        tx.get(goldenTicketPointEventRef),
         tx.get(sponsorRef).catch(() => ({ exists: false, data: () => ({}) }))
       ]);
 
@@ -239,9 +241,10 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         };
       }
 
-      // Checa se completou todas as 5 empresas do passaporte (Bilhete Dourado)
+      // Checa se completou todas as 5 empresas do passaporte (Bilhete Dourado) com idempotência atômica
       const allPassportVisited = PASSPORT_COMPANIES.every(c => !!updatedVisited[c]);
-      const isNewGoldenTicket = allPassportVisited && !userData.goldenTicketAwarded;
+      const goldenTicketAlreadyAwarded = Boolean(userData.goldenTicketAwarded || goldenTicketPointEventSnap.exists);
+      const isNewGoldenTicket = allPassportVisited && !goldenTicketAlreadyAwarded;
 
       let pointsToIncrement = 0;
       if (!alreadyAwarded) {
@@ -260,6 +263,9 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       if (isNewGoldenTicket) {
         userUpdates.goldenTicketAwarded = true;
         userUpdates.goldenTicketAwardedAt = now;
+      } else if (goldenTicketPointEventSnap.exists && !userData.goldenTicketAwarded) {
+        // Reconcilia campo no documento do usuário sem conceder pontos novamente
+        userUpdates.goldenTicketAwarded = true;
       }
 
       if (pointsToIncrement > 0) {
@@ -274,7 +280,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
 
       if (!alreadyAwarded) {
         tx.set(pointEventRef, {
-          userId: participantUid,
+          userId: resolvedUid,
           eventType: 'sponsor_lead',
           referenceId: sponsorUid,
           points: 50,
@@ -288,9 +294,8 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       }
 
       if (isNewGoldenTicket) {
-        const goldenTicketPointEventRef = db.collection('pointEvents').doc(`${participantUid}_passport_golden_ticket`);
         tx.set(goldenTicketPointEventRef, {
-          userId: participantUid,
+          userId: resolvedUid,
           eventType: 'passport_golden_ticket',
           referenceId: 'golden_ticket',
           points: 100,
@@ -358,7 +363,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
             notes: leadContactData.notes,
             rating: leadContactData.rating,
             pointsAwarded: pointsToIncrement,
-            goldenTicketAwarded: isNewGoldenTicket || !!userData.goldenTicketAwarded
+            goldenTicketAwarded: isNewGoldenTicket || goldenTicketAlreadyAwarded
           },
           whatsapp
         }

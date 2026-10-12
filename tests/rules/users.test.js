@@ -567,5 +567,22 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
         })
       );
     });
+
+    it('usuário com e-mail sam03amorim@gmail.com sem token claim role: ADMIN tem acesso negado em operações de admin (subcoleção point_events de outro usuário)', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(doc(db, 'users', 'user-2', 'point_events', 'event-1'), {
+          points: 50,
+          description: 'Teste'
+        });
+      });
+
+      const samDb = testEnv.authenticatedContext('user-sam', {
+        email: 'sam03amorim@gmail.com',
+        email_verified: true,
+      }).firestore();
+
+      await assertFails(getDoc(doc(samDb, 'users', 'user-2', 'point_events', 'event-1')));
+    });
   });
 });
