@@ -56,3 +56,23 @@ export const adminBroadcastLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   limit: 10
 });
+
+// KAN-124: gestão de patrocinadores/convites (cada chamada pode disparar e-mail).
+export const adminSponsorLimiter = rateLimit({
+  ...shared,
+  windowMs: 10 * 60 * 1000,
+  limit: 60
+});
+
+// KAN-124: rotas PÚBLICAS de convite (sem auth no GET, auth só depois no
+// accept): chave = IP (padrão do express-rate-limit, sem keyGenerator de uid).
+// Exige `app.set('trust proxy', 1)` em index.ts pra req.ip ser o cliente real
+// atrás do front do Google. Teto estrito pra dificultar adivinhação de token.
+// ponytail: store em memória por instância (ver nota acima).
+export const sponsorInviteIpLimiter = rateLimit({
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler,
+  windowMs: 15 * 60 * 1000,
+  limit: 20
+});

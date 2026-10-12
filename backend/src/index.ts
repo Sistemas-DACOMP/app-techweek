@@ -12,8 +12,14 @@ import checkinDoubleCheckRouter from './routes/checkinDoubleCheck';
 import pointsRouter from './routes/points';
 import adminRouter from './routes/admin';
 import entranceRouter from './routes/entrance';
+import sponsorsAdminRouter from './routes/sponsorsAdmin';
+import sponsorInvitesRouter from './routes/sponsorInvites';
 
 const app = express();
+
+// Atrás do front do Google (1 hop): req.ip passa a ser o IP real do cliente,
+// necessário pro rate limit por IP das rotas públicas de convite (KAN-124).
+app.set('trust proxy', 1);
 
 // Middlewares padrão
 app.use(cors({ origin: true }));
@@ -76,6 +82,10 @@ app.use(['/api/points', '/points'], pointsRouter);
 
 // Gestão de papéis de usuário por ADMIN (KAN-60) — PUT /api/admin/users/:uid/role
 app.use(['/api/admin', '/admin'], adminRouter);
+
+// Patrocinadores e convites (KAN-124): gestão pelo ADMIN + rotas públicas de aceite
+app.use(['/api/admin', '/admin'], sponsorsAdminRouter);
+app.use(['/api/sponsor-invites', '/sponsor-invites'], sponsorInvitesRouter);
 
 // Exporta a Cloud Function 2nd Gen na região us-east1 (Free Tier)
 export const api = onRequest(
