@@ -26,11 +26,13 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isOwner(userId) && !('symplaTicket' in request.resource.data) && !('hasSymplaTicket' in request.resource.data) &&
         !('sponsorId' in request.resource.data) && !('companyId' in request.resource.data) &&
+        !('company' in request.resource.data) && !('empresa' in request.resource.data) && !('companyName' in request.resource.data) && !('termsAcceptedAt' in request.resource.data) &&
         (!('role' in request.resource.data) || request.resource.data.role == 'PARTICIPANT') &&
         (!('totalPoints' in request.resource.data) || request.resource.data.totalPoints == 0) &&
         (!('pontuacaoTotal' in request.resource.data) || request.resource.data.pontuacaoTotal == 0);
       allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'createdAt', 'totalPoints', 'pontuacaoTotal', 'symplaTicket', 'hasSymplaTicket', 'sponsorId', 'companyId', 'company', 'empresa', 'companyName', 'jobTitle']));
-      allow delete: if isOwner(userId);
+      // Conta vinculada a patrocinador não se apaga/recria pelo client (recriar escolhendo company* contornaria o vínculo).
+      allow delete: if isOwner(userId) && !('sponsorId' in resource.data);
       // Achado do security review (KAN-60): "allow write: if isAdmin()" deixava
       // qualquer sessão ADMIN escrever QUALQUER campo (inclusive role) direto
       // pelo client, contornando PUT /api/admin/users/:uid/role (que sincroniza
