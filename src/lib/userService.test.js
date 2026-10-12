@@ -48,7 +48,7 @@ vi.mock('./api', () => ({ apiRequest: vi.fn() }));
 vi.mock('./firebase', () => ({
   db: {},
   storage: {},
-  auth: { currentUser: { uid: 'user-123', email: 'atual@exemplo.com' } }
+  auth: { currentUser: { uid: 'user-123', email: 'atual@exemplo.com', getIdToken: vi.fn().mockResolvedValue('mock-token') } }
 }));
 
 describe('userService', () => {

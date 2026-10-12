@@ -310,6 +310,13 @@ export async function updateUserEmail(uid, newEmail, currentPassword) {
   }
   await updateEmail(user, trimmedEmail);
 
+  // Força atualização do ID Token para que o claim `email` no token reflita o novo e-mail nas regras do Firestore
+  try {
+    await user.getIdToken(true);
+  } catch (tokenErr) {
+    console.warn('[userService] Aviso: Falha ao renovar token após updateEmail:', tokenErr);
+  }
+
   // Envia e-mail de confirmação para o novo endereço
   try {
     await sendVerificationEmail(user);
@@ -317,7 +324,7 @@ export async function updateUserEmail(uid, newEmail, currentPassword) {
     console.warn('[userService] Aviso: Falha ao enviar verificação para o novo e-mail:', verifErr);
   }
 
-  // 2. Só depois de o Auth aceitar, grava no Firestore
+  // 2. Só depois de o Auth aceitar e o token ser renovado, grava no Firestore
   await updateUserProfile(uid, { email: trimmedEmail });
 
   return true;
