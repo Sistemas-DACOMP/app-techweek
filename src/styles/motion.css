@@ -36,3 +36,26 @@
   .adm-root :is(button, a), .adm-root article { transition: none; }
   .adm-root article:hover { transform: none; }
 }
+
+/* --- [UPD] - Admin Dados e ao vivo no design novo (abas Salas, Es --- */
+/* Movimento compartilhado do painel. Só transform, opacity e stroke-dashoffset.
+   Uso: className="tw-up" (entrada), "tw-growx"/"tw-growy" (barras), "tw-draw" (curva).
+   Atraso escalonado via style={{ '--i': n }}. */
+@keyframes twUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes twFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes twGrowX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes twGrowY { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes twDraw { from { stroke-dashoffset: var(--len, 2600); } to { stroke-dashoffset: 0; } }
+@keyframes twPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: .5; } }
+
+.tw-up { animation: twUp .55s cubic-bezier(.2, .8, .2, 1) calc(var(--i, 0) * 60ms) both; }
+.tw-fade { animation: twFade .6s ease calc(var(--i, 0) * 60ms + .4s) both; }
+.tw-growx { transform-origin: left center; animation: twGrowX 1s cubic-bezier(.2, .8, .2, 1) calc(var(--i, 0) * 60ms + .2s) both; }
+.tw-growy { transform-box: fill-box; transform-origin: bottom center; animation: twGrowY .9s cubic-bezier(.2, .8, .2, 1) calc(var(--i, 0) * 60ms + .2s) both; }
+.tw-draw { stroke-dasharray: var(--len, 2600); animation: twDraw 1.6s cubic-bezier(.3, .7, .2, 1) .2s both; }
+.tw-pulse { animation: twPulse 1.8s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-up, .tw-fade, .tw-growx, .tw-growy, .tw-draw, .tw-pulse { animation: none !important; }
+  .tw-draw { stroke-dasharray: none; }
+}
