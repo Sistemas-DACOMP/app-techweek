@@ -1,6 +1,6 @@
 import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import fs from 'node:fs';
 
 const PROJECT_ID = 'facom-techweek-test-users';
@@ -134,6 +134,39 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
       await assertSucceeds(
         updateDoc(doc(authDb, 'users', 'user-1'), {
           email: 'novo@ufu.br',
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it('solicitação de troca de e-mail com pendingEmailChange pelo próprio participante verificado', async () => {
+      await seedUser('user-1', { email: 'user1@ufu.br' });
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
+      await assertSucceeds(
+        updateDoc(doc(authDb, 'users', 'user-1'), {
+          pendingEmailChange: {
+            newEmail: 'novo.email@ufu.br',
+            requestedAt: Date.now(),
+            expiresAt: Date.now() + 86400000,
+          },
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it('remoção de pendingEmailChange pelo próprio participante verificado (cancelamento ou pós-sincronização)', async () => {
+      await seedUser('user-1', {
+        email: 'user1@ufu.br',
+        pendingEmailChange: {
+          newEmail: 'novo.email@ufu.br',
+          requestedAt: Date.now(),
+          expiresAt: Date.now() + 86400000,
+        },
+      });
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
+      await assertSucceeds(
+        updateDoc(doc(authDb, 'users', 'user-1'), {
+          pendingEmailChange: deleteField(),
           updatedAt: serverTimestamp(),
         })
       );
@@ -583,6 +616,54 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
       }).firestore();
 
       await assertFails(getDoc(doc(samDb, 'users', 'user-2', 'point_events', 'event-1')));
+    });
+
+    it('atualização de pendingEmailChange por outro usuário (não-dono) deve ser negada', async () => {
+      await seedUser('user-1', { email: 'user1@ufu.br' });
+      const attackerDb = testEnv.authenticatedContext('attacker', { email: 'attacker@ufu.br', email_verified: true }).firestore();
+      await assertFails(
+        updateDoc(doc(attackerDb, 'users', 'user-1'), {
+          pendingEmailChange: {
+            newEmail: 'attacker@ufu.br',
+            requestedAt: Date.now(),
+            expiresAt: Date.now() + 86400000,
+          },
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it('atualização de pendingEmailChange por usuário com email_verified: false deve falhar', async () => {
+      await seedUser('user-unverified', { email: 'unverified@ufu.br' });
+      const unverifiedDb = testEnv.authenticatedContext('user-unverified', {
+        email: 'unverified@ufu.br',
+        email_verified: false,
+      }).firestore();
+      await assertFails(
+        updateDoc(doc(unverifiedDb, 'users', 'user-unverified'), {
+          pendingEmailChange: {
+            newEmail: 'novo@ufu.br',
+            requestedAt: Date.now(),
+            expiresAt: Date.now() + 86400000,
+          },
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it('atualização de pendingEmailChange com formato inválido (novo e-mail inválido) deve falhar', async () => {
+      await seedUser('user-1', { email: 'user1@ufu.br' });
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br', email_verified: true }).firestore();
+      await assertFails(
+        updateDoc(doc(authDb, 'users', 'user-1'), {
+          pendingEmailChange: {
+            newEmail: 'nao-e-um-email',
+            requestedAt: Date.now(),
+            expiresAt: Date.now() + 86400000,
+          },
+          updatedAt: serverTimestamp(),
+        })
+      );
     });
   });
 });

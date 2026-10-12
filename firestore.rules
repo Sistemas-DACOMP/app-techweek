@@ -50,7 +50,7 @@ service cloud.firestore {
         'firstName', 'lastName', 'displayName', 'username', 'phone',
         'participantType', 'participant_type', 'course', 'period',
         'institution', 'linkedin', 'instagram', 'github', 'avatarUrl',
-        'photoURL', 'mascot', 'email', 'updatedAt'
+        'photoURL', 'mascot', 'email', 'updatedAt', 'pendingEmailChange'
       ];
     }
 
@@ -60,6 +60,15 @@ service cloud.firestore {
         'Servidor / Professor', 'Professor / Servidor UFU', 'Comunidade Externa',
         'Outro', 'Aluno da UFU', 'Pós-graduação', 'Aluno UFU Pos graduação', 'Organizador'
       ]);
+    }
+
+    function isValidPendingEmailChange(val) {
+      return val == null || (
+        val is map
+        && 'newEmail' in val && val.newEmail is string && val.newEmail.size() <= 150 && val.newEmail.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && 'requestedAt' in val && (val.requestedAt is int || val.requestedAt is number || val.requestedAt is timestamp)
+        && 'expiresAt' in val && (val.expiresAt is int || val.expiresAt is number || val.expiresAt is timestamp)
+      );
     }
 
     function isValidUserFields(data) {
@@ -78,7 +87,8 @@ service cloud.firestore {
         && (!('instagram' in data) || data.instagram == null || (data.instagram is string && data.instagram.size() <= 500))
         && (!('github' in data) || data.github == null || (data.github is string && data.github.size() <= 500))
         && (!('avatarUrl' in data) || data.avatarUrl == null || (data.avatarUrl is string && data.avatarUrl.size() <= 500))
-        && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 500));
+        && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 500))
+        && (!('pendingEmailChange' in data) || isValidPendingEmailChange(data.pendingEmailChange));
     }
 
     // Regras de Usuários: Todos autenticados leem; só o próprio dono cria/atualiza dados pessoais com whitelist estrita
