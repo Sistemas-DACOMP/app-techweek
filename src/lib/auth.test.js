@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -6,8 +6,12 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  deleteUser,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from 'firebase/auth';
+import { deleteDoc, doc } from 'firebase/firestore';
 
 // Mock das funções do Firebase Auth
 vi.mock('firebase/auth', () => ({
@@ -17,8 +21,23 @@ vi.mock('firebase/auth', () => ({
   createUserWithEmailAndPassword: vi.fn(),
   updateProfile: vi.fn(),
   signOut: vi.fn(),
-  onAuthStateChanged: vi.fn()
+  onAuthStateChanged: vi.fn(),
+  deleteUser: vi.fn(),
+  reauthenticateWithCredential: vi.fn(),
+  getAuth: vi.fn(() => ({ currentUser: null })),
+  connectAuthEmulator: vi.fn(),
+  EmailAuthProvider: {
+    credential: vi.fn((email, password) => ({ email, password, providerId: 'password' }))
+  }
 }));
+
+vi.mock('firebase/firestore', () => ({
+  doc: vi.fn((_db, coll, id) => ({ path: `${coll}/${id}`, id })),
+  deleteDoc: vi.fn(),
+  getFirestore: vi.fn(),
+  connectFirestoreEmulator: vi.fn()
+}));
+
 
 const { mockCurrentUser } = vi.hoisted(() => ({
   mockCurrentUser: {
@@ -30,7 +49,8 @@ const { mockCurrentUser } = vi.hoisted(() => ({
 }));
 
 vi.mock('./firebase', () => ({
-  auth: { currentUser: mockCurrentUser }
+  auth: { currentUser: mockCurrentUser },
+  db: {}
 }));
 
 import {
@@ -45,7 +65,8 @@ import {
   reloadCurrentUser,
   signUpWithEmail,
   getActionCodeSettings,
-  clearAuthLocalCaches
+  clearAuthLocalCaches,
+  deleteCurrentUserAccount
 } from './auth';
 
 describe('Módulo de Autenticação Firebase (auth.js)', () => {
@@ -395,6 +416,108 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
 
         vi.unstubAllGlobals();
       });
+    });
+  });
+
+  describe('deleteCurrentUserAccount (KAN-116 / SEC)', () => {
+    let consoleErrorSpy;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleErrorSpy?.mockRestore();
+    });
+
+    it('retorna erro se nenhum usuário estiver autenticado', async () => {
+      const { auth } = await import('./firebase');
+      const originalUser = auth.currentUser;
+      auth.currentUser = null;
+
+      const res = await deleteCurrentUserAccount('qualquerSenha');
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('Nenhum usuário autenticado.');
+      expect(deleteDoc).not.toHaveBeenCalled();
+      expect(deleteUser).not.toHaveBeenCalled();
+
+      auth.currentUser = originalUser;
+    });
+
+    it('reautentica com sucesso quando a senha é fornecida e conclui a deleção do Firestore e Auth', async () => {
+      const { auth } = await import('./firebase');
+      auth.currentUser = mockCurrentUser;
+
+      reauthenticateWithCredential.mockResolvedValue();
+      deleteDoc.mockResolvedValue();
+      deleteUser.mockResolvedValue();
+
+      const dispatchSpy = vi.fn();
+      vi.stubGlobal('window', {
+        dispatchEvent: dispatchSpy,
+        localStorage: {
+          length: 2,
+          key: (i) => (i === 0 ? 'facom_profile_mock-user-123' : 'facom_logged_in'),
+          removeItem: vi.fn()
+        }
+      });
+
+      const res = await deleteCurrentUserAccount('minhaSenhaCorreta123');
+
+      expect(res.success).toBe(true);
+      expect(EmailAuthProvider.credential).toHaveBeenCalledWith('teste@ufu.br', 'minhaSenhaCorreta123');
+      expect(reauthenticateWithCredential).toHaveBeenCalledWith(mockCurrentUser, expect.anything());
+      expect(deleteDoc).toHaveBeenCalledWith(expect.objectContaining({ path: 'users/mock-user-123' }));
+      expect(deleteUser).toHaveBeenCalledWith(mockCurrentUser);
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'facom_auth_state_changed'
+      }));
+
+      vi.unstubAllGlobals();
+    });
+
+    it('aborta imediatamente sem tocar no Firestore ou Auth se a senha for incorreta', async () => {
+      const { auth } = await import('./firebase');
+      auth.currentUser = mockCurrentUser;
+
+      reauthenticateWithCredential.mockRejectedValue({ code: 'auth/wrong-password' });
+
+      const res = await deleteCurrentUserAccount('senhaErrada');
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe(AUTH_MESSAGES.invalid_credentials);
+      expect(reauthenticateWithCredential).toHaveBeenCalled();
+      expect(deleteDoc).not.toHaveBeenCalled();
+      expect(deleteUser).not.toHaveBeenCalled();
+    });
+
+    it('trata adequadamente erro auth/requires-recent-login se deleteUser falhar por sessão antiga', async () => {
+      const { auth } = await import('./firebase');
+      auth.currentUser = mockCurrentUser;
+
+      deleteDoc.mockResolvedValue();
+      deleteUser.mockRejectedValue({ code: 'auth/requires-recent-login' });
+
+      const res = await deleteCurrentUserAccount();
+
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/segurança|login novamente|senha/i);
+    });
+
+    it('exclui conta com sucesso mesmo sem senha caso o usuário não forneça (ex: provedor externo)', async () => {
+      const { auth } = await import('./firebase');
+      auth.currentUser = mockCurrentUser;
+
+      deleteDoc.mockResolvedValue();
+      deleteUser.mockResolvedValue();
+
+      const res = await deleteCurrentUserAccount();
+
+      expect(res.success).toBe(true);
+      expect(reauthenticateWithCredential).not.toHaveBeenCalled();
+      expect(deleteDoc).toHaveBeenCalled();
+      expect(deleteUser).toHaveBeenCalled();
     });
   });
 });

@@ -645,6 +645,8 @@ export default function Profile() {
   };
 
   const handleDeleteAccount = () => {
+    const hasPasswordProvider = auth.currentUser?.providerData?.some(p => p.providerId === 'password') || !auth.currentUser?.providerData?.length;
+
     setConfirmModal({
       title: 'Apagar conta permanentemente',
       message: 'Esta ação não pode ser desfeita. Todos os seus pontos acumulados, carimbos do passaporte e dados cadastrais serão removidos do evento.',
@@ -654,10 +656,13 @@ export default function Profile() {
       Icon: Trash2,
       requireConfirmationText: 'EXCLUIR',
       confirmationPrompt: 'Para confirmar a exclusão definitiva da sua conta, digite EXCLUIR abaixo:',
-      onConfirm: async () => {
+      requirePassword: hasPasswordProvider,
+      passwordLabel: 'Digite sua senha atual para autorizar:',
+      passwordPlaceholder: 'Sua senha atual',
+      onConfirm: async ({ password } = {}) => {
         setIsActionLoading(true);
         try {
-          const res = await deleteCurrentUserAccount();
+          const res = await deleteCurrentUserAccount(password);
           setConfirmModal(null);
           if (res.success) {
             setFeedbackModal({
@@ -844,6 +849,9 @@ export default function Profile() {
           Icon={confirmModal.Icon}
           requireConfirmationText={confirmModal.requireConfirmationText}
           confirmationPrompt={confirmModal.confirmationPrompt}
+          requirePassword={confirmModal.requirePassword}
+          passwordLabel={confirmModal.passwordLabel}
+          passwordPlaceholder={confirmModal.passwordPlaceholder}
           isLoading={isActionLoading}
           onConfirm={confirmModal.onConfirm}
           onCancel={() => !isActionLoading && setConfirmModal(null)}
