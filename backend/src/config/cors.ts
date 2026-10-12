@@ -30,9 +30,13 @@ export function isOriginAllowed(origin: string | undefined): boolean {
     return true;
   }
 
-  // 3. Origens adicionais configuradas via variável de ambiente (ALLOWED_ORIGINS)
-  if (process.env.ALLOWED_ORIGINS) {
-    const allowedList = process.env.ALLOWED_ORIGINS
+  // 3. Origens adicionais configuradas via variável de ambiente (CORS_ALLOWED_ORIGINS / ALLOWED_ORIGINS)
+  const envOrigins = [process.env.CORS_ALLOWED_ORIGINS, process.env.ALLOWED_ORIGINS]
+    .filter(Boolean)
+    .join(',');
+
+  if (envOrigins) {
+    const allowedList = envOrigins
       .split(',')
       .map((entry) => entry.trim())
       .filter(Boolean);

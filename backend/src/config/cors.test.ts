@@ -48,6 +48,7 @@ describe('CORS Configuration (KAN-116 / SEC)', () => {
       beforeEach(() => {
         process.env.NODE_ENV = 'production';
         delete process.env.ALLOWED_ORIGINS;
+        delete process.env.CORS_ALLOWED_ORIGINS;
       });
 
       it('bloqueia localhost e 127.0.0.1 se não estiverem em ALLOWED_ORIGINS', () => {
@@ -72,6 +73,12 @@ describe('CORS Configuration (KAN-116 / SEC)', () => {
         expect(isOriginAllowed('https://techweek.facom.ufu.br')).toBe(true);
         expect(isOriginAllowed('https://custom-domain.com')).toBe(true);
         expect(isOriginAllowed('https://staging.ufu.br')).toBe(true);
+      });
+
+      it('permite origens configuradas via CORS_ALLOWED_ORIGINS (ex: domínios de hosting)', () => {
+        process.env.CORS_ALLOWED_ORIGINS = 'https://app-techweek.web.app,https://app-techweek.firebaseapp.com';
+        expect(isOriginAllowed('https://app-techweek.web.app')).toBe(true);
+        expect(isOriginAllowed('https://app-techweek.firebaseapp.com')).toBe(true);
       });
 
       it('bloqueia origens não autorizadas ou ataques de phishing', () => {
@@ -112,6 +119,7 @@ describe('CORS Configuration (KAN-116 / SEC)', () => {
     it('invoca o callback com erro quando a origem não é permitida', () => {
       process.env.NODE_ENV = 'production';
       delete process.env.ALLOWED_ORIGINS;
+      delete process.env.CORS_ALLOWED_ORIGINS;
       const originCallback = corsOptions.origin as (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => void;
       const cb = vi.fn();
 
@@ -170,6 +178,7 @@ describe('CORS Configuration (KAN-116 / SEC)', () => {
     it('rejeita requisição de origem proibida enviando erro para o next', () => {
       process.env.NODE_ENV = 'production';
       delete process.env.ALLOWED_ORIGINS;
+      delete process.env.CORS_ALLOWED_ORIGINS;
       const corsMiddleware = cors(corsOptions);
 
       const req: any = {
