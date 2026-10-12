@@ -888,7 +888,7 @@ export const DEFAULT_SPEAKERS = [
   {
     id: 'spk_1',
     name: 'Samuel Amorim',
-    email: 'sam03amorim@gmail.com',
+    email: 'speaker@example.com',
     role: 'Engenheiro de Software & Fundador',
     institution: 'TechWeek / Sistemas DACOMP',
     classification: 'Convidado Externo',

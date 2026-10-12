@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMyProfile, updateMascot, uploadAvatar, getMyPointEvents, addPointEvent } from '../lib/gameplay';
 import { onAuthChange } from '../lib/auth';
-import { getCachedUserProfile, isAdminEmail } from '../lib/userService';
+import { getCachedUserProfile } from '../lib/userService';
 import { calculateLevel } from '../lib/level';
 import { useNotifications } from './useNotifications';
 
@@ -300,10 +300,7 @@ export function useUser() {
     };
   };
 
-  const isUserAdmin = Boolean(
-    (profile?.email && isAdminEmail(profile.email)) ||
-    (profile?.role === 'ADMIN')
-  );
+  const isUserAdmin = profile?.role === 'ADMIN';
   const effectiveRole = isUserAdmin ? 'ADMIN' : (profile?.role || 'PARTICIPANT');
 
   const hasSymplaTicket = Boolean(

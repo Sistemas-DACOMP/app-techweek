@@ -1,5 +1,6 @@
 import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
+import { isBootstrapAdmin } from '../config/adminBootstrap';
 
 export interface RegisterProfileData {
   firstName?: string;
@@ -13,13 +14,6 @@ export interface RegisterProfileData {
   linkedin?: string;
   instagram?: string;
   photoURL?: string;
-}
-
-export const ADMIN_EMAILS = ['sam03amorim@gmail.com'];
-
-function isAdminEmail(email?: string | null): boolean {
-  if (!email || typeof email !== 'string') return false;
-  return ADMIN_EMAILS.includes(email.trim().toLowerCase());
 }
 
 export type RegisterUserResult =
@@ -38,7 +32,8 @@ export async function registerUser(
   db: admin.firestore.Firestore,
   uid: string,
   email: string | null,
-  profileData?: RegisterProfileData
+  profileData?: RegisterProfileData,
+  emailVerified = false
 ): Promise<RegisterUserResult> {
   const userRef = db.collection('users').doc(uid);
 
@@ -58,7 +53,7 @@ export async function registerUser(
           ? admin.firestore.FieldValue.serverTimestamp()
           : new Date().toISOString());
 
-    const isUserAdmin = isAdminEmail(email) || isAdminEmail(existingData.email);
+    const isUserAdmin = isBootstrapAdmin(email, emailVerified);
     userRole = isUserAdmin ? 'ADMIN' : (existingData.role || 'PARTICIPANT');
 
     const docData: Record<string, any> = {

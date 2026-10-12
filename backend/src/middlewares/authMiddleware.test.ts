@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 
 vi.mock('../config/firebaseAdmin', () => ({
@@ -79,6 +79,31 @@ describe('requireAuth (KAN-72 — /api/auth/register precisa de token válido)',
       email: 'a@b.com',
       role: 'PARTICIPANT',
       emailVerified: true
+    });
+  });
+
+  describe('bootstrap de ADMIN por e-mail (ADMIN_BOOTSTRAP_EMAILS)', () => {
+    async function run(token: any) {
+      (auth.verifyIdToken as any).mockResolvedValue(token);
+      const req = { headers: { authorization: 'Bearer t' } } as unknown as Request;
+      await requireAuth(req, makeRes(), vi.fn() as NextFunction);
+      return req.user;
+    }
+    afterEach(() => { delete process.env.ADMIN_BOOTSTRAP_EMAILS; });
+
+    it('env vazia: e-mail comum nunca vira ADMIN', async () => {
+      expect((await run({ uid: 'u', email: 'a@b.com', email_verified: true }))?.role).toBe('PARTICIPANT');
+    });
+    it('env com o e-mail + email_verified true => ADMIN', async () => {
+      process.env.ADMIN_BOOTSTRAP_EMAILS = 'a@b.com';
+      expect((await run({ uid: 'u', email: 'a@b.com', email_verified: true }))?.role).toBe('ADMIN');
+    });
+    it('env com o e-mail + email_verified false => NÃO', async () => {
+      process.env.ADMIN_BOOTSTRAP_EMAILS = 'a@b.com';
+      expect((await run({ uid: 'u', email: 'a@b.com', email_verified: false }))?.role).toBe('PARTICIPANT');
+    });
+    it('claim role vale sem bootstrap', async () => {
+      expect((await run({ uid: 'u', email: 'a@b.com', role: 'STAFF' }))?.role).toBe('STAFF');
     });
   });
 

@@ -58,9 +58,9 @@ export async function registerHandler(req: Request, res: Response): Promise<void
   const hasProfile = Object.keys(profileData).length > 0;
 
   try {
-    const result = hasProfile
-      ? await registerUser(db, uid, email, profileData)
-      : await registerUser(db, uid, email);
+    const result = await registerUser(
+      db, uid, email, hasProfile ? profileData : undefined, req.user!.emailVerified === true
+    );
 
     if (result.status === 'already-registered') {
       res.status(409).json({

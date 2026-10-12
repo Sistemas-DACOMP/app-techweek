@@ -87,7 +87,7 @@ describe('POST /api/auth/register (registerHandler) — REG-LGPD-001 / KAN-72', 
 
     await registerHandler(req, res);
 
-    expect(registerUser).toHaveBeenCalledWith({}, 'uid-1', null);
+    expect(registerUser).toHaveBeenCalledWith({}, 'uid-1', null, undefined, false);
   });
 
   it('retorna 409 ALREADY_REGISTERED quando o usuário já tem cadastro concluído', async () => {

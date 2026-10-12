@@ -1,13 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { auth, db } from '../config/firebaseAdmin';
 import { UserRole, AuthUser } from '../types/express';
-
-export const ADMIN_EMAILS = ['sam03amorim@gmail.com'];
-
-export function isAdminEmail(email?: string | null): boolean {
-  if (!email || typeof email !== 'string') return false;
-  return ADMIN_EMAILS.includes(email.trim().toLowerCase());
-}
+import { isBootstrapAdmin } from '../config/adminBootstrap';
 
 /**
  * Middleware para validar o token JWT emitido pelo Firebase Auth.
@@ -41,7 +35,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const decodedToken = await auth.verifyIdToken(token, true);
 
     const tokenRole = decodedToken.role as UserRole | undefined;
-    const isUserAdmin = Boolean(decodedToken.email && isAdminEmail(decodedToken.email));
+    const isUserAdmin = isBootstrapAdmin(decodedToken.email, decodedToken.email_verified);
     const userRole: UserRole = isUserAdmin ? 'ADMIN' : (tokenRole || 'PARTICIPANT');
 
     const user: AuthUser = {

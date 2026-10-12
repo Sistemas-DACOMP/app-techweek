@@ -31,13 +31,6 @@ function fileToDataUrl(file) {
   });
 }
 
-export const ADMIN_EMAILS = ['sam03amorim@gmail.com'];
-
-export function isAdminEmail(email) {
-  if (!email || typeof email !== 'string') return false;
-  return ADMIN_EMAILS.includes(email.trim().toLowerCase());
-}
-
 /**
  * Lê o perfil do usuário de forma 100% síncrona do cache local (zero layout flash).
  * O papel (role) vem do perfil gravado pelo servidor; nenhum papel é inferido no cliente,
@@ -50,11 +43,6 @@ export function getCachedUserProfile(uid) {
       const cached = localStorage.getItem(`facom_profile_${targetUid}`);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (isAdminEmail(parsed?.email) || isAdminEmail(auth?.currentUser?.email)) {
-          parsed.role = 'ADMIN';
-          parsed.participantType = parsed.participantType || 'Organizador';
-          parsed.participant_type = parsed.participant_type || 'Organizador';
-        }
         return parsed;
       }
     }
@@ -66,11 +54,6 @@ export function getCachedUserProfile(uid) {
           const item = localStorage.getItem(key);
           if (item) {
             const parsed = JSON.parse(item);
-            if (isAdminEmail(parsed?.email) || isAdminEmail(auth?.currentUser?.email)) {
-              parsed.role = 'ADMIN';
-              parsed.participantType = parsed.participantType || 'Organizador';
-              parsed.participant_type = parsed.participant_type || 'Organizador';
-            }
             return parsed;
           }
         }
@@ -124,7 +107,6 @@ export async function createUserProfile(uid, data) {
   const now = serverTimestamp();
 
   const cleanEmail = data.email ? data.email.trim().toLowerCase() : '';
-  const isTargetAdmin = isAdminEmail(cleanEmail);
 
   const profileData = {
     uid,
@@ -133,8 +115,8 @@ export async function createUserProfile(uid, data) {
     lastName: data.lastName || '',
     username: data.username ? data.username.trim().toLowerCase() : '',
     phone: data.phone || '',
-    participantType: isTargetAdmin ? 'Organizador' : (data.participantType || 'Aluno da UFU'),
-    participant_type: isTargetAdmin ? 'Organizador' : (data.participantType || 'Aluno da UFU'),
+    participantType: (data.participantType || 'Aluno da UFU'),
+    participant_type: (data.participantType || 'Aluno da UFU'),
     course: data.course || '',
     period: data.period ? Number(data.period) : null,
     institution: data.institution || '',
@@ -142,8 +124,8 @@ export async function createUserProfile(uid, data) {
     instagram: data.instagram || '',
     github: data.github || '',
     avatarUrl: data.avatarUrl || null,
-    hasSymplaTicket: isTargetAdmin ? true : Boolean(data.hasSymplaTicket || data.symplaTicket),
-    role: isTargetAdmin ? 'ADMIN' : 'PARTICIPANT', // papel nunca vem do cliente; promoção é feita pelo backend (custom claims) exceto admins declarados
+    hasSymplaTicket: Boolean(data.hasSymplaTicket || data.symplaTicket),
+    role: 'PARTICIPANT', // papel nunca vem do cliente; promoção é feita pelo backend (custom claims)
     totalPoints: 0,
     pontuacaoTotal: 0,
     ticketId: data.ticketId || data.symplaTicket?.ticketNumber || null,
@@ -215,11 +197,6 @@ export async function getUserProfile(uid) {
         hasSymplaTicket: !!(data.hasSymplaTicket || data.symplaTicket || localData?.hasSymplaTicket || localData?.symplaTicket)
       };
 
-      if (isAdminEmail(merged.email) || isAdminEmail(auth?.currentUser?.email)) {
-        merged.role = 'ADMIN';
-        merged.participantType = merged.participantType || 'Organizador';
-        merged.participant_type = merged.participant_type || 'Organizador';
-      }
 
       try {
         localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(merged));
@@ -232,11 +209,6 @@ export async function getUserProfile(uid) {
     }
   }
 
-  if (localData && (isAdminEmail(localData.email) || isAdminEmail(auth?.currentUser?.email))) {
-    localData.role = 'ADMIN';
-    localData.participantType = localData.participantType || 'Organizador';
-    localData.participant_type = localData.participant_type || 'Organizador';
-  }
 
   return localData;
 }

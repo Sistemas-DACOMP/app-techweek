@@ -26,10 +26,9 @@ describe('decideAccess', () => {
     expect(decideAccess({ ...staff, role: 'ADMIN' })).toBe('allowed');
     expect(decideAccess({ ...staff, role: 'PARTICIPANT' })).toBe('login');
   });
-  it('sam03amorim@gmail.com entra diretamente em Admin e Staff', () => {
-    const adminUser = { uid: 'sam-uid', email: 'sam03amorim@gmail.com' };
-    expect(decideAccess({ ...base, user: adminUser, profileReady: false, role: undefined, allowed: ['ADMIN'] })).toBe('allowed');
-    expect(decideAccess({ ...base, user: adminUser, profileReady: true, role: 'PARTICIPANT', allowed: ['ADMIN'] })).toBe('allowed');
-    expect(decideAccess({ ...base, user: adminUser, profileReady: true, role: 'PARTICIPANT', allowed: ['STAFF', 'ADMIN'] })).toBe('allowed');
+  it('e-mail não promove ninguém: só o role do perfil conta', () => {
+    const u = { uid: 'x', email: 'qualquer@example.com' };
+    expect(decideAccess({ ...base, user: u, profileReady: true, role: 'PARTICIPANT', allowed: ['ADMIN'] })).toBe('login');
+    expect(decideAccess({ ...base, user: u, profileReady: false, role: undefined, allowed: ['ADMIN'] })).toBe('loading');
   });
 });

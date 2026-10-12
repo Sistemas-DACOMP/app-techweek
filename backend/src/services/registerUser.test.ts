@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { registerUser } from './registerUser';
 
 /**
@@ -146,3 +146,25 @@ describe('registerUser (REG-LGPD-001 / KAN-72)', () => {
   });
 });
 
+
+describe('registerUser bootstrap ADMIN (ADMIN_BOOTSTRAP_EMAILS)', () => {
+  afterEach(() => { delete process.env.ADMIN_BOOTSTRAP_EMAILS; });
+
+  it('env vazia: e-mail comum fica PARTICIPANT', async () => {
+    const { db } = makeFakeDb(false);
+    const r: any = await registerUser(db as any, 'u', 'a@b.com', undefined, true);
+    expect(r.user.role).toBe('PARTICIPANT');
+  });
+  it('env com e-mail + verificado => ADMIN', async () => {
+    process.env.ADMIN_BOOTSTRAP_EMAILS = 'a@b.com';
+    const { db } = makeFakeDb(false);
+    const r: any = await registerUser(db as any, 'u', 'a@b.com', undefined, true);
+    expect(r.user.role).toBe('ADMIN');
+  });
+  it('env com e-mail + não verificado => NÃO', async () => {
+    process.env.ADMIN_BOOTSTRAP_EMAILS = 'a@b.com';
+    const { db } = makeFakeDb(false);
+    const r: any = await registerUser(db as any, 'u', 'a@b.com');
+    expect(r.user.role).toBe('PARTICIPANT');
+  });
+});

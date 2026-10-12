@@ -64,13 +64,13 @@ describe('userService', () => {
         email: 'TEST@example.com',
         firstName: 'Samuel',
         lastName: 'Amorim',
-        username: 'sam03amorim',
+        username: 'usuario_teste',
         participantType: 'Aluno da UFU'
       });
 
       expect(setDoc).toHaveBeenCalledTimes(1);
       expect(result.email).toBe('test@example.com');
-      expect(result.username).toBe('sam03amorim');
+      expect(result.username).toBe('usuario_teste');
       expect(result.firstName).toBe('Samuel');
     });
 
@@ -113,11 +113,11 @@ describe('userService', () => {
     it('retorna os dados do documento quando ele existe', async () => {
       vi.mocked(getDoc).mockResolvedValueOnce({
         exists: () => true,
-        data: () => ({ username: 'sam03amorim', totalPoints: 100 })
+        data: () => ({ username: 'usuario_teste', totalPoints: 100 })
       });
 
       const profile = await getUserProfile('user-123');
-      expect(profile.username).toBe('sam03amorim');
+      expect(profile.username).toBe('usuario_teste');
       expect(profile.totalPoints).toBe(100);
     });
 
@@ -202,7 +202,7 @@ describe('userService', () => {
       const updates = {
         firstName: 'Samuel',
         lastName: 'Amorim',
-        username: 'sam03amorim',
+        username: 'usuario_teste',
         phone: '(34) 99999-9999',
         participantType: 'Aluno da UFU',
         course: 'Sistemas de Informação',
@@ -219,7 +219,7 @@ describe('userService', () => {
         expect.objectContaining({
           firstName: 'Samuel',
           lastName: 'Amorim',
-          username: 'sam03amorim',
+          username: 'usuario_teste',
           course: 'Sistemas de Informação',
           period: 5,
           updatedAt: 'MOCK_TIMESTAMP'
