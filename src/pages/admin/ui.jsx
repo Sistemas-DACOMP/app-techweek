@@ -108,7 +108,7 @@ export function OccBar({ taken, total, className = '' }) {
   const pct = total > 0 ? Math.min(100, Math.round((taken / total) * 100)) : 0;
   return (
     <span className={`block h-1.5 overflow-hidden rounded-full bg-surface-raised ${className}`}>
-      <span className="block h-full rounded-full" style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--warn)' : 'var(--progress-fill)' }} />
+      <span className="tw-grow block h-full rounded-full" style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--warn)' : 'var(--progress-fill)' }} />
     </span>
   );
 }

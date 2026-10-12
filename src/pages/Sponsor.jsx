@@ -2,33 +2,21 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
-import { 
-  Building2, 
-  ShieldAlert, 
-  QrCode, 
-  Users, 
-  Star, 
-  Sparkles, 
-  Loader2, 
-  CheckCircle2, 
+import {
+  ShieldAlert,
+  QrCode,
+  Users,
+  Sparkles,
+  Loader2,
+  CheckCircle2,
   AlertCircle,
   RefreshCw,
   Download,
   Printer,
   Search,
-  CalendarDays,
-  MessageSquare,
-  Home,
-  Clock,
-  MapPin,
+
   GraduationCap,
-  ChevronRight,
-  Filter,
-  Heart,
-  Share2,
-  Camera,
   X,
-  ArrowUpDown,
   Flashlight,
   FlashlightOff,
   CameraOff,
@@ -36,11 +24,8 @@ import {
   Send,
   Image as ImageIcon,
   Film,
-  TrendingUp,
-  BarChart3,
-  SlidersHorizontal
+  TrendingUp
 } from 'lucide-react';
-import { GitHubIcon } from '../components/ParticipantCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
 import { 
@@ -59,7 +44,7 @@ import {
   uploadFeedMedia, 
   DEFAULT_FEED_POSTS 
 } from '../lib/feedService';
-import ActivityModal, { SeatsLight, categoryOf, describeDay } from '../components/ActivityModal';
+import ActivityModal, { categoryOf, describeDay } from '../components/ActivityModal';
 import { SPONSORS_CONFIG, TIER_STYLE } from '../components/PassportTab';
 import { ActivityRow, TYPE_FILTERS, dayOrder, getActivityTimingState } from './Agenda';
 import { CameraFrame } from './Scanner';
@@ -68,34 +53,21 @@ import {
   FILTERS as FEED_FILTERS, 
   EMPTY_TEXT as FEED_EMPTY_TEXT 
 } from './Feed';
-import { btn, Kpi, Chip, TypeTag } from './admin/ui';
 import SponsorLeadModal from '../components/SponsorLeadModal';
-import SponsorSplitView from '../components/sponsor/SponsorSplitView';
 import SponsorRoiDashboard from '../components/sponsor/SponsorRoiDashboard';
 import SponsorSettings from '../components/sponsor/SponsorSettings';
 import { getSponsorSettings } from '../lib/sponsorSettingsService';
-import SponsorShell from '../components/sponsor/SponsorShell';
-import WhatsAppButton from '../components/WhatsAppButton';
+import Shell from './sponsor/Shell';
+import Inicio from './sponsor/Inicio';
+import Leads from './sponsor/Leads';
+import { TIER_BAR, leadKey, logoFilter, sponsorFromText } from './sponsor/util';
+import SupportTicketModal from '../components/SupportTicketModal';
 import Mascot from '../components/Mascot';
 import '../styles/cracha.css';
 import '../styles/agenda.css';
 import '../styles/admin.css';
 
 const isDevMode = import.meta.env.DEV;
-
-function greeting(now = new Date()) {
-  const h = now.getHours();
-  return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
-}
-
-function longDate(now = new Date()) {
-  const s = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(now).replace('-feira', '');
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-const AVATAR_BG = ['#2A3570', '#4C2A85', '#1E5A6B', '#7A3A22', '#2C5E3F', '#6B2D5C'];
-const bgFor = (s = '') => AVATAR_BG[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_BG.length];
-const initialsOf = (n = '') => n.trim().split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase() || '?';
 
 export default function Sponsor() {
   const navigate = useNavigate();
@@ -147,6 +119,12 @@ export default function Sponsor() {
     };
   }, [activeCompanyId, userProfile, sponsorName]);
 
+  // Cota so existe se a empresa e conhecida (nunca assume Ouro)
+  const sponsorCfg = useMemo(() => sponsorFromText(activeCompanyId) || sponsorFromText(sponsorName), [activeCompanyId, sponsorName]);
+  const tierKey = TIER_BAR[sponsorTierInfo?.tier] && sponsorCfg ? sponsorTierInfo.tier : (TIER_BAR[userProfile?.tier] ? userProfile.tier : null);
+  const sponsorLogoFilter = logoFilter(sponsorCfg);
+  const sponsorStand = sponsorCfg?.badgeDescription || '';
+
   // Tab State: 'home' | 'leads' | 'roi' | 'scanner' | 'agenda' | 'feed' | 'settings'
   const [activeTab, setActiveTab] = useState('home');
 
@@ -155,14 +133,18 @@ export default function Sponsor() {
   const [myLeads, setMyLeads] = useState([SEED_BIPADO_LEAD]);
   const [companyLeads, setCompanyLeads] = useState([SEED_BIPADO_LEAD]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
-  const [leadsSearch, setLeadsSearch] = useState('');
-  const [starFilter, setStarFilter] = useState('all'); // 'all' | '5' | '4' | '3'
-  const [leadSortBy, setLeadSortBy] = useState('recent'); // 'recent' | 'rating' | 'name'
 
   // Chave de navegação ativa unificada para Desktop Shell
   const activeNavKey = activeTab;
 
+  // Suporte e Chamados SOS
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+
   const handleNavigate = useCallback((key) => {
+    if (key === 'chamados') {
+      setIsSupportModalOpen(true);
+      return;
+    }
     setActiveTab(key);
   }, []);
 
@@ -176,7 +158,7 @@ export default function Sponsor() {
 
   // Modal States
   const [activeParticipant, setActiveParticipant] = useState(null); // Newly scanned attendee
-  const [selectedLead, setSelectedLead] = useState(null); // Existing lead being viewed/edited
+  const [focusLeadId, setFocusLeadId] = useState(null); // lead aberto a partir do Início
   const [selectedActivityModal, setSelectedActivityModal] = useState(null); // Read-only activity modal
   const [toastMessage, setToastMessage] = useState(null);
   const [validatedCount, setValidatedCount] = useState(0);
@@ -216,38 +198,6 @@ export default function Sponsor() {
         // Safe fallback if permission is blocked
       }
     }
-  }, []);
-
-  // Classificação rápida de afiliação acadêmica (Ideia 2)
-  const getAffiliationBadge = useCallback((lead) => {
-    const type = (lead?.participantType || '').toLowerCase();
-    const inst = (lead?.instituicao || lead?.institution || '').toLowerCase();
-    const course = (lead?.course || '').toLowerCase();
-
-    if (type.includes('pós') || type.includes('pos') || type.includes('mestrado') || type.includes('doutorado') || lead?.postgradInst) {
-      return {
-        label: 'Pós-Graduação',
-        color: '#C084FC',
-        bg: 'rgba(192, 132, 252, 0.12)',
-        border: 'rgba(192, 132, 252, 0.3)'
-      };
-    }
-
-    if (type.includes('graduação') || type.includes('graduacao') || type.includes('aluno ufu') || inst.includes('ufu') || course.length > 0) {
-      return {
-        label: 'Graduação',
-        color: '#8FA0FF',
-        bg: 'rgba(56, 189, 248, 0.12)',
-        border: 'rgba(56, 189, 248, 0.3)'
-      };
-    }
-
-    return {
-      label: 'Externo',
-      color: '#34D399',
-      bg: 'rgba(52, 211, 153, 0.12)',
-      border: 'rgba(52, 211, 153, 0.3)'
-    };
   }, []);
 
   // 1. Carrega Leads via API
@@ -300,7 +250,7 @@ export default function Sponsor() {
 
   // 4. Scanner Lifecycle: Só roda quando a aba ativa for 'scanner' e nenhum modal estiver aberto
   useEffect(() => {
-    if (!hasAccess || activeTab !== 'scanner' || activeParticipant || selectedLead) {
+    if (!hasAccess || activeTab !== 'scanner' || activeParticipant) {
       stopScanner();
       return;
     }
@@ -310,7 +260,7 @@ export default function Sponsor() {
     return () => {
       stopScanner();
     };
-  }, [hasAccess, activeTab, activeParticipant, selectedLead]);
+  }, [hasAccess, activeTab, activeParticipant]);
 
   const startScanner = async () => {
     try {
@@ -482,114 +432,43 @@ export default function Sponsor() {
     showToast(`Presença de ${participant?.name || 'participante'} validada com sucesso!`, 'success');
   };
 
-  // Callback ao atualizar um lead existente na lista
-  const handleLeadUpdated = (updatedLead) => {
-    triggerVibration(50);
-    setMyLeads((prev) => prev.map(l => l.participantUid === updatedLead.participantUid ? { ...l, ...updatedLead } : l));
-    setCompanyLeads((prev) => prev.map(l => l.participantUid === updatedLead.participantUid ? { ...l, ...updatedLead } : l));
-    showToast(`Lead de ${updatedLead.name} atualizado!`, 'success');
+  const patchLead = (u) => {
+    const apply = (list) => list.map((l) => (leadKey(l) === leadKey(u) ? { ...l, ...u } : l));
+    setMyLeads(apply);
+    setCompanyLeads(apply);
   };
 
-  // Callback de persistência direta ao editar no Split-View (Desktop/Tablet)
-  const handleUpdateLeadFromSplitView = async (updatedData) => {
+  // Persistência ao editar no dossiê (nota, anotações, tags). Propaga o erro para o dossiê mostrar o estado.
+  const handleUpdateLead = async (data) => {
     try {
       await updateLead({
-        participantUid: updatedData.participantUid,
-        rating: updatedData.rating !== undefined ? Number(updatedData.rating) : 0,
-        notes: updatedData.notes,
-        tags: updatedData.tags,
-        companyId: userProfile?.companyId || activeCompanyId
+        participantUid: data.participantUid,
+        rating: data.rating !== undefined ? Number(data.rating) : 0,
+        notes: data.notes,
+        tags: data.tags,
+        companyId: userProfile?.companyId || activeCompanyId,
       });
-      handleLeadUpdated(updatedData);
+      patchLead(data);
     } catch (err) {
-      console.error('Erro ao atualizar lead via SplitView:', err);
+      console.error('Erro ao atualizar lead:', err);
       showToast('Erro ao salvar alterações do lead.', 'error');
+      throw err;
     }
   };
 
   // Exportar Leads para CSV
-  const handleExportCsv = () => {
-    const leadsToExport = activeTab === 'roi'
-      ? (leadsTab === 'mine' ? myLeads : companyLeads)
-      : (leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads);
+  const handleExportCsv = (list) => {
+    const leadsToExport = Array.isArray(list) ? list : (leadsTab === 'mine' ? myLeads : companyLeads);
     if (!leadsToExport || leadsToExport.length === 0) {
       showToast('Nenhum lead disponível para exportação com os filtros atuais.', 'warning');
       return;
     }
-    const scopeLabel = activeTab === 'roi' ? 'roi_executivo' : (leadsTab === 'mine' ? 'meus' : 'todos');
+    const scopeLabel = activeTab === 'roi' ? 'roi_executivo' : (Array.isArray(list) ? 'filtrados' : leadsTab === 'mine' ? 'meus' : 'todos');
     const success = exportLeadsToCsv(leadsToExport, sponsorName, scopeLabel);
     if (success) {
       showToast(`Planilha CSV (${leadsToExport.length} ${leadsToExport.length === 1 ? 'lead' : 'leads'}) gerada com sucesso!`, 'success');
     }
   };
-
-  // Filtros e Ordenação de Leads (Ideia 1)
-  const filterAndSortLeads = useCallback((list) => {
-    const filtered = list.filter((lead) => {
-      const query = leadsSearch.toLowerCase().trim();
-      const matchQuery = !query || (
-        (lead.name && lead.name.toLowerCase().includes(query)) ||
-        (lead.course && lead.course.toLowerCase().includes(query)) ||
-        (lead.phone && lead.phone.includes(query)) ||
-        (lead.email && lead.email.toLowerCase().includes(query)) ||
-        (lead.notes && lead.notes.toLowerCase().includes(query)) ||
-        (lead.github && lead.github.toLowerCase().includes(query))
-      );
-
-      const rating = Number(lead.rating) || 0;
-      let matchStars = true;
-      if (starFilter === '5') matchStars = rating === 5;
-      else if (starFilter === '4') matchStars = rating >= 4;
-      else if (starFilter === '3') matchStars = rating >= 3;
-
-      return matchQuery && matchStars;
-    });
-
-    return [...filtered].sort((a, b) => {
-      if (leadSortBy === 'rating') {
-        const ratingDiff = (Number(b.rating) || 0) - (Number(a.rating) || 0);
-        if (ratingDiff !== 0) return ratingDiff;
-        // Critério de desempate: mais recente primeiro
-        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-        return timeB - timeA;
-      }
-
-      if (leadSortBy === 'name') {
-        const nameA = a.name || '';
-        const nameB = b.name || '';
-        return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
-      }
-
-      // Default: 'recent' (mais recentes primeiro)
-      const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-      const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-      return timeB - timeA;
-    });
-  }, [leadsSearch, starFilter, leadSortBy]);
-
-  const filteredMyLeads = useMemo(() => filterAndSortLeads(myLeads), [myLeads, filterAndSortLeads]);
-  const filteredCompanyLeads = useMemo(() => filterAndSortLeads(companyLeads), [companyLeads, filterAndSortLeads]);
-
-  const now = useMemo(() => new Date(), []);
-
-  const qualifiedCount = useMemo(() => {
-    return companyLeads.filter(l => (Number(l.rating) || 0) >= 4).length;
-  }, [companyLeads]);
-
-  const qualifiedPercent = useMemo(() => {
-    return companyLeads.length > 0 ? Math.round((qualifiedCount / companyLeads.length) * 100) : 0;
-  }, [companyLeads, qualifiedCount]);
-
-  const recentLeads = useMemo(() => {
-    return [...companyLeads].sort((a, b) => {
-      const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-      const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-      return timeB - timeA;
-    }).slice(0, 4);
-  }, [companyLeads]);
-
-  const displayedLeads = leadsTab === 'mine' ? filteredMyLeads : filteredCompanyLeads;
 
   // Dias do evento a partir das atividades (chips "Qua 21")
   const availableDays = useMemo(() => {
@@ -871,18 +750,21 @@ export default function Sponsor() {
   }
 
   return (
-    <SponsorShell
+    <Shell
       activeNavKey={activeNavKey}
       onNavigate={handleNavigate}
       companyName={sponsorName}
       companyLogo={sponsorLogo}
-      tierInfo={sponsorTierInfo}
+      logoFilter={sponsorLogoFilter}
+      standName={sponsorStand}
+      tierInfo={{ ...sponsorTierInfo, tier: tierKey }}
       userProfile={userProfile}
       authUser={authUser}
       actualRole={actualRole}
       leadsCount={companyLeads.length}
       myLeadsCount={myLeads.length}
       onExportCsv={handleExportCsv}
+      onOpenSupport={() => setIsSupportModalOpen(true)}
     >
       {/* Toast Alert padronizado com DESIGN.md §2.1 & §6 */}
       {toastMessage && (
@@ -969,66 +851,7 @@ export default function Sponsor() {
 
       {/* Top Header Mobile (na versão desktop, a SponsorShell já exibe a barra superior contextual fixa) */}
       <header className="lg:hidden mb-4">
-        {activeTab === 'home' ? (
-          <div className="mb-4 rounded-[20px] bg-surface border border-line p-4 sm:p-5 flex flex-col gap-3.5 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <Mascot size={44} name="alan" mood="happy" className="shrink-0 mascot-still" />
-                <div className="min-w-0 flex-1">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-link block truncate">
-                    Estande {sponsorName}
-                  </span>
-                  <h1 className="m-0 text-[18px] sm:text-[20px] font-extrabold tracking-[-0.01em] text-[#EEF1FA] truncate">
-                    Oi, {firstName}!
-                  </h1>
-                  <p className="m-0 mt-0.5 text-[12px] sm:text-[13px] text-text-2 truncate">
-                    {longDate(now)} · {companyLeads.length} {companyLeads.length === 1 ? 'lead coletado' : 'leads coletados'}
-                  </p>
-                </div>
-              </div>
-
-              {sponsorLogo ? (
-                <div className="shrink-0 flex items-center justify-end max-w-[110px] sm:max-w-[130px]">
-                  <img
-                    src={sponsorLogo}
-                    alt={sponsorName}
-                    className="max-h-8 sm:max-h-9 max-w-full object-contain"
-                    style={{
-                      filter: 'brightness(0) invert(1)',
-                      opacity: 0.95,
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="shrink-0 flex items-center justify-end">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-text-2 border border-line px-2.5 py-1 rounded-lg">
-                    {sponsorName}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Ações Rápidas integradas no mobile */}
-            <div className="flex items-center gap-2 pt-1 border-t border-line/60">
-              <button
-                type="button"
-                className={btn('action', 'flex-1 h-10 text-[13px]')}
-                onClick={() => setActiveTab('scanner')}
-              >
-                <QrCode size={16} aria-hidden="true" />
-                <span>Escanear</span>
-              </button>
-              <button
-                type="button"
-                className={btn('secondary', 'flex-1 h-10 text-[13px]')}
-                onClick={() => setActiveTab('leads')}
-              >
-                <Users size={16} aria-hidden="true" />
-                <span>Leads ({companyLeads.length})</span>
-              </button>
-            </div>
-          </div>
-        ) : (
+        {activeTab === 'home' ? null : (
           activeTab !== 'leads' && activeTab !== 'roi' && (
             <div style={{ textAlign: 'center', marginBottom: '14px' }}>
               <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#EEF1FA', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
@@ -1051,861 +874,45 @@ export default function Sponsor() {
         )}
       </header>
 
-      {/* ========================================================================= */}
-      {/* ABA 1: HOME / ESTANDE                                                    */}
-      {/* ========================================================================= */}
+      {/* Abas extraídas em src/pages/sponsor/ (Início e Leads). As demais seguem aqui até serem extraídas. */}
       {activeTab === 'home' && (
-        <div className="animate-fade-in flex flex-col gap-5">
-          {/* Welcome Hero Desktop */}
-          <div className="hidden lg:flex items-center justify-between gap-4 p-5 rounded-[22px] bg-gradient-to-r from-surface via-surface to-surface-raised border border-line shadow-xs">
-            <div className="flex items-center gap-4 min-w-0">
-              <Mascot size={52} name="alan" mood="happy" className="shrink-0 mascot-still" />
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-link">
-                    Estande {sponsorName}
-                  </span>
-                  {sponsorTierInfo && (
-                    <span
-                      className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider"
-                      style={{
-                        background: sponsorTierInfo.bg,
-                        color: sponsorTierInfo.color,
-                        border: `1px solid ${sponsorTierInfo.border}`,
-                      }}
-                    >
-                      {sponsorTierInfo.label}
-                    </span>
-                  )}
-                </div>
-                <h1 className="m-0 mt-0.5 text-[22px] font-extrabold tracking-[-0.01em] text-[#EEF1FA]">
-                  {greeting(now)}, {firstName}!
-                </h1>
-                <p className="m-0 mt-0.5 text-[13px] text-text-2">
-                  {longDate(now)} · Painel de controle e captação de talentos da {sponsorName}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2.5 shrink-0">
-              <button
-                type="button"
-                className={btn('action', 'h-11 px-5 text-[13px] font-bold shadow-lg shadow-action/20')}
-                onClick={() => setActiveTab('scanner')}
-              >
-                <QrCode size={17} aria-hidden="true" />
-                <span>Escanear Crachá</span>
-              </button>
-              <button
-                type="button"
-                className={btn('secondary', 'h-11 px-4 text-[13px] font-bold')}
-                onClick={() => setActiveTab('leads')}
-              >
-                <Users size={16} aria-hidden="true" />
-                <span>Ver Leads ({companyLeads.length})</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Métricas Principais (4 colunas no Desktop, 2 no Mobile) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 lg:gap-3.5">
-            <Kpi
-              label="Leads no Estande"
-              value={companyLeads.length}
-              hint={`Total da equipe ${sponsorName}`}
-              accent="var(--link)"
-            />
-            <Kpi
-              label="Meus Leads"
-              value={myLeads.length}
-              hint="Coletados por você"
-              accent="#C4B5FD"
-            />
-            <Kpi
-              label="Visitas Validadas"
-              value={companyLeads.length + validatedCount}
-              hint="Passaportes carimbados"
-              accent="var(--ok)"
-            />
-            <Kpi
-              label="Leads Qualificados"
-              value={qualifiedCount}
-              hint={`${qualifiedPercent}% de ${companyLeads.length} (4-5 ★)`}
-              accent="var(--warn)"
-            >
-              <span className="mt-2.5 block h-1.5 overflow-hidden rounded-full bg-surface-raised">
-                <span
-                  className="block h-full rounded-full bg-warn transition-all duration-300"
-                  style={{ width: `${qualifiedPercent}%` }}
-                />
-              </span>
-            </Kpi>
-          </div>
-
-          {/* Módulos Operacionais da Home em Grid Responsivo de 12 colunas no Desktop */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            {/* Coluna da Esquerda (7 colunas no Desktop): Scanner CTA + Leads Recentes */}
-            <div className="lg:col-span-7 flex flex-col gap-5">
-              {/* Hero Action: Escanear Crachá */}
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => setActiveTab('scanner')}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setActiveTab('scanner');
-                  }
-                }}
-                className="press flex cursor-pointer items-center justify-between gap-3.5 rounded-[20px] bg-surface p-4 border border-line hover:border-link transition-colors"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-link">
-                    <Sparkles size={13} aria-hidden="true" />
-                    <span>Escanear Visitante</span>
-                  </div>
-                  <h2 className="m-0 mt-1 text-[16px] font-extrabold text-[#EEF1FA]">
-                    Escanear Crachá de Aluno
-                  </h2>
-                  <p className="m-0 mt-0.5 text-[12px] text-text-3">
-                    Aponte a câmera para o QR digital ou crachá físico Sympla.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-action text-white shadow-lg shadow-action/25"
-                  aria-label="Abrir câmera de escaneamento"
-                >
-                  <QrCode size={24} aria-hidden="true" />
-                </button>
-              </div>
-
-              {/* Leads Recentes no Estande */}
-              <div className="rounded-[20px] bg-surface p-4 border border-line">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <Users size={17} className="text-link shrink-0" aria-hidden="true" />
-                    <h2 className="m-0 text-[12px] sm:text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA] truncate">
-                      Leads Recentes no Estande
-                    </h2>
-                  </div>
-                  {companyLeads.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('leads')}
-                      className="inline-flex items-center gap-1 text-[12px] font-bold text-link hover:underline shrink-0 whitespace-nowrap"
-                    >
-                      <span className="whitespace-nowrap">Ver todos ({companyLeads.length})</span>
-                      <ChevronRight size={14} className="shrink-0" aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-
-                {recentLeads.length === 0 ? (
-                  <div className="py-6 text-center">
-                    <p className="m-0 text-[13px] text-text-3">
-                      Nenhum lead coletado ainda. Aponte a câmera para os crachás no estande!
-                    </p>
-                    <button
-                      type="button"
-                      className={btn('action', 'mt-3 h-10 px-4 text-[12px]')}
-                      onClick={() => setActiveTab('scanner')}
-                    >
-                      <QrCode size={15} aria-hidden="true" />
-                      <span>Escanear primeiro visitante</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {recentLeads.map((lead) => {
-                      const ratingNum = Number(lead.rating) || 0;
-                      const affiliation = getAffiliationBadge(lead);
-                      return (
-                        <div
-                          key={lead.participantUid || lead.uid || lead.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setSelectedLead(lead)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setSelectedLead(lead);
-                            }
-                          }}
-                          className="press flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-surface-raised p-3 border border-line hover:border-line-2 transition-colors"
-                        >
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <div
-                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold text-white"
-                              style={{ backgroundColor: bgFor(lead.name || lead.email || 'L') }}
-                            >
-                              {initialsOf(lead.name || 'Aluno')}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="truncate text-[14px] font-bold text-[#EEF1FA]">
-                                  {lead.name || 'Aluno'}
-                                </span>
-                                {affiliation && (
-                                  <span
-                                    className="rounded px-1.5 py-0.5 text-[10px] font-bold"
-                                    style={{ color: affiliation.color, backgroundColor: affiliation.bg, border: `1px solid ${affiliation.border}` }}
-                                  >
-                                    {affiliation.label}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 text-[11px] text-text-3 mt-0.5">
-                                {lead.course && <span className="truncate">{lead.course}</span>}
-                                {ratingNum > 0 && (
-                                  <span className="flex items-center gap-1 font-bold text-warn">
-                                    <Star size={11} fill="currentColor" /> {ratingNum}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                            {lead.phone ? (
-                              <WhatsAppButton
-                                phone={lead.phone}
-                                participantName={lead.name}
-                                companyName={sponsorName}
-                                label="Whats"
-                                size="sm"
-                              />
-                            ) : (
-                              <button
-                                type="button"
-                                className={btn('secondary', 'h-8 px-2.5 text-[11px]')}
-                                onClick={() => setSelectedLead(lead)}
-                              >
-                                Ver
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Coluna da Direita (5 colunas no Desktop): Programação de Hoje + Feed */}
-            <div className="lg:col-span-5 flex flex-col gap-5">
-              {/* Programação de Hoje (Modo Read-Only) */}
-              <div className="rounded-[20px] bg-surface p-4 border border-line">
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CalendarDays size={17} className="text-link" aria-hidden="true" />
-                    <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
-                      Acontecendo na TechWeek
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('agenda')}
-                    className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
-                  >
-                    <span>Ver tudo</span>
-                    <ChevronRight size={14} aria-hidden="true" />
-                  </button>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  {todayActivities.length === 0 ? (
-                    <p className="m-0 py-3 text-center text-[12px] text-text-3">
-                      Nenhuma atividade programada para agora.
-                    </p>
-                  ) : (
-                    todayActivities.map((act) => (
-                      <div
-                        key={act.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setSelectedActivityModal(act)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setSelectedActivityModal(act);
-                          }
-                        }}
-                        className="press flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-surface-raised p-3 border border-line hover:border-line-2 transition-colors"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13px] font-bold text-[#EEF1FA]">
-                            {act.title}
-                          </div>
-                          <div className="mt-1 flex items-center gap-2.5 text-[11px] text-text-3">
-                            <span className="flex items-center gap-1">
-                              <Clock size={12} className="text-link" />
-                              <span>{act.time}</span>
-                            </span>
-                            {(act.room || act.location) && (
-                              <span className="flex items-center gap-1 truncate">
-                                <MapPin size={12} className="text-link" />
-                                <span className="truncate">{act.room || act.location}</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="shrink-0">
-                          <TypeTag type={act.type || 'palestra'} />
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Destaque do Feed */}
-              <div className="rounded-[20px] bg-surface p-4 border border-line">
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare size={17} className="text-link" aria-hidden="true" />
-                    <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wider text-[#EEF1FA]">
-                      Avisos & Comunidade
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('feed')}
-                    className="flex items-center gap-1 text-[12px] font-bold text-link hover:underline"
-                  >
-                    <span>Abrir feed</span>
-                    <ChevronRight size={14} aria-hidden="true" />
-                  </button>
-                </div>
-
-                {feedPosts.slice(0, 2).map((post) => (
-                  <div
-                    key={post.id}
-                    className="mb-2 rounded-2xl bg-surface-raised p-3 border border-line last:mb-0"
-                  >
-                    <div className="mb-1 flex items-center gap-2">
-                      <span className="text-[12px] font-bold text-[#EEF1FA]">{post.authorName || post.author}</span>
-                      {post.authorRole === 'ORGANIZATION' && (
-                        <span className="rounded bg-link/15 px-1.5 py-0.5 text-[10px] font-bold text-link">
-                          Organização
-                        </span>
-                      )}
-                    </div>
-                    <p className="m-0 text-[12px] text-text-2 line-clamp-2 leading-relaxed">
-                      {post.content}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+        <div className="tw-slide">
+          <Inicio
+            sponsorName={sponsorName}
+            firstName={firstName}
+            tier={tierKey}
+            companyLogo={sponsorLogo}
+            companyLogoFilter={sponsorLogoFilter}
+            myLeads={myLeads}
+            companyLeads={companyLeads}
+            validatedCount={validatedCount}
+            activities={todayActivities}
+            feedPosts={feedPosts}
+            onNavigate={handleNavigate}
+            onOpenLead={(lead) => { setFocusLeadId(leadKey(lead)); setActiveTab('leads'); }}
+            onOpenActivity={setSelectedActivityModal}
+            onOpenSupport={() => setIsSupportModalOpen(true)}
+          />
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* ABA 2: LEADS (CRM DO ESTANDE)                                            */}
-      {/* ========================================================================= */}
       {activeTab === 'leads' && (
-        <div className="animate-fade-in flex flex-col gap-3 sm:gap-4">
-          {/* Sub-navegação Mobile: Alternar entre CRM de Leads e Relatório ROI */}
-          <div className="lg:hidden print:hidden flex items-center justify-between gap-2 pb-0.5">
-            <div
-              role="tablist"
-              aria-label="Modo de visualização"
-              className="inline-flex h-9 p-0.5 rounded-xl bg-surface-raised border border-border shrink-0"
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={true}
-                className="press inline-flex items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold bg-surface-selected text-text shadow-xs"
-              >
-                <Users size={14} aria-hidden="true" />
-                <span>CRM</span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={false}
-                onClick={() => setActiveTab('roi')}
-                className="press inline-flex items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold text-text-3 hover:text-text transition-all"
-              >
-                <TrendingUp size={14} aria-hidden="true" />
-                <span>ROI</span>
-              </button>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={handleExportCsv}
-                disabled={leadsTab === 'mine' ? myLeads.length === 0 : companyLeads.length === 0}
-                className="press inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface-raised hover:bg-surface-selected px-2.5 text-[12px] font-bold text-text-2 hover:text-text disabled:opacity-40 transition-colors"
-                title="Exportar lista em CSV"
-              >
-                <Download size={14} aria-hidden="true" />
-                <span>CSV</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Seletor de Escopo & Controles da Aba de Leads */}
-          <div className="flex items-center justify-between gap-2">
-            <div role="tablist" aria-label="Filtrar escopo dos leads" className="flex items-center gap-1.5">
-              <button
-                type="button"
-                role="tab"
-                id="tab-leads-mine"
-                aria-selected={leadsTab === 'mine'}
-                aria-controls="panel-leads-content"
-                onClick={() => setLeadsTab('mine')}
-                className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
-                  leadsTab === 'mine'
-                    ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
-                    : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
-                }`}
-              >
-                <span>Meus Leads</span>
-                <span
-                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                    leadsTab === 'mine'
-                      ? 'bg-link/20 text-link'
-                      : 'bg-surface-raised text-text-4'
-                  }`}
-                >
-                  {myLeads.length}
-                </span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id="tab-leads-company"
-                aria-selected={leadsTab === 'company'}
-                aria-controls="panel-leads-content"
-                onClick={() => setLeadsTab('company')}
-                className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold transition-all ${
-                  leadsTab === 'company'
-                    ? 'bg-surface-selected text-text border border-link/40 shadow-xs'
-                    : 'bg-surface-raised/40 text-text-3 hover:text-text-2 border border-transparent'
-                }`}
-              >
-                <span>Toda a Empresa</span>
-                <span
-                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                    leadsTab === 'company'
-                      ? 'bg-link/20 text-link'
-                      : 'bg-surface-raised text-text-4'
-                  }`}
-                >
-                  {companyLeads.length}
-                </span>
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-text-3 font-medium hidden sm:inline">
-                {leadsSearch.trim() || starFilter !== 'all' ? (
-                  <>Filtrando <strong>{displayedLeads.length}</strong> de {leadsTab === 'mine' ? myLeads.length : companyLeads.length}</>
-                ) : (
-                  <>{displayedLeads.length} {displayedLeads.length === 1 ? 'contato' : 'contatos'}</>
-                )}
-              </span>
-
-              {/* Botão de CSV no Desktop */}
-              <button
-                type="button"
-                onClick={handleExportCsv}
-                disabled={leadsTab === 'mine' ? myLeads.length === 0 : companyLeads.length === 0}
-                className="hidden lg:inline-flex press h-8 items-center gap-1.5 rounded-xl border border-border bg-surface-raised hover:bg-surface-selected px-2.5 text-[12px] font-bold text-text-2 hover:text-text disabled:opacity-40 transition-colors"
-                title="Exportar lista em CSV"
-              >
-                <Download size={14} aria-hidden="true" />
-                <span>CSV</span>
-              </button>
-            </div>
-          </div>
-
-              {/* Desktop / Tablet Booth OS: Split-View Master-Detail (visível em telas grandes: hidden lg:block) */}
-              <div className="hidden lg:block">
-                <SponsorSplitView
-                  leads={leadsTab === 'mine' ? myLeads : companyLeads}
-                  selectedLead={selectedLead}
-                  onSelectLead={setSelectedLead}
-                  onUpdateLead={handleUpdateLeadFromSplitView}
-                  companyName={sponsorName}
-                  companyId={activeCompanyId}
-                  isLoading={isLoadingLeads}
-                />
-              </div>
-
-              {/* Modo Lista / Mobile (visível abaixo de lg: lg:hidden) */}
-              <div className="lg:hidden flex flex-col gap-3">
-                {/* Campo de Busca Compacto (h-10) */}
-                <label className="flex h-10 items-center gap-2 rounded-xl border border-field-line bg-surface px-3 text-text-3 focus-within:border-link transition-colors">
-                  <Search size={16} aria-hidden="true" />
-                  <span className="sr-only">Buscar leads por nome, curso, telefone ou anotação</span>
-                  <input
-                    type="search"
-                    value={leadsSearch}
-                    onChange={(e) => setLeadsSearch(e.target.value)}
-                    placeholder="Buscar por nome, curso, telefone..."
-                    className="min-w-0 flex-1 border-0 bg-transparent text-[13px] text-text outline-none placeholder:text-text-3"
-                  />
-                  {leadsSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setLeadsSearch('')}
-                      aria-label="Limpar busca"
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-text-3 hover:text-text"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                </label>
-
-                {/* Linha Única de Filtros Rápidos (Nota + Ordenação Integrada) */}
-                <div
-                  className="adm-noscroll flex items-center gap-1.5 overflow-x-auto pb-0.5"
-                  role="group"
-                  aria-label="Filtros e ordenação de leads"
-                >
-                  {[
-                    { id: 'all', label: 'Todas notas' },
-                    { id: '5', label: '5 ★' },
-                    { id: '4', label: '4 ★+' },
-                    { id: '3', label: '3 ★+' }
-                  ].map((f) => {
-                    const isSelected = starFilter === f.id;
-                    return (
-                      <button
-                        key={f.id}
-                        type="button"
-                        aria-pressed={isSelected}
-                        onClick={() => setStarFilter(f.id)}
-                        className={`press inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-[12px] font-bold transition-all ${
-                          isSelected
-                            ? 'bg-surface-selected text-text border border-line-2 shadow-xs'
-                            : 'border border-transparent bg-surface-raised/40 text-text-3 hover:text-text hover:bg-surface-raised/70'
-                        }`}
-                      >
-                        <span>{f.label}</span>
-                      </button>
-                    );
-                  })}
-
-                  <span className="h-3.5 w-[1px] bg-border shrink-0 mx-0.5" aria-hidden="true" />
-
-                  {/* Ordenação Rápida Integrada */}
-                  {[
-                    { id: 'recent', label: 'Recentes' },
-                    { id: 'rating', label: 'Avaliação' }
-                  ].map((s) => {
-                    const isSelected = leadSortBy === s.id;
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        aria-pressed={isSelected}
-                        onClick={() => setLeadSortBy(s.id)}
-                        className={`press inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-[12px] font-bold transition-all ${
-                          isSelected
-                            ? 'bg-surface-selected text-link border border-link/30 shadow-xs'
-                            : 'border border-transparent bg-surface-raised/40 text-text-3 hover:text-text hover:bg-surface-raised/70'
-                        }`}
-                      >
-                        <ArrowUpDown size={11} className={isSelected ? 'text-link' : 'text-text-4'} aria-hidden="true" />
-                        <span>{s.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Lista e Tabela de Leads */}
-                <div
-                  id="panel-leads-content"
-                  role="region"
-                  aria-label="Lista de contatos do estande"
-                  className="flex flex-col gap-2.5"
-                >
-                {(leadsTab === 'mine' ? myLeads : companyLeads).length === 0 ? (
-                  <div className="flex flex-col items-center justify-center rounded-[20px] bg-surface p-5 sm:p-7 text-center border border-line">
-                    <div className="mb-2.5">
-                      <Mascot size={56} name="alan" mood="waving" className="shrink-0" />
-                    </div>
-                    <h3 className="mb-1 text-[14px] font-extrabold text-text">
-                      {leadsTab === 'mine' ? 'Nenhum lead coletado por você ainda' : 'Nenhum lead registrado pela empresa'}
-                    </h3>
-                    <p className="mb-3.5 max-w-[280px] text-[12px] leading-relaxed text-text-3">
-                      {leadsTab === 'mine'
-                        ? 'Aponte a câmera para o crachá dos estudantes no estande para salvar contatos, notas e avaliações.'
-                        : 'Nenhum membro da sua equipe escaneou participantes ainda.'}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('scanner')}
-                      className={`${btn('action')} inline-flex items-center gap-1.5 h-9 px-4 text-[12px] font-extrabold`}
-                    >
-                      <Camera size={15} />
-                      <span>Escanear Primeiro Estudante</span>
-                    </button>
-                  </div>
-                ) : displayedLeads.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-[18px] bg-surface p-7 text-center border border-line">
-                <Search size={32} className="mx-auto mb-3 text-text-3" />
-                <h3 className="mb-1 text-[14px] font-bold text-text">
-                  Nenhum lead encontrado com estes filtros
-                </h3>
-                <p className="mb-4 text-[12px] text-text-3">
-                  Nenhum contato corresponde ao termo "{leadsSearch}" ou à nota selecionada.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLeadsSearch('');
-                    setStarFilter('all');
-                  }}
-                  className={`${btn('secondary')} text-[12px] font-bold`}
-                >
-                  Limpar Filtros
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* Tabela Desktop / Tablet (hidden md:block) */}
-                <div className="hidden overflow-x-auto rounded-[20px] bg-surface px-3 pb-2 pt-4 md:block border border-line">
-                  <table className="w-full min-w-[650px] border-collapse text-left">
-                    <thead>
-                      <tr className="text-[12px] text-text-3">
-                        <th className="px-3 pb-3 font-bold">Estudante</th>
-                        <th className="px-3 pb-3 font-bold">Vínculo / Curso</th>
-                        <th className="px-3 pb-3 font-bold">Avaliação</th>
-                        <th className="px-3 pb-3 font-bold">Anotação</th>
-                        {leadsTab === 'company' && <th className="px-3 pb-3 font-bold">Coletor</th>}
-                        <th className="px-3 pb-3 font-bold text-right">Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayedLeads.map((lead) => {
-                        const ratingNum = Number(lead.rating) || 0;
-                        const badge = getAffiliationBadge(lead);
-                        const leadName = lead.name || 'Estudante';
-                        return (
-                          <tr
-                            key={lead.participantUid || lead.uid || lead.id}
-                            className="border-t border-line hover:bg-white/[0.02] cursor-pointer transition-colors"
-                            onClick={() => setSelectedLead(lead)}
-                          >
-                            <td className="px-3 py-3">
-                              <div className="flex items-center gap-3">
-                                <span
-                                  aria-hidden="true"
-                                  className="flex shrink-0 items-center justify-center rounded-full text-[13px] font-extrabold text-white"
-                                  style={{ width: 38, height: 38, background: bgFor(leadName) }}
-                                >
-                                  {initialsOf(leadName)}
-                                </span>
-                                <div className="min-w-0">
-                                  <span className="block text-[14px] font-bold text-text truncate max-w-[170px]">{leadName}</span>
-                                  {lead.github && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] text-text-3">
-                                      <GitHubIcon size={10} color="var(--link)" />
-                                      <span>@{lead.github.replace(/^@/, '').trim()}</span>
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-3 py-3">
-                              <div className="flex flex-col gap-1 items-start">
-                                <span
-                                  style={{
-                                    fontSize: '10px',
-                                    fontWeight: 700,
-                                    color: badge.color,
-                                    background: badge.bg,
-                                    border: `1px solid ${badge.border}`,
-                                    padding: '1px 6px',
-                                    borderRadius: '6px',
-                                    lineHeight: '1.4'
-                                  }}
-                                >
-                                  {badge.label}
-                                </span>
-                                {lead.course && (
-                                  <span className="text-[12px] text-text-3 truncate max-w-[140px]">
-                                    {lead.course} {lead.period ? `(${lead.period}º)` : ''}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-3 py-3">
-                              {ratingNum > 0 ? (
-                                <div className="inline-flex items-center gap-1 text-warn font-bold text-[13px]">
-                                  <Star size={13} fill="#FBBF24" />
-                                  <span>{ratingNum}★</span>
-                                </div>
-                              ) : (
-                                <span className="text-[12px] text-text-3">—</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-3">
-                              {lead.notes ? (
-                                <span className="block text-[12px] text-text-2 italic truncate max-w-[150px]" title={lead.notes}>
-                                  "{lead.notes}"
-                                </span>
-                              ) : (
-                                <span className="text-[12px] text-text-3 italic">Sem notas</span>
-                              )}
-                            </td>
-                            {leadsTab === 'company' && (
-                              <td className="px-3 py-3 text-[11px] text-text-3 truncate max-w-[120px]">
-                                {lead.collectedByName || lead.collectedByEmail || '—'}
-                              </td>
-                            )}
-                            <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                              {lead.phone ? (
-                                <WhatsAppButton
-                                  phone={lead.phone}
-                                  participantName={lead.name}
-                                  companyName={sponsorName}
-                                  label="Whats"
-                                  size="sm"
-                                />
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedLead(lead)}
-                                  className={`${btn('secondary')} h-8 px-2.5 text-[11px] font-bold`}
-                                >
-                                  Ver
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Lista Mobile (md:hidden) */}
-                <div className="flex flex-col gap-2.5 md:hidden">
-                  {displayedLeads.map((lead) => {
-                    const ratingNum = Number(lead.rating) || 0;
-                    const badge = getAffiliationBadge(lead);
-                    const leadName = lead.name || 'Estudante';
-                    return (
-                      <div
-                        key={lead.participantUid || lead.uid || lead.id}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`Ver detalhes do lead ${leadName}`}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setSelectedLead(lead);
-                          }
-                        }}
-                        className="flex items-center justify-between gap-3 rounded-[16px] bg-surface p-3.5 border border-line cursor-pointer hover:bg-white/[0.02] transition-colors"
-                        onClick={() => setSelectedLead(lead)}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span
-                            aria-hidden="true"
-                            className="flex shrink-0 items-center justify-center rounded-full text-[14px] font-extrabold text-white"
-                            style={{ width: 42, height: 42, background: bgFor(leadName) }}
-                          >
-                            {initialsOf(leadName)}
-                          </span>
-
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[14px] font-bold text-text truncate max-w-[150px]">
-                                {leadName}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: '10px',
-                                  fontWeight: 700,
-                                  color: badge.color,
-                                  background: badge.bg,
-                                  border: `1px solid ${badge.border}`,
-                                  padding: '1px 6px',
-                                  borderRadius: '6px',
-                                  lineHeight: '1.4'
-                                }}
-                              >
-                                {badge.label}
-                              </span>
-                              {lead.github && (
-                                <span className="inline-flex items-center gap-1 text-[10px] text-text-3">
-                                  <GitHubIcon size={10} color="var(--link)" />
-                                  <span>@{lead.github.replace(/^@/, '').trim()}</span>
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 text-[11px] text-text-3 mt-0.5">
-                              {lead.course && (
-                                <span className="truncate max-w-[160px]">
-                                  {lead.course} {lead.period ? `(${lead.period}º)` : ''}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 mt-1">
-                              {ratingNum > 0 && (
-                                <div className="inline-flex items-center gap-1 text-warn text-[11px] font-bold">
-                                  <Star size={11} fill="#FBBF24" />
-                                  <span>{ratingNum}★</span>
-                                </div>
-                              )}
-                              {lead.notes && (
-                                <div className="text-[11px] text-text-3 italic truncate max-w-[150px]">
-                                  "{lead.notes}"
-                                </div>
-                              )}
-                            </div>
-
-                            {leadsTab === 'company' && lead.collectedByEmail && (
-                              <div className="text-[10px] text-text-3 mt-1">
-                                Escaneado por: {lead.collectedByName || lead.collectedByEmail}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                          {lead.phone ? (
-                            <WhatsAppButton
-                              phone={lead.phone}
-                              participantName={lead.name}
-                              companyName={sponsorName}
-                              label="Whats"
-                              size="sm"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedLead(lead)}
-                              className={`${btn('secondary')} h-8 px-2.5 text-[11px] font-bold`}
-                            >
-                              Ver
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
+        <div className="tw-slide">
+          <Leads
+            myLeads={myLeads}
+            companyLeads={companyLeads}
+            isLoading={isLoadingLeads}
+            tier={tierKey}
+            companyName={sponsorName}
+            companyId={activeCompanyId}
+            onUpdateLead={handleUpdateLead}
+            onNavigate={handleNavigate}
+            onExportCsv={handleExportCsv}
+            focusLeadId={focusLeadId}
+            onFocusConsumed={() => setFocusLeadId(null)}
+          />
         </div>
-      </div>
-    )}
+      )}
 
       {/* ========================================================================= */}
       {/* ABA: RELATÓRIO EXECUTIVO ROI                                              */}
@@ -2422,23 +1429,6 @@ export default function Sponsor() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: DETALHES / EDIÇÃO DE LEAD DO CRM                                 */}
-      {/* ========================================================================= */}
-      {selectedLead && (
-        <SponsorLeadModal
-          participant={selectedLead}
-          sponsorProfile={{
-            ...userProfile,
-            companyId: userProfile?.companyId || activeCompanyId,
-            companyName: userProfile?.companyName || userProfile?.empresa || sponsorName
-          }}
-          isExistingLead={true}
-          onClose={() => setSelectedLead(null)}
-          onLeadUpdated={handleLeadUpdated}
-        />
-      )}
-
-      {/* ========================================================================= */}
       {/* MODAL 3: NOVA PUBLICAÇÃO NO FEED                                         */}
       {/* ========================================================================= */}
       {isNewPostOpen && createPortal(
@@ -2576,6 +1566,18 @@ export default function Sponsor() {
           onClose={() => setSelectedActivityModal(null)}
         />
       )}
-    </SponsorShell>
+      {/* ========================================================================= */}
+      {/* MODAL 5: CENTRAL DE CHAMADOS & APOIO (SPONSOR)                           */}
+      {/* ========================================================================= */}
+      <SupportTicketModal
+        isOpen={isSupportModalOpen}
+        onClose={() => setIsSupportModalOpen(false)}
+        role="SPONSOR"
+        entityName={sponsorName}
+        senderName={firstName ? `${firstName} (${sponsorName})` : sponsorName}
+        senderEmail={userProfile?.email || authUser?.email || ''}
+        defaultLocation={`Estande ${sponsorName}`}
+      />
+    </Shell>
   );
 }

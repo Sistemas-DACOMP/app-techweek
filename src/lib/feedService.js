@@ -333,6 +333,9 @@ export async function createFeedPost(postData) {
 
   const currentUid = postData.authorId || auth?.currentUser?.uid || undefined;
   const formattedPost = {
+    // As regras do Firestore exigem authorUid == uid de quem escreve; é também o que
+    // permite o autor apagar o próprio post.
+    authorUid: auth?.currentUser?.uid || '',
     author: String(postData.author || 'Organização FACOM'),
     authorRole: String(postData.authorRole || 'ORGANIZATION'),
     authorAvatar: String(postData.authorAvatar || ''),

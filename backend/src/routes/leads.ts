@@ -110,11 +110,34 @@ export function resolveCompanyId(raw?: string | null): SponsorCompanyId | null {
 }
 
 /**
+ * KAN-124: a empresa do patrocinador vem SEMPRE do servidor, nunca do cliente
+ * (body/query). Com `users.sponsorId` a empresa é `sponsors/{id}.legacyCompanyId`
+ * (sem fallback: conta vinculada a um patrocinador sem legacyCompanyId não
+ * entra no passaporte). Sem sponsorId, mantém o fallback legado (campos do
+ * próprio users/{uid} e e-mail). `linked` indica conta vinculada a sponsors/.
+ */
+async function resolveSponsorCompany(
+  read: (ref: any) => Promise<any>,
+  sponsorData: Record<string, any>,
+  email?: string | null
+): Promise<{ companyId: SponsorCompanyId | null; linked: boolean }> {
+  const sponsorId = sponsorData.sponsorId;
+  if (typeof sponsorId === 'string' && isValidFirestoreId(sponsorId)) {
+    const snap = await read(db.collection('sponsors').doc(sponsorId));
+    const legacy = snap?.exists ? snap.data?.()?.legacyCompanyId : null;
+    return { companyId: PASSPORT_COMPANIES.includes(legacy) ? legacy : null, linked: true };
+  }
+  const candidate =
+    sponsorData.companyId || sponsorData.company || sponsorData.empresa || sponsorData.companyName || email || '';
+  return { companyId: resolveCompanyId(candidate), linked: false };
+}
+
+/**
  * Handler do endpoint POST /api/leads
  * Extraído para facilitar testes unitários isolados.
  */
 export async function leadsHandler(req: Request, res: Response): Promise<void> {
-  const { participantUid, notes, rating, companyId: providedCompanyId, validateOnly, tags } = req.body ?? {};
+  const { participantUid, notes, rating, validateOnly, tags } = req.body ?? {};
   const sponsorUid = req.user!.uid;
 
   let resolvedUid = participantUid;
@@ -221,15 +244,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
 
       // Resolução da empresa patrocinadora para o Passaporte
       const sponsorData = (typeof sponsorSnap?.data === 'function' ? (sponsorSnap.data() || {}) : {}) as Record<string, any>;
-      const companyCandidate = 
-        providedCompanyId ||
-        sponsorData.companyId ||
-        sponsorData.company ||
-        sponsorData.empresa ||
-        sponsorData.companyName ||
-        req.user?.email ||
-        '';
-      const companyId = resolveCompanyId(companyCandidate);
+      const { companyId } = await resolveSponsorCompany((ref) => tx.get(ref), sponsorData, req.user?.email);
 
       const existingVisited = userData.visitedSponsors || {};
       const updatedVisited = { ...existingVisited };
@@ -387,19 +402,23 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
  */
 export async function getLeadsHandler(req: Request, res: Response): Promise<void> {
   const sponsorUid = req.user!.uid;
-  const queryCompany = req.query?.companyId as string | undefined;
+  // KAN-124: só ADMIN (sem vínculo de patrocinador) escolhe a empresa por
+  // query; SPONSOR nunca lê leads de outra empresa.
+  const queryCompany = req.user?.role === 'ADMIN' ? (req.query?.companyId as string | undefined) : undefined;
 
   try {
     const sponsorSnap = await db.collection('users').doc(sponsorUid).get().catch(() => ({ exists: false, data: () => ({}) }));
     const sponsorData = ((sponsorSnap && typeof sponsorSnap.data === 'function' ? sponsorSnap.data() : {}) || {}) as Record<string, any>;
-    const companyCandidate = queryCompany || sponsorData.companyId || sponsorData.empresa || sponsorData.company || req.user?.email || '';
-    const companyId = resolveCompanyId(companyCandidate) || (queryCompany ? queryCompany.toLowerCase() : null);
+    const resolved = await resolveSponsorCompany((ref) => ref.get(), sponsorData, req.user?.email);
+    const companyId = queryCompany ? (resolveCompanyId(queryCompany) || queryCompany.toLowerCase()) : resolved.companyId;
 
     const myLeadsSnap = await db.collection('leads').doc(sponsorUid).collection('contacts').get();
     const myLeads: any[] = myLeadsSnap.docs ? myLeadsSnap.docs.map(d => ({ ...d.data(), id: d.id })) : [];
 
     let companyLeads = [...myLeads];
-    if (companyId) {
+    // Decisão do Fabio (KAN-124): leads por pessoa. Conta vinculada a sponsors/ não
+    // enxerga leads dos colegas; o compartilhamento por empresa só sobra pro legado.
+    if (companyId && (queryCompany || !resolved.linked)) {
       const compLeadsSnap = await db.collection('company_leads').doc(companyId).collection('contacts').get();
       if (compLeadsSnap.docs && compLeadsSnap.docs.length > 0) {
         const map = new Map<string, any>();
@@ -430,7 +449,7 @@ export async function getLeadsHandler(req: Request, res: Response): Promise<void
  */
 export async function updateLeadHandler(req: Request, res: Response): Promise<void> {
   const { participantUid } = req.params;
-  const { rating, notes, companyId: providedCompanyId, tags } = req.body ?? {};
+  const { rating, notes, tags } = req.body ?? {};
   const sponsorUid = req.user!.uid;
 
   if (!participantUid || !isValidFirestoreId(participantUid)) {
@@ -472,8 +491,7 @@ export async function updateLeadHandler(req: Request, res: Response): Promise<vo
   try {
     const sponsorSnap = await db.collection('users').doc(sponsorUid).get().catch(() => ({ exists: false, data: () => ({}) }));
     const sponsorData = ((sponsorSnap && typeof sponsorSnap.data === 'function' ? sponsorSnap.data() : {}) || {}) as Record<string, any>;
-    const companyCandidate = providedCompanyId || sponsorData?.companyId || sponsorData?.empresa || req.user?.email || '';
-    const companyId = resolveCompanyId(companyCandidate);
+    const { companyId } = await resolveSponsorCompany((ref) => ref.get(), sponsorData, req.user?.email);
 
     const now = admin.firestore.FieldValue.serverTimestamp();
     const updates: Record<string, any> = { updatedAt: now };

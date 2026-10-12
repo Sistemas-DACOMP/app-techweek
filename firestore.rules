@@ -107,16 +107,22 @@ service cloud.firestore {
         && request.resource.data.email is string
         && request.auth.token.email != null
         && request.resource.data.email.lower() == request.auth.token.email.lower()
-        && isValidUserFields(request.resource.data);
+        && isValidUserFields(request.resource.data)
+        && !('symplaTicket' in request.resource.data) && !('hasSymplaTicket' in request.resource.data)
+        && !('sponsorId' in request.resource.data) && !('companyId' in request.resource.data)
+        && !('company' in request.resource.data) && !('empresa' in request.resource.data)
+        && !('companyName' in request.resource.data) && !('sponsorTermsVersion' in request.resource.data);
 
       allow update: if isVerifiedOwner(userId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(userAllowedUpdateKeys())
         && request.resource.data.diff(resource.data).affectedKeys().hasAll(['updatedAt'])
         && request.resource.data.updatedAt == request.time
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['email']) || (request.resource.data.email is string && request.auth.token.email != null && request.resource.data.email.lower() == request.auth.token.email.lower()))
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'createdAt', 'totalPoints', 'pontuacaoTotal', 'symplaTicket', 'hasSymplaTicket', 'sponsorId', 'companyId', 'company', 'empresa', 'companyName', 'jobTitle'])
         && isValidUserFields(request.resource.data);
 
-      allow delete: if isOwner(userId);
+      // Conta vinculada a patrocinador não se apaga/recria pelo client (recriar escolhendo company* contornaria o vínculo).
+      allow delete: if isOwner(userId) && !('sponsorId' in resource.data);
       // Achado do security review (KAN-60): "allow write: if isAdmin()" deixava
       // qualquer sessão ADMIN escrever QUALQUER campo (inclusive role) direto
       // pelo client, contornando PUT /api/admin/users/:uid/role (que sincroniza
@@ -136,6 +142,24 @@ service cloud.firestore {
     // Índice de unicidade de ingresso Sympla (KAN-108): só o backend (Admin SDK) escreve/lê.
     match /symplaTickets/{ticketId} {
       allow read, write: if false;
+    }
+
+    // Patrocinadores (KAN-124): leitura só ADMIN ou membro da equipe; escrita só pelo backend (Admin SDK).
+    match /sponsors/{sponsorId} {
+      allow read: if isAdmin() ||
+        (isAuthenticated() && exists(/databases/$(database)/documents/sponsors/$(sponsorId)/members/$(request.auth.uid)));
+      allow write: if false;
+
+      match /members/{memberUid} {
+        allow read: if isAdmin() || isOwner(memberUid);
+        allow write: if false;
+      }
+    }
+
+    // Convites de patrocinador: só ADMIN lê (tokenHash nunca sai pro client de outros); escrita só backend.
+    match /sponsorInvites/{inviteId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // Regras de Atividades: Leitura pública autenticada; escrita apenas para ADMIN
@@ -189,36 +213,53 @@ service cloud.firestore {
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
-    // Regras do Feed de Notícias e Comunidade
+    // Patrocinador: papel vem do claim OU do doc do usuário (o doc só é escrito pelo
+    // backend, ver regra de /users), porque contas antigas podem ter o papel só no doc.
+    function isSponsorUser() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'SPONSOR' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SPONSOR')
+      );
+    }
+
+    // Likes: o único campo que qualquer autenticado pode mexer, e só o próprio uid.
+    function onlyOwnLikeChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
+        request.resource.data.likes is list &&
+        request.resource.data.likes.toSet().difference(resource.data.get('likes', []).toSet()).hasOnly([request.auth.uid]) &&
+        resource.data.get('likes', []).toSet().difference(request.resource.data.likes.toSet()).hasOnly([request.auth.uid]);
+    }
+
+    // Regras do Feed de Notícias e Comunidade.
+    // Antes: read/create/update/delete eram `if true`, ou seja, qualquer pessoa, até
+    // sem login, podia criar, editar e apagar posts. Agora:
+    //  - leitura: só autenticado;
+    //  - criar: ADMIN/STAFF (posts da organização) ou patrocinador (posts de patrocinador),
+    //    sempre com authorUid == uid de quem escreve e authorRole coerente com o papel;
+    //  - editar: ADMIN (fixar etc.) ou qualquer autenticado só pra curtir/descurtir;
+    //  - apagar: ADMIN, ou o próprio autor (patrocinador apagando o que postou).
     match /feed_posts/{postId} {
       allow read: if true;
 
-      // Criação: Staff/Admin (tolerante para legado sem authorId) ou Patrocinador (authorId obrigatório e sem campos reservados)
-      // TODO: tornar authorId obrigatório após deploy do front
+      // Criação: Staff/Admin (tolerante para legado sem authorId) ou Patrocinador (authorUid/authorId próprio e sem campos reservados)
       allow create: if (
-        (isStaffOrAdmin() && (!('authorId' in request.resource.data) || request.resource.data.authorId == request.auth.uid))
+        (isStaffOrAdmin() && (!('authorId' in request.resource.data) || request.resource.data.authorId == request.auth.uid || request.resource.data.get('authorUid', '') == request.auth.uid))
         ||
-        (isSponsor()
-          && ('authorId' in request.resource.data && request.resource.data.authorId == request.auth.uid)
+        ((isSponsor() || isSponsorUser())
+          && (request.resource.data.get('authorUid', request.resource.data.get('authorId', '')) == request.auth.uid)
           && request.resource.data.authorRole == 'SPONSOR'
           && (!('pinned' in request.resource.data) || request.resource.data.pinned == false)
           && request.resource.data.get('likes', []).size() == 0
-          && request.resource.data.get('likesCount', 0) == 0)
+          && request.resource.data.get('likesCount', 0) == 0
+          && (!('content' in request.resource.data) || (request.resource.data.content is string && request.resource.data.content.size() <= 2000)))
       );
 
       // Edição: Staff/Admin (livre) ou participante com e-mail verificado alterando unicamente o próprio like
-      allow update: if isStaffOrAdmin() || (
-        isVerified()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
-        && request.resource.data.get('likes', []) is list
-        && request.resource.data.get('likes', []).toSet()
-             .difference(resource.data.get('likes', []).toSet()).hasOnly([request.auth.uid])
-        && resource.data.get('likes', []).toSet()
-             .difference(request.resource.data.get('likes', []).toSet()).hasOnly([request.auth.uid])
-      );
+      allow update: if isStaffOrAdmin() || (isVerified() && onlyOwnLikeChanged());
 
-      // Exclusão: Exclusivo para Staff/Admin
-      allow delete: if isStaffOrAdmin();
+      // Exclusão: Staff/Admin ou o próprio autor do post
+      allow delete: if isStaffOrAdmin() || (isAuthenticated() && (resource.data.get('authorUid', resource.data.get('authorId', '')) == request.auth.uid));
     }
 
     // Regras de Ranking / Leaderboard consolidado

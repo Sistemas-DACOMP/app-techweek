@@ -187,7 +187,7 @@ describe('Sponsor Service & Innovation Features', () => {
     it('garante que SponsorShell esconde menu lateral e navegação na impressão', async () => {
       const fs = await import('fs');
       const path = await import('path');
-      const shellContent = fs.readFileSync(path.resolve(__dirname, '../../src/components/sponsor/SponsorShell.jsx'), 'utf-8');
+      const shellContent = fs.readFileSync(path.resolve(__dirname, '../../src/pages/sponsor/Shell.jsx'), 'utf-8');
       
       expect(shellContent).toContain('print:!hidden');
       expect(shellContent).toContain('sponsor-shell');

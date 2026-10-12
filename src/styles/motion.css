@@ -1,0 +1,105 @@
+/* Movimento compartilhado dos painéis (admin, patrocinador).
+   Regra: só transform e opacity; movimento explica troca de tela e chegada de conteúdo, não decora.
+   Desligado por prefers-reduced-motion no fim do arquivo (index.css também zera a duração de tudo). */
+
+@keyframes twUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes twPageIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes twGrowX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes twLive { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: .5; } }
+
+/* Troca de tela (SPA): o wrapper é remontado com key da tela; filhos diretos entram em sequência. */
+.tw-page { animation: twPageIn 320ms var(--ease-out) both; }
+.tw-page > * { animation: twUp 500ms var(--ease-out) both; }
+.tw-page > :nth-child(2) { animation-delay: 60ms; }
+.tw-page > :nth-child(3) { animation-delay: 120ms; }
+.tw-page > :nth-child(4) { animation-delay: 180ms; }
+.tw-page > :nth-child(5) { animation-delay: 240ms; }
+.tw-page > :nth-child(6) { animation-delay: 300ms; }
+.tw-page > :nth-child(n+7) { animation-delay: 360ms; }
+
+/* Barra de lotação/progresso cresce da esquerda. */
+.tw-grow { transform-origin: left center; animation: twGrowX 900ms var(--ease-out) 250ms both; }
+
+/* Indicador "ao vivo / no ar". */
+.tw-live { animation: twLive 1.8s ease-in-out infinite; }
+
+/* Hover sutil, só onde há mouse. Escopo: raiz de cada painel. */
+.adm-root :is(button, a):not(:disabled) { transition: transform 180ms var(--ease-out), filter 180ms ease, background-color 150ms, color 150ms; }
+.adm-root article { transition: transform 180ms var(--ease-out); }
+@media (hover: hover) {
+  .adm-root :is(button, a):not(:disabled):hover { filter: brightness(1.12); }
+  .adm-root article:hover { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-page, .tw-page > *, .tw-grow, .tw-live { animation: none; }
+  .adm-root :is(button, a), .adm-root article { transition: none; }
+  .adm-root article:hover { transform: none; }
+}
+
+/* --- [UPD] - Admin Dados e ao vivo no design novo (abas Salas, Es --- */
+/* Movimento compartilhado do painel. Só transform, opacity e stroke-dashoffset.
+   Uso: className="tw-up" (entrada), "tw-growx"/"tw-growy" (barras), "tw-draw" (curva).
+   Atraso escalonado via style={{ '--i': n }}. */
+@keyframes twUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes twFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes twGrowX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes twGrowY { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes twDraw { from { stroke-dashoffset: var(--len, 2600); } to { stroke-dashoffset: 0; } }
+@keyframes twPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: .5; } }
+
+.tw-up { animation: twUp .55s cubic-bezier(.2, .8, .2, 1) calc(var(--i, 0) * 60ms) both; }
+.tw-fade { animation: twFade .6s ease calc(var(--i, 0) * 60ms + .4s) both; }
+.tw-growx { transform-origin: left center; animation: twGrowX 1s cubic-bezier(.2, .8, .2, 1) calc(var(--i, 0) * 60ms + .2s) both; }
+.tw-growy { transform-box: fill-box; transform-origin: bottom center; animation: twGrowY .9s cubic-bezier(.2, .8, .2, 1) calc(var(--i, 0) * 60ms + .2s) both; }
+.tw-draw { stroke-dasharray: var(--len, 2600); animation: twDraw 1.6s cubic-bezier(.3, .7, .2, 1) .2s both; }
+.tw-pulse { animation: twPulse 1.8s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-up, .tw-fade, .tw-growx, .tw-growy, .tw-draw, .tw-pulse { animation: none !important; }
+  .tw-draw { stroke-dasharray: none; }
+}
+
+/* --- Patrocinador: classes proprias (.tw-growx/.tw-fade/.tw-pulse ja vem do bloco acima) --- */
+@keyframes twPop { 0% { opacity: 0; transform: scale(.5); } 70% { opacity: 1; transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes twIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes twSheet { from { opacity: 0; transform: translateY(48px); } to { opacity: 1; transform: none; } }
+@keyframes twModal { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+
+.tw-rise { animation: twUp .55s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+.tw-pop { animation: twPop .45s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.tw-slide { animation: twIn .4s cubic-bezier(.2, .8, .2, 1) both; }
+.tw-sheet { animation: twSheet .5s cubic-bezier(.2, .8, .2, 1) both; }
+.tw-modal { animation: twModal .4s cubic-bezier(.2, .8, .2, 1) both; }
+
+.tw-press, .tw-lift { transition: transform .18s ease, filter .18s ease, opacity .18s ease, background-color .18s ease; }
+.tw-press:hover { transform: translateY(-1px); filter: brightness(1.12); }
+.tw-press:active { transform: scale(.97); }
+.tw-lift:hover { transform: translateY(-2px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-rise, .tw-pop, .tw-slide, .tw-sheet, .tw-modal { animation: none !important; }
+  .tw-press, .tw-lift { transition: none !important; }
+  .tw-press:hover, .tw-press:active, .tw-lift:hover { transform: none !important; filter: none !important; }
+}
+
+/* --- Cadastro de patrocinador / admin: classes mo-* --- */
+/* Movimento compartilhado: entrada escalonada e hover sutil.
+   Só transform e opacity. Uso: className="mo-up" style={{ '--i': índice }}.
+   Reduced-motion desliga tudo (também há regra global em index.css). */
+
+@keyframes moUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes moFade { from { opacity: 0; } to { opacity: 1; } }
+
+.mo-up { animation: moUp 450ms var(--ease-out, cubic-bezier(.2, .8, .2, 1)) both; animation-delay: calc(var(--i, 0) * 60ms); }
+.mo-fade { animation: moFade 300ms ease both; animation-delay: calc(var(--i, 0) * 60ms); }
+
+.mo-hover { transition: transform 180ms var(--ease-out, cubic-bezier(.2, .8, .2, 1)), opacity 180ms ease; }
+.mo-hover:hover { transform: translateY(-1px); }
+.mo-hover:active { transform: scale(.98); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mo-up, .mo-fade { animation: none; }
+  .mo-hover { transition: none; }
+  .mo-hover:hover, .mo-hover:active { transform: none; }
+}
