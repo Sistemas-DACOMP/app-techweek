@@ -8,6 +8,11 @@ export const SPONSOR_TIERS: SponsorTier[] = ['DIAMANTE', 'OURO', 'PRATA'];
 export const DEFAULT_TEAM_LIMIT: Record<SponsorTier, number> = { DIAMANTE: 5, OURO: 4, PRATA: 3 };
 
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// Link genérico (multiuso) vive menos: quem tem o link entra até encher a equipe.
+export const GENERIC_INVITE_TTL_MS = 48 * 60 * 60 * 1000;
+
+export const LOOKING_FOR_OPTIONS = ['Frontend', 'Backend', 'Dados / IA', 'Mobile', 'Design', 'Estágio'];
+export const LEGACY_COMPANY_IDS = ['kanastra', 'bayer', 'aimirim', 'bip', 'hyperflow'];
 
 // TODO(KAN-124): texto jurídico do termo de LGPD próprio do patrocinador ainda
 // não existe. Enquanto isso o aceite grava esta versão provisória; trocar pela
@@ -103,7 +108,7 @@ export interface CreatedInvite {
 
 function newInviteData(sponsorId: string, email: string | null, createdBy: string, resentFrom?: string) {
   const token = generateToken();
-  const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+  const expiresAt = new Date(Date.now() + (email ? INVITE_TTL_MS : GENERIC_INVITE_TTL_MS));
   const data: Record<string, any> = {
     sponsorId,
     tokenHash: hashToken(token),
@@ -225,6 +230,15 @@ export async function acceptInvite(
 
   const email = normalizeEmail(caller.email);
   const userRef = db.collection('users').doc(caller.uid);
+  const alreadyRegistered = () =>
+    new InviteError('ALREADY_REGISTERED', 409, 'Não foi possível concluir o cadastro com esta conta.');
+
+  // M2: nunca rebaixar/sobrescrever ADMIN/STAFF. Claims atuais lidos antes da transação
+  // (Auth não participa de transação do Firestore). Só PARTICIPANT/sem role/SPONSOR passam.
+  const currentClaims = ((await auth.getUser(caller.uid)).customClaims ?? {}) as Record<string, any>;
+  if (currentClaims.admin === true || (currentClaims.role && !['PARTICIPANT', 'SPONSOR'].includes(currentClaims.role))) {
+    throw alreadyRegistered();
+  }
 
   const result = await db.runTransaction(async (tx) => {
     const found = await findInviteByHash((q) => tx.get(q), tokenHash);
@@ -233,7 +247,6 @@ export async function acceptInvite(
       throw INVITE_INVALID_ERROR();
     }
     const invite = found.data;
-    assertUsable(invite);
 
     const sponsorRef = db.collection('sponsors').doc(invite.sponsorId);
     const membersRef = sponsorRef.collection('members');
@@ -243,8 +256,24 @@ export async function acceptInvite(
       tx.get(userRef),
       tx.get(membersRef)
     ]);
+    const existing = userSnap.exists ? (userSnap.data() as Record<string, any>) : {};
+
+    // M3: aceite idempotente. Já é membro deste sponsor (ex: claim falhou na 1a vez):
+    // sem escrita nenhuma, só reaplica o claim fora da transação.
+    if (
+      existing.sponsorId &&
+      existing.sponsorId === invite.sponsorId &&
+      membersSnap.docs?.some((d: any) => d.id === caller.uid)
+    ) {
+      return { sponsorId: invite.sponsorId as string };
+    }
+
+    assertUsable(invite);
     if (!sponsorSnap.exists) throw INVITE_INVALID_ERROR();
     const sponsor = sponsorSnap.data() as Record<string, any>;
+
+    // A2 (defesa em profundidade): link genérico sem domínio restrito nunca é aceito.
+    if (!invite.email && !sponsor.allowedEmailDomain) throw INVITE_INVALID_ERROR();
 
     if (!email) {
       throw new InviteError('EMAIL_MISMATCH', 403, 'O e-mail da sua conta não corresponde ao convite.');
@@ -260,15 +289,19 @@ export async function acceptInvite(
           `Este convite só aceita e-mails do domínio @${sponsor.allowedEmailDomain}.`
         );
       }
-      // Sem e-mail verificado qualquer um criaria conta com "x@dominio" no Firebase Auth.
-      if (caller.emailVerified !== true) {
-        throw new InviteError('EMAIL_NOT_VERIFIED', 403, 'Confirme seu e-mail antes de aceitar o convite.');
-      }
+    }
+    // M1: sem e-mail verificado qualquer um criaria conta "x@dominio" (ou com o e-mail do convite) no Firebase Auth.
+    if ((invite.email || sponsor.allowedEmailDomain) && caller.emailVerified !== true) {
+      throw new InviteError('EMAIL_NOT_VERIFIED', 403, 'Confirme seu e-mail antes de aceitar o convite.');
     }
 
-    const existing = userSnap.exists ? (userSnap.data() as Record<string, any>) : {};
-    if (existing.termsAcceptedAt || existing.sponsorId || membersSnap.docs?.some((d: any) => d.id === caller.uid)) {
-      throw new InviteError('ALREADY_REGISTERED', 409, 'Não foi possível concluir o cadastro com esta conta.');
+    if (
+      existing.termsAcceptedAt ||
+      existing.sponsorId ||
+      ['ADMIN', 'STAFF'].includes(existing.role) ||
+      membersSnap.docs?.some((d: any) => d.id === caller.uid)
+    ) {
+      throw alreadyRegistered();
     }
 
     const teamLimit = Number.isInteger(sponsor.teamLimit) ? sponsor.teamLimit : 0;

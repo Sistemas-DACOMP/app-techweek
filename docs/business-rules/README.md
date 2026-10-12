@@ -61,7 +61,7 @@ Regra pra evitar isso se repetir: todo teste novo que documentar uma regra de ne
 | [REG-CHECKIN-001](REG-CHECKIN-001-double-check-presenca.md) | Double-check de presença (entrance Staff + checkout aluno) | CONFIRMADA | a implementar — KAN-51 |
 | [REG-CHECKIN-002](REG-CHECKIN-002-attendance-mode-exclusivo.md) | attendanceMode decide fluxo exclusivo de presença por atividade | CONFIRMADA | a implementar — KAN-51 |
 | [REG-SPONSOR-001](REG-SPONSOR-001-cadastro-so-por-convite.md) | Cadastro de patrocinador só por convite, e-mail automático | CONFIRMADA | backend pronto — KAN-124 |
-| [REG-SPONSOR-002](REG-SPONSOR-002-ciclo-de-vida-do-convite.md) | Ciclo de vida do convite (7 dias, uso único/genérico, anti-enumeração) | INFERIDA | backend pronto — KAN-124 |
+| [REG-SPONSOR-002](REG-SPONSOR-002-ciclo-de-vida-do-convite.md) | Ciclo de vida do convite (nominal 7 dias, link genérico 48h só com domínio, anti-enumeração) | INFERIDA | backend pronto — KAN-124 |
 | [REG-SPONSOR-003](REG-SPONSOR-003-cota-de-equipe-atomica.md) | Cota de equipe (teamLimit) atômica | INFERIDA | backend pronto — KAN-124 |
 | [REG-SPONSOR-004](REG-SPONSOR-004-termo-lgpd-proprio-patrocinador.md) | Termo de LGPD próprio do patrocinador | INFERIDA | texto jurídico pendente — KAN-124 |
 | [REG-SPONSOR-005](REG-SPONSOR-005-sem-sympla-sem-reserva-leads-por-pessoa.md) | Sem Sympla sem reserva/pontos; leads por pessoa | CONFIRMADA + INFERIDA | backend pronto — KAN-124 |

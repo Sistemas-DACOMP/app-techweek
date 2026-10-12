@@ -8,6 +8,7 @@ import {
   SPONSOR_TIERS,
   DEFAULT_TEAM_LIMIT,
   SponsorTier,
+  LEGACY_COMPANY_IDS,
   CreatedInvite,
   normalizeDomain,
   normalizeEmail,
@@ -25,9 +26,18 @@ class SponsorNotFoundError extends Error {}
 class InviteNotFoundError extends Error {}
 class InviteAcceptedError extends Error {}
 class TeamLimitBelowMembersError extends Error {}
+class DomainRequiredError extends Error {}
 
 function bad(res: Response, message: string): void {
   res.status(400).json({ error: 'INVALID_PAYLOAD', message });
+}
+
+// A2: link genérico (sem e-mails) só existe se o sponsor tiver domínio restrito.
+function domainRequiredForLink(res: Response): void {
+  res.status(400).json({
+    error: 'SPONSOR_DOMAIN_REQUIRED_FOR_LINK',
+    message: 'Pra gerar um link genérico, defina o domínio de e-mail permitido (allowedEmailDomain) ou informe e-mails nominais.'
+  });
 }
 
 function toIso(value: any): string | null {
@@ -101,6 +111,7 @@ export async function createSponsorHandler(req: Request, res: Response): Promise
   }
   const parsedEmails = parseEmails(emails, domain);
   if (typeof parsedEmails === 'string') return bad(res, parsedEmails);
+  if (parsedEmails.length === 0 && !domain) return domainRequiredForLink(res);
 
   const adminUid = req.user!.uid;
   const sponsorRef = db.collection('sponsors').doc();
@@ -191,7 +202,7 @@ export async function listSponsorsHandler(_req: Request, res: Response): Promise
 export async function updateSponsorHandler(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   if (!isValidFirestoreId(id)) return bad(res, 'id inválido.');
-  const { name, logoUrl, tier, booth, teamLimit, allowedEmailDomain } = req.body ?? {};
+  const { name, logoUrl, tier, booth, teamLimit, allowedEmailDomain, legacyCompanyId } = req.body ?? {};
   const updates: Record<string, any> = {};
 
   if (name !== undefined) {
@@ -227,6 +238,13 @@ export async function updateSponsorHandler(req: Request, res: Response): Promise
       if (!d) return bad(res, 'allowedEmailDomain inválido (ex: empresa.com.br).');
       updates.allowedEmailDomain = d;
     }
+  }
+  // Liga o patrocinador ao passaporte/leads legados (só as 5 empresas conhecidas) ou desliga (null).
+  if (legacyCompanyId !== undefined) {
+    if (legacyCompanyId !== null && !LEGACY_COMPANY_IDS.includes(legacyCompanyId)) {
+      return bad(res, `legacyCompanyId deve ser null ou um de: ${LEGACY_COMPANY_IDS.join(', ')}.`);
+    }
+    updates.legacyCompanyId = legacyCompanyId;
   }
   if (Object.keys(updates).length === 0) return bad(res, 'Nenhum campo para atualizar.');
 
@@ -271,6 +289,7 @@ export async function createInvitesHandler(req: Request, res: Response): Promise
     const sponsor = sponsorSnap.data() as Record<string, any>;
     const parsedEmails = parseEmails(req.body?.emails, sponsor.allowedEmailDomain ?? null);
     if (typeof parsedEmails === 'string') return bad(res, parsedEmails);
+    if (parsedEmails.length === 0 && !sponsor.allowedEmailDomain) return domainRequiredForLink(res);
 
     const targets: Array<string | null> = parsedEmails.length ? parsedEmails : [null];
     const prepared = targets.map((email) => ({ email, ...prepareInvite(id, email, req.user!.uid) }));
@@ -300,6 +319,7 @@ export async function resendInviteHandler(req: Request, res: Response): Promise<
       if (old.status === 'ACCEPTED') throw new InviteAcceptedError();
       const sponsorSnap = await tx.get(db.collection('sponsors').doc(old.sponsorId));
       if (!sponsorSnap.exists) throw new SponsorNotFoundError();
+      if (!old.email && !(sponsorSnap.data() as any).allowedEmailDomain) throw new DomainRequiredError();
 
       const fresh = prepareInvite(old.sponsorId, old.email ?? null, req.user!.uid, inviteId);
       tx.update(oldRef, { status: 'REVOKED' });
@@ -314,6 +334,7 @@ export async function resendInviteHandler(req: Request, res: Response): Promise<
       res.status(404).json({ error: 'INVITE_NOT_FOUND', message: 'Convite não encontrado.' });
       return;
     }
+    if (error instanceof DomainRequiredError) return domainRequiredForLink(res);
     if (error instanceof InviteAcceptedError) {
       res.status(409).json({ error: 'INVITE_ALREADY_ACCEPTED', message: 'Este convite já foi aceito.' });
       return;

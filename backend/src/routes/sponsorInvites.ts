@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middlewares/authMiddleware';
-import { sponsorInviteIpLimiter } from '../middlewares/rateLimiter';
+import { sponsorInviteIpLimiter, debugClientIp } from '../middlewares/rateLimiter';
 import {
   InviteError,
   RolePartiallyUpdatedError,
   AcceptProfile,
+  LOOKING_FOR_OPTIONS,
   getInvitePreview,
   acceptInvite
 } from '../services/sponsorInvites';
@@ -42,6 +43,17 @@ function str(value: unknown, max: number): string | null {
   return v && v.length <= max ? v : null;
 }
 
+/** Só https:// (rejeita javascript:, data:, http:). */
+function httpsUrl(value: unknown, max: number): string | null {
+  const v = str(value, max);
+  if (!v) return null;
+  try {
+    return new URL(v).protocol === 'https:' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Valida o corpo do aceite. Só lê campos conhecidos: role/sponsorId/teamLimit/email do cliente são ignorados. */
 export function parseAcceptBody(body: any): AcceptProfile | string {
   const firstName = str(body?.firstName, 80);
@@ -56,21 +68,22 @@ export function parseAcceptBody(body: any): AcceptProfile | string {
   const profile: AcceptProfile = { firstName, lastName, jobTitle, phone: phoneRaw!, lookingFor: [] };
 
   if (body.photoURL !== undefined && body.photoURL !== null && body.photoURL !== '') {
-    const url = str(body.photoURL, 500);
-    if (!url || !/^https:\/\//i.test(url)) return 'photoURL deve ser uma URL https.';
+    const url = httpsUrl(body.photoURL, 500);
+    if (!url) return 'photoURL deve ser uma URL https.';
     profile.photoURL = url;
   }
   if (body.linkedin !== undefined && body.linkedin !== null && body.linkedin !== '') {
-    const l = str(body.linkedin, 200);
-    if (!l) return 'linkedin inválido.';
+    const l = httpsUrl(body.linkedin, 200);
+    if (!l) return 'linkedin deve ser uma URL https.';
     profile.linkedin = l;
   }
   if (body.lookingFor !== undefined && body.lookingFor !== null) {
     if (!Array.isArray(body.lookingFor) || body.lookingFor.length > 10) return 'lookingFor deve ser uma lista de até 10 textos.';
     for (const item of body.lookingFor) {
-      const v = str(item, 60);
-      if (!v) return 'lookingFor deve conter apenas textos curtos não vazios.';
-      profile.lookingFor.push(v);
+      if (typeof item !== 'string' || !LOOKING_FOR_OPTIONS.includes(item)) {
+        return `lookingFor aceita apenas: ${LOOKING_FOR_OPTIONS.join(', ')}.`;
+      }
+      if (!profile.lookingFor.includes(item)) profile.lookingFor.push(item);
     }
   }
   return profile;
@@ -101,6 +114,7 @@ export async function acceptInviteHandler(req: Request, res: Response): Promise<
 }
 
 // Limiter por IP ANTES de qualquer trabalho (inclusive requireAuth, que consulta o Firebase Auth).
+router.use(debugClientIp);
 router.get('/:token', sponsorInviteIpLimiter, previewInviteHandler);
 router.post('/:token/accept', sponsorInviteIpLimiter, requireAuth, acceptInviteHandler);
 

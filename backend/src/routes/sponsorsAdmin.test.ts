@@ -99,7 +99,7 @@ describe('POST /api/admin/sponsors', () => {
 
   it('sem emails cria um link genérico; teamLimit explícito vence o default', async () => {
     const res = makeRes();
-    await createSponsorHandler(req({ name: 'Acme', tier: 'PRATA', teamLimit: 8 }), res);
+    await createSponsorHandler(req({ name: 'Acme', tier: 'PRATA', teamLimit: 8, allowedEmailDomain: 'acme.com' }), res);
     const body = sent(res);
     expect(body.invites).toEqual([expect.objectContaining({ email: null, emailSent: false })]);
     expect(fake.store.get(`sponsors/${body.sponsorId}`)!.teamLimit).toBe(8);
@@ -190,7 +190,7 @@ describe('reenvio e revogação', () => {
   });
 
   it('revogar é idempotente e bloqueia o aceite', async () => {
-    const { invite } = await createOne();
+    const { invite } = await createOne(['a@acme.com']);
     for (let i = 0; i < 2; i++) {
       const res = makeRes();
       await revokeInviteHandler(req({}, { inviteId: invite.inviteId }), res);
@@ -205,7 +205,7 @@ describe('reenvio e revogação', () => {
 describe('PATCH, convites extras e listagem', () => {
   it('teamLimit abaixo dos membros => 409 TEAM_LIMIT_BELOW_MEMBERS; acima passa', async () => {
     const res0 = makeRes();
-    await createSponsorHandler(req({ name: 'Acme', tier: 'PRATA' }), res0);
+    await createSponsorHandler(req({ name: 'Acme', tier: 'PRATA', allowedEmailDomain: 'acme.com' }), res0);
     const { sponsorId, invites } = sent(res0);
     for (const n of [1, 2]) {
       await acceptInvite(tokenOf(invites[0].link), { uid: `u${n}`, email: `p${n}@acme.com`, emailVerified: true }, profile);
@@ -248,7 +248,7 @@ describe('PATCH, convites extras e listagem', () => {
 
   it('GET lista membros, limite e convites por status (PENDING vencido conta como EXPIRED)', async () => {
     const res0 = makeRes();
-    await createSponsorHandler(req({ name: 'Acme', tier: 'PRATA' }), res0);
+    await createSponsorHandler(req({ name: 'Acme', tier: 'PRATA', allowedEmailDomain: 'acme.com' }), res0);
     const { sponsorId, invites } = sent(res0);
     await acceptInvite(tokenOf(invites[0].link), { uid: 'u1', email: 'p1@acme.com', emailVerified: true }, profile);
     fake.store.set('sponsorInvites/old', {

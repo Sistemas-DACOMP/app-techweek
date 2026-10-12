@@ -43,7 +43,7 @@ const profile: AcceptProfile = {
   lastName: 'Silva',
   jobTitle: 'Recrutadora',
   phone: '(34) 99999-0000',
-  lookingFor: ['estagio']
+  lookingFor: ['Estágio']
 };
 
 const future = () => admin.firestore.Timestamp.fromDate(new Date(Date.now() + 3600_000));
@@ -56,7 +56,7 @@ function seedSponsor(over: Record<string, any> = {}) {
     teamLimit: 5,
     booth: null,
     logoUrl: null,
-    allowedEmailDomain: null,
+    allowedEmailDomain: 'kanastra.com.br',
     legacyCompanyId: 'kanastra',
     ...over
   });
@@ -212,7 +212,7 @@ describe('acceptInvite (KAN-124)', () => {
       sponsorId: 'sp1',
       jobTitle: 'Recrutadora',
       sponsorTermsVersion: SPONSOR_TERMS_VERSION,
-      lookingFor: ['estagio']
+      lookingFor: ['Estágio']
     });
     expect(fake.store.get('users/u1')!.termsAcceptedAt).toBeTruthy();
     expect(auth.setCustomUserClaims).toHaveBeenCalledWith('u1', { foo: 1, role: 'SPONSOR' });

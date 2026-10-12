@@ -11,4 +11,4 @@ implementacao_relacionada: backend/src/routes/leads.ts, backend/src/middlewares/
 ultima_validacao: 2026-10-12
 ---
 
-Parte INFERIDA: ignorar `companyId` vindo do cliente (um SPONSOR não pode se passar por outra empresa). Contas SPONSOR legadas, sem sponsorId, mantêm o fallback antigo (campos do próprio users/{uid} e e-mail) e o compartilhamento legado por `company_leads`; contas vinculadas a sponsors/ não enxergam leads dos colegas.
+O ADMIN liga um patrocinador novo ao passaporte via `PATCH /api/admin/sponsors/:id` com `legacyCompanyId` (kanastra, bayer, aimirim, bip, hyperflow ou null). Parte INFERIDA: ignorar `companyId` vindo do cliente (um SPONSOR não pode se passar por outra empresa). Contas SPONSOR legadas, sem sponsorId, mantêm o fallback antigo (campos do próprio users/{uid} e e-mail) e o compartilhamento legado por `company_leads`; contas vinculadas a sponsors/ não enxergam leads dos colegas.
