@@ -1,0 +1,38 @@
+/* Movimento compartilhado dos painéis (admin, patrocinador).
+   Regra: só transform e opacity; movimento explica troca de tela e chegada de conteúdo, não decora.
+   Desligado por prefers-reduced-motion no fim do arquivo (index.css também zera a duração de tudo). */
+
+@keyframes twUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes twPageIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes twGrowX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes twLive { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: .5; } }
+
+/* Troca de tela (SPA): o wrapper é remontado com key da tela; filhos diretos entram em sequência. */
+.tw-page { animation: twPageIn 320ms var(--ease-out) both; }
+.tw-page > * { animation: twUp 500ms var(--ease-out) both; }
+.tw-page > :nth-child(2) { animation-delay: 60ms; }
+.tw-page > :nth-child(3) { animation-delay: 120ms; }
+.tw-page > :nth-child(4) { animation-delay: 180ms; }
+.tw-page > :nth-child(5) { animation-delay: 240ms; }
+.tw-page > :nth-child(6) { animation-delay: 300ms; }
+.tw-page > :nth-child(n+7) { animation-delay: 360ms; }
+
+/* Barra de lotação/progresso cresce da esquerda. */
+.tw-grow { transform-origin: left center; animation: twGrowX 900ms var(--ease-out) 250ms both; }
+
+/* Indicador "ao vivo / no ar". */
+.tw-live { animation: twLive 1.8s ease-in-out infinite; }
+
+/* Hover sutil, só onde há mouse. Escopo: raiz de cada painel. */
+.adm-root :is(button, a):not(:disabled) { transition: transform 180ms var(--ease-out), filter 180ms ease, background-color 150ms, color 150ms; }
+.adm-root article { transition: transform 180ms var(--ease-out); }
+@media (hover: hover) {
+  .adm-root :is(button, a):not(:disabled):hover { filter: brightness(1.12); }
+  .adm-root article:hover { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-page, .tw-page > *, .tw-grow, .tw-live { animation: none; }
+  .adm-root :is(button, a), .adm-root article { transition: none; }
+  .adm-root article:hover { transform: none; }
+}
