@@ -1306,6 +1306,7 @@ export default function Admin() {
         active={view}
         onNavigate={goTo}
         navigate={navigate}
+        onLogout={handleAdminLogout}
         me={me}
         search={sectionSearch ? sectionSearch[0] : globalSearch}
         onSearch={sectionSearch ? sectionSearch[1] : setGlobalSearch}
