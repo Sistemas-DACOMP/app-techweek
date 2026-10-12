@@ -52,6 +52,7 @@ Regra pra evitar isso se repetir: todo teste novo que documentar uma regra de ne
 | [REG-AUTH-003](REG-AUTH-003-status-pos-cadastro.md) | Status pós-cadastro (anti-enumeração / rate limit) | CONFIRMADA | implementado |
 | [REG-LGPD-001](REG-LGPD-001-aceite-lgpd-backend.md) | Aceite de LGPD exigido pelo backend (Firebase) | CONFIRMADA | implementado — KAN-72 |
 | [REG-AVATAR-001](REG-AVATAR-001-limite-avatar-backend.md) | Limite de tamanho/tipo de avatar (front + Storage) | CONFIRMADA | implementado ponta a ponta |
+| [REG-LEAD-001](REG-LEAD-001-captura-leads-estande.md) | Captura de leads de estande, privacidade LGPD e gamificação | CONFIRMADA | implementado — KAN-55 |
 | [REG-SCANNER-001](REG-SCANNER-001-qr-palestra-especifica.md) | Scanner aceita QR de qualquer palestra | INFERIDA | gap — KAN-30 (verificar se KAN-71 já fechou, não conferido nesta rodada) |
 | [REG-PROFILE-001](REG-PROFILE-001-rls-cross-user.md) | Leitura cross-user de users/{uid} pro lookup do Scanner | CONFIRMADA | implementado, sem gap |
 | [REG-REGISTER-001](REG-REGISTER-001-linkedin-instagram-descartados.md) | `linkedin`/`instagram` descartados no cadastro | OBSERVADA | gap — sem card ainda |
@@ -59,3 +60,8 @@ Regra pra evitar isso se repetir: todo teste novo que documentar uma regra de ne
 | [REG-BOOKING-001](REG-BOOKING-001-leitura-restrita-dono.md) | Leitura de reserva de vaga restrita ao dono ou ADMIN | CONFIRMADA | implementado — KAN-48 |
 | [REG-CHECKIN-001](REG-CHECKIN-001-double-check-presenca.md) | Double-check de presença (entrance Staff + checkout aluno) | CONFIRMADA | a implementar — KAN-51 |
 | [REG-CHECKIN-002](REG-CHECKIN-002-attendance-mode-exclusivo.md) | attendanceMode decide fluxo exclusivo de presença por atividade | CONFIRMADA | a implementar — KAN-51 |
+| [REG-SPONSOR-001](REG-SPONSOR-001-cadastro-so-por-convite.md) | Cadastro de patrocinador só por convite, e-mail automático | CONFIRMADA | backend pronto — KAN-124 |
+| [REG-SPONSOR-002](REG-SPONSOR-002-ciclo-de-vida-do-convite.md) | Ciclo de vida do convite (7 dias, uso único/genérico, anti-enumeração) | INFERIDA | backend pronto — KAN-124 |
+| [REG-SPONSOR-003](REG-SPONSOR-003-cota-de-equipe-atomica.md) | Cota de equipe (teamLimit) atômica | INFERIDA | backend pronto — KAN-124 |
+| [REG-SPONSOR-004](REG-SPONSOR-004-termo-lgpd-proprio-patrocinador.md) | Termo de LGPD próprio do patrocinador | INFERIDA | texto jurídico pendente — KAN-124 |
+| [REG-SPONSOR-005](REG-SPONSOR-005-sem-sympla-sem-reserva-leads-por-pessoa.md) | Sem Sympla sem reserva/pontos; leads por pessoa | CONFIRMADA + INFERIDA | backend pronto — KAN-124 |
