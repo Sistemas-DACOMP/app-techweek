@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Mail, CheckCircle2, AlertCircle, RefreshCw, LogOut, Loader2 } from 'lucide-react';
 import Mascot from './Mascot';
 import logoTw from '../assets/logo-tw.png';
@@ -15,6 +15,9 @@ export default function EmailVerificationGate({ onVerified }) {
   const [cooldown, setCooldown] = useState(0);
   const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error' | 'info', message: string }
 
+  const isCheckingRef = useRef(false);
+  const isVerifiedRef = useRef(false);
+
   // Temporizador para contagem regressiva de reenvio
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -24,13 +27,65 @@ export default function EmailVerificationGate({ onVerified }) {
     return () => clearTimeout(timer);
   }, [cooldown]);
 
+  // Auto-detecção ao retornar para a aba (visibilitychange) ou focar na janela (focus)
+  useEffect(() => {
+    let active = true;
+
+    const handleAutoCheck = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState && document.visibilityState !== 'visible') {
+        return;
+      }
+      if (isCheckingRef.current || isVerifiedRef.current) return;
+
+      isCheckingRef.current = true;
+      try {
+        const refreshedUser = await reloadUser();
+        if (!active) return;
+        if (refreshedUser?.emailVerified) {
+          isVerifiedRef.current = true;
+          setFeedback({
+            type: 'success',
+            message: 'E-mail confirmado com sucesso! Redirecionando...'
+          });
+          setTimeout(() => {
+            if (active && onVerified) onVerified();
+          }, 800);
+        }
+      } catch (_err) {
+        // Silencioso em caso de erro na checagem em background para não poluir a tela
+      } finally {
+        isCheckingRef.current = false;
+      }
+    };
+
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', handleAutoCheck);
+    }
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('focus', handleAutoCheck);
+    }
+
+    return () => {
+      active = false;
+      if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+        document.removeEventListener('visibilitychange', handleAutoCheck);
+      }
+      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+        window.removeEventListener('focus', handleAutoCheck);
+      }
+    };
+  }, [reloadUser, onVerified]);
+
   // Checagem manual clicando em "Já confirmei meu e-mail"
   const handleCheckVerification = async () => {
+    if (isCheckingRef.current || isVerifiedRef.current) return;
+    isCheckingRef.current = true;
     setChecking(true);
     setFeedback(null);
     try {
       const refreshedUser = await reloadUser();
       if (refreshedUser?.emailVerified) {
+        isVerifiedRef.current = true;
         setFeedback({
           type: 'success',
           message: 'E-mail confirmado com sucesso! Redirecionando...'
@@ -50,6 +105,7 @@ export default function EmailVerificationGate({ onVerified }) {
         message: 'Erro ao verificar o status da conta. Verifique sua conexão e tente novamente.'
       });
     } finally {
+      isCheckingRef.current = false;
       setChecking(false);
     }
   };

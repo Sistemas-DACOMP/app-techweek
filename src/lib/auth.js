@@ -166,6 +166,8 @@ export async function signUpWithEmail({ email, password, metadata }) {
     }
 
     // Dispara automaticamente o e-mail oficial de confirmação do Firebase Auth
+    let verificationEmailSent = false;
+    let verificationEmailError = null;
     try {
       const actionCodeSettings = getActionCodeSettings();
       if (actionCodeSettings) {
@@ -173,14 +175,22 @@ export async function signUpWithEmail({ email, password, metadata }) {
       } else {
         await sendEmailVerification(userCredential.user);
       }
+      verificationEmailSent = true;
     } catch (verifErr) {
       console.warn('Aviso: Falha ao enviar e-mail de verificação inicial:', verifErr);
+      verificationEmailSent = false;
+      verificationEmailError = mapAuthError(verifErr) || verifErr.message || 'Falha ao enviar e-mail de verificação inicial.';
     }
 
     return {
       status: 'signed_in',
       message: null,
-      data: { user: userCredential.user, metadata },
+      data: {
+        user: userCredential.user,
+        metadata,
+        verificationEmailSent,
+        verificationEmailError
+      },
       error: null
     };
   } catch (err) {
@@ -196,15 +206,48 @@ export async function signUpWithEmail({ email, password, metadata }) {
 
 /**
  * Retorna as configurações de redirecionamento para o e-mail do Firebase Auth.
+ * Prioriza a variável de ambiente VITE_APP_URL sobre window.location.origin.
  */
 export function getActionCodeSettings() {
-  if (typeof window !== 'undefined' && window.location?.origin) {
+  const baseUrl =
+    (typeof process !== 'undefined' && process.env?.VITE_APP_URL) ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_APP_URL) ||
+    (typeof window !== 'undefined' && window.location?.origin) ||
+    null;
+
+  if (baseUrl) {
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
     return {
-      url: `${window.location.origin}/#/login`,
+      url: `${cleanBaseUrl}/#/login`,
       handleCodeInApp: false
     };
   }
   return undefined;
+}
+
+/**
+ * Higieniza chaves de sessão e dados de usuário no localStorage ao deslogar.
+ */
+export function clearAuthLocalCaches() {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (
+        key &&
+        (key.startsWith('facom_profile_') ||
+         key.startsWith('facom_point_events_') ||
+         key === 'facom_logged_in' ||
+         key === 'facom_test_session')
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => window.localStorage.removeItem(k));
+  } catch (_err) {
+    // Falha silenciosa caso localStorage não esteja acessível
+  }
 }
 
 /**
@@ -248,25 +291,20 @@ export async function reloadCurrentUser() {
 }
 
 /**
- * Encerra a sessão do usuário.
+ * Encerra a sessão do usuário e higieniza caches locais.
  */
 export async function logoutUser() {
   try {
     await signOut(auth);
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.removeItem('facom_logged_in');
-      window.localStorage.removeItem('facom_test_session');
-      if (typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('facom_auth_state_changed', { detail: { user: null } }));
-      }
+    clearAuthLocalCaches();
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('facom_auth_state_changed', { detail: { user: null } }));
     }
     return { success: true };
   } catch (err) {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.removeItem('facom_test_session');
-      if (typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('facom_auth_state_changed', { detail: { user: null } }));
-      }
+    clearAuthLocalCaches();
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('facom_auth_state_changed', { detail: { user: null } }));
     }
     return { success: false, error: mapAuthError(err) };
   }

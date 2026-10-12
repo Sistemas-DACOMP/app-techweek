@@ -44,7 +44,8 @@ import {
   sendVerificationEmail,
   reloadCurrentUser,
   signUpWithEmail,
-  getActionCodeSettings
+  getActionCodeSettings,
+  clearAuthLocalCaches
 } from './auth';
 
 describe('Módulo de Autenticação Firebase (auth.js)', () => {
@@ -147,12 +148,27 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
     });
   });
 
-  describe('logoutUser', () => {
-    it('deve encerrar a sessão e limpar flag local', async () => {
+  describe('logoutUser e higienização de cache local', () => {
+    it('deve encerrar a sessão e remover facom_logged_in, facom_test_session, perfis e pontos do localStorage', async () => {
       signOut.mockResolvedValue();
-      const mockStorage = {
-        removeItem: vi.fn()
+      const storageState = {
+        'facom_logged_in': 'true',
+        'facom_test_session': 'true',
+        'facom_profile_user123': '{"name":"Alan"}',
+        'facom_point_events_user123': '[{"id":"e1"}]',
+        'theme': 'dark'
       };
+
+      const mockStorage = {
+        getItem: vi.fn((k) => storageState[k] || null),
+        setItem: vi.fn((k, v) => { storageState[k] = v; }),
+        removeItem: vi.fn((k) => { delete storageState[k]; }),
+        key: vi.fn((i) => Object.keys(storageState)[i]),
+        get length() {
+          return Object.keys(storageState).length;
+        }
+      };
+
       vi.stubGlobal('localStorage', mockStorage);
       vi.stubGlobal('window', { localStorage: mockStorage });
 
@@ -160,7 +176,43 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
 
       expect(res.success).toBe(true);
       expect(signOut).toHaveBeenCalled();
-      expect(mockStorage.removeItem).toHaveBeenCalledWith('facom_logged_in');
+      expect(storageState['facom_logged_in']).toBeUndefined();
+      expect(storageState['facom_test_session']).toBeUndefined();
+      expect(storageState['facom_profile_user123']).toBeUndefined();
+      expect(storageState['facom_point_events_user123']).toBeUndefined();
+      expect(storageState['theme']).toBe('dark');
+
+      vi.unstubAllGlobals();
+    });
+
+    it('clearAuthLocalCaches remove todas as chaves facom_profile_* e facom_point_events_*', () => {
+      const storageState = {
+        'facom_logged_in': 'true',
+        'facom_test_session': 'true',
+        'facom_profile_u1': '{}',
+        'facom_profile_u2': '{}',
+        'facom_point_events_u1': '[]',
+        'outra_chave': 'manter'
+      };
+
+      const mockStorage = {
+        removeItem: vi.fn((k) => { delete storageState[k]; }),
+        key: vi.fn((i) => Object.keys(storageState)[i]),
+        get length() {
+          return Object.keys(storageState).length;
+        }
+      };
+
+      vi.stubGlobal('window', { localStorage: mockStorage });
+
+      clearAuthLocalCaches();
+
+      expect(storageState['facom_logged_in']).toBeUndefined();
+      expect(storageState['facom_test_session']).toBeUndefined();
+      expect(storageState['facom_profile_u1']).toBeUndefined();
+      expect(storageState['facom_profile_u2']).toBeUndefined();
+      expect(storageState['facom_point_events_u1']).toBeUndefined();
+      expect(storageState['outra_chave']).toBe('manter');
 
       vi.unstubAllGlobals();
     });
@@ -207,6 +259,19 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
           url: 'https://techweek.facom.ufu.br/#/login',
           handleCodeInApp: false
         });
+        vi.unstubAllGlobals();
+      });
+
+      it('deve priorizar VITE_APP_URL sobre window.location.origin quando definida', () => {
+        vi.stubEnv('VITE_APP_URL', 'https://evento.ufu.br');
+        vi.stubGlobal('window', { location: { origin: 'https://localhost:5173' } });
+
+        expect(getActionCodeSettings()).toEqual({
+          url: 'https://evento.ufu.br/#/login',
+          handleCodeInApp: false
+        });
+
+        vi.unstubAllEnvs();
         vi.unstubAllGlobals();
       });
 
@@ -282,6 +347,52 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
           url: 'https://techweek.facom.ufu.br/#/login',
           handleCodeInApp: false
         });
+        vi.unstubAllGlobals();
+      });
+
+      it('retorna verificationEmailSent: true e verificationEmailError: null quando o envio tem sucesso', async () => {
+        vi.stubGlobal('window', { location: { origin: 'https://techweek.facom.ufu.br' } });
+        const mockNewUser = {
+          uid: 'new-user-789',
+          email: 'sucesso@ufu.br',
+          emailVerified: false
+        };
+        createUserWithEmailAndPassword.mockResolvedValue({ user: mockNewUser });
+        sendEmailVerification.mockResolvedValue();
+
+        const res = await signUpWithEmail({
+          email: 'sucesso@ufu.br',
+          password: 'senhaSegura123!',
+          metadata: { firstName: 'Ada' }
+        });
+
+        expect(res.status).toBe('signed_in');
+        expect(res.data.verificationEmailSent).toBe(true);
+        expect(res.data.verificationEmailError).toBeNull();
+
+        vi.unstubAllGlobals();
+      });
+
+      it('retorna verificationEmailSent: false e verificationEmailError quando sendEmailVerification falha', async () => {
+        vi.stubGlobal('window', { location: { origin: 'https://techweek.facom.ufu.br' } });
+        const mockNewUser = {
+          uid: 'new-user-101',
+          email: 'ratelimit@ufu.br',
+          emailVerified: false
+        };
+        createUserWithEmailAndPassword.mockResolvedValue({ user: mockNewUser });
+        sendEmailVerification.mockRejectedValue({ code: 'auth/too-many-requests' });
+
+        const res = await signUpWithEmail({
+          email: 'ratelimit@ufu.br',
+          password: 'senhaSegura123!',
+          metadata: { firstName: 'Grace' }
+        });
+
+        expect(res.status).toBe('signed_in');
+        expect(res.data.verificationEmailSent).toBe(false);
+        expect(res.data.verificationEmailError).toBe(AUTH_MESSAGES.too_many_requests);
+
         vi.unstubAllGlobals();
       });
     });
