@@ -1401,6 +1401,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** A tipagem foi escrita antes da introdução dos papéis de `SPONSOR` na modelagem do sistema sem sincronização com os novos tipos do backend.
 - **Sugestão de correção:** Atualizar `RegisterUserResult` para usar o tipo global `UserRole` (`'PARTICIPANT' | 'ADMIN' | 'STAFF' | 'SPONSOR'`) e adicionar testes unitários cobrindo o registro complementar de contas pré-existentes com papéis de `SPONSOR` e `STAFF`.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/services/registerUser.ts`, atualizada a tipagem de retorno `RegisterUserResult` e a variável local `userRole` para utilizarem o tipo unificado `UserRole` (`'PARTICIPANT' | 'STAFF' | 'SPONSOR' | 'ADMIN'`). Em `backend/src/services/registerUser.test.ts`, adicionado teste unitário comprovando que contas com papéis pré-existentes (`SPONSOR`, `STAFF`, `ADMIN`) mantêm suas permissões intactas sem sofrer rebaixamento indevido para `PARTICIPANT`.
+- **Verificação:** Executado `npm --prefix backend test src/services/registerUser.test.ts`. Todos os 8 testes passaram com sucesso.
 
 ---
 
@@ -1418,6 +1421,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O autor assumiu que o `uid` sempre virá sanitizado diretamente do Firebase Auth, sem considerar chamadas internas ou rotas administrativas.
 - **Sugestão de correção:** Incluir validação defensiva com `isValidFirestoreId(uid)` no topo da função e adicionar testes com UIDs inválidos garantindo tratamento de erro controlado.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/services/registerUser.ts`, adicionada validação defensiva no topo da função utilizando `isValidFirestoreId(uid)`. Caso o identificador seja vazio, nulo, contenha barras, espaços ou caracteres inválidos para IDs de documento do Firestore, a função lança um `Error` descritivo antes de interagir com o banco de dados. Em `backend/src/services/registerUser.test.ts`, adicionados testes unitários para múltiplos cenários de UIDs inválidos garantindo que nenhuma transação ou escrita é disparada.
+- **Verificação:** Executado `npm --prefix backend test src/services/registerUser.test.ts`. Testes passaram. Prova de falha verificada: ao desabilitar temporariamente a validação de UID, os testes de rejeição falharam imediatamente com `promise resolved instead of rejecting`.
 
 ---
 
@@ -1439,6 +1445,11 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhuma das duas funções é importada ou executada em `sponsorInvites.test.ts`.
 - **Causa provável:** Os testes foram focados na complexidade do aceite concorrente e nas regras de segurança do KAN-124, omitindo os métodos de criação.
 - **Sugestão de correção:** Criar testes para `prepareInvite` validando o cálculo de expiração com 7 dias quando `email` é fornecido e 48 horas quando `null`, e testes para `dispatchInvite` mockando `sendSponsorInviteEmail` com sucesso e falha de SMTP.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/services/sponsorInvites.test.ts`, adicionada suíte dedicada de testes unitários para `prepareInvite` e `dispatchInvite`:
+  1. `prepareInvite`: validação de estrutura do documento criado, geração de token de 43 caracteres em base64url, cálculo exato do `tokenHash` via SHA-256, status inicial `PENDING`, gravação de `resentFromInviteId` e diferenciação estrita de TTL (7 dias / `INVITE_TTL_MS` para convite nominal vs 48 horas / `GENERIC_INVITE_TTL_MS` para convite genérico multiuso).
+  2. `dispatchInvite`: validação da construção do link público com hash fragment, disparo de e-mail via `sendSponsorInviteEmail` quando nominal (com retorno `emailSent: true` em caso de sucesso e `false` em caso de falha), e garantia de não-disparo de e-mail para links genéricos (`email: null`).
+- **Verificação:** Executado `npm --prefix backend test src/services/sponsorInvites.test.ts`. Todos os 28 testes passaram (anteriormente 22 testes). Prova de falha verificada: ao quebrar temporariamente o cálculo de TTL nominal em `sponsorInvites.ts`, o teste falhou imediatamente com asserção de timestamp `expected ... to be greater than or equal to ... + INVITE_TTL_MS`.
 
 ---
 

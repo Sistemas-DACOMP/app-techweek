@@ -19,11 +19,24 @@ vi.mock('firebase-admin', async (importOriginal) => {
   return { ...actual, firestore: actual.firestore };
 });
 
+vi.mock('./emailService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./emailService')>();
+  return {
+    ...actual,
+    sendSponsorInviteEmail: vi.fn(),
+    buildInviteLink: vi.fn((token: string) => `https://app.example/#/sponsor/invite/${token}`)
+  };
+});
+
 import * as admin from 'firebase-admin';
 import { auth } from '../config/firebaseAdmin';
 import {
   acceptInvite,
   getInvitePreview,
+  prepareInvite,
+  dispatchInvite,
+  INVITE_TTL_MS,
+  GENERIC_INVITE_TTL_MS,
   generateToken,
   hashToken,
   normalizeDomain,
@@ -34,6 +47,7 @@ import {
   SPONSOR_TERMS_VERSION,
   AcceptProfile
 } from './sponsorInvites';
+import { sendSponsorInviteEmail, buildInviteLink } from './emailService';
 import router, { acceptInviteHandler, previewInviteHandler } from '../routes/sponsorInvites';
 import { requireAuth } from '../middlewares/authMiddleware';
 import { sponsorInviteIpLimiter } from '../middlewares/rateLimiter';
@@ -334,3 +348,94 @@ describe('POST /api/sponsor-invites/:token/accept (handler)', () => {
     expect(get[0]).toBe(sponsorInviteIpLimiter);
   });
 });
+
+describe('prepareInvite e dispatchInvite (KAN-124 / ERR-064)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.APP_BASE_URL = 'https://app.example/';
+  });
+
+  describe('prepareInvite', () => {
+    it('cria convite nominal com TTL de 7 dias (INVITE_TTL_MS) e status PENDING', () => {
+      const before = Date.now();
+      const prepared = prepareInvite('sp1', 'recrutador@kanastra.com.br', 'admin-1');
+      const after = Date.now();
+
+      expect(prepared.ref).toBeDefined();
+      expect(prepared.ref.path).toMatch(/^sponsorInvites\//);
+      expect(prepared.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(prepared.data.tokenHash).toBe(hashToken(prepared.token));
+      expect(prepared.data.sponsorId).toBe('sp1');
+      expect(prepared.data.email).toBe('recrutador@kanastra.com.br');
+      expect(prepared.data.status).toBe('PENDING');
+      expect(prepared.data.createdBy).toBe('admin-1');
+      expect(prepared.data.resentFromInviteId).toBeNull();
+
+      // TTL nominal: 7 dias
+      const expiresAtMs = prepared.expiresAt.getTime();
+      expect(expiresAtMs).toBeGreaterThanOrEqual(before + INVITE_TTL_MS);
+      expect(expiresAtMs).toBeLessThanOrEqual(after + INVITE_TTL_MS);
+    });
+
+    it('cria convite genérico (email null) com TTL de 48 horas (GENERIC_INVITE_TTL_MS)', () => {
+      const before = Date.now();
+      const prepared = prepareInvite('sp1', null, 'admin-1');
+      const after = Date.now();
+
+      expect(prepared.data.email).toBeNull();
+      const expiresAtMs = prepared.expiresAt.getTime();
+      expect(expiresAtMs).toBeGreaterThanOrEqual(before + GENERIC_INVITE_TTL_MS);
+      expect(expiresAtMs).toBeLessThanOrEqual(after + GENERIC_INVITE_TTL_MS);
+    });
+
+    it('registra resentFromInviteId quando informado', () => {
+      const prepared = prepareInvite('sp1', 'a@b.com', 'admin-1', 'inv-original-123');
+      expect(prepared.data.resentFromInviteId).toBe('inv-original-123');
+    });
+  });
+
+  describe('dispatchInvite', () => {
+    it('para convite nominal dispara e-mail com link e retorna emailSent: true em caso de sucesso', async () => {
+      (sendSponsorInviteEmail as any).mockResolvedValue(true);
+
+      const prepared = prepareInvite('sp1', 'ana@kanastra.com.br', 'admin-1');
+      const result = await dispatchInvite(prepared, 'ana@kanastra.com.br', 'Kanastra');
+
+      expect(result.inviteId).toBe(prepared.ref.id);
+      expect(result.email).toBe('ana@kanastra.com.br');
+      expect(result.expiresAt).toBe(prepared.expiresAt.toISOString());
+      expect(result.link).toBe(`https://app.example/#/sponsor/invite/${prepared.token}`);
+      expect(result.emailSent).toBe(true);
+
+      expect(sendSponsorInviteEmail).toHaveBeenCalledWith({
+        to: 'ana@kanastra.com.br',
+        sponsorName: 'Kanastra',
+        link: result.link,
+        expiresAt: prepared.expiresAt
+      });
+    });
+
+    it('para convite nominal propaga emailSent: false quando o envio de e-mail falha', async () => {
+      (sendSponsorInviteEmail as any).mockResolvedValue(false);
+
+      const prepared = prepareInvite('sp1', 'falha@kanastra.com.br', 'admin-1');
+      const result = await dispatchInvite(prepared, 'falha@kanastra.com.br', 'Kanastra');
+
+      expect(result.emailSent).toBe(false);
+      expect(result.link).toContain(prepared.token);
+    });
+
+    it('para convite genérico (email null) não dispara e-mail e retorna emailSent: false', async () => {
+      vi.clearAllMocks();
+
+      const prepared = prepareInvite('sp1', null, 'admin-1');
+      const result = await dispatchInvite(prepared, null, 'Kanastra');
+
+      expect(sendSponsorInviteEmail).not.toHaveBeenCalled();
+      expect(result.email).toBeNull();
+      expect(result.emailSent).toBe(false);
+      expect(result.link).toContain(prepared.token);
+    });
+  });
+});
+
