@@ -9,7 +9,8 @@ import {
   onAuthStateChanged,
   deleteUser,
   reauthenticateWithCredential,
-  EmailAuthProvider
+  EmailAuthProvider,
+  verifyBeforeUpdateEmail
 } from 'firebase/auth';
 import { deleteDoc, doc } from 'firebase/firestore';
 
@@ -24,6 +25,7 @@ vi.mock('firebase/auth', () => ({
   onAuthStateChanged: vi.fn(),
   deleteUser: vi.fn(),
   reauthenticateWithCredential: vi.fn(),
+  verifyBeforeUpdateEmail: vi.fn(),
   getAuth: vi.fn(() => ({ currentUser: null })),
   connectAuthEmulator: vi.fn(),
   EmailAuthProvider: {
@@ -66,7 +68,9 @@ import {
   signUpWithEmail,
   getActionCodeSettings,
   clearAuthLocalCaches,
-  deleteCurrentUserAccount
+  deleteCurrentUserAccount,
+  requestEmailCorrection,
+  mapUpdateEmailError
 } from './auth';
 
 describe('Módulo de Autenticação Firebase (auth.js)', () => {
@@ -536,6 +540,86 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
       expect(reauthenticateWithCredential).not.toHaveBeenCalled();
       expect(deleteDoc).toHaveBeenCalled();
       expect(deleteUser).toHaveBeenCalled();
+    });
+  });
+
+  describe('Correção de E-mail (KAN-116)', () => {
+    const mockUser = {
+      uid: 'user-corrigir-123',
+      email: 'errado@ufu.br'
+    };
+
+    beforeEach(() => {
+      vi.stubGlobal('window', { location: { origin: 'https://techweek.facom.ufu.br' } });
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('falha se o e-mail for inválido ou vazio', async () => {
+      await expect(requestEmailCorrection(mockUser, '')).rejects.toThrow(/e-mail válido/i);
+      await expect(requestEmailCorrection(mockUser, 'invalido')).rejects.toThrow(/e-mail válido/i);
+    });
+
+    it('falha se o novo e-mail for idêntico ao atual', async () => {
+      await expect(requestEmailCorrection(mockUser, 'errado@ufu.br')).rejects.toThrow(/idêntico ao atual/i);
+    });
+
+    it('executa verifyBeforeUpdateEmail com sucesso sem senha', async () => {
+      verifyBeforeUpdateEmail.mockResolvedValueOnce();
+
+      const res = await requestEmailCorrection(mockUser, 'correto@ufu.br');
+
+      expect(res.success).toBe(true);
+      expect(res.newEmail).toBe('correto@ufu.br');
+      expect(verifyBeforeUpdateEmail).toHaveBeenCalledWith(
+        mockUser,
+        'correto@ufu.br',
+        expect.any(Object)
+      );
+      expect(reauthenticateWithCredential).not.toHaveBeenCalled();
+    });
+
+    it('executa reautenticação se a senha for fornecida antes de verifyBeforeUpdateEmail', async () => {
+      reauthenticateWithCredential.mockResolvedValueOnce();
+      verifyBeforeUpdateEmail.mockResolvedValueOnce();
+
+      const res = await requestEmailCorrection(mockUser, 'correto@ufu.br', 'senha123');
+
+      expect(res.success).toBe(true);
+      expect(reauthenticateWithCredential).toHaveBeenCalledWith(
+        mockUser,
+        expect.objectContaining({ email: 'errado@ufu.br', password: 'senha123' })
+      );
+      expect(verifyBeforeUpdateEmail).toHaveBeenCalledWith(
+        mockUser,
+        'correto@ufu.br',
+        expect.any(Object)
+      );
+    });
+
+    it('usa fallback sem actionCodeSettings se o envio com settings falhar', async () => {
+      verifyBeforeUpdateEmail
+        .mockRejectedValueOnce(new Error('auth/unauthorized-continue-uri'))
+        .mockResolvedValueOnce();
+
+      const res = await requestEmailCorrection(mockUser, 'correto@ufu.br');
+
+      expect(res.success).toBe(true);
+      expect(verifyBeforeUpdateEmail).toHaveBeenCalledTimes(2);
+      expect(verifyBeforeUpdateEmail).toHaveBeenLastCalledWith(mockUser, 'correto@ufu.br');
+    });
+
+    it('mapUpdateEmailError traduz os códigos esperados do KAN-116', () => {
+      expect(mapUpdateEmailError({ code: 'auth/email-already-in-use' })).toBe('Este e-mail já está em uso por outra conta.');
+      expect(mapUpdateEmailError({ code: 'auth/invalid-email' })).toBe('Por favor, insira um e-mail válido.');
+      expect(mapUpdateEmailError({ code: 'auth/wrong-password' })).toBe('Senha incorreta. Tente novamente.');
+      expect(mapUpdateEmailError({ code: 'auth/invalid-credential' })).toBe('Senha incorreta. Tente novamente.');
+      expect(mapUpdateEmailError({ code: 'auth/requires-recent-login' })).toBe('Por segurança, informe sua senha para alterar o e-mail.');
+      expect(mapUpdateEmailError({ code: 'auth/too-many-requests' })).toBe('Muitas tentativas seguidas. Aguarde alguns instantes.');
+      expect(mapUpdateEmailError({ code: 'auth/same-email' })).toBe('O novo e-mail informado é idêntico ao atual.');
+      expect(mapUpdateEmailError(null)).toBeNull();
     });
   });
 });
