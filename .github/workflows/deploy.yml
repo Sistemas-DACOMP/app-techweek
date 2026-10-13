@@ -31,10 +31,13 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install dependencies (Root and Backend)
+      - name: Install root dependencies
+        run: npm ci --no-audit
+
+      - name: Install backend dependencies
         run: |
-          npm ci
-          (cd backend && npm ci)
+          cd backend
+          npm ci --legacy-peer-deps --no-audit || npm install --legacy-peer-deps --no-audit
 
       - name: Configure backend environment (.env)
         env:
