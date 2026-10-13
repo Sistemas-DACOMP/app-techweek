@@ -1,22 +1,64 @@
 import { useState, useEffect, useRef } from 'react';
-import { Mail, CheckCircle2, AlertCircle, RefreshCw, LogOut, Loader2 } from 'lucide-react';
+import { Mail, CheckCircle2, AlertCircle, RefreshCw, LogOut, Loader2, Edit3, X } from 'lucide-react';
 import Mascot from './Mascot';
 import logoTw from '../assets/logo-tw.png';
 import { useAuth } from '../contexts/AuthContext';
+import { requestEmailCorrection, mapUpdateEmailError } from '../lib/auth';
+import { isValidEmail } from '../lib/validators';
 import '../styles/entrada.css';
 
 const RESEND_COOLDOWN_S = 60;
 
-export default function EmailVerificationGate({ onVerified }) {
+/**
+ * Valida o novo e-mail informado para correção no gate (KAN-116).
+ */
+export function validateEmailCorrection(newEmail, currentEmail) {
+  const cleanEmail = (newEmail || '').trim().toLowerCase();
+  if (!cleanEmail || !isValidEmail(cleanEmail)) {
+    return { valid: false, error: 'Por favor, insira um e-mail válido.' };
+  }
+  const cleanCurrent = (currentEmail || '').trim().toLowerCase();
+  if (cleanEmail === cleanCurrent) {
+    return { valid: false, error: 'O novo e-mail informado é idêntico ao atual.' };
+  }
+  return { valid: true, email: cleanEmail };
+}
+
+export default function EmailVerificationGate({
+  onVerified,
+  initialModalOpen = false,
+  initialPendingEmail = null,
+  initialFeedback = null
+}) {
   const { user, reloadUser, resendVerification, logout } = useAuth();
 
   const [checking, setChecking] = useState(false);
   const [resending, setResending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error' | 'info', message: string }
+  const [feedback, setFeedback] = useState(initialFeedback);
+
+  // Estados do Modal de Correção de E-mail (KAN-116)
+  const [isModalOpen, setIsModalOpen] = useState(initialModalOpen);
+  const [pendingNewEmail, setPendingNewEmail] = useState(initialPendingEmail);
+  const [newEmailInput, setNewEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [updatingEmail, setUpdatingEmail] = useState(false);
+  const [modalError, setModalError] = useState(null);
 
   const isCheckingRef = useRef(false);
   const isVerifiedRef = useRef(false);
+
+  // Fecha o modal ao pressionar a tecla ESC
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !updatingEmail) {
+        setIsModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModalOpen, updatingEmail]);
 
   // Temporizador para contagem regressiva de reenvio
   useEffect(() => {
@@ -110,29 +152,87 @@ export default function EmailVerificationGate({ onVerified }) {
     }
   };
 
+  const hasPasswordProvider =
+    !user?.providerData ||
+    user.providerData.length === 0 ||
+    user.providerData.some((p) => p?.providerId === 'password');
+
+  const handleOpenModal = () => {
+    setNewEmailInput(pendingNewEmail || user?.email || '');
+    setPasswordInput('');
+    setModalError(null);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    if (updatingEmail) return;
+    setIsModalOpen(false);
+    setModalError(null);
+    setPasswordInput('');
+  };
+
+  const handleUpdateEmailSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setModalError(null);
+
+    const currentEmail = pendingNewEmail || user?.email || '';
+    const validation = validateEmailCorrection(newEmailInput, currentEmail);
+    if (!validation.valid) {
+      setModalError(validation.error);
+      return;
+    }
+
+    setUpdatingEmail(true);
+    try {
+      await requestEmailCorrection(user, validation.email, passwordInput);
+      setPendingNewEmail(validation.email);
+      setIsModalOpen(false);
+      setPasswordInput('');
+      setCooldown(RESEND_COOLDOWN_S);
+      setFeedback({
+        type: 'success',
+        message: `Enviamos um novo link de confirmação para ${validation.email}! Verifique sua caixa de entrada e spam.`
+      });
+    } catch (err) {
+      console.error('[EmailVerificationGate] Erro ao corrigir e-mail:', err);
+      setModalError(mapUpdateEmailError(err));
+    } finally {
+      setUpdatingEmail(false);
+    }
+  };
+
   // Reenvio do e-mail de verificação com cooldown
   const handleResendEmail = async () => {
     if (cooldown > 0 || resending) return;
     setResending(true);
     setFeedback(null);
     try {
-      const result = await resendVerification();
-      if (result.success) {
+      if (pendingNewEmail) {
+        await requestEmailCorrection(user, pendingNewEmail);
         setCooldown(RESEND_COOLDOWN_S);
         setFeedback({
           type: 'success',
-          message: result.message || 'E-mail de confirmação reenviado com sucesso! Verifique sua caixa de entrada e spam.'
+          message: `Novo link de confirmação reenviado para ${pendingNewEmail}! Verifique sua caixa de entrada e spam.`
         });
       } else {
-        setFeedback({
-          type: 'error',
-          message: result.error || 'Não foi possível reenviar o e-mail no momento. Aguarde alguns instantes.'
-        });
+        const result = await resendVerification();
+        if (result.success) {
+          setCooldown(RESEND_COOLDOWN_S);
+          setFeedback({
+            type: 'success',
+            message: result.message || 'E-mail de confirmação reenviado com sucesso! Verifique sua caixa de entrada e spam.'
+          });
+        } else {
+          setFeedback({
+            type: 'error',
+            message: result.error || 'Não foi possível reenviar o e-mail no momento. Aguarde alguns instantes.'
+          });
+        }
       }
-    } catch (_err) {
+    } catch (err) {
       setFeedback({
         type: 'error',
-        message: 'Falha ao conectar com o serviço de autenticação.'
+        message: mapUpdateEmailError(err) || 'Falha ao reenviar e-mail de confirmação.'
       });
     } finally {
       setResending(false);
@@ -147,7 +247,7 @@ export default function EmailVerificationGate({ onVerified }) {
     }
   };
 
-  const emailDisplay = user?.email || 'seu e-mail cadastrado';
+  const emailDisplay = pendingNewEmail || user?.email || 'seu e-mail cadastrado';
 
   return (
     <div className="ent-bg-login relative flex h-full w-full flex-col overflow-x-hidden overflow-y-auto px-5 text-text">
@@ -192,6 +292,17 @@ export default function EmailVerificationGate({ onVerified }) {
 
           <div className="mt-2.5 rounded-xl border border-[#2E3878] bg-[#0E152E]/90 px-3.5 py-2.5 text-center text-sm font-semibold text-primary break-all">
             {emailDisplay}
+          </div>
+
+          <div className="mt-2 flex justify-center">
+            <button
+              type="button"
+              onClick={handleOpenModal}
+              className="inline-flex items-center gap-1.5 text-xs text-[#7B96FF] hover:text-[#9bb1ff] transition-colors focus:outline-none"
+            >
+              <Edit3 className="size-3.5" />
+              <span>Digitou o e-mail errado? <strong>Alterar e-mail</strong></span>
+            </button>
           </div>
 
           <p className="mt-3 text-center text-xs leading-relaxed text-text-2">
@@ -276,6 +387,121 @@ export default function EmailVerificationGate({ onVerified }) {
           </div>
         </section>
       </div>
+
+      {/* Modal de Correção de E-mail (KAN-116) */}
+      {isModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-edit-email-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          onClick={handleCloseModal}
+        >
+          <div
+            className="relative w-full max-w-[400px] rounded-2xl border border-[#2A3460] bg-[linear-gradient(180deg,#151E40_0%,#111833_100%)] p-6 shadow-[0_24px_60px_rgba(0,0,0,0.6)] text-text"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-primary/20 text-[#7B96FF] border border-primary/30">
+                  <Edit3 className="size-4" />
+                </div>
+                <h2 id="modal-edit-email-title" className="text-base font-bold text-white">
+                  Corrigir endereço de e-mail
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                disabled={updatingEmail}
+                className="text-text-3 hover:text-white p-1 rounded-lg transition-colors disabled:opacity-50"
+                aria-label="Fechar"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <p className="mt-3 text-xs leading-relaxed text-text-2">
+              Informe o e-mail correto para onde devemos enviar o link de confirmação.
+            </p>
+
+            {modalError && (
+              <div
+                role="alert"
+                className="mt-3 flex items-start gap-2 rounded-xl border border-rose-500/40 bg-rose-500/15 p-2.5 text-xs text-rose-200"
+              >
+                <AlertCircle className="size-4 shrink-0 mt-0.5 text-rose-400" />
+                <span>{modalError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateEmailSubmit} className="mt-4 flex flex-col gap-3">
+              <div>
+                <label htmlFor="gate-new-email" className="block text-[11px] font-bold uppercase tracking-wider text-text-2 mb-1">
+                  Novo e-mail
+                </label>
+                <input
+                  id="gate-new-email"
+                  type="email"
+                  required
+                  value={newEmailInput}
+                  onChange={(e) => setNewEmailInput(e.target.value)}
+                  placeholder="seu-email-correto@exemplo.com"
+                  disabled={updatingEmail}
+                  autoFocus
+                  className="w-full h-11 px-3.5 rounded-xl border border-[#2E3878] bg-[#0E152E] text-sm text-text placeholder:text-[#5B6B9E] focus:border-primary focus:outline-none disabled:opacity-50"
+                />
+              </div>
+
+              {hasPasswordProvider && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="gate-password" className="block text-[11px] font-bold uppercase tracking-wider text-text-2">
+                      Sua senha atual
+                    </label>
+                    <span className="text-[10px] text-text-3">(caso solicitada)</span>
+                  </div>
+                  <input
+                    id="gate-password"
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="Digite sua senha"
+                    disabled={updatingEmail}
+                    className="w-full h-11 px-3.5 rounded-xl border border-[#2E3878] bg-[#0E152E] text-sm text-text placeholder:text-[#5B6B9E] focus:border-primary focus:outline-none disabled:opacity-50"
+                  />
+                </div>
+              )}
+
+              <div className="mt-2 flex flex-col gap-2">
+                <button
+                  type="submit"
+                  disabled={updatingEmail}
+                  className="ent-btn-submit flex h-11 w-full items-center justify-center gap-2 rounded-xl text-xs font-bold text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-60"
+                >
+                  {updatingEmail ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      <span>Enviando confirmação...</span>
+                    </>
+                  ) : (
+                    <span>Enviar confirmação para o novo e-mail</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  disabled={updatingEmail}
+                  className="flex h-10 w-full items-center justify-center rounded-xl border border-[#2E3878]/60 bg-[#1A234A]/40 text-xs font-semibold text-text-2 hover:bg-[#1A234A] hover:text-text-1 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
