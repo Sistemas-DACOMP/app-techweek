@@ -152,7 +152,9 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
           resolvedUid = emailSnap.docs[0].id;
         }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Erro ao resolver UID por e-mail em leadsHandler:', e);
+    }
   }
 
   if (typeof resolvedUid !== 'string' || !resolvedUid || !isValidFirestoreId(resolvedUid)) {
@@ -323,7 +325,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       }
 
       const leadContactData: Record<string, any> = {
-        participantUid,
+        participantUid: resolvedUid,
         sponsorUid,
         companyId: companyId || null,
         collectedByEmail: req.user?.email || null,
@@ -350,7 +352,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         tx.set(leadRef, leadContactData, { merge: true });
 
         if (companyId) {
-          const companyLeadRef = db.collection('company_leads').doc(companyId).collection('contacts').doc(participantUid);
+          const companyLeadRef = db.collection('company_leads').doc(companyId).collection('contacts').doc(resolvedUid);
           tx.set(companyLeadRef, leadContactData, { merge: true });
         }
       }
@@ -363,7 +365,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
           success: true,
           validateOnly: Boolean(validateOnly),
           lead: {
-            participantUid,
+            participantUid: resolvedUid,
             sponsorUid,
             companyId,
             name,
@@ -413,14 +415,31 @@ export async function getLeadsHandler(req: Request, res: Response): Promise<void
     const resolved = await resolveSponsorCompany((ref) => ref.get(), sponsorData, req.user?.email);
     const companyId = queryCompany ? (resolveCompanyId(queryCompany) || queryCompany.toLowerCase()) : resolved.companyId;
 
-    const myLeadsSnap = await db.collection('leads').doc(sponsorUid).collection('contacts').get();
+    const rawLimit = Number(req.query?.limit);
+    const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50;
+
+    let myLeadsRef: any = db.collection('leads').doc(sponsorUid).collection('contacts');
+    if (typeof myLeadsRef.orderBy === 'function') {
+      myLeadsRef = myLeadsRef.orderBy('createdAt', 'desc');
+    }
+    if (typeof myLeadsRef.limit === 'function') {
+      myLeadsRef = myLeadsRef.limit(limit);
+    }
+    const myLeadsSnap = await myLeadsRef.get();
     const myLeads: any[] = myLeadsSnap.docs ? myLeadsSnap.docs.map(d => ({ ...d.data(), id: d.id })) : [];
 
     let companyLeads = [...myLeads];
     // Decisão do Fabio (KAN-124): leads por pessoa. Conta vinculada a sponsors/ não
     // enxerga leads dos colegas; o compartilhamento por empresa só sobra pro legado.
     if (companyId && (queryCompany || !resolved.linked)) {
-      const compLeadsSnap = await db.collection('company_leads').doc(companyId).collection('contacts').get();
+      let compLeadsRef: any = db.collection('company_leads').doc(companyId).collection('contacts');
+      if (typeof compLeadsRef.orderBy === 'function') {
+        compLeadsRef = compLeadsRef.orderBy('createdAt', 'desc');
+      }
+      if (typeof compLeadsRef.limit === 'function') {
+        compLeadsRef = compLeadsRef.limit(limit);
+      }
+      const compLeadsSnap = await compLeadsRef.get();
       if (compLeadsSnap.docs && compLeadsSnap.docs.length > 0) {
         const map = new Map<string, any>();
         compLeadsSnap.docs.forEach(d => map.set(d.id, { ...d.data(), id: d.id }));
@@ -433,7 +452,11 @@ export async function getLeadsHandler(req: Request, res: Response): Promise<void
       success: true,
       myLeads,
       companyLeads,
-      companyId
+      companyId,
+      pagination: {
+        limit,
+        totalReturned: myLeads.length
+      }
     });
   } catch (error) {
     console.error('Erro ao buscar leads:', error);

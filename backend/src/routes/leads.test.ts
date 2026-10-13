@@ -157,6 +157,134 @@ describe('POST /api/leads handler (KAN-55)', () => {
     );
   });
 
+  it('resolve participantUid enviado como e-mail para o ID do documento do usuário (ERR-077)', async () => {
+    const req = makeReq({
+      participantUid: 'aluno@ufu.br',
+      notes: 'Contato via e-mail',
+      rating: 5
+    });
+    const res = makeRes();
+
+    (db.collection as any).mockImplementation((name: string) => {
+      if (name === 'users') {
+        return {
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              get: vi.fn().mockResolvedValue({
+                empty: false,
+                docs: [{ id: 'part-resolved' }]
+              })
+            })
+          }),
+          doc: (id: string) => ({
+            path: `users/${id}`,
+            collection: (sub: string) => ({
+              doc: (subId: string) => ({ path: `users/${id}/${sub}/${subId}` })
+            })
+          })
+        };
+      }
+      return {
+        doc: (id: string) => ({
+          path: `${name}/${id}`,
+          collection: (sub: string) => ({
+            doc: (subId: string) => ({ path: `${name}/${id}/${sub}/${subId}` })
+          })
+        })
+      };
+    });
+
+    const mockTx = {
+      get: vi.fn((ref: { path: string }) => {
+        if (ref.path === 'users/part-resolved') {
+          return Promise.resolve({
+            exists: true,
+            data: () => ({
+              name: 'Aluno Resolvido',
+              email: 'aluno@ufu.br',
+              phone: '34991112233'
+            })
+          });
+        }
+        return Promise.resolve({ exists: false });
+      }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
+
+    await leadsHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        lead: expect.objectContaining({
+          participantUid: 'part-resolved'
+        })
+      })
+    );
+  });
+
+  it('rejeita com 400 INVALID_PAYLOAD quando e-mail não é encontrado no Firestore (ERR-077)', async () => {
+    const req = makeReq({ participantUid: 'naoexiste@ufu.br' });
+    const res = makeRes();
+
+    (db.collection as any).mockImplementation((name: string) => {
+      if (name === 'users') {
+        return {
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              get: vi.fn().mockResolvedValue({ empty: true, docs: [] })
+            })
+          }),
+          doc: (id: string) => ({ path: `users/${id}` })
+        };
+      }
+      return { doc: (id: string) => ({ path: `${name}/${id}` }) };
+    });
+
+    await leadsHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'INVALID_PAYLOAD' })
+    );
+  });
+
+  it('trata falha de rede ao resolver e-mail logando aviso e retornando 400 sem travar (ERR-077)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const req = makeReq({ participantUid: 'erro@ufu.br' });
+    const res = makeRes();
+
+    (db.collection as any).mockImplementation((name: string) => {
+      if (name === 'users') {
+        return {
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              get: vi.fn().mockRejectedValue(new Error('Network error'))
+            })
+          }),
+          doc: (id: string) => ({ path: `users/${id}` })
+        };
+      }
+      return { doc: (id: string) => ({ path: `${name}/${id}` }) };
+    });
+
+    await leadsHandler(req, res);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Erro ao resolver UID por e-mail'),
+      expect.any(Error)
+    );
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'INVALID_PAYLOAD' })
+    );
+    warnSpy.mockRestore();
+  });
+
   it('grava lead, calcula faixa etária e credita +50 pontos na primeira visita (HTTP 201)', async () => {
     const req = makeReq({
       participantUid: 'part-1',
@@ -593,6 +721,121 @@ describe('GET /api/leads handler', () => {
         ])
       })
     );
+  });
+
+  it('aplica limit e orderBy createdAt desc na busca e retorna metadados de paginação (ERR-075)', async () => {
+    const { getLeadsHandler } = await import('./leads');
+    const req = {
+      body: {},
+      user: { uid: 'sponsor-1', role: 'SPONSOR', email: 'contato@kanastra.com.br' },
+      query: { limit: '25' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    const mockOrderBy = vi.fn();
+    const mockLimit = vi.fn();
+
+    (db.collection as any).mockImplementation((colName: string) => {
+      if (colName === 'users') {
+        return {
+          doc: () => ({
+            get: () => Promise.resolve({
+              exists: true,
+              data: () => ({ companyId: 'kanastra' })
+            })
+          })
+        };
+      }
+      if (colName === 'leads' || colName === 'company_leads') {
+        return {
+          doc: () => ({
+            collection: () => {
+              const queryObj: any = {
+                orderBy: mockOrderBy.mockImplementation(() => queryObj),
+                limit: mockLimit.mockImplementation(() => queryObj),
+                get: () => Promise.resolve({
+                  docs: [
+                    { id: 'part-1', data: () => ({ name: 'Aluno 1' }) },
+                    { id: 'part-2', data: () => ({ name: 'Aluno 2' }) }
+                  ]
+                })
+              };
+              return queryObj;
+            }
+          })
+        };
+      }
+      return { doc: () => ({ get: () => Promise.resolve({ exists: false }) }) };
+    });
+
+    await getLeadsHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(mockOrderBy).toHaveBeenCalledWith('createdAt', 'desc');
+    expect(mockLimit).toHaveBeenCalledWith(25);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        pagination: {
+          limit: 25,
+          totalReturned: 2
+        }
+      })
+    );
+  });
+
+  it('aplica teto máximo de 100 itens e fallback de 50 para limit ausente ou inválido (ERR-075)', async () => {
+    const { getLeadsHandler } = await import('./leads');
+    const mockLimit = vi.fn();
+
+    (db.collection as any).mockImplementation((colName: string) => {
+      if (colName === 'users') {
+        return {
+          doc: () => ({
+            get: () => Promise.resolve({
+              exists: true,
+              data: () => ({ companyId: 'kanastra' })
+            })
+          })
+        };
+      }
+      if (colName === 'leads') {
+        return {
+          doc: () => ({
+            collection: () => {
+              const queryObj: any = {
+                orderBy: vi.fn().mockImplementation(() => queryObj),
+                limit: mockLimit.mockImplementation(() => queryObj),
+                get: () => Promise.resolve({ docs: [] })
+              };
+              return queryObj;
+            }
+          })
+        };
+      }
+      return { doc: () => ({ collection: () => ({ get: () => Promise.resolve({ docs: [] }) }) }) };
+    });
+
+    // Caso 1: limit acima de 100 deve ser limitado a 100
+    const reqOverLimit = {
+      body: {},
+      user: { uid: 'sponsor-1', role: 'SPONSOR', email: 'contato@kanastra.com.br' },
+      query: { limit: '500' }
+    } as unknown as Request;
+    const resOver = makeRes();
+    await getLeadsHandler(reqOverLimit, resOver);
+    expect(mockLimit).toHaveBeenCalledWith(100);
+
+    // Caso 2: limit ausente/inválido deve ser 50
+    mockLimit.mockClear();
+    const reqDefault = {
+      body: {},
+      user: { uid: 'sponsor-1', role: 'SPONSOR', email: 'contato@kanastra.com.br' },
+      query: { limit: 'invalido' }
+    } as unknown as Request;
+    const resDefault = makeRes();
+    await getLeadsHandler(reqDefault, resDefault);
+    expect(mockLimit).toHaveBeenCalledWith(50);
   });
 });
 

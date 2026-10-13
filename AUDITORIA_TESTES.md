@@ -1686,6 +1686,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Os testes em `leads.test.ts` usam apenas 1 ou 2 documentos estáticos mockados, sem validar paginação.
 - **Causa provável:** Implementação voltada para prova de conceito ou baixo volume de testes sem planejamento de escalabilidade para o evento presencial.
 - **Sugestão de correção:** Implementar parâmetros opcionais de consulta `limit` (com teto padrão, ex: 50) e `cursor`/`startAfter` na query do Firestore, ordenando por `createdAt` desc, e adicionar testes cobrindo paginação.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/leads.ts` (`getLeadsHandler`), adicionado parsing seguro do parâmetro `limit` via query string (com fallback de 50 e teto de 100), encadeamento condicional de `.orderBy('createdAt', 'desc')` e `.limit(limit)` nas queries das coleções `leads/{sponsorUid}/contacts` e `company_leads/{companyId}/contacts`, e inclusão do bloco `pagination: { limit, totalReturned }` no payload de resposta HTTP 200. Em `backend/src/routes/leads.test.ts`, adicionados testes unitários validando ordenação por `createdAt` desc, aplicação de limite, metadados de paginação e clamping de valores excessivos (>100) ou inválidos.
+- **Verificação:** Executado `npm --prefix backend test src/routes/leads.test.ts`. Todos os 33 testes passaram. Prova de falha verificada: a remoção da cláusula limit ou do teto de 100 itens quebra as asserções de mock e resposta da suíte.
 
 ---
 
@@ -1733,6 +1736,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Adaptação defensiva para permitir leitura de QR code bruto do crachá do participante, implementada sem testes de unidade associados.
 - **Sugestão de correção:** Registrar warning ou log em caso de erro na consulta, e adicionar casos de teste em `leads.test.ts` enviando `participantUid: 'aluno@ufu.br'` simulando resolução bem-sucedida e participante não encontrado.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/leads.ts`, substituído o bloco vazio `catch {}` na resolução de e-mails em `leadsHandler` por `console.warn` estruturado, e corrigida inconsistência nos dados do contato (`leadContactData`, `companyLeadRef` e `body.lead`) para propagar o `resolvedUid` em vez do endereço de e-mail bruto. Em `backend/src/routes/leads.test.ts`, adicionados 3 testes unitários cobrindo: resolução bem-sucedida de `participantUid: 'aluno@ufu.br'` com creditação de 50 pontos e retorno do UID correto, rejeição 400 `INVALID_PAYLOAD` para e-mails não cadastrados, e tolerância a falhas na consulta de rede sem derrubar a API.
+- **Verificação:** Executado `npm --prefix backend test src/routes/leads.test.ts`. Todos os 33 testes passaram. Prova de falha comprovada pelo vitest quando o payload retornou o e-mail não-resolvido antes da correção em `leads.ts`.
 
 ---
 
@@ -1754,6 +1760,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhuma asserção em `points.test.ts` valida `tx.set` para `missions/` com chave default.
 - **Causa provável:** A rotina de auto-seed de missões foi inserida para evitar quebras em ambientes novos sem seed prévio, mas os testes unitários não foram atualizados com esse cenário.
 - **Sugestão de correção:** Adicionar teste unitário em `points.test.ts` resgatando uma missão padrão (ex: `network_first` ou `sponsor_visit`) quando `missionSnap.exists == false`, verificando se os pontos foram creditados e se `tx.set(missionRef, ...)` foi disparado.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/points.test.ts`, adicionados testes unitários para o fluxo de auto-seed de missões default (`DEFAULT_MISSION_CATALOG`) quando o documento em `/missions/{missionId}` ainda não existe no Firestore: um teste para `sponsor_visit` (15 pontos) assertando a criação do documento em `missions/sponsor_visit` via `tx.set`, gravação do evento em `point_events` e incremento de `totalPoints`, e um teste para `network_first` (10 pontos) com metadados válidos de conexão entre participantes.
+- **Verificação:** Executado `npm --prefix backend test src/routes/points.test.ts`. Todos os 22 testes passaram. Prova de falha verificada: caso a rotina de auto-seed seja desativada, a requisição responde 404 `MISSION_NOT_FOUND` e `tx.set` não recebe a referência da missão, falhando os testes imediatamente.
 
 ---
 
@@ -1771,6 +1780,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O endpoint foi modelado assumindo que apenas chamadas de administradores e staff ocorreriam, omitindo validação defensiva de parâmetros de rota.
 - **Sugestão de correção:** Utilizar `isValidFirestoreId(req.params.activityId)` no início do handler retornando 400 `INVALID_PAYLOAD` se inválido, e adicionar testes cobrindo parâmetros inválidos em `screenToken.test.ts`.
+- **Status:** Corrigido
+- **Correção aplicada:** Confirmada a presença de guarda defensivo `isValidFirestoreId(activityId)` em `backend/src/routes/screenToken.ts`. Em `backend/src/routes/screenToken.test.ts`, expandida a cobertura de testes com parametrização `it.each` cobrindo múltiplas variações de IDs maliciosos/inválidos (path traversal com barras e pontos `x/y`, `../activity-1`, espaços em branco, caracteres especiais `@`, `#`, `$`, `.`, e strings acima de 200 caracteres), comprovando rejeição 400 `INVALID_ACTIVITY_ID` antes de consultar o banco. Adicionado também teste para tratamento de falhas inesperadas de leitura do Firestore retornando 500 `INTERNAL_ERROR`.
+- **Verificação:** Executado `npm --prefix backend test src/routes/screenToken.test.ts`. Todos os 13 testes passaram. Prova de falha verificada: a remoção da checagem de `isValidFirestoreId` causa falha imediata nos testes de ID malicioso.
 
 ---
 
