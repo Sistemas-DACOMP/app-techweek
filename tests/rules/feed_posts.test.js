@@ -45,16 +45,6 @@ describe('Regras de Segurança do Firestore — Coleção /feed_posts', () => {
   // CASOS QUE DEVEM SER PERMITIDOS (assertSucceeds)
   // ==========================================
   describe('Permissões Válidas (assertSucceeds)', () => {
-    it('leitura por anônimo deve ser permitida', async () => {
-      await seedPost('post-1', {
-        content: 'Post público de boas-vindas',
-        likes: [],
-        createdAt: new Date().toISOString(),
-      });
-      const unauthDb = testEnv.unauthenticatedContext().firestore();
-      await assertSucceeds(getDoc(doc(unauthDb, 'feed_posts', 'post-1')));
-    });
-
     it('leitura por participante autenticado deve ser permitida', async () => {
       await seedPost('post-1', {
         content: 'Post público de boas-vindas',
@@ -198,6 +188,16 @@ describe('Regras de Segurança do Firestore — Coleção /feed_posts', () => {
   // comprovando que o teste detecta a vulnerabilidade!)
   // ==========================================
   describe('Bloqueios e Negações de Segurança (assertFails)', () => {
+    it('leitura por anônimo deve ser negada (assertFails)', async () => {
+      await seedPost('post-1', {
+        content: 'Post público de boas-vindas',
+        likes: [],
+        createdAt: new Date().toISOString(),
+      });
+      const unauthDb = testEnv.unauthenticatedContext().firestore();
+      await assertFails(getDoc(doc(unauthDb, 'feed_posts', 'post-1')));
+    });
+
     it('usuário anônimo cria, edita e apaga post (deve falhar)', async () => {
       const unauthDb = testEnv.unauthenticatedContext().firestore();
 

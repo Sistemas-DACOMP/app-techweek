@@ -13,11 +13,11 @@ service cloud.firestore {
     }
 
     function isVerified() {
-      return isAuthenticated() && request.auth.token.email_verified == true;
+      return isAuthenticated() && ('email_verified' in request.auth.token) && request.auth.token.email_verified == true;
     }
 
     function isVerifiedOwner(userId) {
-      return isOwner(userId) && request.auth.token.email_verified == true;
+      return isOwner(userId) && ('email_verified' in request.auth.token) && request.auth.token.email_verified == true;
     }
     
     function isAdmin() {
@@ -240,7 +240,7 @@ service cloud.firestore {
     //  - editar: ADMIN (fixar etc.) ou qualquer autenticado só pra curtir/descurtir;
     //  - apagar: ADMIN, ou o próprio autor (patrocinador apagando o que postou).
     match /feed_posts/{postId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
 
       // Criação: Staff/Admin (tolerante para legado sem authorId) ou Patrocinador (authorUid/authorId próprio e sem campos reservados)
       allow create: if (
