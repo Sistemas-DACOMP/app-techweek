@@ -1,47 +1,69 @@
-name: Deploy static content to Pages
+name: Deploy to Firebase (Frontend & Backend)
 
 on:
   push:
-    branches: ['main']
+    branches:
+      - homolog
+      - main
 
 permissions:
   contents: read
-  pages: write
   id-token: write
 
 concurrency:
-  group: 'pages'
+  group: deploy-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   deploy:
+    name: Deploy to Firebase (${{ github.ref_name == 'main' && 'Production' || 'Homologation' }})
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: ${{ github.ref_name == 'main' && 'Production' || 'Homologation' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Setup Node
+
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
-          
-      - name: Install dependencies
-        run: npm ci
-        
-      - name: Build
+
+      - name: Install dependencies (Root and Backend)
+        run: |
+          npm ci
+          npm --prefix backend ci
+
+      - name: Configure backend environment (.env)
+        env:
+          SCREEN_TOKEN_SECRET: ${{ secrets.SCREEN_TOKEN_SECRET }}
+          SYMPLA_API_TOKEN: ${{ secrets.SYMPLA_API_TOKEN }}
+          SYMPLA_EVENT_ID: ${{ secrets.SYMPLA_EVENT_ID }}
+          CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          DEBUG_CLIENT_IP: ${{ secrets.DEBUG_CLIENT_IP }}
+        run: |
+          cat << EOF > backend/.env
+          SCREEN_TOKEN_SECRET=${SCREEN_TOKEN_SECRET}
+          SYMPLA_API_TOKEN=${SYMPLA_API_TOKEN}
+          SYMPLA_EVENT_ID=${SYMPLA_EVENT_ID}
+          CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+          ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+          RESEND_API_KEY=${RESEND_API_KEY}
+          EMAIL_FROM=${EMAIL_FROM}
+          APP_BASE_URL=${APP_BASE_URL}
+          DEBUG_CLIENT_IP=${DEBUG_CLIENT_IP}
+          EOF
+
+      - name: Build backend
+        run: npm --prefix backend run build
+
+      - name: Build frontend
         run: npm run build
         env:
-          # Migração Supabase->Firebase (KAN-78/KAN-64): este workflow só builda o
-          # que estiver em `main` no momento do push. Troca de var aqui não afeta
-          # o deploy atual (main ainda não recebeu a migração) — só passa a valer
-          # quando o cutover pra main acontecer, junto com o código que já é
-          # Firebase. Secrets VITE_FIREBASE_* precisam existir no repo antes disso
-          # (Settings > Secrets and variables > Actions) — não configurados ainda
-          # nesta rodada, ver mapeamento de gaps do KAN-64.
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
@@ -49,16 +71,17 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
-          VITE_BASE_PATH: /app-techweek/
+          VITE_BASE_PATH: /
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-        
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: './dist'
-          
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Authenticate Google Cloud Service Account
+        env:
+          SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_FACOM_TECHWEEK_LAYERX }}
+        run: |
+          echo "$SERVICE_ACCOUNT_KEY" > "$RUNNER_TEMP/service-account.json"
+
+      - name: Deploy to Firebase (Hosting, Functions, Firestore Rules, Storage Rules)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
+        run: |
+          PROJECT_ID="${{ secrets.VITE_FIREBASE_PROJECT_ID || 'facom-techweek-homolog' }}"
+          npx firebase-tools deploy --only functions,hosting,firestore:rules,storage --project "$PROJECT_ID" --non-interactive
