@@ -5,7 +5,7 @@ import cors from 'cors';
  * Ex: https://facom-techweek.web.app, https://facom-techweek-2026.web.app,
  * https://facom-techweek.firebaseapp.com
  */
-const FIREBASE_HOSTING_REGEX = /^https:\/\/facom-techweek[a-zA-Z0-9-]*\.(web\.app|firebaseapp\.com)$/;
+const FIREBASE_HOSTING_REGEX = /^https:\/\/(facom-techweek|facom-techweek-2026|facom-techweek-staging|facom-techweek-layerx)\.(web\.app|firebaseapp\.com)$/;
 
 /**
  * Regex para validar origens locais em ambiente de desenvolvimento/teste:

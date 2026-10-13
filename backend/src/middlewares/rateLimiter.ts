@@ -21,7 +21,7 @@ import rateLimit, { Options } from 'express-rate-limit';
 // de wiring como "rate limit funcionando". Melhor: cada requisição sem uid
 // vira sua própria chave (randomUUID), nunca compete com outra, e o erro
 // fica visível no log em vez de silencioso.
-function keyGenerator(req: Request): string {
+export function keyGenerator(req: Request): string {
   if (req.user?.uid) return req.user.uid;
   console.error('rateLimiter: req.user.uid ausente — limiter montado antes/sem requireAuth?', req.method, req.path);
   return randomUUID();

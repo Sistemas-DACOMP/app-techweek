@@ -1193,6 +1193,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
 - **Sugestão de correção:**
   1. No código-fonte `firestoreId.ts`, adicionar guarda explícita de tipo: `if (typeof value !== 'string' || !value.trim()) return false;`.
   2. No teste `firestoreId.test.ts`, adicionar cenários testando `undefined`, `null`, números e objetos, garantindo retorno `false`.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/lib/firestoreId.ts`, adicionada guarda de tipo em tempo de execução `if (typeof value !== 'string' || !value.trim()) return false;` para impedir que `RegExp.test(undefined)` ou valores não-string sofram coerção para `"undefined"` e passem pela regex. Em `backend/src/lib/firestoreId.test.ts`, adicionados testes unitários validando a rejeição de `undefined`, `null`, números (`123`), objetos (`{}`), arrays (`[]`) e strings vazias/apenas espaços.
+- **Verificação:** Executado `npm --prefix backend test src/lib/firestoreId.test.ts`. Todos os 18 testes passaram. Prova de falha verificada: ao remover temporariamente a guarda de tipo, os testes de valores não-string falharam imediatamente com `expected true to be false`.
 
 ---
 
@@ -1210,6 +1213,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Uso de padrão wildcard aberto (`[a-zA-Z0-9-]*`) para acomodar edições futuras (ex: 2026) sem delimitar uma lista estrita de domínios ou validar contra o Project ID exato.
 - **Sugestão de correção:** Restringir a regex para domínios estritamente conhecidos do projeto (ou via `ALLOWED_ORIGINS` no ambiente) e adicionar testes no `cors.test.ts` que rejeitem domínios com sufixos maliciosos (ex: `https://facom-techweek-attacker.web.app`).
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/config/cors.ts`, restringida a regex `FIREBASE_HOSTING_REGEX` para aceitar estritamente os subdomínios oficiais autorizados do projeto: `(facom-techweek|facom-techweek-2026|facom-techweek-staging|facom-techweek-layerx)`. Em `backend/src/config/cors.test.ts`, adicionados testes cobrindo `facom-techweek-layerx` e testes de rejeição para subdomínios de spoofing/ataque (`facom-techweek-attacker.web.app`, `facom-techweek-malicious.web.app`, `facom-techweek-phishing.firebaseapp.com`).
+- **Verificação:** Executado `npm --prefix backend test src/config/cors.test.ts`. Todos os 22 testes passaram. Prova de falha verificada: a regex original falha ao rejeitar os domínios maliciosos.
 
 ---
 
@@ -1331,6 +1337,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   - `requireAuth`: header ausente, header malformatado sem `Bearer`, token inválido/expirado (mockando `auth.verifyIdToken`), propagação de claims `admin` e `role`, e injeção do objeto `req.user`.
   - `requireRole`: negação para papéis insuficientes (ex: participante tentando acessar rota de staff) e permissão para papéis autorizados e admins.
   - `requireSymplaTicket`: verificação de flags `hasSymplaTicket`/`symplaTicket`, bypass de admin, bloqueio 403 para usuários sem ingresso e resposta 500 em erros de banco.
+- **Status:** Corrigido
+- **Correção aplicada:** Expandido `backend/src/middlewares/authMiddleware.test.ts` adicionando suítes completas de testes unitários para `requireAuth` (8 testes), `requireRole` (6 testes) e `requireSymplaTicket` (5 testes), cobrindo tokens ausentes/malformados, expiração/revogação, injeção de `req.user` e claims, RBAC para `STAFF`/`SPONSOR`/`ADMIN`, verificação de ingressos Sympla no Firestore e tratamento de erro 500.
+- **Verificação:** Executado `npm --prefix backend test src/middlewares/authMiddleware.test.ts`. Todos os 25 testes passaram (anteriormente eram 6 testes). Prova de falha verificada: ao simular bypass de verificação de role, os testes de rejeição falharam imediatamente com erro esperado.
 
 ---
 
@@ -1352,6 +1361,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   `adminSponsorLimiter`, `sponsorInviteIpLimiter`, `debugClientIp` e cenários sem `req.user` não são testados.
 - **Causa provável:** A suíte focou nos limitadores criados na issue KAN-75, deixando de fora os limitadores criados posteriormente para a gestão de convites de patrocinadores (KAN-124).
 - **Sugestão de correção:** Adicionar testes para `adminSponsorLimiter`, `sponsorInviteIpLimiter` (simulando requisições por IP com `req.ip`), `debugClientIp` e testar explicitamente o comportamento do `keyGenerator` quando `req.user` não é fornecido.
+- **Status:** Corrigido
+- **Correção aplicada:** Exportada a função `keyGenerator` em `backend/src/middlewares/rateLimiter.ts`. Em `backend/src/middlewares/rateLimiter.test.ts`, adicionados blocos de teste para `adminSponsorLimiter` (limitação em 60 req/10min), `sponsorInviteIpLimiter` (limitação por IP independente), `debugClientIp` (diagnóstico condicional sob `DEBUG_CLIENT_IP=1`) e testes diretos de `keyGenerator` validando identificação por `req.user.uid` e geração de UUID pseudo-aleatório quando usuário não estiver autenticado.
+- **Verificação:** Executado `npm --prefix backend test src/middlewares/rateLimiter.test.ts`. Todos os 8 testes passaram (anteriormente 2 testes). Prova de falha verificada: ao quebrar a lógica de fallback de `keyGenerator` para retornar chave fixa, os testes de chave única falharam imediatamente.
 
 ---
 
