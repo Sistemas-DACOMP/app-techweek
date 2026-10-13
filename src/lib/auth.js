@@ -8,11 +8,12 @@ import {
   updateProfile,
   deleteUser,
   reauthenticateWithCredential,
-  EmailAuthProvider
+  EmailAuthProvider,
+  verifyBeforeUpdateEmail
 } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { normalizeEmail } from './validators';
+import { normalizeEmail, isValidEmail } from './validators';
 
 export const AUTH_MESSAGES = {
   invalid_credentials: 'E-mail ou senha incorretos. Verifique seus dados e tente novamente.',
@@ -296,6 +297,87 @@ export async function sendVerificationEmail(user = auth.currentUser) {
       rawError: err
     };
   }
+}
+
+/**
+ * Traduz erros específicos do fluxo de alteração/correção de e-mail (KAN-116).
+ */
+export function mapUpdateEmailError(error) {
+  if (!error) return null;
+  const code = error.code || '';
+  switch (code) {
+    case 'auth/email-already-in-use':
+      return 'Este e-mail já está em uso por outra conta.';
+    case 'auth/invalid-email':
+      return 'Por favor, insira um e-mail válido.';
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      return 'Senha incorreta. Tente novamente.';
+    case 'auth/requires-recent-login':
+      return 'Por segurança, informe sua senha para alterar o e-mail.';
+    case 'auth/too-many-requests':
+      return 'Muitas tentativas seguidas. Aguarde alguns instantes.';
+    case 'auth/same-email':
+      return 'O novo e-mail informado é idêntico ao atual.';
+    default:
+      return mapAuthError(error) || error.message || 'Erro ao alterar o e-mail. Tente novamente em instantes.';
+  }
+}
+
+/**
+ * Solicita a alteração/correção de e-mail do usuário autenticado no Firebase Auth (KAN-116).
+ * Se a senha for informada, executa reautenticação prévia para prevenir auth/requires-recent-login.
+ * Em seguida, envia o link de confirmação para o novo endereço via verifyBeforeUpdateEmail.
+ *
+ * @param {import('firebase/auth').User} user
+ * @param {string} newEmail
+ * @param {string} [currentPassword]
+ * @returns {Promise<{ success: boolean, newEmail: string }>}
+ */
+export async function requestEmailCorrection(user = auth.currentUser, newEmail, currentPassword) {
+  if (!user) {
+    const error = new Error('Nenhum usuário autenticado.');
+    error.code = 'auth/no-current-user';
+    throw error;
+  }
+
+  const cleanEmail = normalizeEmail(newEmail);
+  if (!cleanEmail || !isValidEmail(cleanEmail)) {
+    const error = new Error('Por favor, insira um e-mail válido.');
+    error.code = 'auth/invalid-email';
+    throw error;
+  }
+
+  const currentEmail = normalizeEmail(user.email);
+  if (cleanEmail === currentEmail) {
+    const error = new Error('O novo e-mail informado é idêntico ao atual.');
+    error.code = 'auth/same-email';
+    throw error;
+  }
+
+  // 1. Reautenticação prévia com senha se fornecida
+  if (currentPassword && user.email) {
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+  }
+
+  // 2. Dispara verifyBeforeUpdateEmail com ActionCodeSettings e fallback resiliente
+  const actionCodeSettings = getActionCodeSettings();
+  if (actionCodeSettings) {
+    try {
+      await verifyBeforeUpdateEmail(user, cleanEmail, actionCodeSettings);
+    } catch (settingsErr) {
+      console.warn('Aviso: Falha ao enviar com actionCodeSettings no verifyBeforeUpdateEmail, tentando sem:', settingsErr);
+      await verifyBeforeUpdateEmail(user, cleanEmail);
+    }
+  } else {
+    await verifyBeforeUpdateEmail(user, cleanEmail);
+  }
+
+  return {
+    success: true,
+    newEmail: cleanEmail
+  };
 }
 
 /**
