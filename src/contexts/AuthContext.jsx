@@ -16,6 +16,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   useEffect(() => {
     // Timeout de segurança: garante que a aplicação nunca fique travada na tela de splash
@@ -27,6 +28,7 @@ export function AuthProvider({ children }) {
     const unsubscribe = onAuthChange(async (currentUser) => {
       clearTimeout(safetyTimer);
       setUser(currentUser);
+      setIsEmailVerified(Boolean(currentUser?.emailVerified));
       if (currentUser) {
         try {
           const idToken = await currentUser.getIdToken();
@@ -69,9 +71,20 @@ export function AuthProvider({ children }) {
     try {
       const refreshed = await reloadCurrentUser();
       if (refreshed) {
-        setUser({ ...refreshed, emailVerified: refreshed.emailVerified });
-        const idToken = await refreshed.getIdToken(true);
-        setToken(idToken);
+        setIsEmailVerified(Boolean(refreshed.emailVerified));
+        // Cria um proxy para garantir nova referência de estado no React sem perder métodos do protótipo (como getIdTokenResult)
+        const userProxy = new Proxy(refreshed, {
+          get(target, prop, receiver) {
+            const val = Reflect.get(target, prop, receiver);
+            if (typeof val === 'function') return val.bind(target);
+            return val;
+          }
+        });
+        setUser(userProxy);
+        if (typeof refreshed.getIdToken === 'function') {
+          const idToken = await refreshed.getIdToken(true);
+          setToken(idToken);
+        }
       }
       return refreshed;
     } catch (err) {
@@ -84,13 +97,14 @@ export function AuthProvider({ children }) {
     return await sendVerificationEmail(user);
   };
 
-  const isEmailVerified = Boolean(user && user.emailVerified);
+  const computedIsEmailVerified = Boolean(isEmailVerified || (user && user.emailVerified));
 
   const logout = async () => {
     setLoading(true);
     await logoutUser();
     setUser(null);
     setToken(null);
+    setIsEmailVerified(false);
     setLoading(false);
   };
 
@@ -99,7 +113,7 @@ export function AuthProvider({ children }) {
       user,
       token,
       loading,
-      isEmailVerified,
+      isEmailVerified: computedIsEmailVerified,
       logout,
       getIdToken,
       reloadUser,

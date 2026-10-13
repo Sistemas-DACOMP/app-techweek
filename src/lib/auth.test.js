@@ -326,6 +326,24 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
         expect(res.error).toBe('Nenhum usuário autenticado para envio do e-mail.');
       });
 
+      it('deve utilizar fallback sem actionCodeSettings caso o envio com URL continue falhe', async () => {
+        vi.stubGlobal('window', { location: { origin: 'https://techweek.facom.ufu.br' } });
+        sendEmailVerification
+          .mockRejectedValueOnce(new Error('auth/unauthorized-continue-uri'))
+          .mockResolvedValueOnce();
+
+        const res = await sendVerificationEmail(mockCurrentUser);
+
+        expect(res.success).toBe(true);
+        expect(sendEmailVerification).toHaveBeenCalledTimes(2);
+        expect(sendEmailVerification).toHaveBeenNthCalledWith(1, mockCurrentUser, {
+          url: 'https://techweek.facom.ufu.br/#/login',
+          handleCodeInApp: false
+        });
+        expect(sendEmailVerification).toHaveBeenNthCalledWith(2, mockCurrentUser);
+        vi.unstubAllGlobals();
+      });
+
       it('deve capturar erro do Firebase no envio e traduzir com mapAuthError', async () => {
         sendEmailVerification.mockRejectedValue({ code: 'auth/too-many-requests' });
 
