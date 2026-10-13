@@ -11,7 +11,7 @@ vi.mock('../config/firebaseAdmin', () => ({
 import router from './booking';
 import { db } from '../config/firebaseAdmin';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
-import { requireSymplaTicket } from '../middlewares/authMiddleware';
+import { requireSymplaTicket, requireVerifiedEmail } from '../middlewares/authMiddleware';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -21,7 +21,7 @@ function makeRes() {
 }
 
 function makeReq(activityId = 'lecture-1', uid = 'user-1') {
-  return { params: { activityId }, user: { uid } } as unknown as Request;
+  return { params: { activityId }, user: { uid, role: 'PARTICIPANT', emailVerified: true } } as unknown as Request;
 }
 
 // booking.ts só exporta o router default (sem handler nomeado, diferente de
@@ -58,6 +58,28 @@ it('KAN-84: requireSymplaTicket está montado na rota real, antes do handler fin
   const handles = layer.route.stack.map((l: any) => l.handle);
   expect(handles).toContain(requireSymplaTicket);
   expect(handles.indexOf(requireSymplaTicket)).toBeLessThan(handles.length - 1);
+});
+
+// KAN-116: prova que requireVerifiedEmail está montado nas rotas reais de reserva e cancelamento
+it('KAN-116: requireVerifiedEmail está montado na rota de reserva e cancelamento, antes do handler final', () => {
+  const reserveLayer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/:activityId/reserve' && l.route?.methods?.post
+  );
+  const reserveHandles = reserveLayer.route.stack.map((l: any) => l.handle);
+  expect(reserveHandles).toContain(requireVerifiedEmail);
+  expect(reserveHandles.indexOf(requireVerifiedEmail)).toBeLessThan(reserveHandles.length - 1);
+
+  const deleteLayer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/:activityId/reserve' && l.route?.methods?.delete
+  );
+  const deleteHandles = deleteLayer.route.stack.map((l: any) => l.handle);
+  expect(deleteHandles).toContain(requireVerifiedEmail);
+
+  const cancelLayer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/:activityId/cancel' && l.route?.methods?.post
+  );
+  const cancelHandles = cancelLayer.route.stack.map((l: any) => l.handle);
+  expect(cancelHandles).toContain(requireVerifiedEmail);
 });
 
 

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
-import { requireAuth, requireSymplaTicket } from '../middlewares/authMiddleware';
+import { requireAuth, requireSymplaTicket, requireVerifiedEmail } from '../middlewares/authMiddleware';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 
@@ -107,10 +107,10 @@ export const DEFAULT_ACTIVITIES_CATALOG: Record<string, {
 // POST /api/activities/:activityId/reserve
 //
 // Reserva atômica de vaga (ou entrada na lista de espera) numa atividade.
-// Exige autenticação e ingresso oficial validado do Sympla (KAN-84).
+// Exige autenticação, e-mail confirmado (KAN-116) e ingresso oficial validado do Sympla (KAN-84).
 // bookingId determinístico ({uid}_{activityId}, mesmo padrão de checkin.ts) permite
 // checar duplicidade dentro da própria transação, sem query extra.
-router.post('/:activityId/reserve', requireAuth, participantActionLimiter, requireSymplaTicket, async (req: Request, res: Response) => {
+router.post('/:activityId/reserve', requireAuth, requireVerifiedEmail, participantActionLimiter, requireSymplaTicket, async (req: Request, res: Response) => {
   const { activityId } = req.params;
   const uid = req.user!.uid;
 
@@ -318,8 +318,8 @@ const cancelBookingHandler = async (req: Request, res: Response) => {
   }
 };
 
-router.delete('/:activityId/reserve', requireAuth, participantActionLimiter, cancelBookingHandler);
-router.post('/:activityId/cancel', requireAuth, participantActionLimiter, cancelBookingHandler);
+router.delete('/:activityId/reserve', requireAuth, requireVerifiedEmail, participantActionLimiter, cancelBookingHandler);
+router.post('/:activityId/cancel', requireAuth, requireVerifiedEmail, participantActionLimiter, cancelBookingHandler);
 
 export default router;
 

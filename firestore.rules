@@ -11,26 +11,116 @@ service cloud.firestore {
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
+
+    function isVerified() {
+      return isAuthenticated() && request.auth.token.email_verified == true;
+    }
+
+    function isVerifiedOwner(userId) {
+      return isOwner(userId) && request.auth.token.email_verified == true;
+    }
     
     function isAdmin() {
       return isAuthenticated() && 
-        (request.auth.token.role == 'ADMIN' || request.auth.token.admin == true || (request.auth.token.email != null && request.auth.token.email in ['sam03amorim@gmail.com']));
+        (request.auth.token.role == 'ADMIN' || request.auth.token.admin == true);
     }
 
     function isStaffOrAdmin() {
       return isAdmin() || (isAuthenticated() && request.auth.token.role == 'STAFF');
     }
 
-    // Regras de Usuários: Todos autenticados leem; só o próprio dono cria/atualiza dados pessoais
+    function isSponsor() {
+      return isAuthenticated() && request.auth.token.role == 'SPONSOR';
+    }
+
+    // Whitelist de campos permitidos para criação e atualização do perfil do usuário
+    function userAllowedCreateKeys() {
+      return [
+        'uid', 'email', 'firstName', 'lastName', 'displayName',
+        'username', 'phone', 'participantType', 'participant_type',
+        'course', 'period', 'institution', 'linkedin', 'instagram',
+        'github', 'avatarUrl', 'photoURL', 'mascot', 'role',
+        'totalPoints', 'pontuacaoTotal', 'termsAcceptedAt',
+        'createdAt', 'updatedAt'
+      ];
+    }
+
+    function userAllowedUpdateKeys() {
+      return [
+        'firstName', 'lastName', 'displayName', 'username', 'phone',
+        'participantType', 'participant_type', 'course', 'period',
+        'institution', 'linkedin', 'instagram', 'github', 'avatarUrl',
+        'photoURL', 'mascot', 'email', 'updatedAt', 'pendingEmailChange'
+      ];
+    }
+
+    function isValidParticipantType(val) {
+      return val == null || (val is string && val in [
+        'Aluno UFU Graduação', 'Aluno UFU Pós-graduação', 'Aluno de outra instituição',
+        'Servidor / Professor', 'Professor / Servidor UFU', 'Comunidade Externa',
+        'Outro', 'Aluno da UFU', 'Pós-graduação', 'Aluno UFU Pos graduação', 'Organizador'
+      ]);
+    }
+
+    function isValidPendingEmailChange(val) {
+      return val == null || (
+        val is map
+        && 'newEmail' in val && val.newEmail is string && val.newEmail.size() <= 150 && val.newEmail.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && 'requestedAt' in val && (val.requestedAt is int || val.requestedAt is number || val.requestedAt is timestamp)
+        && 'expiresAt' in val && (val.expiresAt is int || val.expiresAt is number || val.expiresAt is timestamp)
+      );
+    }
+
+    function isValidUserFields(data) {
+      return (!('username' in data) || (data.username is string && (data.username == '' || (data.username.size() >= 3 && data.username.size() <= 30 && data.username.matches('^[a-zA-Z0-9._]+$')))))
+        && (!('period' in data) || data.period == null || (data.period is int && data.period >= 1 && data.period <= 20))
+        && (!('participantType' in data) || isValidParticipantType(data.participantType))
+        && (!('participant_type' in data) || isValidParticipantType(data.participant_type))
+        && (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 100))
+        && (!('lastName' in data) || (data.lastName is string && data.lastName.size() <= 100))
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 30))
+        && (!('course' in data) || (data.course is string && data.course.size() <= 100))
+        && (!('institution' in data) || (data.institution is string && data.institution.size() <= 100))
+        && (!('mascot' in data) || (data.mascot is string && data.mascot.size() <= 50))
+        && (!('linkedin' in data) || data.linkedin == null || (data.linkedin is string && data.linkedin.size() <= 500))
+        && (!('instagram' in data) || data.instagram == null || (data.instagram is string && data.instagram.size() <= 500))
+        && (!('github' in data) || data.github == null || (data.github is string && data.github.size() <= 500))
+        && (!('avatarUrl' in data) || data.avatarUrl == null || (data.avatarUrl is string && data.avatarUrl.size() <= 500))
+        && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 500))
+        && (!('pendingEmailChange' in data) || isValidPendingEmailChange(data.pendingEmailChange));
+    }
+
+    // Regras de Usuários: Todos autenticados leem; só o próprio dono cria/atualiza dados pessoais com whitelist estrita
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && !('symplaTicket' in request.resource.data) && !('hasSymplaTicket' in request.resource.data) &&
-        !('sponsorId' in request.resource.data) && !('companyId' in request.resource.data) &&
-        !('company' in request.resource.data) && !('empresa' in request.resource.data) && !('companyName' in request.resource.data) && !('termsAcceptedAt' in request.resource.data) &&
-        (!('role' in request.resource.data) || request.resource.data.role == 'PARTICIPANT') &&
-        (!('totalPoints' in request.resource.data) || request.resource.data.totalPoints == 0) &&
-        (!('pontuacaoTotal' in request.resource.data) || request.resource.data.pontuacaoTotal == 0);
-      allow update: if isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'createdAt', 'totalPoints', 'pontuacaoTotal', 'symplaTicket', 'hasSymplaTicket', 'sponsorId', 'companyId', 'company', 'empresa', 'companyName', 'jobTitle']));
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['uid', 'email', 'role', 'totalPoints', 'pontuacaoTotal', 'termsAcceptedAt', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(userAllowedCreateKeys())
+        && request.resource.data.uid == userId
+        && request.resource.data.role == 'PARTICIPANT'
+        && request.resource.data.totalPoints == 0
+        && request.resource.data.pontuacaoTotal == 0
+        && request.resource.data.termsAcceptedAt == request.time
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.email is string
+        && request.auth.token.email != null
+        && request.resource.data.email.lower() == request.auth.token.email.lower()
+        && isValidUserFields(request.resource.data)
+        && !('symplaTicket' in request.resource.data) && !('hasSymplaTicket' in request.resource.data)
+        && !('sponsorId' in request.resource.data) && !('companyId' in request.resource.data)
+        && !('company' in request.resource.data) && !('empresa' in request.resource.data)
+        && !('companyName' in request.resource.data) && !('sponsorTermsVersion' in request.resource.data);
+
+      allow update: if isVerifiedOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(userAllowedUpdateKeys())
+        && request.resource.data.diff(resource.data).affectedKeys().hasAll(['updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['email']) || (request.resource.data.email is string && request.auth.token.email != null && request.resource.data.email.lower() == request.auth.token.email.lower()))
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'termsAcceptedAt', 'uid', 'createdAt', 'totalPoints', 'pontuacaoTotal', 'symplaTicket', 'hasSymplaTicket', 'sponsorId', 'companyId', 'company', 'empresa', 'companyName', 'jobTitle'])
+        && isValidUserFields(request.resource.data);
+
       // Conta vinculada a patrocinador não se apaga/recria pelo client (recriar escolhendo company* contornaria o vínculo).
       allow delete: if isOwner(userId) && !('sponsorId' in resource.data);
       // Achado do security review (KAN-60): "allow write: if isAdmin()" deixava
@@ -44,7 +134,7 @@ service cloud.firestore {
       // Regra do documento pai não cobre subcollection — sem isso aqui, a
       // leitura cai no default-deny e o histórico nunca aparece pro dono.
       match /point_events/{eventId} {
-        allow read: if isOwner(userId) || isAdmin();
+        allow read: if isVerifiedOwner(userId) || isAdmin();
         allow write: if false; // Apenas backend via Firebase Admin SDK
       }
     }
@@ -98,11 +188,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Regras de Reservas: leitura e criação/remoção pelo próprio participante autenticado ou ADMIN
+    // Regras de Reservas: leitura e criação/remoção pelo próprio participante autenticado com e-mail verificado ou ADMIN
     match /bookings/{bookingId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if (isVerified() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
+      allow delete: if (isVerified() && resource.data.userId == request.auth.uid) || isAdmin();
       allow update: if isAdmin();
     }
 
@@ -111,15 +201,15 @@ service cloud.firestore {
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
-    // Regras de Pontos: cada usuário lê os próprios eventos; escrita sempre pelo backend
+    // Regras de Pontos: cada usuário com e-mail verificado lê os próprios eventos; escrita sempre pelo backend
     match /pointEvents/{eventId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if (isVerified() && resource.data.userId == request.auth.uid) || isAdmin();
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
-    // Regras de Check-ins (double-check de presença): leitura restrita ao participante ou Staff/ADMIN
+    // Regras de Check-ins (double-check de presença): leitura restrita ao participante verificado ou Staff/ADMIN
     match /checkins/{checkinId} {
-      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isStaffOrAdmin());
+      allow read: if (isVerified() && resource.data.uid == request.auth.uid) || isStaffOrAdmin();
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
@@ -150,18 +240,26 @@ service cloud.firestore {
     //  - editar: ADMIN (fixar etc.) ou qualquer autenticado só pra curtir/descurtir;
     //  - apagar: ADMIN, ou o próprio autor (patrocinador apagando o que postou).
     match /feed_posts/{postId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated()
-        && request.resource.data.authorUid == request.auth.uid
-        && (
-          (isStaffOrAdmin() && request.resource.data.authorRole == 'ORGANIZATION')
-          || (isSponsorUser() && request.resource.data.authorRole == 'SPONSOR')
-        )
-        && request.resource.data.content is string
-        && request.resource.data.content.size() <= 2000
-        && (!('likes' in request.resource.data) || request.resource.data.likes.size() == 0);
-      allow update: if isAdmin() || (isAuthenticated() && onlyOwnLikeChanged());
-      allow delete: if isAdmin() || (isAuthenticated() && resource.data.get('authorUid', '') == request.auth.uid);
+      allow read: if true;
+
+      // Criação: Staff/Admin (tolerante para legado sem authorId) ou Patrocinador (authorUid/authorId próprio e sem campos reservados)
+      allow create: if (
+        (isStaffOrAdmin() && (!('authorId' in request.resource.data) || request.resource.data.authorId == request.auth.uid || request.resource.data.get('authorUid', '') == request.auth.uid))
+        ||
+        ((isSponsor() || isSponsorUser())
+          && (request.resource.data.get('authorUid', request.resource.data.get('authorId', '')) == request.auth.uid)
+          && request.resource.data.authorRole == 'SPONSOR'
+          && (!('pinned' in request.resource.data) || request.resource.data.pinned == false)
+          && request.resource.data.get('likes', []).size() == 0
+          && request.resource.data.get('likesCount', 0) == 0
+          && (!('content' in request.resource.data) || (request.resource.data.content is string && request.resource.data.content.size() <= 2000)))
+      );
+
+      // Edição: Staff/Admin (livre) ou participante com e-mail verificado alterando unicamente o próprio like
+      allow update: if isStaffOrAdmin() || (isVerified() && onlyOwnLikeChanged());
+
+      // Exclusão: Staff/Admin ou o próprio autor do post
+      allow delete: if isStaffOrAdmin() || (isAuthenticated() && (resource.data.get('authorUid', resource.data.get('authorId', '')) == request.auth.uid));
     }
 
     // Regras de Ranking / Leaderboard consolidado

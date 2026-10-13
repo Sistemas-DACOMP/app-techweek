@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db, FieldValue } from '../config/firebaseAdmin';
-import { requireAuth, requireSymplaTicket } from '../middlewares/authMiddleware';
+import { requireAuth, requireSymplaTicket, requireVerifiedEmail } from '../middlewares/authMiddleware';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 import { validateMissionProof } from '../lib/missionProofValidator';
@@ -67,7 +67,8 @@ function resolveMissionId(eventType: string, referenceId: string): string {
 // `points` alto numa chamada direta à API.
 //
 // KAN-84: Exige ingresso validado do Sympla para participar e creditar pontos.
-router.post('/claim', requireAuth, participantActionLimiter, requireSymplaTicket, async (req: Request, res: Response) => {
+// KAN-116: Exige confirmação de e-mail antes de resgatar pontos.
+router.post('/claim', requireAuth, requireVerifiedEmail, participantActionLimiter, requireSymplaTicket, async (req: Request, res: Response) => {
   const { eventType, referenceId, metadata } = req.body ?? {};
   const uid = req.user!.uid;
 

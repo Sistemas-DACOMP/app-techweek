@@ -10,13 +10,15 @@ import {
   orderBy,
   limit,
   serverTimestamp,
-  onSnapshot
+  onSnapshot,
+  deleteField
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile, updateEmail, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { updateProfile, updateEmail, verifyBeforeUpdateEmail, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { db, storage, auth } from './firebase';
 import { validateAvatarFile } from './validators';
 import { apiRequest } from './api';
+import { sendVerificationEmail, getActionCodeSettings } from './auth';
 
 function fileToDataUrl(file) {
   return new Promise((resolve) => {
@@ -291,7 +293,8 @@ export async function updateUserProfile(uid, updates) {
 }
 
 /**
- * Atualiza o e-mail do usuário no Firestore e no Firebase Auth.
+ * Inicia a troca de e-mail enviando e-mail de confirmação via verifyBeforeUpdateEmail
+ * e grava pendingEmailChange no Firestore sem alterar o e-mail principal prematuramente (KAN-116).
  */
 export async function updateUserEmail(uid, newEmail, currentPassword) {
   if (!uid || !newEmail) throw new Error('UID e novo e-mail são obrigatórios.');
@@ -302,17 +305,132 @@ export async function updateUserEmail(uid, newEmail, currentPassword) {
     throw new Error('Sessão inválida. Faça login novamente para trocar o e-mail.');
   }
 
-  // 1. Auth primeiro: se falhar (ex.: auth/requires-recent-login), o erro sobe pra UI
-  //    e o Firestore não é tocado, então perfil e login nunca ficam com e-mails diferentes.
+  // 1. Reautenticação opcional / necessária se currentPassword for fornecido
   if (currentPassword) {
     await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword));
   }
-  await updateEmail(user, trimmedEmail);
 
-  // 2. Só depois de o Auth aceitar, grava no Firestore
-  await updateUserProfile(uid, { email: trimmedEmail });
+  // 2. Auth: dispara verifyBeforeUpdateEmail para o novo endereço com ActionCodeSettings
+  const actionCodeSettings = getActionCodeSettings();
+  if (actionCodeSettings) {
+    await verifyBeforeUpdateEmail(user, trimmedEmail, actionCodeSettings);
+  } else {
+    await verifyBeforeUpdateEmail(user, trimmedEmail);
+  }
 
-  return true;
+  // 3. Registra a intenção de troca no Firestore com ciclo de vida (expiração em 24h)
+  // O campo `email` principal NÃO é alterado agora: ele só muda após a confirmação no link e novo token JWT.
+  const pendingEmailChange = {
+    newEmail: trimmedEmail,
+    requestedAt: Date.now(),
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000 // 24 horas
+  };
+
+  await updateUserProfile(uid, { pendingEmailChange });
+
+  return { success: true, verificationEmailSent: true };
+}
+
+/**
+ * Cancela uma solicitação de troca de e-mail pendente, removendo o campo pendingEmailChange (KAN-116).
+ */
+export async function cancelPendingEmailChange(uid) {
+  if (!uid) throw new Error('UID é obrigatório.');
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, {
+    pendingEmailChange: deleteField(),
+    updatedAt: serverTimestamp()
+  });
+
+  try {
+    const cached = localStorage.getItem(`facom_profile_${uid}`);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      delete parsed.pendingEmailChange;
+      localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(parsed));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('facom_profile_updated', { detail: parsed }));
+      }
+    }
+  } catch (_) {}
+
+  return { success: true };
+}
+
+/**
+ * Sincroniza o e-mail do perfil do Firestore com o Firebase Auth após confirmação do link pelo usuário (KAN-116).
+ * Também higieniza solicitações pendentes expiradas.
+ */
+export async function syncUserEmailWithAuth(uid, userParam) {
+  const user = userParam || auth.currentUser;
+  if (!uid || !user || user.uid !== uid) {
+    return { synced: false, reason: 'no_user' };
+  }
+
+  try {
+    await user.reload();
+    await user.getIdToken(true);
+
+    const userRef = doc(db, 'users', uid);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) return { synced: false, reason: 'not_found' };
+
+    const data = snap.data();
+    const currentFirestoreEmail = (data.email || '').trim().toLowerCase();
+    const currentAuthEmail = (user.email || '').trim().toLowerCase();
+    const pending = data.pendingEmailChange;
+
+    // Se o Firebase Auth já tiver o novo e-mail confirmado
+    if (currentAuthEmail && (currentAuthEmail !== currentFirestoreEmail || (pending?.newEmail && currentAuthEmail === pending.newEmail.toLowerCase()))) {
+      await updateDoc(userRef, {
+        email: currentAuthEmail,
+        pendingEmailChange: deleteField(),
+        updatedAt: serverTimestamp()
+      });
+
+      try {
+        const cached = localStorage.getItem(`facom_profile_${uid}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          parsed.email = currentAuthEmail;
+          delete parsed.pendingEmailChange;
+          localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(parsed));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('facom_profile_updated', { detail: parsed }));
+          }
+        }
+      } catch (_) {}
+
+      return { synced: true, newEmail: currentAuthEmail };
+    }
+
+    // Se o pedido pendente expirou (mais de 24 horas)
+    if (pending?.expiresAt && Date.now() > pending.expiresAt) {
+      await updateDoc(userRef, {
+        pendingEmailChange: deleteField(),
+        updatedAt: serverTimestamp()
+      });
+
+      try {
+        const cached = localStorage.getItem(`facom_profile_${uid}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          delete parsed.pendingEmailChange;
+          localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(parsed));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('facom_profile_updated', { detail: parsed }));
+          }
+        }
+      } catch (_) {}
+
+      return { synced: false, expired: true };
+    }
+
+    return { synced: false };
+  } catch (err) {
+    console.warn('[userService] Erro ao sincronizar e-mail com Auth:', err);
+    return { synced: false, error: err };
+  }
 }
 
 /**

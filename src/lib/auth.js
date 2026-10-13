@@ -1,11 +1,14 @@
 import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
+  sendEmailVerification,
   signOut,
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   updateProfile,
-  deleteUser
+  deleteUser,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -20,6 +23,9 @@ export const AUTH_MESSAGES = {
   too_many_requests: 'Muitas tentativas sem sucesso. Aguarde alguns instantes antes de tentar novamente.',
   network_error: 'Falha de conexão. Verifique sua internet.',
   reset_email_sent: 'E-mail de recuperação enviado com sucesso! Verifique sua caixa de entrada e spam.',
+  verification_email_sent: 'E-mail de confirmação enviado com sucesso! Verifique sua caixa de entrada e spam.',
+  email_not_verified: 'Seu e-mail ainda não foi verificado. Clique no link enviado para sua caixa de entrada (ou pasta de spam) e tente novamente.',
+  requires_recent_login: 'Por segurança, confirme sua senha atual antes de realizar esta operação.',
   generic_error: 'Ocorreu um erro na autenticação. Tente novamente em instantes.'
 };
 
@@ -42,6 +48,8 @@ export function mapAuthError(error) {
       return AUTH_MESSAGES.user_disabled;
     case 'auth/too-many-requests':
       return AUTH_MESSAGES.too_many_requests;
+    case 'auth/requires-recent-login':
+      return AUTH_MESSAGES.requires_recent_login;
     case 'auth/operation-not-allowed':
       return 'O método de login por E-mail/Senha precisa ser ativado no Firebase Console (Authentication > Sign-in method).';
     case 'auth/network-request-failed':
@@ -162,10 +170,32 @@ export async function signUpWithEmail({ email, password, metadata }) {
       }
     }
 
+    // Dispara automaticamente o e-mail oficial de confirmação do Firebase Auth
+    let verificationEmailSent = false;
+    let verificationEmailError = null;
+    try {
+      const actionCodeSettings = getActionCodeSettings();
+      if (actionCodeSettings) {
+        await sendEmailVerification(userCredential.user, actionCodeSettings);
+      } else {
+        await sendEmailVerification(userCredential.user);
+      }
+      verificationEmailSent = true;
+    } catch (verifErr) {
+      console.warn('Aviso: Falha ao enviar e-mail de verificação inicial:', verifErr);
+      verificationEmailSent = false;
+      verificationEmailError = mapAuthError(verifErr) || verifErr.message || 'Falha ao enviar e-mail de verificação inicial.';
+    }
+
     return {
       status: 'signed_in',
       message: null,
-      data: { user: userCredential.user, metadata },
+      data: {
+        user: userCredential.user,
+        metadata,
+        verificationEmailSent,
+        verificationEmailError
+      },
       error: null
     };
   } catch (err) {
@@ -180,25 +210,106 @@ export async function signUpWithEmail({ email, password, metadata }) {
 }
 
 /**
- * Encerra a sessão do usuário.
+ * Retorna as configurações de redirecionamento para o e-mail do Firebase Auth.
+ * Prioriza a variável de ambiente VITE_APP_URL sobre window.location.origin.
+ */
+export function getActionCodeSettings() {
+  const baseUrl =
+    (typeof process !== 'undefined' && process.env?.VITE_APP_URL) ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_APP_URL) ||
+    (typeof window !== 'undefined' && window.location?.origin) ||
+    null;
+
+  if (baseUrl) {
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+    return {
+      url: `${cleanBaseUrl}/#/login`,
+      handleCodeInApp: false
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Higieniza chaves de sessão e dados de usuário no localStorage ao deslogar.
+ */
+export function clearAuthLocalCaches() {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (
+        key &&
+        (key.startsWith('facom_profile_') ||
+         key.startsWith('facom_point_events_') ||
+         key === 'facom_logged_in' ||
+         key === 'facom_test_session')
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => window.localStorage.removeItem(k));
+  } catch (_err) {
+    // Falha silenciosa caso localStorage não esteja acessível
+  }
+}
+
+/**
+ * Dispara o e-mail oficial do Firebase para confirmação de e-mail do usuário autenticado.
+ */
+export async function sendVerificationEmail(user = auth.currentUser) {
+  if (!user) {
+    return {
+      success: false,
+      error: 'Nenhum usuário autenticado para envio do e-mail.'
+    };
+  }
+
+  try {
+    const actionCodeSettings = getActionCodeSettings();
+    if (actionCodeSettings) {
+      await sendEmailVerification(user, actionCodeSettings);
+    } else {
+      await sendEmailVerification(user);
+    }
+    return {
+      success: true,
+      message: AUTH_MESSAGES.verification_email_sent
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: mapAuthError(err) || 'Não foi possível reenviar o e-mail no momento.',
+      rawError: err
+    };
+  }
+}
+
+/**
+ * Recarrega os dados do usuário autenticado no Firebase Auth para sincronizar emailVerified.
+ */
+export async function reloadCurrentUser() {
+  if (!auth.currentUser) return null;
+  await auth.currentUser.reload();
+  return auth.currentUser;
+}
+
+/**
+ * Encerra a sessão do usuário e higieniza caches locais.
  */
 export async function logoutUser() {
   try {
     await signOut(auth);
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.removeItem('facom_logged_in');
-      window.localStorage.removeItem('facom_test_session');
-      if (typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('facom_auth_state_changed', { detail: { user: null } }));
-      }
+    clearAuthLocalCaches();
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('facom_auth_state_changed', { detail: { user: null } }));
     }
     return { success: true };
   } catch (err) {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.removeItem('facom_test_session');
-      if (typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('facom_auth_state_changed', { detail: { user: null } }));
-      }
+    clearAuthLocalCaches();
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('facom_auth_state_changed', { detail: { user: null } }));
     }
     return { success: false, error: mapAuthError(err) };
   }
@@ -236,30 +347,40 @@ export function getCurrentAuthUser() {
 
 /**
  * Exclui a conta e o perfil do usuário logado (Auth + Firestore + localStorage).
+ * Suporta reautenticação prévia com senha para prevenir falhas por auth/requires-recent-login.
+ *
+ * @param {string} [currentPassword] - Senha atual do usuário para reautenticação prévia.
+ * @returns {Promise<{ success: boolean, error?: string }>}
  */
-export async function deleteCurrentUserAccount() {
+export async function deleteCurrentUserAccount(currentPassword) {
   const user = auth.currentUser;
   if (!user) return { success: false, error: 'Nenhum usuário autenticado.' };
 
   const uid = user.uid;
 
   try {
-    // 1. Remove documento do Firestore
+    // 1. Reautenticação Prévia com senha (se fornecida e usuário possui e-mail cadastrado)
+    if (currentPassword && user.email) {
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+    }
+
+    // 2. Remove documento do Firestore antes de apagar o usuário no Auth
+    // (Pois após deleteUser, o token é revogado e request.auth vira null nas regras de segurança)
     try {
       await deleteDoc(doc(db, 'users', uid));
     } catch (_dbErr) {
       console.warn('Erro ao remover documento do Firestore:', _dbErr);
     }
 
-    // 2. Limpa dados de cache no localStorage
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.removeItem(`facom_profile_${uid}`);
-      window.localStorage.removeItem('facom_logged_in');
-      window.localStorage.removeItem('facom_onboarding_completed');
-    }
-
     // 3. Remove a conta do Firebase Authentication
     await deleteUser(user);
+
+    // 4. Higienização completa de caches locais e notificação de logout global
+    clearAuthLocalCaches();
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('facom_auth_state_changed', { detail: { user: null } }));
+    }
 
     return { success: true };
   } catch (err) {

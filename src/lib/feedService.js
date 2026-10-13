@@ -331,6 +331,7 @@ export async function createFeedPost(postData) {
   const mediaType = postData.mediaType || (postData.videoUrl ? 'video' : (postData.imageUrl ? 'image' : ''));
   const nowIso = new Date().toISOString();
 
+  const currentUid = postData.authorId || auth?.currentUser?.uid || undefined;
   const formattedPost = {
     // As regras do Firestore exigem authorUid == uid de quem escreve; é também o que
     // permite o autor apagar o próprio post.
@@ -339,6 +340,7 @@ export async function createFeedPost(postData) {
     authorRole: String(postData.authorRole || 'ORGANIZATION'),
     authorAvatar: String(postData.authorAvatar || ''),
     authorHandle: postData.authorHandle ? String(postData.authorHandle) : undefined,
+    authorId: currentUid ? String(currentUid) : undefined,
     content: String(postData.content || '').trim(),
     imageUrl: String(postData.imageUrl || (mediaType === 'image' ? (postData.mediaUrl || '') : '')),
     videoUrl: String(postData.videoUrl || (mediaType === 'video' ? (postData.mediaUrl || '') : '')),

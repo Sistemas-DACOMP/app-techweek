@@ -124,4 +124,28 @@ describe('ConfirmModal Component (KAN-101)', () => {
     expect(html).not.toContain('confirm-input-text');
     expect(html).not.toContain('placeholder="Digite');
   });
+
+  it('renderiza campo de senha quando requirePassword é true', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ConfirmModal, {
+        isOpen: true,
+        title: 'Confirmar Ação Crítica',
+        message: 'Confirme sua senha para continuar.',
+        variant: 'danger',
+        confirmLabel: 'Autorizar',
+        requirePassword: true,
+        passwordLabel: 'Senha atual de segurança:',
+        passwordPlaceholder: 'Digite sua senha',
+        onConfirm: () => {},
+        onCancel: () => {}
+      })
+    );
+
+    expect(html).toContain('Senha atual de segurança:');
+    expect(html).toContain('id="confirm-input-password"');
+    expect(html).toContain('type="password"');
+    expect(html).toContain('placeholder="Digite sua senha"');
+    expect(html).toContain('disabled=""');
+  });
 });
+

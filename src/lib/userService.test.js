@@ -5,20 +5,23 @@ import {
   updateUserProfile, 
   uploadUserAvatar,
   updateUserEmail,
+  cancelPendingEmailChange,
+  syncUserEmailWithAuth,
   getLeaderboardUsers,
   subscribeToLeaderboardUsers,
   updateUserRoleInFirestore
 } from './userService';
 import { apiRequest } from './api';
-import { doc, setDoc, getDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot, deleteField } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile, updateEmail, reauthenticateWithCredential } from 'firebase/auth';
+import { updateProfile, updateEmail, verifyBeforeUpdateEmail, reauthenticateWithCredential } from 'firebase/auth';
 
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(() => ({ id: 'mockDocRef' })),
   setDoc: vi.fn(),
   getDoc: vi.fn(),
   updateDoc: vi.fn(),
+  deleteField: vi.fn(() => 'MOCK_DELETE_FIELD'),
   collection: vi.fn(),
   getDocs: vi.fn(),
   query: vi.fn(),
@@ -39,6 +42,7 @@ vi.mock('firebase/storage', () => ({
 vi.mock('firebase/auth', () => ({
   updateProfile: vi.fn(),
   updateEmail: vi.fn(() => Promise.resolve()),
+  verifyBeforeUpdateEmail: vi.fn(() => Promise.resolve()),
   reauthenticateWithCredential: vi.fn(() => Promise.resolve()),
   EmailAuthProvider: { credential: vi.fn((email, pass) => ({ email, pass })) }
 }));
@@ -48,7 +52,7 @@ vi.mock('./api', () => ({ apiRequest: vi.fn() }));
 vi.mock('./firebase', () => ({
   db: {},
   storage: {},
-  auth: { currentUser: { uid: 'user-123', email: 'atual@exemplo.com' } }
+  auth: { currentUser: { uid: 'user-123', email: 'atual@exemplo.com', getIdToken: vi.fn().mockResolvedValue('mock-token') } }
 }));
 
 describe('userService', () => {
@@ -152,42 +156,148 @@ describe('userService', () => {
     });
   });
 
-  describe('updateUserEmail', () => {
+  describe('updateUserEmail (KAN-116)', () => {
     it('lança erro se uid ou email não forem fornecidos', async () => {
       await expect(updateUserEmail('', 'teste@ufu.br')).rejects.toThrow('UID e novo e-mail são obrigatórios.');
       await expect(updateUserEmail('123', '')).rejects.toThrow('UID e novo e-mail são obrigatórios.');
     });
 
-    it('troca no Auth primeiro e só então grava no Firestore', async () => {
+    it('envia verifyBeforeUpdateEmail e grava pendingEmailChange no Firestore sem alterar o email principal', async () => {
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined);
       const result = await updateUserEmail('user-123', 'Novo.Email@ufu.br ');
 
-      expect(result).toBe(true);
-      expect(updateEmail).toHaveBeenCalledWith(expect.anything(), 'novo.email@ufu.br');
-      expect(updateDoc).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ email: 'novo.email@ufu.br' }));
-      expect(vi.mocked(updateEmail).mock.invocationCallOrder[0])
-        .toBeLessThan(vi.mocked(updateDoc).mock.invocationCallOrder[0]);
+      expect(result).toEqual({ success: true, verificationEmailSent: true });
+      expect(verifyBeforeUpdateEmail).toHaveBeenCalledWith(expect.anything(), 'novo.email@ufu.br');
+      
+      // O campo email principal NÃO deve ser atualizado agora!
+      expect(updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          pendingEmailChange: expect.objectContaining({
+            newEmail: 'novo.email@ufu.br',
+            requestedAt: expect.any(Number),
+            expiresAt: expect.any(Number)
+          })
+        })
+      );
+      const callArg = vi.mocked(updateDoc).mock.calls[0][1];
+      expect(callArg).not.toHaveProperty('email');
     });
 
-    it('se o Auth recusar (login recente), propaga o erro e NÃO grava no Firestore (KAN-117)', async () => {
+    it('se o Auth recusar (ex: requer login recente), propaga o erro e NÃO grava no Firestore', async () => {
       const err = Object.assign(new Error('recent'), { code: 'auth/requires-recent-login' });
-      vi.mocked(updateEmail).mockRejectedValueOnce(err);
+      vi.mocked(verifyBeforeUpdateEmail).mockRejectedValueOnce(err);
 
       await expect(updateUserEmail('user-123', 'novo@ufu.br')).rejects.toMatchObject({ code: 'auth/requires-recent-login' });
       expect(updateDoc).not.toHaveBeenCalled();
     });
 
-    it('com a senha informada, re-autentica antes de trocar o e-mail', async () => {
+    it('com a senha informada, re-autentica antes de chamar verifyBeforeUpdateEmail', async () => {
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined);
       await updateUserEmail('user-123', 'novo@ufu.br', 'senha-atual');
 
       expect(reauthenticateWithCredential).toHaveBeenCalledTimes(1);
       expect(vi.mocked(reauthenticateWithCredential).mock.invocationCallOrder[0])
-        .toBeLessThan(vi.mocked(updateEmail).mock.invocationCallOrder[0]);
+        .toBeLessThan(vi.mocked(verifyBeforeUpdateEmail).mock.invocationCallOrder[0]);
     });
 
     it('recusa se a sessão do Auth não for do uid informado', async () => {
       await expect(updateUserEmail('outro-uid', 'novo@ufu.br')).rejects.toThrow('Sessão inválida');
-      expect(updateEmail).not.toHaveBeenCalled();
+      expect(verifyBeforeUpdateEmail).not.toHaveBeenCalled();
       expect(updateDoc).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelPendingEmailChange (KAN-116)', () => {
+    it('remove pendingEmailChange do Firestore via deleteField', async () => {
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined);
+      const result = await cancelPendingEmailChange('user-123');
+
+      expect(result).toEqual({ success: true });
+      expect(updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          pendingEmailChange: 'MOCK_DELETE_FIELD',
+          updatedAt: 'MOCK_TIMESTAMP'
+        })
+      );
+    });
+
+    it('lança erro se uid não for fornecido', async () => {
+      await expect(cancelPendingEmailChange('')).rejects.toThrow('UID é obrigatório');
+    });
+  });
+
+  describe('syncUserEmailWithAuth (KAN-116)', () => {
+    it('sincroniza novo e-mail no Firestore quando auth.currentUser.email mudou e limpa pendingEmailChange', async () => {
+      const reloadMock = vi.fn().mockResolvedValue(undefined);
+      const getIdTokenMock = vi.fn().mockResolvedValue('new-token');
+      const mockUser = {
+        uid: 'user-123',
+        email: 'novo.confirmado@ufu.br',
+        reload: reloadMock,
+        getIdToken: getIdTokenMock
+      };
+
+      vi.mocked(getDoc).mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({
+          email: 'antigo@ufu.br',
+          pendingEmailChange: {
+            newEmail: 'novo.confirmado@ufu.br',
+            expiresAt: Date.now() + 60000
+          }
+        })
+      });
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined);
+
+      const result = await syncUserEmailWithAuth('user-123', mockUser);
+
+      expect(reloadMock).toHaveBeenCalled();
+      expect(getIdTokenMock).toHaveBeenCalledWith(true);
+      expect(result).toEqual({ synced: true, newEmail: 'novo.confirmado@ufu.br' });
+      expect(updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          email: 'novo.confirmado@ufu.br',
+          pendingEmailChange: 'MOCK_DELETE_FIELD',
+          updatedAt: 'MOCK_TIMESTAMP'
+        })
+      );
+    });
+
+    it('limpa pendingEmailChange se a solicitação expirou', async () => {
+      const reloadMock = vi.fn().mockResolvedValue(undefined);
+      const getIdTokenMock = vi.fn().mockResolvedValue('token');
+      const mockUser = {
+        uid: 'user-123',
+        email: 'antigo@ufu.br',
+        reload: reloadMock,
+        getIdToken: getIdTokenMock
+      };
+
+      vi.mocked(getDoc).mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({
+          email: 'antigo@ufu.br',
+          pendingEmailChange: {
+            newEmail: 'novo@ufu.br',
+            expiresAt: Date.now() - 5000
+          }
+        })
+      });
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined);
+
+      const result = await syncUserEmailWithAuth('user-123', mockUser);
+
+      expect(result).toEqual({ synced: false, expired: true });
+      expect(updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          pendingEmailChange: 'MOCK_DELETE_FIELD',
+          updatedAt: 'MOCK_TIMESTAMP'
+        })
+      );
     });
   });
 
