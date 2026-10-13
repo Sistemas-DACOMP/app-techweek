@@ -1241,10 +1241,12 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   if (!scanned || (!validCodes.includes(scanned) && typeof scanned === 'string' && !scanned.toLowerCase().includes('kanastra')))
   ```
 - **Causa provável:** A validação foi prototipada tendo o estande da Kanastra como modelo inicial e os valores de teste/mock locais (`blob:`) foram deixados ativos no código final sem parametrização por ambiente ou por patrocinador.
-- **Sugestão de correção:**
-  1. Em produção (`NODE_ENV === 'production'`), restringir aceitação de fotos estritamente a URLs `https://firebasestorage.googleapis.com/...` pertencentes ao bucket oficial do projeto.
-  2. Parametrizar a validação de `sponsor_visit` para checar tokens válidos de qualquer patrocinador cadastrado na coleção de sponsors ou via `mission_secrets`.
-  3. Expandir a suíte de testes unitários para cobrir esses cenários e rejeitar `blob:` em produção.
+- **Status:** Corrigido
+- **Correção aplicada:**
+  1. Em `backend/src/lib/missionProofValidator.ts`, a validação de fotos passou a checar o ambiente: em produção (`NODE_ENV === 'production'`), URLs com prefixo `blob:` e `http://localhost` / `http://127.0.0.1` são estritamente rejeitadas, exigindo URLs HTTPS válidas do Firebase Storage. Em ambiente de teste e desenvolvimento local, `blob:` e `localhost` continuam permitidos para não quebrar fixtures locais.
+  2. A validação de `sponsor_visit` foi parametrizada para suportar patrocinadores parceiros do evento (`Levty`, `Sankhya`, `Neospace`, `Sebrae`, `Bayer`, `Aimorés`, `Hyperflow`), alvos definidos em `autoConfig.targetId` e listas de códigos em `validCodes`, desacoplando o código de um único patrocinador hardcoded.
+  3. Em `backend/src/lib/missionProofValidator.test.ts`, adicionados testes unitários cobrindo a rejeição de `blob:` e `localhost` em produção, aceitação em teste, e validação de múltiplos patrocinadores e códigos configurados.
+- **Verificação:** Executado `npm --prefix backend test src/lib/missionProofValidator.test.ts`. Todos os 25 testes passaram. Prova de falha verificada: ao desabilitar temporariamente a checagem de parceiros, o teste falhou com `expected false to be true`.
 
 ---
 
@@ -1265,6 +1267,12 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Os testes foram desenhados com fixtures contendo todos os campos preenchidos, sem explorar bordas de dados incompletos em perfis de usuários ou falhas transacionais.
 - **Sugestão de correção:** Adicionar testes com perfis incompletos (usuário sem curso, usuário com `curso` vs `course`, `period` como string) e testes de erro na transação para assegurar mensagens de erro amigáveis ao participante.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/lib/missionProofValidator.ts`:
+  1. A consulta `tx.get(targetUserRef)` foi envolvida em bloco `try/catch` que retorna `{ valid: false, error: 'TARGET_LOOKUP_FAILED', message: ... }` em vez de propagar exceções síncronas/assíncronas que abortavam a transação de pontuação.
+  2. Adicionada detecção explícita de perfis incompletos (`INCOMPLETE_PROFILE`) para participante atual ou usuário alvo sem curso preenchido (`course` / `curso`) e sem período (`period` / `periodo`), com suporte a períodos expressos como strings ordinais ou numéricas (ex: `'1'`, `'1º'`).
+  3. Em `backend/src/lib/missionProofValidator.test.ts`, adicionados testes cobrindo perfis incompletos, períodos em string ordinal e numérico, tipos externos, e tratamento gracioso de erro de transação/I/O no Firestore.
+- **Verificação:** Executado `npm --prefix backend test src/lib/missionProofValidator.test.ts`. Todos os 25 testes passaram com sucesso.
 
 ---
 
@@ -1292,6 +1300,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
 - **Sugestão de correção:**
   1. Envolver a chamada de `sign` dentro de `verifyScreenToken` em bloco `try/catch` retornando `{ valid: false, reason: 'MALFORMED' }` (ou tratando erro de configuração adequadamente).
   2. Adicionar testes unitários validando o disparo das exceções de validação de segredo em `issueScreenToken` e `verifyScreenToken` quando `process.env.SCREEN_TOKEN_SECRET` for indefinido ou curto.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/lib/screenToken.ts`, a verificação de assinatura em `verifyScreenToken` foi protegida por `try/catch`, retornando `{ valid: false, reason: 'MALFORMED' }` de forma defensiva se `sign()` lançar exceção. Em `backend/src/lib/screenToken.test.ts`, adicionados testes unitários validando que `issueScreenToken` lança erro descritivo quando o secret está ausente ou tem menos de 32 caracteres, e que `verifyScreenToken` retorna `{ valid: false, reason: 'MALFORMED' }` sem explodir exceção não tratada.
+- **Verificação:** Executado `npm --prefix backend test src/lib/screenToken.test.ts`. Todos os 11 testes passaram.
 
 ---
 
@@ -1314,6 +1325,12 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   1. Adicionar checagem no topo de `verifyScreenToken`: `if (typeof token !== 'string' || !token) return { valid: false, reason: 'MALFORMED' };`.
   2. Alterar o split para isolar a assinatura a partir do último separador ou empacotar o payload como JSON base64.
   3. Adicionar testes com `activityId` complexos (com hífens, underscores e pontos) e argumentos nulos/indefinidos.
+- **Status:** Corrigido
+- **Correção aplicada:**
+  1. Em `backend/src/lib/screenToken.ts`, adicionada guarda de tipo `if (typeof token !== 'string' || !token) return { valid: false, reason: 'MALFORMED' };`.
+  2. Modificada a decodificação para particionar da direita para a esquerda usando `lastIndexOf('.')`: isola a assinatura final (`expectedSignature`) e a expiração numérica (`expiresAt`), permitindo com segurança que o `activityId` contenha múltiplos pontos (ex: `palestra.ia.v1`).
+  3. Em `backend/src/lib/screenToken.test.ts`, adicionados testes unitários para tokens não-string (`null`, `undefined`, números, objetos) e tokens emitidos para atividades com identificadores complexos com pontos.
+- **Verificação:** Executado `npm --prefix backend test src/lib/screenToken.test.ts`. Todos os 11 testes passaram. Prova de falha verificada: a versão anterior do split falhava com `MALFORMED` para `activityId` com pontos.
 
 ---
 

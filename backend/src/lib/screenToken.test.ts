@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { issueScreenToken, verifyScreenToken } from './screenToken';
 
 beforeAll(() => {
@@ -49,4 +49,60 @@ describe('issueScreenToken / verifyScreenToken (KAN-51/D1 — QR dinâmico do te
     const garbage = Buffer.from('lixo-sem-pontos').toString('base64url');
     expect(verifyScreenToken(garbage, Date.now())).toEqual({ valid: false, reason: 'MALFORMED' });
   });
+
+  it('suporta activityId contendo pontos sem quebrar o split do token (ERR-059)', () => {
+    const now = Date.now();
+    const { token, expiresAt } = issueScreenToken('palestra.ia.v1', now);
+
+    expect(expiresAt).toBe(now + 5 * 60 * 1000);
+    const result = verifyScreenToken(token, now + 10_000);
+    expect(result).toEqual({ valid: true, activityId: 'palestra.ia.v1' });
+  });
+
+  it('rejeita tokens não-string, nulos ou indefinidos graciosamente (ERR-059)', () => {
+    expect(verifyScreenToken(undefined as any)).toEqual({ valid: false, reason: 'MALFORMED' });
+    expect(verifyScreenToken(null as any)).toEqual({ valid: false, reason: 'MALFORMED' });
+    expect(verifyScreenToken('' as any)).toEqual({ valid: false, reason: 'MALFORMED' });
+    expect(verifyScreenToken(12345 as any)).toEqual({ valid: false, reason: 'MALFORMED' });
+    expect(verifyScreenToken({} as any)).toEqual({ valid: false, reason: 'MALFORMED' });
+  });
+
+  describe('Validação defensiva de SCREEN_TOKEN_SECRET (ERR-058)', () => {
+    const VALID_SECRET = 'test-secret-kan-51-com-pelo-menos-32-chars';
+
+    beforeEach(() => {
+      process.env.SCREEN_TOKEN_SECRET = VALID_SECRET;
+    });
+
+    afterEach(() => {
+      process.env.SCREEN_TOKEN_SECRET = VALID_SECRET;
+    });
+
+    it('issueScreenToken dispara erro explícito quando o segredo não estiver configurado', () => {
+      delete process.env.SCREEN_TOKEN_SECRET;
+      expect(() => issueScreenToken('activity-1')).toThrow('SCREEN_TOKEN_SECRET não configurado');
+    });
+
+    it('issueScreenToken dispara erro explícito quando o segredo for muito curto (<32 chars)', () => {
+      process.env.SCREEN_TOKEN_SECRET = 'segredo-curto';
+      expect(() => issueScreenToken('activity-1')).toThrow('pelo menos 32 caracteres');
+    });
+
+    it('verifyScreenToken retorna MALFORMED sem explodir exceção quando o segredo estiver ausente', () => {
+      const now = Date.now();
+      const { token } = issueScreenToken('activity-1', now);
+
+      delete process.env.SCREEN_TOKEN_SECRET;
+      expect(verifyScreenToken(token, now)).toEqual({ valid: false, reason: 'MALFORMED' });
+    });
+
+    it('verifyScreenToken retorna MALFORMED sem explodir exceção quando o segredo for muito curto', () => {
+      const now = Date.now();
+      const { token } = issueScreenToken('activity-1', now);
+
+      process.env.SCREEN_TOKEN_SECRET = 'curto';
+      expect(verifyScreenToken(token, now)).toEqual({ valid: false, reason: 'MALFORMED' });
+    });
+  });
 });
+
