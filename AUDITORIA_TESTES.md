@@ -1639,8 +1639,11 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   else if (uid.startsWith('@')) { ... }
   ```
   Nenhuma linha deste bloco é exercitada na suíte de testes.
-- **Causa provável:** A funcionalidade de flexibilização de leitura de crachás por Staff foi adicionada posteriormente sem a inclusão de testes correspondentes.
-- **Sugestão de correção:** Adicionar testes em `checkinDoubleCheck.test.ts` enviando `participantUid: 'mailto:aluno@facom.ufms.br'`, `uid: 'aluno@facom.ufms.br'` e `uid: '@usuario_dev'`, mockando as queries do Firestore e confirmando a resolução correta do ID.
+- **Causa provável:** A funcionalidade de flexibilização de leitura de crachás por Staff foi adicionada posteriormente sem a inclusão de testes correspondentes. Além disso, havia um bug lógico no código em que `if (uid.includes('@'))` precedia `else if (uid.startsWith('@'))`, mascarando resoluções de usernames que iniciam com `@`.
+- **Sugestão de correção:** Corrigir a ordem de avaliação em `checkinDoubleCheck.ts` para verificar `uid.startsWith('@')` antes de `uid.includes('@')`, e adicionar testes em `checkinDoubleCheck.test.ts` cobrindo `mailto:`, e-mail, `@username`, `participantUid`, participantes não encontrados e resiliência a falhas de rede.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/checkinDoubleCheck.ts`, corrigida a ordem de resolução para avaliar `uid.startsWith('@')` antes de `uid.includes('@')`. Em `backend/src/routes/checkinDoubleCheck.test.ts`, adicionada a suíte `POST /entrance — resolução de crachá e identidade (ERR-073)` com 7 testes unitários cobrindo: resolução via prefixo `mailto:aluno@facom.ufms.br`, fallback case-sensitive quando lowercase não encontra, resolução de `@usuario_dev` via campo `username`, aceitação de `participantUid` como alternativa a `uid`, rejeição 400 `INVALID_PAYLOAD` para e-mail inexistente ou @username inexistente, e tolerância a exceções na busca sem derrubar o processo.
+- **Verificação:** Executado `npm --prefix backend test src/routes/checkinDoubleCheck.test.ts src/routes/leads.test.ts`. 54 testes passaram. Prova de falha comprovada pelo vitest quando a precedência de `@username` falhou antes do ajuste no código.
 
 ---
 
@@ -1661,6 +1664,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhum limiter é importado ou montado no roteador.
 - **Causa provável:** Os endpoints de double-check foram desenvolvidos em um ticket posterior (KAN-51) e o rate limiter existente no projeto foi omitido da cadeia de middlewares.
 - **Sugestão de correção:** Aplicar `participantActionLimiter` (ou limiter dedicado para checkouts de eventos) em `POST /checkout` e `POST /entrance`, e adicionar testes assertando a presença dos limitadores na cadeia de middlewares do roteador.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/checkinDoubleCheck.ts`, importado `participantActionLimiter` e montado nas rotas `POST /entrance` e `POST /checkout`. Em `backend/src/routes/checkinDoubleCheck.test.ts`, adicionada a suíte `checkinDoubleCheck route middleware configuration (ERR-074)` assertando a presença do middleware `participantActionLimiter` na cadeia de execução de ambos os endpoints.
+- **Verificação:** Executado `npm --prefix backend test src/routes/checkinDoubleCheck.test.ts`. 26 testes passaram. Prova de falha verificada: a remoção do limiter resulta em falha nas asserções de middleware.
 
 ---
 
@@ -1698,6 +1704,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Ausência de middleware específico para ações de expositores (diferente de `participantActionLimiter`).
 - **Sugestão de correção:** Aplicar um limitador de requisições de patrocinadores (ex: `adminSponsorLimiter` ou limitador específico de leads) em todas as rotas de `leads.ts` e incluir asserções na suíte de testes.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/leads.ts`, importado `adminSponsorLimiter` e montado nas rotas `GET /`, `POST /` e `PATCH /:participantUid`. Em `backend/src/routes/leads.test.ts`, atualizado o bloco `describe('leads route middleware configuration (ERR-076)')` assertando que as 3 rotas possuem `adminSponsorLimiter` registrado em suas pilhas de middleware.
+- **Verificação:** Executado `npm --prefix backend test src/routes/leads.test.ts`. 28 testes passaram. Prova de falha verificada: omitir `adminSponsorLimiter` causa falha nas asserções de middleware da suíte.
 
 ---
 

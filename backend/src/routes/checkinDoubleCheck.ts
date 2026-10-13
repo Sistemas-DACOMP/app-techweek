@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db, FieldValue } from '../config/firebaseAdmin';
 import { requireAuth, requireRole } from '../middlewares/authMiddleware';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 import { verifyScreenToken } from '../lib/screenToken';
 import { resolveAttendanceMode } from '../lib/attendanceMode';
@@ -12,13 +13,23 @@ const router = Router();
 // Staff/ADMIN registra a entrada do participante numa atividade com
 // attendanceMode DOUBLE_CHECK (D2 do SPEC KAN-51). Sem isso registrado,
 // o checkout do próprio aluno é recusado (ver ENTRANCE_NOT_FOUND abaixo).
-router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (req: Request, res: Response) => {
+router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), participantActionLimiter, async (req: Request, res: Response) => {
   const rawUid = req.body?.uid || req.body?.participantUid;
   const { activityId } = req.body ?? {};
   const staffUid = req.user!.uid;
 
   let uid = typeof rawUid === 'string' ? rawUid.replace(/^mailto:/i, '').trim() : '';
-  if (uid.includes('@')) {
+  if (uid.startsWith('@')) {
+    try {
+      const cleanUsername = uid.replace(/^@/, '').toLowerCase();
+      const userSnap = await db.collection('users').where('username', '==', cleanUsername).limit(1).get();
+      if (!userSnap.empty) {
+        uid = userSnap.docs[0].id;
+      }
+    } catch (e) {
+      console.warn('Erro ao resolver UID por username em checkinDoubleCheck:', e);
+    }
+  } else if (uid.includes('@')) {
     try {
       const cleanEmail = uid.toLowerCase();
       const userSnap = await db.collection('users').where('email', '==', cleanEmail).limit(1).get();
@@ -32,16 +43,6 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
       }
     } catch (e) {
       console.warn('Erro ao resolver UID por e-mail em checkinDoubleCheck:', e);
-    }
-  } else if (uid.startsWith('@')) {
-    try {
-      const cleanUsername = uid.replace(/^@/, '').toLowerCase();
-      const userSnap = await db.collection('users').where('username', '==', cleanUsername).limit(1).get();
-      if (!userSnap.empty) {
-        uid = userSnap.docs[0].id;
-      }
-    } catch (e) {
-      console.warn('Erro ao resolver UID por username em checkinDoubleCheck:', e);
     }
   }
 
@@ -111,7 +112,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
 // O próprio aluno chama isto escaneando o QR dinâmico do telão. uid vem
 // sempre do JWT (req.user), nunca do corpo — o token só prova "este QR era
 // da atividade X e ainda não expirou", não quem está escaneando.
-router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
+router.post('/checkout', requireAuth, participantActionLimiter, async (req: Request, res: Response) => {
   const { token } = req.body ?? {};
   const uid = req.user!.uid;
 

@@ -11,6 +11,7 @@ vi.mock('../config/firebaseAdmin', () => ({
 import router, { calculateAgeGroup, buildWhatsAppPayload, leadsHandler } from './leads';
 import { db } from '../config/firebaseAdmin';
 import { requireVerifiedEmail } from '../middlewares/authMiddleware';
+import { adminSponsorLimiter } from '../middlewares/rateLimiter';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -658,31 +659,36 @@ describe('PATCH /api/leads/:participantUid handler', () => {
   });
 });
 
-describe('leads route middleware configuration', () => {
-  it('registra a rota POST / com middleware de autenticação e papel restrito', () => {
+describe('leads route middleware configuration (ERR-076)', () => {
+  it('registra a rota POST / com middleware de autenticação, rate limiter e papel restrito', () => {
     const postRoute = (router as unknown as { stack: any[] }).stack.find(
       (layer) => layer.route?.path === '/' && layer.route?.methods?.post
     );
     expect(postRoute).toBeDefined();
-    expect(postRoute.route.stack.length).toBeGreaterThanOrEqual(4); // requireAuth, requireRole, requireVerifiedEmail, leadsHandler
+    expect(postRoute.route.stack.length).toBeGreaterThanOrEqual(5); // requireAuth, requireRole, adminSponsorLimiter, requireVerifiedEmail, leadsHandler
     const handles = postRoute.route.stack.map((l: any) => l.handle);
     expect(handles).toContain(requireVerifiedEmail);
+    expect(handles).toContain(adminSponsorLimiter);
   });
 
-  it('registra a rota GET / com middleware de autenticação e papel restrito', () => {
+  it('registra a rota GET / com middleware de autenticação, rate limiter e papel restrito', () => {
     const getRoute = (router as unknown as { stack: any[] }).stack.find(
       (layer) => layer.route?.path === '/' && layer.route?.methods?.get
     );
     expect(getRoute).toBeDefined();
-    expect(getRoute.route.stack.length).toBeGreaterThanOrEqual(3);
+    expect(getRoute.route.stack.length).toBeGreaterThanOrEqual(4); // requireAuth, requireRole, adminSponsorLimiter, getLeadsHandler
+    const handles = getRoute.route.stack.map((l: any) => l.handle);
+    expect(handles).toContain(adminSponsorLimiter);
   });
 
-  it('registra a rota PATCH /:participantUid com middleware de autenticação e papel restrito', () => {
+  it('registra a rota PATCH /:participantUid com middleware de autenticação, rate limiter e papel restrito', () => {
     const patchRoute = (router as unknown as { stack: any[] }).stack.find(
       (layer) => layer.route?.path === '/:participantUid' && layer.route?.methods?.patch
     );
     expect(patchRoute).toBeDefined();
-    expect(patchRoute.route.stack.length).toBeGreaterThanOrEqual(3);
+    expect(patchRoute.route.stack.length).toBeGreaterThanOrEqual(4); // requireAuth, requireRole, adminSponsorLimiter, updateLeadHandler
+    const handles = patchRoute.route.stack.map((l: any) => l.handle);
+    expect(handles).toContain(adminSponsorLimiter);
   });
 });
 

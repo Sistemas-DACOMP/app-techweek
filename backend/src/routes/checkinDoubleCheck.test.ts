@@ -22,6 +22,7 @@ import router from './checkinDoubleCheck';
 import { db } from '../config/firebaseAdmin';
 import { issueScreenToken } from '../lib/screenToken';
 import * as admin from 'firebase-admin';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -206,6 +207,186 @@ describe('POST /entrance (KAN-51 — Staff registra entrada)', () => {
   });
 });
 
+describe('POST /entrance — resolução de crachá e identidade (ERR-073)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function setupUsersMock(userDocs: Array<{ id: string; email?: string; username?: string }> = []) {
+    (db.collection as any).mockImplementation((name: string) => {
+      if (name === 'users') {
+        return {
+          doc: (id: string) => ({ path: `users/${id}` }),
+          where: vi.fn((field: string, op: string, val: string) => ({
+            limit: vi.fn(() => ({
+              get: vi.fn(async () => {
+                const matches = userDocs.filter((d) => (d as any)[field] === val);
+                return {
+                  empty: matches.length === 0,
+                  docs: matches.map((m) => ({ id: m.id, data: () => m }))
+                };
+              })
+            }))
+          }))
+        };
+      }
+      return {
+        doc: (id: string) => ({ path: `${name}/${id}` })
+      };
+    });
+  }
+
+  it('resolve crachá com prefixo mailto: e e-mail via consulta Firestore', async () => {
+    setupUsersMock([{ id: 'resolved-user-1', email: 'aluno@facom.ufms.br' }]);
+    const tx = makeTx({
+      'activities/': { exists: true, data: () => ({ attendanceMode: 'DOUBLE_CHECK' }) },
+      'checkins/': { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = {
+      body: { uid: 'mailto:aluno@facom.ufms.br', activityId: 'activity-1' },
+      user: { uid: 'staff-1', role: 'STAFF' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await entranceHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: 'checkins/resolved-user-1_activity-1' },
+      expect.objectContaining({ uid: 'resolved-user-1', activityId: 'activity-1', status: 'CHECKED_IN' })
+    );
+  });
+
+  it('resolve e-mail case-sensitive via fallback de busca exata quando lowercase não encontra', async () => {
+    setupUsersMock([{ id: 'resolved-user-2', email: 'Aluno_Especial@Facom.Ufms.Br' }]);
+    const tx = makeTx({
+      'activities/': { exists: true, data: () => ({ attendanceMode: 'DOUBLE_CHECK' }) },
+      'checkins/': { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = {
+      body: { uid: 'Aluno_Especial@Facom.Ufms.Br', activityId: 'activity-1' },
+      user: { uid: 'staff-1', role: 'STAFF' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await entranceHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: 'checkins/resolved-user-2_activity-1' },
+      expect.objectContaining({ uid: 'resolved-user-2' })
+    );
+  });
+
+  it('resolve username iniciado por @ via consulta ao Firestore', async () => {
+    setupUsersMock([{ id: 'resolved-dev-3', username: 'usuario_dev' }]);
+    const tx = makeTx({
+      'activities/': { exists: true, data: () => ({ attendanceMode: 'DOUBLE_CHECK' }) },
+      'checkins/': { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = {
+      body: { uid: '@usuario_dev', activityId: 'activity-1' },
+      user: { uid: 'staff-1', role: 'STAFF' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await entranceHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: 'checkins/resolved-dev-3_activity-1' },
+      expect.objectContaining({ uid: 'resolved-dev-3' })
+    );
+  });
+
+  it('aceita participantUid como alternativa a uid no corpo da requisição', async () => {
+    setupUsersMock();
+    const tx = makeTx({
+      'activities/': { exists: true, data: () => ({ attendanceMode: 'DOUBLE_CHECK' }) },
+      'checkins/': { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = {
+      body: { participantUid: 'part-legacy-1', activityId: 'activity-1' },
+      user: { uid: 'staff-1', role: 'STAFF' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await entranceHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: 'checkins/part-legacy-1_activity-1' },
+      expect.objectContaining({ uid: 'part-legacy-1' })
+    );
+  });
+
+  it('retorna 400 INVALID_PAYLOAD se e-mail não for encontrado no Firestore (uid não resolvido)', async () => {
+    setupUsersMock([]);
+    const req = {
+      body: { uid: 'mailto:inexistente@facom.ufms.br', activityId: 'activity-1' },
+      user: { uid: 'staff-1', role: 'STAFF' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await entranceHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
+    expect(db.runTransaction).not.toHaveBeenCalled();
+  });
+
+  it('retorna 400 INVALID_PAYLOAD se @username não for encontrado no Firestore', async () => {
+    setupUsersMock([]);
+    const req = {
+      body: { uid: '@nao_existe', activityId: 'activity-1' },
+      user: { uid: 'staff-1', role: 'STAFF' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await entranceHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
+    expect(db.runTransaction).not.toHaveBeenCalled();
+  });
+
+  it('trata falha de rede/exceção na consulta de resolução de usuário sem quebrar o servidor', async () => {
+    (db.collection as any).mockImplementation((name: string) => {
+      if (name === 'users') {
+        return {
+          doc: (id: string) => ({ path: `users/${id}` }),
+          where: vi.fn(() => ({
+            limit: vi.fn(() => ({
+              get: vi.fn().mockRejectedValue(new Error('Firestore connection failure'))
+            }))
+          }))
+        };
+      }
+      return { doc: (id: string) => ({ path: `${name}/${id}` }) };
+    });
+
+    const req = {
+      body: { uid: 'aluno@facom.ufms.br', activityId: 'activity-1' },
+      user: { uid: 'staff-1', role: 'STAFF' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await entranceHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
+    expect(db.runTransaction).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /checkout (KAN-51 — aluno via QR dinâmico do telão)', () => {
   beforeAll(() => {
     process.env.SCREEN_TOKEN_SECRET = 'test-secret-kan-51-com-pelo-menos-32-chars';
@@ -373,3 +554,24 @@ describe('POST /checkout (KAN-51 — aluno via QR dinâmico do telão)', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'WRONG_ATTENDANCE_MODE' }));
   });
 });
+
+describe('checkinDoubleCheck route middleware configuration (ERR-074)', () => {
+  it('registra POST /entrance com participantActionLimiter na cadeia de middlewares', () => {
+    const entranceRoute = (router as unknown as { stack: any[] }).stack.find(
+      (layer) => layer.route?.path === '/entrance' && layer.route?.methods?.post
+    );
+    expect(entranceRoute).toBeDefined();
+    const handles = entranceRoute.route.stack.map((l: any) => l.handle);
+    expect(handles).toContain(participantActionLimiter);
+  });
+
+  it('registra POST /checkout com participantActionLimiter na cadeia de middlewares', () => {
+    const checkoutRoute = (router as unknown as { stack: any[] }).stack.find(
+      (layer) => layer.route?.path === '/checkout' && layer.route?.methods?.post
+    );
+    expect(checkoutRoute).toBeDefined();
+    const handles = checkoutRoute.route.stack.map((l: any) => l.handle);
+    expect(handles).toContain(participantActionLimiter);
+  });
+});
+
