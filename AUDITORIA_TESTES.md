@@ -1579,6 +1579,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   O teste `it('cancelar reserva confirmada devolve a vaga')` em `booking.test.ts:252` apenas valida que `vagas_disponiveis` virou 3 e `total_inscritos` virou 7, consolidando esse comportamento incorreto sem testar a fila de espera.
 - **Causa provável:** Implementação simplificada de cancelamento que tratou devolução de vagas isoladamente sem integrar com a mecânica da fila de espera.
 - **Sugestão de correção:** Na transação de cancelamento, consultar se há participantes com `status == 'WAITING_LIST'` ordenados por `position` asc; se houver, promover o primeiro para `CONFIRMED` (mantendo `vagas_disponiveis` em 0 e decrementando `total_espera`), notificando-o, ou implementar um job de conciliação de fila de espera.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/booking.ts:cancelBookingHandler`, implementada a promoção automática da lista de espera ao cancelar reserva com status `CONFIRMED` e `total_espera > 0` (Opção 1 aprovada). A leitura do próximo da fila (`bookings.where('activityId', '==', activityId).where('status', '==', 'WAITING_LIST').orderBy('position', 'asc').limit(1)`) é executada dentro da transação antes de qualquer escrita (atendendo à regra do Firestore). Se houver participante na fila, seu doc é atualizado para `CONFIRMED`, `position: null`, `promotedAt: new Date()` e `total_espera` da atividade é decrementado sem alterar `vagas_disponiveis` (preservando o assento para o usuário promovido). Caso a fila esteja vazia (fallback), a vaga é liberada normalmente. Em `backend/src/routes/booking.test.ts`, adicionados testes unitários validando a promoção e o fallback.
+- **Verificação:** Executado `npm --prefix backend test src/routes/booking.test.ts`. 16 testes passaram (5x estável). Prova de falha verificada: a remoção da lógica de promoção faz o teste falhar pois `tx.update(promotedDocRef)` não é chamado e `vagas_disponiveis` seria indevidamente incrementada.
 
 ---
 
@@ -1600,6 +1603,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Teste unitário foi escrito antes ou sem considerar a adição do catálogo de fallback `DEFAULT_ACTIVITIES_CATALOG`.
 - **Sugestão de correção:** Adicionar testes em `booking.test.ts` cobrindo a reserva de uma atividade presente no catálogo padrão (`palestra_abertura`, `workshop_firebase_node`), validando a inicialização do documento e a confirmação de vaga ou inserção em fila de espera.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/booking.test.ts`, adicionados testes unitários para a rotina de auto-seed de atividades do catálogo padrão `DEFAULT_ACTIVITIES_CATALOG` (linhas 154-201 de `booking.ts`), cobrindo tanto o ramo com vagas disponíveis (`palestra_abertura` gerando atividade persistida e reserva `CONFIRMED`) quanto o ramo com vagas esgotadas (atividade persistida com `total_espera: 1` e reserva `WAITING_LIST` com `position: 1`).
+- **Verificação:** Executado `npm --prefix backend test src/routes/booking.test.ts`. 16 testes passaram. Prova de falha verificada: alteração dos asserts de `tx.set` ou da chave de catálogo no teste resulta em falha direta.
 
 ---
 
@@ -1613,6 +1619,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Em `backend/src/routes/checkin.ts`, linhas 57-62, 77-82, 91 e 110-116 não são exercitadas por nenhum dos 6 testes em `checkin.test.ts`.
 - **Causa provável:** Testes focaram apenas na validação de formato do ID do QR (`isValidFirestoreId`), no rate limit e no `attendanceMode`, deixando de lado os ramos convencionais de erro do handler.
 - **Sugestão de correção:** Adicionar casos de teste para 404 (atividade inexistente), 409 (presença já registrada), 201 com e sem `rating` opcional, e 500 (rejeição da transação).
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/checkin.test.ts`, adicionado describe block `POST /:activityId/checkin — fluxos de negócio e erros (ERR-072)` contendo 5 novos testes unitários cobrindo todos os fluxos faltantes: 404 `ACTIVITY_NOT_FOUND` (atividade inexistente no Firestore), 409 `CHECKIN_DUPLICATE` (presença já registrada via doc determinístico de `pointEvent`), 201 com gravação de `metadata: { rating }` quando `rating` numérico é enviado no payload, 201 com `metadata: null` quando `rating` é omitido, e 500 `INTERNAL_ERROR` quando `db.runTransaction` rejeita com erro.
+- **Verificação:** Executado `npm --prefix backend test src/routes/checkin.test.ts`. 11 testes passaram. Prova de falha verificada: alteração dos códigos de erro ou payload de metadados gera falha imediata nos testes.
 
 ---
 

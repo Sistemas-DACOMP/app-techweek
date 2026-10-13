@@ -283,23 +283,50 @@ const cancelBookingHandler = async (req: Request, res: Response) => {
 
       const bookingData = bookingSnap.data() ?? {};
       const wasConfirmed = bookingData.status === 'CONFIRMED';
+      const actData = activitySnap.exists ? (activitySnap.data() ?? {}) : {};
+      const totalEspera = typeof actData.total_espera === 'number' ? actData.total_espera : 0;
+
+      // KAN-110 / ERR-070: se havia fila de espera e a vaga cancelada estava
+      // confirmada, lê o próximo da fila antes de qualquer escrita (regra de
+      // transação do Firestore: all reads must precede all writes).
+      let promotedBookingDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+      if (activitySnap.exists && wasConfirmed && totalEspera > 0) {
+        const waitingQuery = db.collection('bookings')
+          .where('activityId', '==', activityId)
+          .where('status', '==', 'WAITING_LIST')
+          .orderBy('position', 'asc')
+          .limit(1);
+        const waitingSnap = await tx.get(waitingQuery);
+        if (!waitingSnap.empty) {
+          promotedBookingDoc = waitingSnap.docs[0];
+        }
+      }
 
       tx.delete(bookingRef);
 
       if (activitySnap.exists && bookingData.status === 'WAITING_LIST') {
-        const actData = activitySnap.data() ?? {};
         const espera = typeof actData.total_espera === 'number' ? actData.total_espera : 1;
         tx.update(activityRef, { total_espera: Math.max(0, espera - 1) });
       }
 
       if (activitySnap.exists && wasConfirmed) {
-        const actData = activitySnap.data() ?? {};
-        const available = typeof actData.vagas_disponiveis === 'number' ? actData.vagas_disponiveis : 0;
-        const totalInscritos = typeof actData.total_inscritos === 'number' ? actData.total_inscritos : 1;
-        tx.update(activityRef, {
-          vagas_disponiveis: available + 1,
-          total_inscritos: Math.max(0, totalInscritos - 1)
-        });
+        if (promotedBookingDoc) {
+          tx.update(promotedBookingDoc.ref, {
+            status: 'CONFIRMED',
+            position: null,
+            promotedAt: new Date()
+          });
+          tx.update(activityRef, {
+            total_espera: Math.max(0, totalEspera - 1)
+          });
+        } else {
+          const available = typeof actData.vagas_disponiveis === 'number' ? actData.vagas_disponiveis : 0;
+          const totalInscritos = typeof actData.total_inscritos === 'number' ? actData.total_inscritos : 1;
+          tx.update(activityRef, {
+            vagas_disponiveis: available + 1,
+            total_inscritos: Math.max(0, totalInscritos - 1)
+          });
+        }
       }
 
       return {
