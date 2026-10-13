@@ -5,6 +5,7 @@ on:
     branches:
       - homolog
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -33,7 +34,7 @@ jobs:
       - name: Install dependencies (Root and Backend)
         run: |
           npm ci
-          npm --prefix backend ci
+          (cd backend && npm ci)
 
       - name: Configure backend environment (.env)
         env:
@@ -59,7 +60,7 @@ jobs:
           EOF
 
       - name: Build backend
-        run: npm --prefix backend run build
+        run: (cd backend && npm run build)
 
       - name: Build frontend
         run: npm run build
@@ -77,7 +78,7 @@ jobs:
         env:
           SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_FACOM_TECHWEEK_LAYERX }}
         run: |
-          echo "$SERVICE_ACCOUNT_KEY" > "$RUNNER_TEMP/service-account.json"
+          printf '%s' "$SERVICE_ACCOUNT_KEY" > "$RUNNER_TEMP/service-account.json"
 
       - name: Deploy to Firebase (Hosting, Functions, Firestore Rules, Storage Rules)
         env:
