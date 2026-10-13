@@ -1468,6 +1468,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Estratégia ingênua de contenção de tamanho de memória em cache sem implementar estratégia LRU.
 - **Sugestão de correção:** Substituir o `invalidAttempts.clear()` por um cache LRU (ex: `lru-cache`) ou mapa com limpeza seletiva de entradas expiradas, e criar teste verificando a retenção de bloqueios ativos sob carga.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/services/sponsorInvites.ts`, substituído o descarte total `invalidAttempts.clear()` por algoritmo inteligente de contenção em 3 etapas quando `size >= MAX_INVALID_ENTRIES (5000)`: (1) purga de entradas expiradas por TTL; (2) descarte de entradas transitórias não-bloqueadas (`count < 10`) para resistir a inundações de tokens falsos; e (3) descarte progressivo FIFO/LRU das entradas mais antigas. Em `backend/src/services/sponsorInvites.test.ts`, adicionado teste unitário comprovando que o flooding com mais de 5000 tokens falsos não expurga tokens bloqueados sob ataque de força bruta.
+- **Verificação:** Executado `npm --prefix backend test src/services/sponsorInvites.test.ts`. 29 testes passaram. Prova de falha verificada: ao reinserir temporariamente `invalidAttempts.clear()`, o teste falhou imediatamente com `AssertionError: expected false to be true`.
 
 ---
 
@@ -1512,6 +1515,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Em `admin.test.ts`, nenhum caso de teste valida sanitização ou rejeição de payloads com scripts/tags HTML.
 - **Causa provável:** Validação focada apenas em tamanho de caracteres sem considerar higienização de conteúdo que será renderizado no cliente.
 - **Sugestão de correção:** Implementar sanitização (ou rejeição de tags HTML/scripts) no backend antes de persistir em `/announcements` e adicionar testes em `admin.test.ts` cobrindo tentativas de injeção de HTML/scripts.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/admin.ts`, adicionada validação e rejeição via regex (`HTML_TAG_REGEX = /<[a-z/!][\s\S]*?>/i`) retornando 400 `INVALID_PAYLOAD` com mensagem clara quando `title` ou `body` contiverem tags HTML ou scripts injetados. Em `backend/src/routes/admin.test.ts`, adicionados testes unitários para payloads maliciosos contendo `<script>` e `<img onerror=...>`, comprovando que a requisição é barrada sem tocar Firestore nem FCM.
+- **Verificação:** Executado `npm --prefix backend test src/routes/admin.test.ts`. 32 testes passaram. Prova de falha verificada: ao comentar temporariamente o bloco de validação de tags HTML, os testes falharam com `expected vi.fn() to not be called at all, but actually been called 1 times` (escrita indevida no Firestore).
 
 ---
 
@@ -1532,6 +1538,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Em `admin.test.ts`, o `adminBroadcastLimiter` não é importado nem verificado em nenhum teste de rate-limit da rota.
 - **Causa provável:** Testes foram focados na lógica do handler e nas exceções do FCM, desacoplando o middleware de rate limiting.
 - **Sugestão de correção:** Adicionar testes de integração do roteador ou da cadeia de middlewares validando que o `adminBroadcastLimiter` bloqueia requisições excessivas (ex: > 3 broadcasts no intervalo configurado) e adicionar verificação defensiva caso `req.user?.uid` não esteja definido.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/admin.ts`, adicionada verificação defensiva `if (!req.user?.uid)` retornando 401 `UNAUTHENTICATED`, eliminando o risco da asserção não-nula `req.user!.uid`. Em `backend/src/routes/admin.test.ts`, adicionado teste unitário verificando o 401 quando `req.user` é indefinido e teste de integração da cadeia real de middlewares com `adminBroadcastLimiter` comprovando o bloqueio com status 429 `RATE_LIMITED` ao exceder 10 requisições em 10 minutos.
+- **Verificação:** Executado `npm --prefix backend test src/routes/admin.test.ts`. 32 testes passaram. Prova de falha verificada: ao executar o teste da cadeia sem os métodos de cabeçalho do express-rate-limit ou sem a verificação defensiva, o teste falha com status incompatível.
 
 ---
 

@@ -41,6 +41,8 @@ import {
   hashToken,
   normalizeDomain,
   emailInDomain,
+  isTokenLocked,
+  recordInvalidAttempt,
   resetInvalidAttempts,
   InviteError,
   RolePartiallyUpdatedError,
@@ -243,6 +245,30 @@ describe('acceptInvite (KAN-124)', () => {
   it('teto de tentativas inválidas por token => 429 RATE_LIMITED', async () => {
     const ghost = generateToken();
     for (let i = 0; i < 10; i++) expect(await code(acceptInvite(ghost, caller(1), profile))).toBe('INVITE_INVALID');
+    expect(await code(acceptInvite(ghost, caller(1), profile))).toBe('RATE_LIMITED');
+  });
+
+  it('ERR-065: flooding com milhares de tokens falsos não zera bloqueios ativos (resiste a bypass de rate limit)', async () => {
+    const ghost = generateToken();
+    const ghostHash = hashToken(ghost);
+
+    // 10 tentativas inválidas bloqueiam o token
+    for (let i = 0; i < 10; i++) {
+      expect(await code(acceptInvite(ghost, caller(1), profile))).toBe('INVITE_INVALID');
+    }
+    expect(isTokenLocked(ghostHash)).toBe(true);
+    expect(await code(acceptInvite(ghost, caller(1), profile))).toBe('RATE_LIMITED');
+
+    // Atacante tenta floodar o cache com mais de 5000 tokens inválidos novos para forçar limpeza total
+    for (let i = 0; i < 5050; i++) {
+      recordInvalidAttempt(`attacker-flood-token-${i}`);
+    }
+
+    // Com o algoritmo anterior (invalidAttempts.clear()), o token bloqueado teria sido apagado
+    // e o invasor teria burlado o bloqueio (retornando INVITE_INVALID em vez de RATE_LIMITED).
+    // Com a purga seletiva e priorização de tokens bloqueados, o token bloqueado continua protegido
+    // contra despejo causado por flood de tentativas efêmeras.
+    expect(isTokenLocked(ghostHash)).toBe(true);
     expect(await code(acceptInvite(ghost, caller(1), profile))).toBe('RATE_LIMITED');
   });
 });
