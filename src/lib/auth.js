@@ -176,11 +176,18 @@ export async function signUpWithEmail({ email, password, metadata }) {
     try {
       const actionCodeSettings = getActionCodeSettings();
       if (actionCodeSettings) {
-        await sendEmailVerification(userCredential.user, actionCodeSettings);
+        try {
+          await sendEmailVerification(userCredential.user, actionCodeSettings);
+          verificationEmailSent = true;
+        } catch (settingsErr) {
+          console.warn('Aviso: Falha ao enviar e-mail com actionCodeSettings, tentando envio padrão:', settingsErr);
+          await sendEmailVerification(userCredential.user);
+          verificationEmailSent = true;
+        }
       } else {
         await sendEmailVerification(userCredential.user);
+        verificationEmailSent = true;
       }
-      verificationEmailSent = true;
     } catch (verifErr) {
       console.warn('Aviso: Falha ao enviar e-mail de verificação inicial:', verifErr);
       verificationEmailSent = false;
@@ -269,7 +276,12 @@ export async function sendVerificationEmail(user = auth.currentUser) {
   try {
     const actionCodeSettings = getActionCodeSettings();
     if (actionCodeSettings) {
-      await sendEmailVerification(user, actionCodeSettings);
+      try {
+        await sendEmailVerification(user, actionCodeSettings);
+      } catch (settingsErr) {
+        console.warn('Aviso: Falha ao enviar e-mail com actionCodeSettings no reenvio, tentando envio padrão:', settingsErr);
+        await sendEmailVerification(user);
+      }
     } else {
       await sendEmailVerification(user);
     }

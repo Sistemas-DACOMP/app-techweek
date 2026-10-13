@@ -43,7 +43,9 @@ function AppContent() {
   useEffect(() => {
     let cancelled = false;
     if (!user) { setClaimRole(null); return undefined; }
-    user.getIdTokenResult().then((r) => { if (!cancelled) setClaimRole(r.claims?.role || null); }).catch(() => {});
+    if (typeof user.getIdTokenResult === 'function') {
+      user.getIdTokenResult().then((r) => { if (!cancelled) setClaimRole(r.claims?.role || null); }).catch(() => {});
+    }
     return () => { cancelled = true; };
   }, [user]);
 
