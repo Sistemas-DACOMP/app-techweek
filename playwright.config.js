@@ -16,13 +16,23 @@ export default defineConfig({
   testDir: 'e2e',
   timeout: 60_000,
   workers: 1,
+  projects: [
+    {
+      name: 'functional',
+      testIgnore: /.*(capture|compare)\.spec\.js/,
+    },
+    {
+      name: 'visual',
+      testMatch: /.*(capture|compare)\.spec\.js/,
+    },
+  ],
   use: {
     baseURL: process.env.E2E_BASE_URL || 'http://localhost:5180',
     viewport: { width: 390, height: 844 },
     locale: 'pt-BR',
   },
   webServer: {
-    command: 'npm run dev',
+    command: 'npx vite --port 5180',
     url: 'http://localhost:5180',
     reuseExistingServer: !process.env.CI,
   },

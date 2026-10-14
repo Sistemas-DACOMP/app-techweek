@@ -21,8 +21,9 @@
     "quality-gate": "node scripts/quality-gate.mjs",
     "check-ai-infra": "node scripts/check-ai-infra.mjs",
     "test:rules": "npx firebase-tools emulators:exec --only firestore,storage \"npx vitest run tests/rules\"",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e": "playwright test --project functional",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:visual": "playwright test --project visual"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

@@ -2100,6 +2100,13 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Apenas dois arquivos existem em `e2e/`: `capture.spec.js` e `compare.spec.js`. A execução via `npx playwright test` relata "3 skipped" e 0 asserções executadas.
 - **Causa provável:** O Playwright foi adotado pontualmente para automação de screenshots do redesign e nunca foi expandido para uma suíte de regressão E2E funcional.
 - **Sugestão de correção:** Estruturar uma suíte de testes E2E funcionais cobrindo os fluxos principais (autenticação, agenda e reserva de vagas, validação de QR code, resgate de missões e painel administrativo).
+- **Status:** Corrigido
+- **Correção aplicada:** Criada uma suíte abrangente de testes E2E funcionais em `e2e/` cobrindo fluxos reais da aplicação:
+  - `e2e/auth.spec.js`: renderização do formulário de login, alternância de visibilidade da senha (eye toggle), abertura/fechamento do modal de recuperação de senha e redirecionamento de rotas protegidas para `/login`.
+  - `e2e/register.spec.js`: renderização da etapa 1 com campos de identificação (nome, sobrenome, @usuario, e-mail), validação bloqueando prosseguimento com campos obrigatórios vazios e navegação de retorno ao login.
+  - `e2e/terms.spec.js`: renderização da página de termos de uso e política de privacidade LGPD, alternância de abas de documentação e botão voltar.
+  - `e2e/portals.spec.js`: validação de montagem e renderização sem erros de runtime de telas especiais e portais (`/tv/programacao`, `/admin`, `/staff`, `/sponsor`).
+- **Verificação:** Execução via `npm run test:e2e` (projeto functional) passando 14/14 testes com 100% de sucesso.
 
 ---
 
@@ -2114,6 +2121,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   `e2e/compare.spec.js` contém apenas uma espera de URL (`waitForURL(/onboarding/)`), sem asserções sobre os dados ou elementos da página.
 - **Causa provável:** Confundir testes de regressão automatizados com scripts de geração de mídia para documentação.
 - **Sugestão de correção:** Mover scripts de captura de tela para fora de `e2e/` (ex: `scripts/generate-screenshots.mjs`) ou anotá-los em uma tag dedicada (ex: `@visual-media`), e introduzir asserções explícitas (`expect(page.getByText(...)).toBeVisible()`) nos testes E2E reais.
+- **Status:** Corrigido
+- **Correção aplicada:** Desacoplados os scripts visuais de captura (`capture.spec.js` e `compare.spec.js`) através da tag `@visual-media` e configurado projeto Playwright dedicado (`visual`), isolando-os da execução padrão funcional (`functional`). Removidas as chamadas incondicionais `test.skip()` de nível de arquivo em prol de skips condicionais por flag (`VISUAL_CAPTURE=1`). Adicionadas asserções explícitas (`expect(...)`) de integridade das páginas, visibilidade de cabeçalhos e elementos principais.
+- **Verificação:** Executado `npm run test:e2e` verificando que a suíte funcional roda limpa sem capturas visuais, e `npm run test:e2e:visual` comprovando a correta segregação e execução do projeto visual.
 
 ---
 
@@ -2157,6 +2167,10 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Tentativa empírica de aguardar o término de animações CSS e requisições assíncronas do Firebase antes de capturar a tela.
 - **Sugestão de correção:** Substituir pausas fixas por esperas orientadas a eventos e estados de rede (`page.waitForLoadState('networkidle')`) ou visibilidade de elementos reais (`await expect(locator).toBeVisible()`).
+- **Status:** Corrigido
+- **Correção aplicada:** Eliminadas todas as ocorrências de `page.waitForTimeout(...)` com tempos estáticos arbitrários em `e2e/capture.spec.js`, `e2e/compare.spec.js` e `e2e/helpers.js`. Substituídas por esperas orientadas a eventos e estados do ciclo de vida da página (`page.waitForLoadState('domcontentloaded')`) e locators reativos com timeout explícito (`locator.waitFor({ state: 'visible' })`, `expect(locator).toBeVisible()`).
+- **Verificação:** Executado loop de estabilidade de 5 rodadas consecutivas (`1..5 | ForEach-Object { npm run test:e2e }`), atingindo 14/14 testes aprovados em todas as 5 iterações com zero flakiness.
+
 
 ---
 

@@ -5,8 +5,10 @@ export async function login(page) {
 
   await page.addInitScript(() => localStorage.setItem('facom_onboarding_completed', 'true'));
   await page.goto('/#/login');
-  await page.locator('input[type="email"]').first().fill(email);
+  const emailInput = page.locator('input[type="email"]').first();
+  await emailInput.waitFor({ state: 'visible', timeout: 15_000 });
+  await emailInput.fill(email);
   await page.locator('input[type="password"]').first().fill(password);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  await page.waitForURL(/#\/$/);
+  await page.waitForURL(/#\/$/, { timeout: 15_000 });
 }
