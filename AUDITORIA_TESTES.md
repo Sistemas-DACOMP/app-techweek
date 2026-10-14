@@ -484,6 +484,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O arquivo de teste testa apenas `extractInviteTokenFromSearch` (função pura de string/URL), mas importou-a do serviço que agrega chamadas de rede sem isolar dependências com `vi.mock('./api')`.
 - **Sugestão de correção:** Adicionar `vi.mock('./api', () => ({ apiClient: {} }));` no início de `src/lib/sponsorInviteService.test.js` ou isolar funções utilitárias puras de query string em um módulo auxiliar sem dependências de rede.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/sponsorInviteService.test.js`, adicionado mock para `./api` (`apiRequest: vi.fn()`), isolando o serviço de suas dependências transitivas do Firebase e eliminando por completo a inicialização indevida dos emuladores locais e poluição de logs no console.
+- **Verificação:** Executado `npx vitest run src/lib/sponsorInviteService.test.js`, passando sem qualquer log de emulador.
 
 ---
 
@@ -508,6 +511,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhuma dessas funções é importada ou executada em `src/lib/sponsorInviteService.test.js`.
 - **Causa provável:** O arquivo de teste foi criado apenas para cobrir a lógica de extração do token da URL durante a criação da tela de convites (KAN), deixando de fora a suíte de integração com a API.
 - **Sugestão de correção:** Expandir `sponsorInviteService.test.js` mockando `apiClient` e criando casos de teste para cada uma das 8 funções, cobrindo envio correto de rotas/parâmetros e propagação de erros.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/sponsorInviteService.test.js`, expandida a suíte com o bloco `describe('sponsorInviteService - Operações de API')` cobrindo todas as 8 operações de API (`getInvite`, `acceptInvite`, `listSponsors`, `createSponsor`, `updateSponsor`, `addSponsorInvites`, `resendSponsorInvite`, `revokeSponsorInvite`), validando rotas, codificação de URL com `encodeURIComponent`, métodos HTTP (GET, POST, PATCH, DELETE), serialização de payloads e tratamento/propagação de falhas e rejeições.
+- **Verificação:** Executado `npx vitest run src/lib/sponsorInviteService.test.js`, passando 13/13 testes.
 
 ---
 
@@ -539,6 +545,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O teste foi escrito sob demanda da issue KAN-118 especificamente para a rota `/profile`, sem contemplar os testes unitários da função de identificação de subdomínio já existente.
 - **Sugestão de correção:** Adicionar uma suíte `describe('getAppSubdomain')` testando os cenários: `window` indefinido, hostnames com `admin.`, `adm.`, `staff.`, `portaria.`, subdomínios comuns (`app.`, `www.`) e hostnames sem subdomínio (`localhost`, `techweekufu.com.br`).
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/subdomain.test.js`, adicionada suíte `describe('getAppSubdomain')` com cobertura para detecção de subdomínio `admin` (prefixos `admin.` e `adm.`), subdomínio `staff` (prefixos `staff.` e `portaria.`), case-insensitivity, retorno `null` para hostnames principais/outros subdomínios, e retorno `null` em ambiente SSR (`window` indefinido). Implementado hook `afterEach` para restauração determinística do objeto global `window`.
+- **Verificação:** Executado `npx vitest run src/lib/subdomain.test.js`, passando 7/7 testes.
 
 ---
 
@@ -561,6 +570,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Mock ad-hoc atribuído diretamente a propriedades globais em vez de utilizar utilitários controlados do Vitest (`vi.spyOn`).
 - **Sugestão de correção:** Utilizar `vi.spyOn(global.URL, 'createObjectURL')` e `vi.spyOn(global.URL, 'revokeObjectURL')`, além de utilizar um hook `afterEach(() => { vi.restoreAllMocks(); })` para garantir restauração determinística mesmo em caso de falha de asserção.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/sponsorService.test.js`, no teste de exportação de leads para CSV, as substituições das propriedades globais `URL.createObjectURL`, `URL.revokeObjectURL` e `document` foram encapsuladas em bloco `try...finally`, garantindo restauração incondicional e determinística do estado original do runtime do Vitest mesmo no caso de eventuais falhas de asserção.
+- **Verificação:** Executado `npx vitest run src/lib/sponsorService.test.js`, passando 15/15 testes.
 
 ---
 
