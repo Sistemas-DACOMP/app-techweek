@@ -699,29 +699,61 @@ export async function checkoutDoubleCheck(token) {
   });
 }
 
+const ATTENDED_ACTIVITIES_PREFIX = 'facom_attended_activities_';
+
+function hasLocallyAttendedActivity(uid, activityId) {
+  if (!uid || !activityId) return false;
+  try {
+    const raw = localStorage.getItem(`${ATTENDED_ACTIVITIES_PREFIX}${uid}`);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) && list.includes(activityId);
+  } catch {
+    return false;
+  }
+}
+
+function markLocallyAttendedActivity(uid, activityId) {
+  if (!uid || !activityId) return;
+  try {
+    const key = `${ATTENDED_ACTIVITIES_PREFIX}${uid}`;
+    const raw = localStorage.getItem(key);
+    const list = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(list) && !list.includes(activityId)) {
+      list.push(activityId);
+      localStorage.setItem(key, JSON.stringify(list));
+    }
+  } catch {
+    // Ignora falha de localStorage
+  }
+}
+
 /**
  * Registra a presença do participante em uma atividade escaneada via QR Code.
- * Lida com double-check (telão com sessionToken) e com check-in direto por autoatendimento.
+ * Permite escanear mais de uma vez (success: true), mas só pontua na primeira leitura.
  */
 export async function registerActivityAttendance(activityId, sessionToken = null, rating = 5) {
   if (!activityId) {
     return { success: false, error: 'Identificador da atividade não informado.' };
   }
 
+  const uid = auth?.currentUser?.uid || 'anon';
+
   // 1. Se houver sessionToken informado (QR dinâmico do telão), tenta o fluxo de checkout
   if (sessionToken) {
     try {
       const checkoutRes = await checkoutDoubleCheck(sessionToken);
-      const points = checkoutRes?.pointsCredited || 20;
-      if (typeof window !== 'undefined') {
+      const points = typeof checkoutRes?.pointsCredited === 'number' ? checkoutRes.pointsCredited : 20;
+      markLocallyAttendedActivity(uid, activityId);
+      if (points > 0 && typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('facom_points_updated', {
           detail: { delta: points, source: 'checkin', activityId }
         }));
       }
-      return { success: true, points, mode: 'double_check' };
+      return { success: true, points, alreadyCheckedIn: points === 0, mode: 'double_check' };
     } catch (err) {
       if (err.status === 409 || err.data?.error === 'CHECKIN_DUPLICATE') {
-        return { success: false, alreadyCheckedIn: true, message: 'Presença já confirmada nesta atividade.' };
+        markLocallyAttendedActivity(uid, activityId);
+        return { success: true, points: 0, alreadyCheckedIn: true, message: 'Presença confirmada nesta atividade.' };
       }
       if (err.status === 403 && (err.code === 'SYMPLA_TICKET_REQUIRED' || err.data?.error === 'SYMPLA_TICKET_REQUIRED')) {
         return { success: false, symplaRequired: true, message: 'Ingresso do Sympla obrigatório para confirmar presença.' };
@@ -736,16 +768,22 @@ export async function registerActivityAttendance(activityId, sessionToken = null
       method: 'POST',
       body: JSON.stringify({ lectureId: activityId, rating })
     });
-    const points = checkinRes?.pointsCredited || checkinRes?.points || 20;
-    if (typeof window !== 'undefined') {
+    const points = typeof checkinRes?.pointsCredited === 'number'
+      ? checkinRes.pointsCredited
+      : typeof checkinRes?.points === 'number'
+      ? checkinRes.points
+      : 20;
+    markLocallyAttendedActivity(uid, activityId);
+    if (points > 0 && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('facom_points_updated', {
         detail: { delta: points, source: 'checkin', activityId }
       }));
     }
-    return { success: true, points, mode: 'self_scan' };
+    return { success: true, points, alreadyCheckedIn: points === 0, mode: 'self_scan' };
   } catch (err) {
     if (err.status === 409 || err.data?.error === 'CHECKIN_DUPLICATE') {
-      return { success: false, alreadyCheckedIn: true, message: 'Presença já confirmada nesta atividade.' };
+      markLocallyAttendedActivity(uid, activityId);
+      return { success: true, points: 0, alreadyCheckedIn: true, message: 'Presença confirmada nesta atividade.' };
     }
     if (err.status === 403 && (err.code === 'SYMPLA_TICKET_REQUIRED' || err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')) {
       return { success: false, symplaRequired: true, message: 'Ingresso do Sympla obrigatório para confirmar presença.' };
@@ -754,13 +792,19 @@ export async function registerActivityAttendance(activityId, sessionToken = null
       return { success: false, error: err.data?.message || err.message };
     }
 
-    // Fallback resiliente para ambiente de testes, offline ou sem backend
+    // Fallback resiliente para ambiente de testes, offline ou sem backend:
+    // Só pontua na primeira leitura da atividade
+    if (hasLocallyAttendedActivity(uid, activityId)) {
+      return { success: true, points: 0, alreadyCheckedIn: true, fallback: true };
+    }
+
+    markLocallyAttendedActivity(uid, activityId);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('facom_points_updated', {
         detail: { delta: 20, source: 'checkin', activityId }
       }));
     }
-    return { success: true, points: 20, fallback: true };
+    return { success: true, points: 20, alreadyCheckedIn: false, fallback: true };
   }
 }
 

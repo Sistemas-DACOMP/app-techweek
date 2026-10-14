@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getMyProfile, updateMascot, uploadAvatar, getMyPointEvents, addPointEvent } from '../lib/gameplay';
 import { onAuthChange } from '../lib/auth';
 import { getCachedUserProfile, isAdminEmail } from '../lib/userService';
@@ -10,6 +10,7 @@ export function useUser() {
   const [pointEvents, setPointEvents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [profileReady, setProfileReady] = useState(false); // true só quando há sessão e o perfil chegou
+  const scannedCodesRef = useRef(new Set());
   const { addNotification } = useNotifications();
 
   const load = useCallback(async () => {
@@ -92,7 +93,7 @@ export function useUser() {
   const mascot = profile?.mascot || 'blue';
   const avatarUrl = profile?.avatar_url || profile?.avatarUrl || profile?.photoURL || null;
 
-  const hasScannedCode = (code) => scannedCodes.includes(code);
+  const hasScannedCode = (code) => scannedCodes.includes(code) || scannedCodesRef.current.has(code);
   const hasCompletedChallenge = (challengeId) => {
     if (!challengeId) return false;
     if (challengeId === 'sponsor_colecao' || challengeId === 'passport_complete') {
@@ -132,10 +133,11 @@ export function useUser() {
   const recordEvent = async (eventType, referenceId, amount, metadata = null) => {
     const result = await addPointEvent({ eventType, referenceId, points: amount, metadata });
     if (result && (result.success || result.alreadyClaimed)) {
+      const creditedPoints = result.alreadyClaimed ? 0 : amount;
       setPointEvents(prev => {
         const exists = prev.some(e => (e.reference_id || e.referenceId) === referenceId);
         if (exists) return prev;
-        return [...prev, { event_type: eventType, reference_id: referenceId, points: amount, metadata }];
+        return [...prev, { event_type: eventType, reference_id: referenceId, points: creditedPoints, metadata }];
       });
     }
     return result;
@@ -177,9 +179,16 @@ export function useUser() {
       return { success: false, selfScan: true, error: 'Você escaneou o seu próprio crachá.' };
     }
 
-    // 2. Detectar se já foi escaneado anteriormente pelo histórico local
+    // 2. Se já foi escaneado anteriormente, permite a leitura normalmente, porém sem pontuar novamente (points: 0)
     if (hasScannedCode(codeStr)) {
-      return { success: false, alreadyScanned: true };
+      return {
+        success: true,
+        points: 0,
+        alreadyScanned: true,
+        unlockedChallenges: [],
+        isProfile: !!scannedProfile,
+        scannedProfile
+      };
     }
 
     // 3. Registrar o evento
@@ -193,8 +202,17 @@ export function useUser() {
       };
     }
 
+    scannedCodesRef.current.add(codeStr);
+
     if (scanResult.alreadyClaimed) {
-      return { success: false, alreadyScanned: true };
+      return {
+        success: true,
+        points: 0,
+        alreadyScanned: true,
+        unlockedChallenges: [],
+        isProfile: !!scannedProfile,
+        scannedProfile
+      };
     }
 
     const unlockedChallenges = [];
@@ -268,7 +286,14 @@ export function useUser() {
       }
     }
 
-    return { success: true, points: amount, unlockedChallenges, isProfile: !!scannedProfile, scannedProfile };
+    return {
+      success: true,
+      points: amount,
+      alreadyScanned: false,
+      unlockedChallenges,
+      isProfile: !!scannedProfile,
+      scannedProfile
+    };
   };
 
   const completeChallenge = async (challengeId, amount, metadata = null) => {

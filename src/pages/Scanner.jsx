@@ -473,21 +473,17 @@ export default function Scanner() {
       const actId = activityData?.id || parsedPayload?.lectureId || parsedPayload?.activityId || (typeof data === 'string' ? data.trim() : '');
       const attResult = await registerActivityAttendance(actId, sessionToken);
 
-      if (attResult.success) {
+      if (attResult.success || attResult.alreadyCheckedIn) {
+        const earnedPoints = attResult.alreadyCheckedIn ? 0 : (attResult.points ?? 20);
         setScanResult({
           status: 'success',
           type: 'activity',
           title: 'Presença confirmada!',
-          message: `Sua presença em "${activityData?.title || 'Atividade'}" foi confirmada com sucesso!`,
-          points: attResult.points || 20,
-          activity: activityData
-        });
-      } else if (attResult.alreadyCheckedIn) {
-        setScanResult({
-          status: 'already_scanned',
-          type: 'activity',
-          title: 'Presença já confirmada',
-          message: attResult.message || `Você já confirmou presença em "${activityData?.title || 'esta atividade'}".`,
+          message: attResult.alreadyCheckedIn
+            ? `Presença em "${activityData?.title || 'Atividade'}" validada. Os pontos já foram contabilizados na primeira leitura.`
+            : `Sua presença em "${activityData?.title || 'Atividade'}" foi confirmada com sucesso!`,
+          points: earnedPoints,
+          alreadyScanned: Boolean(attResult.alreadyCheckedIn),
           activity: activityData
         });
       } else if (attResult.symplaRequired) {
@@ -570,15 +566,19 @@ export default function Scanner() {
 
     const result = await registerCodeScan(data, 5);
 
-    if (result && result.success) {
+    if (result && (result.success || result.alreadyScanned)) {
+      const earnedPoints = result.alreadyScanned ? 0 : (result.points ?? 5);
       if (isUserQr) {
         setScanResult({ 
           status: 'success',
           type: 'participant',
           title: 'QR Code identificado',
-          message: 'Conexão realizada com sucesso!',
-          points: 5,
-          challenges: result.unlockedChallenges,
+          message: result.alreadyScanned
+            ? 'Perfil aberto! Os pontos desta conexão já foram somados na primeira leitura.'
+            : 'Conexão realizada com sucesso!',
+          points: earnedPoints,
+          alreadyScanned: Boolean(result.alreadyScanned),
+          challenges: result.unlockedChallenges || [],
           participant: consolidatedParticipant
         });
       } else {
@@ -586,9 +586,12 @@ export default function Scanner() {
           status: 'success',
           type: 'code',
           title: 'Código identificado',
-          message: 'Participação registrada com sucesso!',
-          points: 5,
-          challenges: result.unlockedChallenges
+          message: result.alreadyScanned
+            ? 'Código validado! Os pontos já foram contabilizados na primeira leitura.'
+            : 'Participação registrada com sucesso!',
+          points: earnedPoints,
+          alreadyScanned: Boolean(result.alreadyScanned),
+          challenges: result.unlockedChallenges || []
         });
       }
     } else if (result?.selfScan) {
@@ -598,16 +601,6 @@ export default function Scanner() {
         title: 'Seu próprio crachá',
         message: 'Você escaneou o seu próprio QR Code.',
         participant: consolidatedParticipant || badge
-      });
-    } else if (result?.alreadyScanned) {
-      setScanResult({ 
-        status: 'already_scanned',
-        type: isUserQr ? 'participant' : 'generic',
-        title: isUserQr ? 'Vocês já estão conectados' : 'Código já processado',
-        message: isUserQr 
-          ? 'Você já escaneou o crachá deste participante anteriormente.' 
-          : 'Você já escaneou este código anteriormente.',
-        participant: consolidatedParticipant
       });
     } else if (result?.code === 'SYMPLA_TICKET_REQUIRED') {
       setScanResult({
@@ -863,7 +856,7 @@ export default function Scanner() {
                   <ParticipantCard
                     participant={scanResult.participant}
                     titleId="cracha-result-title"
-                    points={scanResult.status === 'success' ? scanResult.points : null}
+                    points={scanResult.status === 'success' && scanResult.points > 0 ? scanResult.points : null}
                     eyebrow={
                       scanResult.status === 'success'
                         ? 'Conexão feita!'
@@ -886,9 +879,9 @@ export default function Scanner() {
                       Mostre o seu crachá na aba &quot;Meu QR&quot; para outras pessoas se conectarem com você.
                     </p>
                   )}
-                  {scanResult.status === 'already_scanned' && (
+                  {(scanResult.alreadyScanned || scanResult.status === 'already_scanned') && (
                     <p className="mt-3 text-xs leading-relaxed text-text-2">
-                      Você já adicionou este participante à sua rede e acumulou os pontos de conexão.
+                      Os pontos desta conexão já foram contabilizados na primeira leitura.
                     </p>
                   )}
                 </>
@@ -915,7 +908,7 @@ export default function Scanner() {
                   </span>
                   <h2 id="cracha-result-title" className="mt-4 mb-0 text-[22px] font-black">{scanResult.title}</h2>
                   <p className="mt-1.5 mb-0 text-sm leading-relaxed text-text-2">{scanResult.message}</p>
-                  {scanResult.status === 'success' && scanResult.points ? (
+                  {scanResult.status === 'success' && scanResult.points > 0 ? (
                     <span className="pts-chip mt-3">+{scanResult.points} pts</span>
                   ) : null}
                   {scanResult.status === 'ticket_required' && (

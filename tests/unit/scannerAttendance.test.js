@@ -135,11 +135,11 @@ describe('Scanner & Conexões (Resolução de Falso Código Já Processado)', ()
 
       const res = await userHook.registerCodeScan(peerBadgeQr, 5);
       expect(res.success).toBe(true);
-      expect(res.alreadyScanned).toBeUndefined();
+      expect(res.alreadyScanned).toBe(false);
       expect(res.points).toBe(5);
     });
 
-    it('segunda leitura do mesmo participante deve indicar já escaneado apenas na repetição', async () => {
+    it('segunda leitura do mesmo participante sucede normalmente mas retorna 0 pontos', async () => {
       const { apiRequest } = await import('../../src/lib/api');
       let scanCallCount = 0;
       apiRequest.mockImplementation(async (_url, options) => {
@@ -167,13 +167,16 @@ describe('Scanner & Conexões (Resolução de Falso Código Já Processado)', ()
         uid: 'usr_lucas_888'
       });
 
-      // 1ª Leitura
+      // 1ª Leitura: pontua +5
       const firstRes = await userHook.registerCodeScan(peerBadgeQr, 5);
       expect(firstRes.success).toBe(true);
+      expect(firstRes.points).toBe(5);
+      expect(firstRes.alreadyScanned).toBe(false);
 
-      // 2ª Leitura
+      // 2ª Leitura: sucede, mas pontua 0
       const secondRes = await userHook.registerCodeScan(peerBadgeQr, 5);
-      expect(secondRes.success).toBe(false);
+      expect(secondRes.success).toBe(true);
+      expect(secondRes.points).toBe(0);
       expect(secondRes.alreadyScanned).toBe(true);
     });
 

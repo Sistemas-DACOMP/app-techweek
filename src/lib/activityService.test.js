@@ -245,14 +245,15 @@ describe('activityService (KAN-50)', () => {
       }));
     });
 
-    it('identifica presença duplicada (409) sem acusar falso erro técnico', async () => {
+    it('permite ler novamente presença já registrada (409) com sucesso e 0 pontos', async () => {
       const conflictError = new Error('Presença já confirmada');
       conflictError.status = 409;
       conflictError.data = { error: 'CHECKIN_DUPLICATE' };
       apiRequest.mockRejectedValueOnce(conflictError);
 
       const res = await registerActivityAttendance('act_1588971', 'session_token_123');
-      expect(res.success).toBe(false);
+      expect(res.success).toBe(true);
+      expect(res.points).toBe(0);
       expect(res.alreadyCheckedIn).toBe(true);
     });
 
