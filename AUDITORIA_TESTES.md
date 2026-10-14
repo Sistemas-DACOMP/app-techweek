@@ -391,6 +391,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   `getMyProfile`, `uploadAvatar`, `uploadMissionPhoto`, `updateMascot`, `getMyPointEvents`, `addPointEvent`, `getRanking`.
 - **Causa provável:** O teste foi escrito com escopo restrito às histórias KAN-79 e KAN-71 (regaste de pontos e consolidação de eventos de pontos), deixando o restante do módulo sem testes unitários.
 - **Sugestão de correção:** Adicionar blocos de testes unitários para `getMyProfile` (cobrindo usuário anônimo/nulo, usuário padrão e usuário admin), `getRanking` (sucesso e fallback quando coleção está vazia), `uploadMissionPhoto` e `updateMascot`.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/gameplay.test.js`, foram criados blocos de teste unitários abrangentes com isolamento de mocks para as funções críticas de gamificação: `getMyProfile` (cobrindo usuário anônimo/nulo, mapeamento e sanitização de dados do Firestore, permissão e elevação para ADMIN e fallback para perfil padrão), `uploadAvatar` (autenticação obrigatória e delegação para `uploadUserAvatar`), `uploadMissionPhoto` (armazenamento no storage com retorno de downloadURL, fallback de `ObjectURL` para preview/offline e falha de upload), `updateMascot` (usuário anônimo, atualização via `updateUserProfile` e fallback direto no Firestore via `updateDoc`) e `getRanking` (obtenção via `getLeaderboardUsers`, fallback para coleção `ranking` e retorno de lista vazia).
+- **Verificação:** Executado `npx vitest run src/lib/gameplay.test.js`, passando 20/20 testes sem warnings no console.
 
 ---
 
@@ -411,6 +414,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhum dos 10 testes verifica `dispatchEvent` e não há `afterAll` limpando os mocks globais.
 - **Causa provável:** O mock foi concebido apenas como dublê passivo para não quebrar a execução no Node, sem validação da reatividade da UI.
 - **Sugestão de correção:** Alterar `dispatchEvent` para um mock espião `vi.fn()`, adicionar asserção em um teste validando a emissão de `CustomEvent('techweek_notifications_updated')` e implementar `afterAll` restaurando o estado original de `globalThis`.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/notifications.test.js`, `globalThis.window.dispatchEvent` foi configurado como um espião (`vi.fn()`), adicionando teste específico que valida o disparo de `CustomEvent('techweek_notifications_updated')` após mutações de notificação. Adicionado hook `afterAll` restaurando os valores originais de `globalThis.localStorage`, `globalThis.window` e `globalThis.CustomEvent`, eliminando vazamento de estado entre testes.
+- **Verificação:** Executado `npx vitest run src/lib/notifications.test.js`, passando 11/11 testes.
 
 ---
 
@@ -436,6 +442,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   O arquivo não possui nenhum bloco `afterAll` restaurando ou deletando `globalThis.document`.
 - **Causa provável:** O desenvolvedor assumiu isolamento total de processo por arquivo ou omitiu a restauração do objeto global modificado.
 - **Sugestão de correção:** Salvar a referência prévia `const originalDoc = globalThis.document;` e restaurar em `afterAll(() => { globalThis.document = originalDoc; })` (ou `delete globalThis.document` caso fosse `undefined`), ou migrar o arquivo para o ambiente de teste `// @vitest-environment jsdom`.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/scrollLock.test.js`, preservada a referência prévia `originalDocument = globalThis.document` e adicionado hook de teardown `afterAll` restaurando ou deletando `globalThis.document`, evitando que o stub parcial do DOM permaneça no escopo global e afete testes subsequentes no mesmo worker.
+- **Verificação:** Executado `npx vitest run src/lib/scrollLock.test.js`, passando 3/3 testes.
 
 ---
 
@@ -455,6 +464,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O autor do teste não incluiu uma asserção de sanidade sobre o tamanho da coleção inspecionada.
 - **Sugestão de correção:** Adicionar uma asserção de sanidade (ex: `expect(Object.keys(sources).length).toBeGreaterThan(10);`) antes dos testes ou no início da suíte para garantir que arquivos de código foram efetivamente carregados e analisados.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/noUrlDemoFlag.test.js`, adicionado caso de teste de guarda sanitária `it('garante que arquivos de código foram efetivamente carregados para análise')` assertando que `Object.keys(sources).length` é maior que 10, prevenindo falso positivo caso o glob falhasse silenciosamente.
+- **Verificação:** Executado `npx vitest run src/lib/noUrlDemoFlag.test.js`, passando 3/3 testes.
 
 ---
 
