@@ -6,6 +6,7 @@ import {
   subscribeToUserPointEvents,
   reserveActivity,
   checkoutDoubleCheck,
+  registerActivityAttendance,
   calculateActivityStatus,
   formatActivityType,
   DEFAULT_ACTIVITIES
@@ -139,6 +140,19 @@ describe('activityService (KAN-50)', () => {
       expect(res.bookingId).toBe('test_user_id_palestra_abertura');
     });
 
+    it('deve repassar erro 401 (SESSION_EXPIRED) para a UI orientar nova autenticação (KAN-127)', async () => {
+      const err = new Error('Sua sessão expirou ou é inválida. Por favor, faça login novamente para continuar.');
+      err.status = 401;
+      err.code = 'SESSION_EXPIRED';
+      err.data = { error: 'INVALID_TOKEN' };
+      vi.mocked(apiRequest).mockRejectedValueOnce(err);
+
+      await expect(reserveActivity('palestra_abertura')).rejects.toMatchObject({
+        status: 401,
+        code: 'SESSION_EXPIRED'
+      });
+    });
+
     it('deve rejeitar se activityId não for fornecido', async () => {
       await expect(reserveActivity('')).rejects.toThrow('activityId é obrigatório');
     });
@@ -204,6 +218,66 @@ describe('activityService (KAN-50)', () => {
       const act = onUpdate.mock.calls.at(-1)[0].find((a) => a.id === 'act_x');
       expect(act.vagas_disponiveis).toBe(7);
       expect(act.total_inscritos).toBe(3);
+    });
+  });
+
+  describe('registerActivityAttendance', () => {
+    it('retorna erro se activityId não for fornecido', async () => {
+      const res = await registerActivityAttendance(null);
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('Identificador da atividade não informado.');
+    });
+
+    it('registra presença via sessionToken (double check) com sucesso', async () => {
+      apiRequest.mockResolvedValueOnce({
+        success: true,
+        pointsCredited: 25,
+        activityId: 'act_1588971'
+      });
+
+      const res = await registerActivityAttendance('act_1588971', 'session_token_123');
+      expect(res.success).toBe(true);
+      expect(res.points).toBe(25);
+      expect(res.mode).toBe('double_check');
+      expect(apiRequest).toHaveBeenCalledWith('/checkin/checkout', expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ token: 'session_token_123' })
+      }));
+    });
+
+    it('identifica presença duplicada (409) sem acusar falso erro técnico', async () => {
+      const conflictError = new Error('Presença já confirmada');
+      conflictError.status = 409;
+      conflictError.data = { error: 'CHECKIN_DUPLICATE' };
+      apiRequest.mockRejectedValueOnce(conflictError);
+
+      const res = await registerActivityAttendance('act_1588971', 'session_token_123');
+      expect(res.success).toBe(false);
+      expect(res.alreadyCheckedIn).toBe(true);
+    });
+
+    it('identifica exigência de ingresso Sympla (403) adequadamente', async () => {
+      const ticketError = new Error('Ingresso Sympla obrigatório');
+      ticketError.status = 403;
+      ticketError.code = 'SYMPLA_TICKET_REQUIRED';
+      ticketError.data = { error: 'SYMPLA_TICKET_REQUIRED' };
+      apiRequest.mockRejectedValueOnce(ticketError);
+
+      const res = await registerActivityAttendance('act_1588971', null);
+      expect(res.success).toBe(false);
+      expect(res.symplaRequired).toBe(true);
+    });
+
+    it('registra presença direta por autoatendimento (/activities/:id/checkin)', async () => {
+      apiRequest.mockResolvedValueOnce({
+        success: true,
+        pointsCredited: 20
+      });
+
+      const res = await registerActivityAttendance('act_1588971', null);
+      expect(res.success).toBe(true);
+      expect(res.points).toBe(20);
+      expect(res.mode).toBe('self_scan');
     });
   });
 });

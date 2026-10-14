@@ -131,14 +131,14 @@ export function useUser() {
   // (eventType+referenceId) garante que a mesma ação nunca rende pontos duas vezes.
   const recordEvent = async (eventType, referenceId, amount, metadata = null) => {
     const result = await addPointEvent({ eventType, referenceId, points: amount, metadata });
-    if (result.success || result.alreadyClaimed) {
+    if (result && (result.success || result.alreadyClaimed)) {
       setPointEvents(prev => {
         const exists = prev.some(e => (e.reference_id || e.referenceId) === referenceId);
         if (exists) return prev;
         return [...prev, { event_type: eventType, reference_id: referenceId, points: amount, metadata }];
       });
     }
-    return result.success || result.alreadyClaimed;
+    return result;
   };
 
   const registerCodeScan = async (data, amount = 5) => {
@@ -152,7 +152,7 @@ export function useUser() {
         const parsed = JSON.parse(decoded);
         if (parsed.username) {
           scannedProfile = parsed;
-          codeStr = `user_${parsed.username}`;
+          codeStr = `user_${parsed.username.replace(/^@/, '')}`;
         }
       }
     } catch (e) {
@@ -161,19 +161,40 @@ export function useUser() {
           const parsed = JSON.parse(data);
           if (parsed.username) {
             scannedProfile = parsed;
-            codeStr = `user_${parsed.username}`;
+            codeStr = `user_${parsed.username.replace(/^@/, '')}`;
           }
         }
       } catch (e2) {}
     }
 
-    if (hasScannedCode(codeStr)) {
-      return { success: false };
+    // 1. Detectar auto-scan (escanear o próprio crachá)
+    const myUid = profile?.uid || profile?.id;
+    const myUsername = (profile?.username || '').replace(/^@/, '').toLowerCase();
+    const targetUid = scannedProfile?.uid || scannedProfile?.participantUid;
+    const targetUsername = (scannedProfile?.username || '').replace(/^@/, '').toLowerCase();
+
+    if ((myUid && targetUid && myUid === targetUid) || (myUsername && targetUsername && myUsername === targetUsername)) {
+      return { success: false, selfScan: true, error: 'Você escaneou o seu próprio crachá.' };
     }
 
-    const scanOk = await recordEvent('scan', codeStr, amount);
-    if (!scanOk) {
-      return { success: false };
+    // 2. Detectar se já foi escaneado anteriormente pelo histórico local
+    if (hasScannedCode(codeStr)) {
+      return { success: false, alreadyScanned: true };
+    }
+
+    // 3. Registrar o evento
+    const scanResult = await recordEvent('scan', codeStr, amount);
+    if (!scanResult || (!scanResult.success && !scanResult.alreadyClaimed)) {
+      return {
+        success: false,
+        alreadyScanned: false,
+        error: scanResult?.error || 'Não foi possível registrar a leitura do código.',
+        code: scanResult?.code || null
+      };
+    }
+
+    if (scanResult.alreadyClaimed) {
+      return { success: false, alreadyScanned: true };
     }
 
     const unlockedChallenges = [];
@@ -192,7 +213,8 @@ export function useUser() {
       };
 
       if (!hasCompletedChallenge('network_first')) {
-        if (await recordEvent('challenge', 'network_first', 10, targetMeta)) {
+        const evRes = await recordEvent('challenge', 'network_first', 10, targetMeta);
+        if (evRes && (evRes.success || evRes.alreadyClaimed)) {
           unlockedChallenges.push('network_first');
         }
       }
@@ -200,7 +222,8 @@ export function useUser() {
       if (profile) {
         if (profile.course && scannedProfile.course && profile.course.toLowerCase() !== scannedProfile.course.toLowerCase()) {
           if (!hasCompletedChallenge('network_course')) {
-            if (await recordEvent('challenge', 'network_course', 15, targetMeta)) {
+            const evRes = await recordEvent('challenge', 'network_course', 15, targetMeta);
+            if (evRes && (evRes.success || evRes.alreadyClaimed)) {
               unlockedChallenges.push('network_course');
             }
           }
@@ -208,7 +231,8 @@ export function useUser() {
 
         if (scannedProfile.participantType && scannedProfile.participantType !== 'Aluno da UFU' && scannedProfile.participantType !== 'Aluno UFU Graduação') {
           if (!hasCompletedChallenge('network_type')) {
-            if (await recordEvent('challenge', 'network_type', 15, targetMeta)) {
+            const evRes = await recordEvent('challenge', 'network_type', 15, targetMeta);
+            if (evRes && (evRes.success || evRes.alreadyClaimed)) {
               unlockedChallenges.push('network_type');
             }
           }
@@ -216,7 +240,8 @@ export function useUser() {
 
         if (scannedProfile.period === 1) {
           if (!hasCompletedChallenge('network_period')) {
-            if (await recordEvent('challenge', 'network_period', 15, targetMeta)) {
+            const evRes = await recordEvent('challenge', 'network_period', 15, targetMeta);
+            if (evRes && (evRes.success || evRes.alreadyClaimed)) {
               unlockedChallenges.push('network_period');
             }
           }
@@ -227,7 +252,8 @@ export function useUser() {
     // Check for specific hardcoded mission QR codes
     if (data === 'kanastra_code' || data === 'sponsor_visit') {
       if (!hasCompletedChallenge('sponsor_visit')) {
-        if (await recordEvent('challenge', 'sponsor_visit', 15, { scannedCode: data })) {
+        const evRes = await recordEvent('challenge', 'sponsor_visit', 15, { scannedCode: data });
+        if (evRes && (evRes.success || evRes.alreadyClaimed)) {
           unlockedChallenges.push('sponsor_visit');
         }
       }
@@ -235,13 +261,14 @@ export function useUser() {
 
     if (data === 'secret_qr_code') {
       if (!hasCompletedChallenge('secret_qr')) {
-        if (await recordEvent('challenge', 'secret_qr', 40, { scannedCode: data })) {
+        const evRes = await recordEvent('challenge', 'secret_qr', 40, { scannedCode: data });
+        if (evRes && (evRes.success || evRes.alreadyClaimed)) {
           unlockedChallenges.push('secret_qr');
         }
       }
     }
 
-    return { success: true, unlockedChallenges, isProfile: !!scannedProfile, scannedProfile };
+    return { success: true, points: amount, unlockedChallenges, isProfile: !!scannedProfile, scannedProfile };
   };
 
   const completeChallenge = async (challengeId, amount, metadata = null) => {

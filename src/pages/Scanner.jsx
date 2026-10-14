@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
 import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
-import { DEFAULT_ACTIVITIES } from '../lib/activityService';
+import { DEFAULT_ACTIVITIES, registerActivityAttendance } from '../lib/activityService';
 import { DEFAULT_MISSIONS } from '../lib/missionService';
 import { resolveParticipantFromQr } from '../lib/sponsorService';
 import { getBadgeQrValue } from '../lib/sympla';
@@ -248,6 +248,7 @@ export default function Scanner() {
   const scannerRef = useRef(null);
   const isStartingRef = useRef(false);
   const isMountedRef = useRef(true);
+  const isProcessingRef = useRef(false);
 
   // O botão demo só existe no build de desenvolvimento; parâmetro de URL não libera nada em produção.
   const isDevMode = import.meta.env.DEV;
@@ -325,7 +326,8 @@ export default function Scanner() {
             aspectRatio: 1
           },
           (decodedText) => {
-            if (!isMountedRef.current) return;
+            if (!isMountedRef.current || isProcessingRef.current) return;
+            isProcessingRef.current = true;
             // Desliga o hardware da câmera imediatamente ao capturar o código
             stopScannerCamera();
             handleScan(decodedText);
@@ -390,6 +392,7 @@ export default function Scanner() {
     if (!scanResult && !qrZoom) return;
     const onKey = (e) => {
       if (e.key === 'Escape') {
+        isProcessingRef.current = false;
         setScanResult(null);
         setQrZoom(false);
       }
@@ -399,47 +402,59 @@ export default function Scanner() {
   }, [scanResult, qrZoom]);
 
   const handleScan = async (data) => {
+    if (!data) {
+      isProcessingRef.current = false;
+      return;
+    }
+
     setIsLoading(true);
 
     let isUserQr = false;
     let isActivityQr = false;
     let activityData = null;
+    let sessionToken = null;
     let usernameToValidate = null;
     let participantData = null;
+    let parsedPayload = null;
 
     // 1. Tenta identificar payload JSON (Participante ou Atividade)
     try {
       const decoded = decodeURIComponent(data);
       if (decoded.startsWith('{') && decoded.endsWith('}')) {
-        const parsed = JSON.parse(decoded);
-        if (parsed.username || parsed.participantUid || (parsed.uid && !parsed.lectureId)) {
-          isUserQr = true;
-          usernameToValidate = parsed.username || null;
-          participantData = parsed;
-        } else if (parsed.lectureId || parsed.activityId) {
-          isActivityQr = true;
-          const actId = parsed.lectureId || parsed.activityId;
-          activityData = DEFAULT_ACTIVITIES.find(a => a.id === actId) || { id: actId, title: 'Atividade TechWeek' };
-        }
+        parsedPayload = JSON.parse(decoded);
       }
     } catch {
       try {
-        if (data.startsWith('{') && data.endsWith('}')) {
-          const parsed = JSON.parse(data);
-          if (parsed.username || parsed.participantUid || (parsed.uid && !parsed.lectureId)) {
-            isUserQr = true;
-            usernameToValidate = parsed.username || null;
-            participantData = parsed;
-          } else if (parsed.lectureId || parsed.activityId) {
-            isActivityQr = true;
-            const actId = parsed.lectureId || parsed.activityId;
-            activityData = DEFAULT_ACTIVITIES.find(a => a.id === actId) || { id: actId, title: 'Atividade TechWeek' };
-          }
+        if (typeof data === 'string' && data.startsWith('{') && data.endsWith('}')) {
+          parsedPayload = JSON.parse(data);
         }
       } catch {}
     }
 
-    // Se não for atividade e ainda não tiver identificado participante, tenta resolver pelo helper do crachá/sympla
+    if (parsedPayload) {
+      if (parsedPayload.username || parsedPayload.participantUid || (parsedPayload.uid && !parsedPayload.lectureId && !parsedPayload.activityId)) {
+        isUserQr = true;
+        usernameToValidate = parsedPayload.username || null;
+        participantData = parsedPayload;
+      } else if (parsedPayload.lectureId || parsedPayload.activityId) {
+        isActivityQr = true;
+        const actId = parsedPayload.lectureId || parsedPayload.activityId;
+        sessionToken = parsedPayload.token || parsedPayload.sessionToken || null;
+        activityData = DEFAULT_ACTIVITIES.find(a => a.id === actId || a.number === actId) || { id: actId, title: 'Atividade TechWeek' };
+      }
+    }
+
+    // Se não for JSON de atividade nem usuário, verifica se a string pura é o ID de uma atividade cadastrada
+    if (!isActivityQr && !isUserQr && typeof data === 'string') {
+      const trimmed = data.trim();
+      const matchedAct = DEFAULT_ACTIVITIES.find(a => a.id === trimmed || a.number === trimmed);
+      if (matchedAct) {
+        isActivityQr = true;
+        activityData = matchedAct;
+      }
+    }
+
+    // Se ainda não for atividade e não for participante, tenta resolver pelo helper do crachá/sympla
     if (!isActivityQr && !isUserQr) {
       try {
         const resolved = await resolveParticipantFromQr(data);
@@ -451,6 +466,55 @@ export default function Scanner() {
       } catch {}
     }
 
+    // ==========================================
+    // FLUXO A: QR CODE DE ATIVIDADE (PRESENÇA)
+    // ==========================================
+    if (isActivityQr) {
+      const actId = activityData?.id || parsedPayload?.lectureId || parsedPayload?.activityId || (typeof data === 'string' ? data.trim() : '');
+      const attResult = await registerActivityAttendance(actId, sessionToken);
+
+      if (attResult.success) {
+        setScanResult({
+          status: 'success',
+          type: 'activity',
+          title: 'Presença confirmada!',
+          message: `Sua presença em "${activityData?.title || 'Atividade'}" foi confirmada com sucesso!`,
+          points: attResult.points || 20,
+          activity: activityData
+        });
+      } else if (attResult.alreadyCheckedIn) {
+        setScanResult({
+          status: 'already_scanned',
+          type: 'activity',
+          title: 'Presença já confirmada',
+          message: attResult.message || `Você já confirmou presença em "${activityData?.title || 'esta atividade'}".`,
+          activity: activityData
+        });
+      } else if (attResult.symplaRequired) {
+        setScanResult({
+          status: 'ticket_required',
+          type: 'activity',
+          title: 'Ingresso necessário',
+          message: attResult.message || 'É necessário ter um ingresso Sympla vinculado para confirmar presença nas atividades.',
+          activity: activityData
+        });
+      } else {
+        setScanResult({
+          status: 'error',
+          type: 'activity',
+          title: 'Não foi possível confirmar presença',
+          message: attResult.error || attResult.message || 'Ocorreu um erro ao registrar sua presença. Tente novamente.',
+          activity: activityData
+        });
+      }
+
+      setIsLoading(false);
+      return;
+    }
+
+    // ==========================================
+    // FLUXO B: QR CODE DE PARTICIPANTE OU MISSÃO
+    // ==========================================
     let fetchedProfile = null;
     if (isUserQr && usernameToValidate) {
       fetchedProfile = await findUserByUsername(usernameToValidate).catch(() => null);
@@ -465,8 +529,6 @@ export default function Scanner() {
         return;
       }
     }
-
-    const result = await registerCodeScan(data, 5);
 
     // Constrói objeto enriquecido do participante para o card (KAN-95)
     const consolidatedParticipant = isUserQr ? {
@@ -488,6 +550,26 @@ export default function Scanner() {
       github: fetchedProfile?.github || participantData?.github || ''
     } : null;
 
+    // Detectar auto-scan no frontend antes de acionar a pontuação
+    const myUid = profile?.uid || profile?.id;
+    const myUsername = (profile?.username || '').replace(/^@/, '').toLowerCase();
+    const targetUid = participantData?.uid || participantData?.participantUid || fetchedProfile?.uid || fetchedProfile?.id;
+    const targetUsername = (participantData?.username || usernameToValidate || fetchedProfile?.username || '').replace(/^@/, '').toLowerCase();
+
+    if (isUserQr && ((myUid && targetUid && myUid === targetUid) || (myUsername && targetUsername && myUsername === targetUsername))) {
+      setIsLoading(false);
+      setScanResult({
+        status: 'self_scan',
+        type: 'participant',
+        title: 'Seu próprio crachá',
+        message: 'Você escaneou o seu próprio QR Code. Mostre para outras pessoas te adicionarem!',
+        participant: consolidatedParticipant || badge
+      });
+      return;
+    }
+
+    const result = await registerCodeScan(data, 5);
+
     if (result && result.success) {
       if (isUserQr) {
         setScanResult({ 
@@ -499,15 +581,6 @@ export default function Scanner() {
           challenges: result.unlockedChallenges,
           participant: consolidatedParticipant
         });
-      } else if (isActivityQr) {
-        setScanResult({
-          status: 'success',
-          type: 'activity',
-          title: 'Atividade identificada',
-          message: 'Presença e participação confirmadas!',
-          points: 5,
-          activity: activityData
-        });
       } else {
         setScanResult({ 
           status: 'success',
@@ -518,13 +591,38 @@ export default function Scanner() {
           challenges: result.unlockedChallenges
         });
       }
-    } else {
-      // Estado Já Lido ou Inválido
+    } else if (result?.selfScan) {
+      setScanResult({
+        status: 'self_scan',
+        type: 'participant',
+        title: 'Seu próprio crachá',
+        message: 'Você escaneou o seu próprio QR Code.',
+        participant: consolidatedParticipant || badge
+      });
+    } else if (result?.alreadyScanned) {
       setScanResult({ 
         status: 'already_scanned',
         type: isUserQr ? 'participant' : 'generic',
-        title: 'Código já processado',
-        message: 'Você já escaneou este código anteriormente.',
+        title: isUserQr ? 'Vocês já estão conectados' : 'Código já processado',
+        message: isUserQr 
+          ? 'Você já escaneou o crachá deste participante anteriormente.' 
+          : 'Você já escaneou este código anteriormente.',
+        participant: consolidatedParticipant
+      });
+    } else if (result?.code === 'SYMPLA_TICKET_REQUIRED') {
+      setScanResult({
+        status: 'ticket_required',
+        type: isUserQr ? 'participant' : 'generic',
+        title: 'Ingresso necessário',
+        message: result.error || 'É necessário ter um ingresso Sympla vinculado para realizar esta ação.',
+        participant: consolidatedParticipant
+      });
+    } else {
+      setScanResult({ 
+        status: 'error',
+        type: isUserQr ? 'participant' : 'generic',
+        title: 'Não foi possível processar',
+        message: result?.error || 'Não foi possível processar este código. Verifique e tente novamente.',
         participant: consolidatedParticipant
       });
     }
@@ -575,8 +673,15 @@ export default function Scanner() {
   const isParticipantResult = Boolean(scanResult?.participant);
   const unlocked = (scanResult?.challenges || []).map(missionTitle).filter(Boolean);
   const closeResultAndScan = () => {
+    isProcessingRef.current = false;
     setScanResult(null);
     setTab('scan');
+  };
+
+  const handleTabChange = (newTab) => {
+    isProcessingRef.current = false;
+    setScanResult(null);
+    setTab(newTab);
   };
 
   return (
@@ -614,7 +719,7 @@ export default function Scanner() {
                 id={`cracha-tab-${key}`}
                 aria-selected={tab === key}
                 aria-controls={`cracha-panel-${key}`}
-                onClick={() => setTab(key)}
+                onClick={() => handleTabChange(key)}
                 className={`h-10 cursor-pointer rounded-[10px] border-0 font-[Montserrat] text-sm transition-colors duration-150 ${
                   tab === key ? 'bg-surface-selected font-bold text-text' : 'bg-transparent font-semibold text-text-2'
                 }`}
@@ -754,27 +859,79 @@ export default function Scanner() {
           >
             <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-center overflow-y-auto rounded-[28px] border border-[#2E3878] bg-[#0F1530] p-[18px] text-center shadow-[0_24px_60px_rgba(0,0,0,0.5)] [animation:dsFadeUp_300ms_var(--ease-out)_both]">
               {isParticipantResult ? (
-                <ParticipantCard
-                  participant={scanResult.participant}
-                  titleId="cracha-result-title"
-                  points={scanResult.status === 'success' ? scanResult.points : null}
-                  eyebrow={scanResult.status === 'success' ? 'Conexão feita!' : 'Vocês já estão conectados'}
-                  eyebrowTone={scanResult.status === 'success' ? 'ok' : 'neutral'}
-                />
+                <>
+                  <ParticipantCard
+                    participant={scanResult.participant}
+                    titleId="cracha-result-title"
+                    points={scanResult.status === 'success' ? scanResult.points : null}
+                    eyebrow={
+                      scanResult.status === 'success'
+                        ? 'Conexão feita!'
+                        : scanResult.status === 'self_scan'
+                        ? 'Seu próprio crachá'
+                        : scanResult.status === 'already_scanned'
+                        ? 'Vocês já estão conectados'
+                        : 'Aviso'
+                    }
+                    eyebrowTone={
+                      scanResult.status === 'success'
+                        ? 'ok'
+                        : scanResult.status === 'already_scanned'
+                        ? 'warn'
+                        : 'neutral'
+                    }
+                  />
+                  {scanResult.status === 'self_scan' && (
+                    <p className="mt-3 text-xs leading-relaxed text-text-2">
+                      Mostre o seu crachá na aba &quot;Meu QR&quot; para outras pessoas se conectarem com você.
+                    </p>
+                  )}
+                  {scanResult.status === 'already_scanned' && (
+                    <p className="mt-3 text-xs leading-relaxed text-text-2">
+                      Você já adicionou este participante à sua rede e acumulou os pontos de conexão.
+                    </p>
+                  )}
+                </>
               ) : (
                 <div className="flex w-full flex-1 flex-col items-center justify-center">
                   <span
                     className={`flex h-16 w-16 items-center justify-center rounded-full ${
-                      scanResult.status === 'success' ? 'bg-[rgba(111,216,166,0.16)] text-ok' : 'bg-[rgba(242,196,106,0.16)] text-warn'
+                      scanResult.status === 'success'
+                        ? 'bg-[rgba(111,216,166,0.16)] text-ok'
+                        : scanResult.status === 'already_scanned'
+                        ? 'bg-[rgba(242,196,106,0.16)] text-warn'
+                        : scanResult.status === 'ticket_required'
+                        ? 'bg-[rgba(155,123,255,0.18)] text-link'
+                        : 'bg-[rgba(255,90,90,0.16)] text-[#FF5A5A]'
                     }`}
                   >
-                    {scanResult.status === 'success' ? <Check size={30} strokeWidth={2.6} aria-hidden="true" /> : <AlertCircle size={30} aria-hidden="true" />}
+                    {scanResult.status === 'success' ? (
+                      <Check size={30} strokeWidth={2.6} aria-hidden="true" />
+                    ) : scanResult.status === 'ticket_required' ? (
+                      <Ticket size={28} strokeWidth={2.2} aria-hidden="true" />
+                    ) : (
+                      <AlertCircle size={30} aria-hidden="true" />
+                    )}
                   </span>
                   <h2 id="cracha-result-title" className="mt-4 mb-0 text-[22px] font-black">{scanResult.title}</h2>
-                  <p className="mt-1.5 mb-0 text-sm text-text-2">{scanResult.message}</p>
+                  <p className="mt-1.5 mb-0 text-sm leading-relaxed text-text-2">{scanResult.message}</p>
                   {scanResult.status === 'success' && scanResult.points ? (
                     <span className="pts-chip mt-3">+{scanResult.points} pts</span>
                   ) : null}
+                  {scanResult.status === 'ticket_required' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScanResult(null);
+                        isProcessingRef.current = false;
+                        setShowLinkTicket(true);
+                      }}
+                      className="btn btn-primary btn-block mt-4"
+                    >
+                      <Ticket size={18} aria-hidden="true" />
+                      Vincular ingresso Sympla
+                    </button>
+                  )}
                   {scanResult.activity && (
                     <div className="mt-5 w-full rounded-2xl bg-surface p-3.5 text-left">
                       <div className="text-[15px] font-extrabold">{scanResult.activity.title}</div>
@@ -788,6 +945,7 @@ export default function Scanner() {
                         type="button"
                         onClick={() => {
                           setScanResult(null);
+                          isProcessingRef.current = false;
                           navigate('/agenda');
                         }}
                         className="btn btn-secondary btn-sm btn-block mt-3"
