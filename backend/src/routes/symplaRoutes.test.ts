@@ -36,6 +36,7 @@ vi.mock('../services/symplaService', () => ({
 
 import router from './symplaRoutes';
 import { symplaService } from '../services/symplaService';
+import { symplaPublicLimiter, symplaSyncLimiter, staffActionLimiter } from '../middlewares/rateLimiter';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -445,5 +446,88 @@ describe('POST /api/sympla/checkin (ERR-083: Check-in de portaria)', () => {
       status: 'error',
       message: 'Erro ao processar check-in.'
     });
+  });
+});
+
+describe('GET /api/sympla/event (ERR-084: Consulta de evento configurado)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const eventHandlers = getRouteHandlers('/event', 'get');
+  const finalHandler = eventHandlers[eventHandlers.length - 1];
+
+  it('retorna 200 com os dados do evento em caso de sucesso', async () => {
+    const fakeEvent = {
+      id: 12345,
+      name: 'TechWeek 2026',
+      start_date: '2026-10-20 08:00:00',
+      end_date: '2026-10-24 18:00:00'
+    };
+    vi.mocked(symplaService.getEventDetails).mockResolvedValueOnce(fakeEvent as any);
+
+    const req = {} as Request;
+    const res = makeRes();
+
+    await finalHandler(req, res, () => {});
+
+    expect(symplaService.getEventDetails).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      status: 'success',
+      data: fakeEvent
+    });
+  });
+
+  it('retorna 500 com mensagem de erro quando a API do Sympla falha', async () => {
+    vi.mocked(symplaService.getEventDetails).mockRejectedValueOnce(new Error('Erro de conexão com o Sympla'));
+
+    const req = {} as Request;
+    const res = makeRes();
+
+    await finalHandler(req, res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      status: 'error',
+      message: 'Erro de conexão com o Sympla'
+    });
+  });
+
+  it('retorna 500 com mensagem padrão quando o erro lançado não possui message', async () => {
+    vi.mocked(symplaService.getEventDetails).mockRejectedValueOnce({});
+
+    const req = {} as Request;
+    const res = makeRes();
+
+    await finalHandler(req, res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      status: 'error',
+      message: 'Erro ao consultar evento no Sympla.'
+    });
+  });
+});
+
+describe('Rotas Sympla - Rate Limiting (ERR-085)', () => {
+  it('GET /event possui symplaPublicLimiter na cadeia de middlewares', () => {
+    const handlers = getRouteHandlers('/event', 'get');
+    expect(handlers).toContain(symplaPublicLimiter);
+  });
+
+  it('POST /verify-ticket possui symplaSyncLimiter na cadeia de middlewares', () => {
+    const handlers = getRouteHandlers('/verify-ticket', 'post');
+    expect(handlers).toContain(symplaSyncLimiter);
+  });
+
+  it('POST /sync-user possui symplaSyncLimiter na cadeia de middlewares', () => {
+    const handlers = getRouteHandlers('/sync-user', 'post');
+    expect(handlers).toContain(symplaSyncLimiter);
+  });
+
+  it('POST /checkin possui staffActionLimiter na cadeia de middlewares', () => {
+    const handlers = getRouteHandlers('/checkin', 'post');
+    expect(handlers).toContain(staffActionLimiter);
   });
 });

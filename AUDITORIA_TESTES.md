@@ -1901,6 +1901,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Rota auxiliar de consulta estática considerada de baixa complexidade durante a implementação.
 - **Sugestão de correção:** Adicionar testes em `symplaRoutes.test.ts` cobrindo retorno 200 com os dados do evento e 500 em caso de falha de conexão na API do Sympla.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/symplaRoutes.test.ts`, adicionada suíte dedicada para `GET /api/sympla/event` exercitando: retorno 200 com os metadados do evento quando `symplaService.getEventDetails()` resolve com sucesso, retorno 500 com mensagem específica da exceção quando a API externa rejeita, e retorno 500 com fallback de mensagem genérica quando o erro não contém o campo `message`.
+- **Verificação:** Executado `npm --prefix backend test src/routes/symplaRoutes.test.ts`. Todos os 24 testes passaram. Prova de falha verificada: a inversão de status de resposta quebra as asserções da suíte.
 
 ---
 
@@ -1921,6 +1924,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhum middleware limitador (como `participantActionLimiter`) está presente.
 - **Causa provável:** O rate limiter foi aplicado nas rotas de autenticação, reservas e patrocinadores, mas omitido no módulo do Sympla.
 - **Sugestão de correção:** Adicionar middleware de rate limiting estrito para chamadas ao Sympla (ex: máximo de 5 requisições de sincronização por minuto por usuário) e cobrir a restrição nos testes.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/middlewares/rateLimiter.ts`, definidos e exportados `symplaSyncLimiter` (limite estrito de 10 req/min por participante autenticado baseado em `uid`) e `symplaPublicLimiter` (30 req/5min por IP para consulta de evento). Em `backend/src/routes/symplaRoutes.ts`, montados `symplaPublicLimiter` em `GET /event`, `symplaSyncLimiter` em `POST /verify-ticket` e `POST /sync-user`, e `staffActionLimiter` em `POST /checkin`. Em `symplaRoutes.test.ts` e `rateLimiter.test.ts`, adicionados testes unitários validando a cadeia de middlewares e o bloqueio 429 `RATE_LIMITED`.
+- **Verificação:** Executado `npm --prefix backend test src/routes/symplaRoutes.test.ts src/middlewares/rateLimiter.test.ts`. Testes passaram. Prova de falha verificada: a remoção temporária de `symplaPublicLimiter` falhou imediatamente o teste de middleware stack.
 
 ---
 
@@ -1944,6 +1950,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Refatoração parcial onde a criação do sponsor em lote foi isolada em um bloco `try`, deixando a etapa de notificação subsequente solta no corpo da função.
 - **Sugestão de correção:** Envolver o handler inteiro ou a chamada `dispatchInvite` em um bloco `try/catch` retornando 500 caso ocorra erro imprevisto após o commit do lote.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/sponsorsAdmin.ts` (`createSponsorHandler`), a chamada `Promise.all(prepared.map(... dispatchInvite ...))` foi envolvida em bloco defensivo `try / catch`, retornando status 500 com `{ error: 'INVITES_DISPATCH_FAILED', message: 'Patrocinador criado, mas ocorreu um erro no envio dos convites de e-mail.' }` em caso de falha no envio. Em `backend/src/routes/sponsorsAdmin.test.ts`, adicionado teste unitário mockando rejeição de `dispatchInvite` e assertando o retorno HTTP 500 padronizado.
+- **Verificação:** Executado `npm --prefix backend test src/routes/sponsorsAdmin.test.ts`. 15 testes passaram. Prova de falha verificada: a remoção temporária do bloco `try / catch` resultou em unhandled rejection e falha imediata no teste.
 
 ---
 
@@ -1963,6 +1972,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Modelagem de dados onde os membros de patrocinadores residem em uma subcoleção por patrocinador, sem desnormalização da contagem de membros ou lista resumida no documento pai do patrocinador.
 - **Sugestão de correção:** Desnormalizar o contador `memberCount` e resumo de membros no documento do patrocinador durante o aceite do convite, ou adicionar cache/paginação na rota de listagem de patrocinadores.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/sponsorsAdmin.ts` (`listSponsorsHandler`), implementado suporte a query parameter de paginação defensiva `limit` (padrão 50, com teto estrito de 100), encadeando `.limit(sponsorsLimit)` na consulta de `sponsors`, e adicionada limitação defensiva `.limit(MAX_TEAM_LIMIT)` (50) ao carregar a subcoleção `members` de cada patrocinador. Em `backend/src/services/fakeFirestore.testutil.ts`, adicionado suporte a `.limit(n)` direto em `colRef`. Em `backend/src/routes/sponsorsAdmin.test.ts`, adicionado teste unitário validando a aplicação de limites e integridade dos metadados de membros.
+- **Verificação:** Executado `npm --prefix backend test src/routes/sponsorsAdmin.test.ts`. 15 testes passaram.
 
 ---
 

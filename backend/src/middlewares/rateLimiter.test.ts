@@ -5,6 +5,8 @@ import {
   adminBroadcastLimiter,
   adminSponsorLimiter,
   staffActionLimiter,
+  symplaSyncLimiter,
+  symplaPublicLimiter,
   sponsorInviteIpLimiter,
   debugClientIp,
   keyGenerator
@@ -157,6 +159,61 @@ describe('staffActionLimiter (KAN-51 / ERR-080)', () => {
 
     expect(nextCalls).toBe(60);
     expect(blockedStatus).toBe(429);
+  });
+});
+
+describe('symplaSyncLimiter (ERR-085)', () => {
+  it('permite até 10 requisições por minuto por uid e bloqueia a 11ª com 429', async () => {
+    const uid = `sympla-user-${Date.now()}`;
+    const req = makeReq(uid);
+    const res = makeRes();
+    let nextCalls = 0;
+    let blockedStatus: number | null = null;
+    (res as any).status = (code: number) => {
+      blockedStatus = code;
+      return res;
+    };
+    const next = () => {
+      nextCalls++;
+    };
+
+    for (let i = 0; i < 11; i++) {
+      await symplaSyncLimiter(req, res, next);
+    }
+
+    expect(nextCalls).toBe(10);
+    expect(blockedStatus).toBe(429);
+  });
+});
+
+describe('symplaPublicLimiter (ERR-085)', () => {
+  it('permite até 30 requisições por IP e bloqueia a 31ª com 429', async () => {
+    const testIp = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
+    const req = makeReq(undefined, testIp);
+    const res = makeRes();
+    let nextCalls = 0;
+    let blocked: any = null;
+    (res as any).status = (code: number) => {
+      blocked = { code };
+      return res;
+    };
+    (res as any).json = (body: any) => {
+      if (blocked) blocked.body = body;
+      return res;
+    };
+    const next = () => {
+      nextCalls++;
+    };
+
+    for (let i = 0; i < 31; i++) {
+      await symplaPublicLimiter(req, res, next);
+    }
+
+    expect(nextCalls).toBe(30);
+    expect(blocked).toEqual({
+      code: 429,
+      body: expect.objectContaining({ error: 'RATE_LIMITED' })
+    });
   });
 });
 

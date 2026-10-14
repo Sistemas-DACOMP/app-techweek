@@ -24,6 +24,7 @@ import router, {
   resendInviteHandler,
   revokeInviteHandler
 } from './sponsorsAdmin';
+import * as sponsorInvitesService from '../services/sponsorInvites';
 import { acceptInvite, getInvitePreview, hashToken, resetInvalidAttempts, AcceptProfile } from '../services/sponsorInvites';
 import { requireRole } from '../middlewares/authMiddleware';
 import { adminSponsorLimiter } from '../middlewares/rateLimiter';
@@ -148,6 +149,20 @@ describe('POST /api/admin/sponsors', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(sent(res).invites[0].emailSent).toBe(false);
   });
+
+  it('retorna 500 INVITES_DISPATCH_FAILED caso o despacho de convites falhe (ERR-086)', async () => {
+    vi.spyOn(sponsorInvitesService, 'dispatchInvite').mockRejectedValueOnce(new Error('Erro de envio SMTP'));
+    const res = makeRes();
+    await createSponsorHandler(
+      req({ name: 'Acme Error', tier: 'OURO', emails: ['admin@acme.com'] }),
+      res
+    );
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(sent(res)).toEqual({
+      error: 'INVITES_DISPATCH_FAILED',
+      message: 'Patrocinador criado, mas ocorreu um erro no envio dos convites de e-mail.'
+    });
+  });
 });
 
 describe('reenvio e revogação', () => {
@@ -264,5 +279,22 @@ describe('PATCH, convites extras e listagem', () => {
     expect(s.members[0]).toMatchObject({ uid: 'u1', email: 'p1@acme.com', jobTitle: 'Dev' });
     expect(s.invites).toEqual({ PENDING: 1, ACCEPTED: 0, EXPIRED: 1, REVOKED: 1 });
     expect(JSON.stringify(s)).not.toContain('tokenHash');
+  });
+
+  it('aplica limite defensivo de membros e query limit na listagem de sponsors (ERR-087)', async () => {
+    const res0 = makeRes();
+    await createSponsorHandler(req({ name: 'Acme Paginated', tier: 'PRATA', allowedEmailDomain: 'acme.com' }), res0);
+    const { sponsorId } = sent(res0);
+
+    const res = makeRes();
+    const reqWithLimit = { ...req(), query: { limit: '10' } } as unknown as Request;
+    await listSponsorsHandler(reqWithLimit, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    const body = sent(res);
+    expect(body.sponsors).toBeDefined();
+    expect(Array.isArray(body.sponsors)).toBe(true);
+    const found = body.sponsors.find((s: any) => s.sponsorId === sponsorId);
+    expect(found).toBeDefined();
+    expect(found.memberCount).toBeDefined();
   });
 });

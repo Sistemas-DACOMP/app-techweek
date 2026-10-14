@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { symplaService } from '../services/symplaService';
 import { linkSymplaTicket, TicketInUseError, TICKET_IN_USE_MESSAGE } from '../services/symplaLink';
 import { requireAuth, requireRole } from '../middlewares/authMiddleware';
+import { symplaPublicLimiter, symplaSyncLimiter, staffActionLimiter } from '../middlewares/rateLimiter';
 
 const router = Router();
 
@@ -9,7 +10,7 @@ const router = Router();
  * GET /api/sympla/event
  * Retorna os detalhes do evento configurado
  */
-router.get('/event', async (_req: Request, res: Response) => {
+router.get('/event', symplaPublicLimiter, async (_req: Request, res: Response) => {
   try {
     const event = await symplaService.getEventDetails();
     res.status(200).json({ status: 'success', data: event });
@@ -23,7 +24,7 @@ router.get('/event', async (_req: Request, res: Response) => {
  * Valida o ingresso do participante por e-mail ou número de ingresso.
  * Requer autenticação. Usuários normais só podem consultar o próprio ingresso.
  */
-router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) => {
+router.post('/verify-ticket', requireAuth, symplaSyncLimiter, async (req: Request, res: Response) => {
   try {
     const userEmail = req.user?.email;
     const isAdmin = req.user?.role === 'ADMIN';
@@ -107,7 +108,7 @@ router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) =
  * POST /api/sympla/sync-user
  * Sincroniza o crachá/ingresso do Sympla diretamente com o perfil do usuário no Firestore
  */
-router.post('/sync-user', requireAuth, async (req: Request, res: Response) => {
+router.post('/sync-user', requireAuth, symplaSyncLimiter, async (req: Request, res: Response) => {
   try {
     const uid = req.user?.uid;
     const { email: bodyEmail, ticketNumber } = req.body;
@@ -174,7 +175,7 @@ router.post('/sync-user', requireAuth, async (req: Request, res: Response) => {
  * POST /api/sympla/checkin
  * Realiza o Check-in oficial na portaria (Exclusivo para STAFF e ADMIN)
  */
-router.post('/checkin', requireAuth, requireRole(['STAFF', 'ADMIN']), async (req: Request, res: Response) => {
+router.post('/checkin', requireAuth, requireRole(['STAFF', 'ADMIN']), staffActionLimiter, async (req: Request, res: Response) => {
   try {
     const { ticketNumber } = req.body;
     if (!ticketNumber) {

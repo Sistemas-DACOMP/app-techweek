@@ -72,6 +72,24 @@ export const staffActionLimiter = rateLimit({
   limit: 60
 });
 
+// Sympla (ERR-085): sincronização/verificação de ingressos contra a API externa do Sympla.
+// Protege a cota da organização no Sympla com teto de 10 req/min por participante autenticado.
+export const symplaSyncLimiter = rateLimit({
+  ...shared,
+  windowMs: 1 * 60 * 1000,
+  limit: 10
+});
+
+// Sympla (ERR-085): consulta pública dos detalhes do evento Sympla.
+// 30 req/5min por IP.
+export const symplaPublicLimiter = rateLimit({
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler,
+  windowMs: 5 * 60 * 1000,
+  limit: 30
+});
+
 // KAN-124: rotas PÚBLICAS de convite (sem auth no GET, auth só depois no
 // accept): chave = IP (padrão do express-rate-limit, sem keyGenerator de uid).
 // 60 req/15min por IP (CGNAT/Wi-Fi do evento junta muita gente num IP só).
