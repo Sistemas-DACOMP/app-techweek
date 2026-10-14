@@ -590,6 +590,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O arquivo de teste mockou apenas `global.fetch` mas não mockou o import de `./firebase`.
 - **Sugestão de correção:** Adicionar `vi.mock('./firebase', () => ({ auth: { currentUser: null } }));` no topo do arquivo para isolar completamente o ambiente de teste.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/sympla.test.js`, adicionado mock para `./firebase` (`auth: { currentUser: null }`), isolando completamente os testes das conexões com emuladores locais e eliminando o log de emulador no terminal.
+- **Verificação:** Executado `npx vitest run src/lib/sympla.test.js`, passando sem qualquer log de emulador.
 
 ---
 
@@ -610,6 +613,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   (`syncUserSymplaTicket` e `verifySymplaDirectly` não são importadas nem testadas).
 - **Causa provável:** O desenvolvedor priorizou apenas a função principal chamada pela interface (`verifySymplaTicket`), deixando as rotinas de sincronização de sessão e o client direto sem testes diretos.
 - **Sugestão de correção:** Adicionar suítes de teste para `syncUserSymplaTicket` (cenário não autenticado, cenário de sucesso na API e cenário de fallback) e para `verifySymplaDirectly` (validação de filtro por e-mail, por número de ingresso e por QR code).
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/sympla.test.js`, foram criados blocos de teste para `verifySymplaDirectly` (busca por e-mail insensível a maiúsculas/espaços, busca por número de ingresso, busca por QR Code, retorno null para não encontrados ou respostas HTTP não ok, e tratamento com log de aviso e rethrow em caso de erro de rede) e para `syncUserSymplaTicket` (usuário não autenticado, sincronização bem-sucedida via backend, fallback automático para API direta Sympla com sucesso e retorno not_found).
+- **Verificação:** Executado `npx vitest run src/lib/sympla.test.js`, passando 17/17 testes.
 
 ---
 
@@ -634,6 +640,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   `import { classify, formatRemaining } from './tvProgramacao';` (`typeInfo` não é importada).
 - **Causa provável:** O teste focou nas funções de classificação temporal (`classify`) e formatação de tempo (`formatRemaining`), esquecendo a função de apresentação visual.
 - **Sugestão de correção:** Importar `typeInfo` e criar testes validando o retorno de cada categoria conhecida (incluindo variações de caixa alta/baixa e espaços) e o retorno padrão para tipos não reconhecidos ou nulos.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/tvProgramacao.test.js`, importada a função `typeInfo` e adicionada suíte dedicada validando os mapeamentos de label e cor para todas as categorias ('palestra', 'workshop', 'minicurso', 'curso'), case-insensitivity, espaços e fallback para 'Ativação' em tipos desconhecidos, vazios ou nulos.
+- **Verificação:** Executado `npx vitest run src/lib/tvProgramacao.test.js`, passando 7/7 testes.
 
 ---
 
@@ -652,6 +661,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   `getPasswordStrength` não consta na lista de imports nem é executada em nenhum bloco `describe`.
 - **Causa provável:** A função foi adicionada para alimentar o componente visual de força de senha no cadastro/redefinição, mas o teste correspondente não foi criado.
 - **Sugestão de correção:** Importar `getPasswordStrength` em `validators.test.js` e criar testes para os cenários: nulo/vazio (score 0), senhas apenas numéricas ou alfabéticas curtas (score 1-2), senhas mistas (letras e números >= 8 chars) e senhas fortes (maiúsculas, minúsculas, números e caracteres especiais).
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/validators.test.js`, importada a função `getPasswordStrength` e criada suíte completa de testes unitários cobrindo todos os scores (0 a 4), labels explicativos, cálculo percentual, paleta de cores e o booleano `valid` para valores vazios/nulos, senhas curtas, senhas médias, senhas alfanuméricas e senhas fortes com caracteres especiais ou maiúsculas.
+- **Verificação:** Executado `npx vitest run src/lib/validators.test.js`, passando 39/39 testes.
 
 ---
 
