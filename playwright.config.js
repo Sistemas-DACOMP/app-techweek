@@ -18,8 +18,12 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: process.env.E2E_BASE_URL || 'http://localhost:5180',
-    channel: 'chrome',
     viewport: { width: 390, height: 844 },
     locale: 'pt-BR',
+  },
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:5180',
+    reuseExistingServer: !process.env.CI,
   },
 });

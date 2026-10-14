@@ -1992,6 +1992,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Criação de uma guarda estática rápida para CI sem subir o emulador do Firestore.
 - **Sugestão de correção:** Portar os casos de teste para a suíte oficial baseada no emulador em `tests/rules/users.test.js`, utilizando `assertFails` e `assertSucceeds` com clientes autenticados reais.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/firestoreRules.test.ts`, refatorado o extrator e expressões regulares para suportar variações flexíveis de espaçamento e quebras de linha (`\s*`), tornando o teste estático resiliente a formatações. Em `tests/rules/users.test.js`, portados testes oficiais contra o emulador do Firestore utilizando `@firebase/rules-unit-testing`, cobrindo: deleção do próprio perfil permitida quando sem `sponsorId` (`assertSucceeds`), deleção negada quando vinculado a patrocinador (`sponsorId` presente, `assertFails`), rejeição de criação com campos de vínculo (`sponsorId`, `companyId`, `company`, `empresa`, `companyName`, `sponsorTermsVersion`), e rejeição de atualização de campos protegidos de vínculo e ingresso (`sponsorId`, `companyId`, `company`, `empresa`, `companyName`, `jobTitle`, `hasSymplaTicket`).
+- **Verificação:** Executado `npm --prefix backend test src/firestoreRules.test.ts` (4 testes passaram, 5x estável) e `npx vitest run tests/rules/users.test.js` (47 testes passaram no emulador). Prova de falha verificada: alternar a asserção de deleção para `assertSucceeds` com `sponsorId` resulta em falha imediata por rejeição da regra.
 
 ---
 
@@ -2133,6 +2136,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhuma menção a `playwright` ou `test:e2e`.
 - **Causa provável:** Omissão no momento da adição do pacote `@playwright/test`.
 - **Sugestão de correção:** Adicionar `"test:e2e": "playwright test"` na seção `scripts` de `package.json`.
+- **Status:** Corrigido
+- **Correção aplicada:** Adicionados os scripts `"test:e2e": "playwright test"` e `"test:e2e:ui": "playwright test --ui"` na seção `scripts` de `package.json`, padronizando a interface de comandos do repositório e habilitando a execução automatizada de testes E2E.
+- **Verificação:** Executado `npm run test:e2e -- --help` e `npm run test:e2e -- --list`, confirmando que o script é invocado com sucesso pelo npm e localiza os arquivos de spec do Playwright.
 
 ---
 
@@ -2184,6 +2190,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
     reuseExistingServer: !process.env.CI,
   }
   ```
+- **Status:** Corrigido
+- **Correção aplicada:** Em `playwright.config.js`, removido o parâmetro rígido `channel: 'chrome'` do bloco `use` (permitindo a execução em Chromium padrão em ambientes de CI e máquinas sem Google Chrome instalado) e configurado o bloco `webServer` com comando `npm run dev`, url `http://localhost:5180` e `reuseExistingServer: !process.env.CI`.
+- **Verificação:** Executado `npm run test:e2e -- --list`, confirmando a leitura da configuração e listagem das specs sem erro de inicialização de browser.
 
 ---
 
@@ -2204,6 +2213,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   const email = process.env.E2E_TEST_EMAIL || 'teste@ufu.br';
   const password = process.env.E2E_TEST_PASSWORD || '123456';
   ```
+- **Status:** Corrigido
+- **Correção aplicada:** Em `e2e/helpers.js`, adicionados valores padrão de fallback (`process.env.E2E_TEST_EMAIL || 'teste@ufu.br'` e `process.env.E2E_TEST_PASSWORD || '123456'`) para as credenciais da conta de testes do emulador semeada por `seed:test-accounts`, impedindo falhas em ambientes sem `.env.local` customizado.
+- **Verificação:** Validado o carregamento e importação do módulo helper sem variáveis de ambiente pré-existentes.
 
 ---
 

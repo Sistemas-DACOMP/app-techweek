@@ -1,6 +1,6 @@
 export async function login(page) {
-  const email = process.env.E2E_TEST_EMAIL;
-  const password = process.env.E2E_TEST_PASSWORD;
+  const email = process.env.E2E_TEST_EMAIL || 'teste@ufu.br';
+  const password = process.env.E2E_TEST_PASSWORD || '123456';
   if (!email || !password) throw new Error('Defina E2E_TEST_EMAIL e E2E_TEST_PASSWORD no .env.local');
 
   await page.addInitScript(() => localStorage.setItem('facom_onboarding_completed', 'true'));
