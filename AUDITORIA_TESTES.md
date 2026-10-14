@@ -215,6 +215,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O teste não fez mock do módulo `./userService` (ou da função `isAdminEmail`).
 - **Sugestão de correção:** Em `accessGuard.test.js`, adicionar `vi.mock('./userService', () => ({ isAdminEmail: vi.fn((email) => email === 'sam03amorim@gmail.com') }))` para isolar a função pura `decideAccess` de imports pesados com efeitos colaterais.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/accessGuard.test.js`, adicionado mock para `./userService` mockando `isAdminEmail` (`email === 'admin@techweek.com'`), isolando a função pura `decideAccess` e eliminando por completo a inicialização do Firebase e os logs de emulador.
+- **Verificação:** Executado `npx vitest run src/lib/accessGuard.test.js`, passando 7/7 testes com 0 logs de emulador no stdout.
 
 ---
 
@@ -236,6 +239,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O desenvolvedor implementou o caso base de guarda contra `null` e deixou a simulação do snapshot do Firestore para trás por requerer mocks mais complexos de query/snapshot.
 - **Sugestão de correção:** Expandir o bloco com cenários onde `userId` é fornecido, simulando chamadas do callback `onSnapshot` com docs simulados e validando se `onUpdate` emite as entidades mapeadas corretamente.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/activityService.test.js`, expandida a suíte `describe('Listeners e Subscriptions')` com cobertura abrangente para quando `userId` é válido: montagem de query e filtragem por `userId`/`uid`, mesclagem reativa com dados de `localStorage` (`emitMerged`), reação a eventos da janela (`techweek_bookings_updated`), cancelamento correto em `unsubscribe` (removendo event listeners do DOM e instâncias do Firestore) e propagação resiliente de erros para o callback `onError`.
+- **Verificação:** Executado `npx vitest run src/lib/activityService.test.js`, passando 25/25 testes unitários.
 
 ---
 
@@ -252,6 +258,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Falta de `vi.mock('./firebase')` no arquivo de teste.
 - **Sugestão de correção:** Adicionar `vi.mock('./firebase', () => ({ db: {} }))` no topo de `analyticsService.test.js`.
+- **Status:** Corrigido
+- **Correção aplicada:** Adicionado `vi.mock('./firebase', () => ({ db: { mock: 'db' } }))` e `vi.mock('firebase/firestore')` no topo de `src/lib/analyticsService.test.js`, isolando a suíte contra efeitos colaterais de rede e eliminando a inicialização de emuladores.
+- **Verificação:** Executado `npx vitest run src/lib/analyticsService.test.js`, passando com 0 logs de emulador.
 
 ---
 
@@ -265,6 +274,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhum teste no arquivo importa ou referencia `subscribeToLiveAnalytics`. A suíte testa apenas funções utilitárias puras e o schema dos dados mockados (`getMockAnalyticsData`).
 - **Causa provável:** Testar um listener multi-coleção com throttling exige mocks de 5 snapshots e timers de relógio (`vi.useFakeTimers()`), o que foi evitado no momento da escrita.
 - **Sugestão de correção:** Criar uma suíte dedicada para `subscribeToLiveAnalytics` usando timers falsos (`vi.useFakeTimers()`) e mocks das coleções do Firestore, validando o throttling de 300ms, o acionamento do callback `onUpdate` consolidado e a limpeza no retorno do `unsubscribe`.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/analyticsService.test.js`, criada suíte unitária completa `describe('subscribeToLiveAnalytics (ERR-008)')` cobrindo: validação de tipo de `onUpdate`, subscrição paralela às 5 coleções (`activities`, `checkins`, `users`, `missions`, `pointEvents`), coalescência e throttling de 300ms via `vi.useFakeTimers()`, emissão do payload consolidado com KPIs e distribuições, fallback automático para dados mockados em caso de timeout de 1500ms, tratamento de erro com disparo de `onError`, e desmontagem limpa via chamada de `unsub()` para todos os listeners.
+- **Verificação:** Executado `npx vitest run src/lib/analyticsService.test.js`, passando 16/16 testes.
 
 ---
 
