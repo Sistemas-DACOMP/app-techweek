@@ -1,5 +1,6 @@
 import { auth, db } from './firebase';
 import { doc, getDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
+import { verifySymplaDirectly } from './sympla';
 
 const getApiBaseUrl = () => {
   return import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL || '/api';
@@ -16,6 +17,8 @@ export async function resolveParticipantFromQr(rawData) {
   if (!rawData || typeof rawData !== 'string') return null;
 
   const trimmed = rawData.trim();
+  if (!trimmed) return null;
+
   let decodedText = trimmed;
   try {
     decodedText = decodeURIComponent(trimmed);
@@ -36,11 +39,12 @@ export async function resolveParticipantFromQr(rawData) {
   }
 
   // Se o JSON contiver UID direto
-  if (parsedJson?.uid) {
+  if (parsedJson?.uid || parsedJson?.participantUid) {
+    const targetUid = parsedJson.uid || parsedJson.participantUid;
     try {
-      const userDoc = await getDoc(doc(db, 'users', parsedJson.uid));
+      const userDoc = await getDoc(doc(db, 'users', targetUid));
       if (userDoc?.exists()) {
-        return formatParticipant(userDoc.id, userDoc.data());
+        return formatParticipant(userDoc.id, userDoc.data(), parsedJson);
       }
     } catch {}
   }
@@ -53,7 +57,7 @@ export async function resolveParticipantFromQr(rawData) {
       const snap = await getDocs(q);
       if (snap && !snap.empty) {
         const docSnap = snap.docs[0];
-        return formatParticipant(docSnap.id, docSnap.data());
+        return formatParticipant(docSnap.id, docSnap.data(), parsedJson);
       }
     } catch {}
   }
@@ -66,25 +70,7 @@ export async function resolveParticipantFromQr(rawData) {
       const snap = await getDocs(q);
       if (snap && !snap.empty) {
         const docSnap = snap.docs[0];
-        return formatParticipant(docSnap.id, docSnap.data());
-      }
-    } catch {}
-  }
-
-  // Se contiver número de ingresso Sympla no JSON ou texto
-  const ticketNumber = parsedJson?.ticketNumber || (trimmed.startsWith('SYMPLA:') ? trimmed.replace('SYMPLA:', '').trim() : null);
-  if (ticketNumber) {
-    try {
-      const q1 = query(collection(db, 'users'), where('ticketId', '==', ticketNumber), limit(1));
-      const snap1 = await getDocs(q1);
-      if (snap1 && !snap1.empty) {
-        return formatParticipant(snap1.docs[0].id, snap1.docs[0].data());
-      }
-
-      const q2 = query(collection(db, 'users'), where('symplaTicket.ticketNumber', '==', ticketNumber), limit(1));
-      const snap2 = await getDocs(q2);
-      if (snap2 && !snap2.empty) {
-        return formatParticipant(snap2.docs[0].id, snap2.docs[0].data());
+        return formatParticipant(docSnap.id, docSnap.data(), parsedJson);
       }
     } catch {}
   }
@@ -98,13 +84,13 @@ export async function resolveParticipantFromQr(rawData) {
       const snap = await getDocs(q);
       if (snap && !snap.empty) {
         const docSnap = snap.docs[0];
-        return formatParticipant(docSnap.id, docSnap.data());
+        return formatParticipant(docSnap.id, docSnap.data(), parsedJson);
       }
       const qExact = query(collection(db, 'users'), where('email', '==', emailCandidate), limit(1));
       const snapExact = await getDocs(qExact);
       if (snapExact && !snapExact.empty) {
         const docSnap = snapExact.docs[0];
-        return formatParticipant(docSnap.id, docSnap.data());
+        return formatParticipant(docSnap.id, docSnap.data(), parsedJson);
       }
     } catch {}
 
@@ -117,6 +103,7 @@ export async function resolveParticipantFromQr(rawData) {
       firstName: namePart.split(' ')[0] || 'Participante',
       course: 'Computação',
       period: null,
+      institution: '',
       phone: '',
       email: emailCandidate,
       linkedin: '',
@@ -128,7 +115,7 @@ export async function resolveParticipantFromQr(rawData) {
   }
 
   // 3. Se o dado lido for diretamente um ID de documento do Firestore (UID)
-  if (/^[a-zA-Z0-9_-]{15,40}$/.test(trimmed)) {
+  if (!parsedJson && /^[a-zA-Z0-9_-]{15,40}$/.test(trimmed)) {
     try {
       const directDoc = await getDoc(doc(db, 'users', trimmed));
       if (directDoc?.exists()) {
@@ -138,7 +125,7 @@ export async function resolveParticipantFromQr(rawData) {
   }
 
   // 4. Se for username direto (ex: @erickraposo ou erickraposo)
-  if (/^@?[a-zA-Z0-9_.-]{3,30}$/.test(trimmed) && !trimmed.includes(' ')) {
+  if (!parsedJson && /^@?[a-zA-Z0-9_.-]{3,30}$/.test(trimmed) && !trimmed.includes(' ')) {
     try {
       const cleanUsername = trimmed.replace(/^@/, '').toLowerCase();
       const q = query(collection(db, 'users'), where('username', '==', cleanUsername), limit(1));
@@ -150,14 +137,82 @@ export async function resolveParticipantFromQr(rawData) {
     } catch {}
   }
 
-  // 5. Fallback: se os dados parsed contiverem informações locais suficientes
+  // 5. Se contiver número/código de ingresso Sympla no JSON ou texto puro (com ou sem prefixo SYMPLA:)
+  const rawTicketCandidate = parsedJson?.ticketNumber || (!parsedJson ? trimmed : null);
+  const ticketNumber = rawTicketCandidate
+    ? String(rawTicketCandidate).replace(/^SYMPLA:/i, '').trim()
+    : null;
+
+  if (ticketNumber && !ticketNumber.startsWith('QR_')) {
+    const candidates = Array.from(new Set([ticketNumber, ticketNumber.toUpperCase(), rawTicketCandidate.trim()]));
+    for (const candidate of candidates) {
+      try {
+        const q1 = query(collection(db, 'users'), where('ticketId', '==', candidate), limit(1));
+        const snap1 = await getDocs(q1);
+        if (snap1 && !snap1.empty) {
+          return formatParticipant(snap1.docs[0].id, snap1.docs[0].data(), parsedJson);
+        }
+
+        const q2 = query(collection(db, 'users'), where('symplaTicket.ticketNumber', '==', candidate), limit(1));
+        const snap2 = await getDocs(q2);
+        if (snap2 && !snap2.empty) {
+          return formatParticipant(snap2.docs[0].id, snap2.docs[0].data(), parsedJson);
+        }
+
+        const q3 = query(collection(db, 'users'), where('symplaTicket.qrCodeData', '==', candidate), limit(1));
+        const snap3 = await getDocs(q3);
+        if (snap3 && !snap3.empty) {
+          return formatParticipant(snap3.docs[0].id, snap3.docs[0].data(), parsedJson);
+        }
+      } catch {}
+    }
+
+    // Fallback: consulta o ingresso na API do Sympla e cruza pelo e-mail no Firestore para obter redes sociais e perfil completo
+    try {
+      const symplaResult = await verifySymplaDirectly({ ticketNumber });
+      const symplaParticipant = symplaResult?.participant;
+      if (symplaParticipant) {
+        const symplaEmail = (symplaParticipant.email || '').trim();
+        if (symplaEmail) {
+          try {
+            const qEmail = query(collection(db, 'users'), where('email', '==', symplaEmail.toLowerCase()), limit(1));
+            const snapEmail = await getDocs(qEmail);
+            if (snapEmail && !snapEmail.empty) {
+              return formatParticipant(snapEmail.docs[0].id, snapEmail.docs[0].data(), parsedJson);
+            }
+            const qEmailExact = query(collection(db, 'users'), where('email', '==', symplaEmail), limit(1));
+            const snapEmailExact = await getDocs(qEmailExact);
+            if (snapEmailExact && !snapEmailExact.empty) {
+              return formatParticipant(snapEmailExact.docs[0].id, snapEmailExact.docs[0].data(), parsedJson);
+            }
+          } catch {}
+        }
+
+        const fullName = [symplaParticipant.first_name, symplaParticipant.last_name].filter(Boolean).join(' ').trim() || 'Participante';
+        return formatParticipant(
+          parsedJson?.uid || symplaEmail || `sympla_${symplaParticipant.ticket_number || ticketNumber}`,
+          {
+            displayName: fullName,
+            firstName: symplaParticipant.first_name || '',
+            lastName: symplaParticipant.last_name || '',
+            email: symplaEmail,
+            username: symplaEmail ? symplaEmail.split('@')[0] : ''
+          },
+          parsedJson
+        );
+      }
+    } catch {}
+  }
+
+  // 6. Fallback: se os dados parsed contiverem informações locais suficientes
   if (parsedJson && (parsedJson.name || parsedJson.username || parsedJson.email)) {
     return {
-      participantUid: parsedJson.uid || parsedJson.email || `temp_${Date.now()}`,
+      participantUid: parsedJson.uid || parsedJson.participantUid || parsedJson.email || `temp_${Date.now()}`,
       name: parsedJson.name || parsedJson.username || parsedJson.email || 'Participante',
       username: parsedJson.username || (parsedJson.email ? parsedJson.email.split('@')[0] : ''),
       course: parsedJson.course || 'Computação',
       period: parsedJson.period || null,
+      institution: parsedJson.institution || '',
       phone: parsedJson.phone || '',
       email: parsedJson.email || '',
       linkedin: parsedJson.linkedin || '',
@@ -171,30 +226,35 @@ export async function resolveParticipantFromQr(rawData) {
   return null;
 }
 
-function formatParticipant(uid, data) {
+function formatParticipant(uid, data = {}, fallback = null) {
+  const fb = fallback || {};
   const name = (
     data.displayName ||
     [data.firstName, data.lastName].filter(Boolean).join(' ') ||
     [data.first_name, data.last_name].filter(Boolean).join(' ') ||
     data.name ||
+    fb.name ||
+    fb.displayName ||
     data.username ||
+    fb.username ||
     'Participante'
   ).trim();
 
   return {
-    participantUid: uid,
+    participantUid: uid || data.uid || fb.uid || fb.participantUid || '',
     name,
-    username: data.username || '',
+    username: data.username || fb.username || '',
     firstName: data.firstName || name.split(' ')[0],
-    email: data.email || '',
-    phone: data.phone || '',
-    course: data.course || 'Não informado',
-    period: data.period || null,
-    linkedin: data.linkedin || '',
-    instagram: data.instagram || '',
-    github: data.github || '',
-    participantType: data.participantType || data.participant_type || 'Aluno',
-    avatarUrl: data.avatarUrl || data.photoURL || null
+    email: data.email || fb.email || '',
+    phone: data.phone || fb.phone || '',
+    course: data.course || fb.course || 'Não informado',
+    period: data.period ?? fb.period ?? null,
+    institution: data.institution || fb.institution || '',
+    linkedin: data.linkedin || fb.linkedin || '',
+    instagram: data.instagram || fb.instagram || '',
+    github: data.github || fb.github || '',
+    participantType: data.participantType || data.participant_type || fb.participantType || 'Aluno',
+    avatarUrl: data.avatarUrl || data.photoURL || fb.avatarUrl || fb.photoURL || null
   };
 }
 

@@ -53,11 +53,16 @@ function badgeFromProfile(profile) {
     username,
     course: profile.course || '',
     period: profile.period || null,
+    institution: profile.institution || '',
     participantType: profile.participantType || profile.participant_type || 'Participante',
     avatarUrl: profile.avatarUrl || profile.avatar_url || profile.photoURL || null,
     symplaTicket: profile.symplaTicket || profile.sympla_ticket || null,
     uid: profile.uid || profile.id || '',
-    email: profile.email || ''
+    email: profile.email || '',
+    phone: profile.phone || '',
+    linkedin: profile.linkedin || '',
+    instagram: profile.instagram || '',
+    github: profile.github || ''
   };
 }
 
@@ -432,7 +437,13 @@ export default function Scanner() {
     }
 
     if (parsedPayload) {
-      if (parsedPayload.username || parsedPayload.participantUid || (parsedPayload.uid && !parsedPayload.lectureId && !parsedPayload.activityId)) {
+      if (
+        parsedPayload.username ||
+        parsedPayload.participantUid ||
+        parsedPayload.email ||
+        parsedPayload.ticketNumber ||
+        (parsedPayload.uid && !parsedPayload.lectureId && !parsedPayload.activityId)
+      ) {
         isUserQr = true;
         usernameToValidate = parsedPayload.username || null;
         participantData = parsedPayload;
@@ -454,14 +465,14 @@ export default function Scanner() {
       }
     }
 
-    // Se ainda não for atividade e não for participante, tenta resolver pelo helper do crachá/sympla
-    if (!isActivityQr && !isUserQr) {
+    // Se não for atividade, tenta resolver/enriquecer pelo helper do crachá/sympla/Firestore
+    if (!isActivityQr) {
       try {
         const resolved = await resolveParticipantFromQr(data);
         if (resolved) {
           isUserQr = true;
-          usernameToValidate = resolved.username || null;
-          participantData = resolved;
+          usernameToValidate = resolved.username || usernameToValidate || null;
+          participantData = participantData ? { ...participantData, ...resolved } : resolved;
         }
       } catch {}
     }
@@ -528,6 +539,8 @@ export default function Scanner() {
 
     // Constrói objeto enriquecido do participante para o card (KAN-95)
     const consolidatedParticipant = isUserQr ? {
+      uid: fetchedProfile?.uid || fetchedProfile?.id || participantData?.uid || participantData?.participantUid || '',
+      participantUid: fetchedProfile?.uid || fetchedProfile?.id || participantData?.participantUid || participantData?.uid || '',
       name: fetchedProfile?.displayName || 
             [fetchedProfile?.firstName, fetchedProfile?.lastName].filter(Boolean).join(' ') || 
             participantData?.name || 
@@ -537,7 +550,8 @@ export default function Scanner() {
       username: fetchedProfile?.username || participantData?.username || usernameToValidate || '',
       avatarUrl: fetchedProfile?.avatarUrl || fetchedProfile?.photoURL || participantData?.avatarUrl || participantData?.photoURL || null,
       course: fetchedProfile?.course || participantData?.course || 'Computação',
-      period: fetchedProfile?.period || participantData?.period || null,
+      period: fetchedProfile?.period ?? participantData?.period ?? null,
+      institution: fetchedProfile?.institution || participantData?.institution || '',
       participantType: fetchedProfile?.participantType || fetchedProfile?.participant_type || participantData?.participantType || 'Aluno da UFU',
       phone: fetchedProfile?.phone || participantData?.phone || '',
       email: fetchedProfile?.email || participantData?.email || '',
@@ -549,10 +563,10 @@ export default function Scanner() {
     // Detectar auto-scan no frontend antes de acionar a pontuação
     const myUid = profile?.uid || profile?.id;
     const myUsername = (profile?.username || '').replace(/^@/, '').toLowerCase();
-    const targetUid = participantData?.uid || participantData?.participantUid || fetchedProfile?.uid || fetchedProfile?.id;
-    const targetUsername = (participantData?.username || usernameToValidate || fetchedProfile?.username || '').replace(/^@/, '').toLowerCase();
+    const targetUid = consolidatedParticipant?.uid || participantData?.uid || participantData?.participantUid || fetchedProfile?.uid || fetchedProfile?.id;
+    const targetUsername = (consolidatedParticipant?.username || participantData?.username || usernameToValidate || fetchedProfile?.username || '').replace(/^@/, '').toLowerCase();
 
-    if (isUserQr && ((myUid && targetUid && myUid === targetUid) || (myUsername && targetUsername && myUsername === targetUsername))) {
+    if (isUserQr && ((myUid && targetUid && myUid === targetUid) || (myUsername && targetUsername && myUsername !== 'user' && myUsername === targetUsername))) {
       setIsLoading(false);
       setScanResult({
         status: 'self_scan',
@@ -564,7 +578,7 @@ export default function Scanner() {
       return;
     }
 
-    const result = await registerCodeScan(data, 5);
+    const result = await registerCodeScan(data, 5, consolidatedParticipant);
 
     if (result && (result.success || result.alreadyScanned)) {
       const earnedPoints = result.alreadyScanned ? 0 : (result.points ?? 5);

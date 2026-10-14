@@ -16,18 +16,36 @@ export function hasSymplaTicket(userProfile) {
  * o participante vincular o ingresso (nunca bloqueia a tela por falta de ingresso).
  */
 export function getBadgeQrValue(profile) {
-  const ticket = profile?.symplaTicket;
-  if (ticket?.qrCodeData) return ticket.qrCodeData;
-  if (ticket?.ticketNumber) return ticket.ticketNumber;
+  const ticket = profile?.symplaTicket || profile?.sympla_ticket;
+  const hasUserIdentity = Boolean(
+    profile?.username ||
+    profile?.uid ||
+    profile?.id ||
+    profile?.email ||
+    profile?.name ||
+    profile?.displayName
+  );
+
+  if (!hasUserIdentity) {
+    if (ticket?.qrCodeData) return ticket.qrCodeData;
+    if (ticket?.ticketNumber) return ticket.ticketNumber;
+  }
+
   const payload = {
     username: (profile?.username || 'user').replace(/^@/, ''),
-    participantType: profile?.participantType || 'Participante',
+    participantType: profile?.participantType || profile?.participant_type || 'Participante',
     course: profile?.course || '',
     period: profile?.period || null
   };
   if (profile?.uid || profile?.id) payload.uid = profile.uid || profile.id;
   if (profile?.email) payload.email = profile.email;
   if (profile?.name || profile?.displayName) payload.name = profile.name || profile.displayName;
+  if (profile?.institution) payload.institution = profile.institution;
+  if (profile?.linkedin) payload.linkedin = profile.linkedin;
+  if (profile?.instagram) payload.instagram = profile.instagram;
+  if (profile?.github) payload.github = profile.github;
+  const ticketCode = ticket?.qrCodeData || ticket?.ticketNumber || profile?.ticketId;
+  if (ticketCode) payload.ticketNumber = ticketCode;
   return JSON.stringify(payload);
 }
 

@@ -198,5 +198,100 @@ describe('Scanner & Conexões (Resolução de Falso Código Já Processado)', ()
       expect(res.alreadyScanned).toBe(false);
       expect(res.code).toBe('SYMPLA_TICKET_REQUIRED');
     });
+
+    it('crachá digital com ingresso Sympla vinculado preserva dados de perfil e redes sociais no QR e renderiza ParticipantCard na 1ª e 2ª leituras', async () => {
+      const { getBadgeQrValue } = await import('../../src/lib/sympla');
+      const ParticipantCard = (await import('../../src/components/ParticipantCard')).default;
+      const { apiRequest } = await import('../../src/lib/api');
+
+      let scanCallCount = 0;
+      apiRequest.mockImplementation(async (_url, options) => {
+        const body = options?.body ? JSON.parse(options.body) : {};
+        if (body.eventType === 'scan') {
+          scanCallCount++;
+          if (scanCallCount > 1) {
+            return { success: false, alreadyClaimed: true };
+          }
+          return { success: true, points: 5, type: 'scan' };
+        }
+        return { success: true, points: 10, type: 'challenge' };
+      });
+
+      const peerProfileWithTicket = {
+        uid: 'usr_ana_777',
+        username: 'anabeatriz',
+        displayName: 'Ana Beatriz',
+        email: 'ana@ufu.br',
+        course: 'Ciência da Computação',
+        period: 6,
+        institution: 'UFU',
+        participantType: 'Estudante',
+        instagram: '@anabeatriz.dev',
+        linkedin: 'https://linkedin.com/in/anabeatriz',
+        github: 'anabeatriz-dev',
+        symplaTicket: {
+          ticketNumber: 'T987654',
+          qrCodeData: 'SYMPLA:T987654'
+        }
+      };
+
+      const qrValue = getBadgeQrValue(peerProfileWithTicket);
+      const parsedQr = JSON.parse(qrValue);
+
+      expect(parsedQr.username).toBe('anabeatriz');
+      expect(parsedQr.uid).toBe('usr_ana_777');
+      expect(parsedQr.ticketNumber).toBe('SYMPLA:T987654');
+      expect(parsedQr.instagram).toBe('@anabeatriz.dev');
+      expect(parsedQr.linkedin).toBe('https://linkedin.com/in/anabeatriz');
+      expect(parsedQr.github).toBe('anabeatriz-dev');
+
+      let userHook = null;
+      renderToStaticMarkup(React.createElement(HookTester, { onReady: (u) => { userHook = u; } }));
+
+      // 1ª Leitura
+      const firstScan = await userHook.registerCodeScan(qrValue, 5, parsedQr);
+      expect(firstScan.success).toBe(true);
+      expect(firstScan.points).toBe(5);
+      expect(firstScan.alreadyScanned).toBe(false);
+
+      const firstCardHtml = renderToStaticMarkup(
+        React.createElement(ParticipantCard, {
+          participant: parsedQr,
+          points: firstScan.points,
+          eyebrow: 'Conexão feita!',
+          eyebrowTone: 'ok'
+        })
+      );
+      expect(firstCardHtml).toContain('Ana Beatriz');
+      expect(firstCardHtml).toContain('@anabeatriz');
+      expect(firstCardHtml).toContain('Redes de contato');
+      expect(firstCardHtml).toContain('Instagram');
+      expect(firstCardHtml).toContain('LinkedIn');
+      expect(firstCardHtml).toContain('GitHub');
+      expect(firstCardHtml).toContain('+5 pts');
+
+      // 2ª Leitura (pontua 0 mas mantém crachá digital com redes sociais)
+      const secondScan = await userHook.registerCodeScan(qrValue, 5, parsedQr);
+      expect(secondScan.success).toBe(true);
+      expect(secondScan.points).toBe(0);
+      expect(secondScan.alreadyScanned).toBe(true);
+      expect(secondScan.isProfile).toBe(true);
+
+      const secondCardHtml = renderToStaticMarkup(
+        React.createElement(ParticipantCard, {
+          participant: parsedQr,
+          points: secondScan.points > 0 ? secondScan.points : null,
+          eyebrow: 'Conexão feita!',
+          eyebrowTone: 'ok'
+        })
+      );
+      expect(secondCardHtml).toContain('Ana Beatriz');
+      expect(secondCardHtml).toContain('Redes de contato');
+      expect(secondCardHtml).toContain('Instagram');
+      expect(secondCardHtml).toContain('LinkedIn');
+      expect(secondCardHtml).toContain('GitHub');
+      expect(secondCardHtml).not.toContain('+5 pts');
+    });
   });
 });
+

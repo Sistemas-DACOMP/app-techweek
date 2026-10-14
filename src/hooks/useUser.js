@@ -143,7 +143,7 @@ export function useUser() {
     return result;
   };
 
-  const registerCodeScan = async (data, amount = 5) => {
+  const registerCodeScan = async (data, amount = 5, resolvedProfile = null) => {
     let codeStr = data;
     let scannedProfile = null;
 
@@ -152,21 +152,37 @@ export function useUser() {
       const decoded = decodeURIComponent(data);
       if (decoded.startsWith('{') && decoded.endsWith('}')) {
         const parsed = JSON.parse(decoded);
-        if (parsed.username) {
+        if (parsed.username || parsed.uid || parsed.participantUid || parsed.email) {
           scannedProfile = parsed;
-          codeStr = `user_${parsed.username.replace(/^@/, '')}`;
+          const idKey = (parsed.username || parsed.uid || parsed.participantUid || parsed.email || data).replace(/^@/, '');
+          codeStr = `user_${idKey}`;
         }
       }
     } catch (e) {
       try {
-        if (data.startsWith('{') && data.endsWith('}')) {
+        if (typeof data === 'string' && data.startsWith('{') && data.endsWith('}')) {
           const parsed = JSON.parse(data);
-          if (parsed.username) {
+          if (parsed.username || parsed.uid || parsed.participantUid || parsed.email) {
             scannedProfile = parsed;
-            codeStr = `user_${parsed.username.replace(/^@/, '')}`;
+            const idKey = (parsed.username || parsed.uid || parsed.participantUid || parsed.email || data).replace(/^@/, '');
+            codeStr = `user_${idKey}`;
           }
         }
       } catch (e2) {}
+    }
+
+    if (!scannedProfile && resolvedProfile) {
+      scannedProfile = resolvedProfile;
+      const idKey = String(
+        resolvedProfile.username ||
+        resolvedProfile.uid ||
+        resolvedProfile.participantUid ||
+        resolvedProfile.email ||
+        data
+      ).replace(/^@/, '');
+      codeStr = `user_${idKey}`;
+    } else if (scannedProfile && resolvedProfile) {
+      scannedProfile = { ...resolvedProfile, ...scannedProfile };
     }
 
     // 1. Detectar auto-scan (escanear o próprio crachá)
