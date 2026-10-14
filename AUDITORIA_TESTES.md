@@ -126,6 +126,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhum teste em `scripts/quality-gate.test.mjs` inclui `hasBackend`.
 - **Causa provável:** O teste ficou defasado quando a feature do backend foi integrada ao Quality Gate.
 - **Sugestão de correção:** Adicionar cenários validando `hasBackend: true` com `backendOk: false` (reprovação) e `backendOk: true` (aprovação ponderada no score).
+- **Status:** Corrigido
+- **Correção aplicada:** Em `scripts/quality-gate.test.mjs`, adicionados cenários de teste cobrindo `hasBackend: true` com `backendOk: true` (ponderação no score e aprovação total), `hasBackend: true` com `backendOk: false` (reprovação mandatória e score proporcional), e `hasBackend: false` (omissão limpa da checagem de backend nos `mandatory_checks`).
+- **Verificação:** Executado `npx vitest run scripts/quality-gate.test.mjs`, passando 9/9 testes.
 
 ---
 
@@ -147,6 +150,11 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
 - **Sugestão de correção:**
   1. No `vite.config.js`, ajustar o padrão de inclusão para aceitar `.jsx`: `src/**/*.test.{js,jsx}`.
   2. Implementar os testes de renderização e clique do componente `WhatsAppButton`, ou remover o arquivo se não for necessário.
+- **Status:** Corrigido
+- **Correção aplicada:**
+  1. Em `vite.config.js`, atualizado o padrão de include do Vitest para suportar arquivos de teste com extensão `.jsx`: `src/**/*.test.{js,jsx}` e `tests/**/*.test.{js,jsx}`.
+  2. Em `src/components/WhatsAppButton.test.jsx`, implementada suíte completa com 9 testes unitários cobrindo renderização condicional por telefone válido/inválido, estado desabilitado (via prop e via disponibilidade), aplicação de `fullWidth`, classes CSS customizadas, renderização do ícone SVG `WhatsAppIcon`, e interceptação e despacho do evento de clique chamando `onClick` e `window.open` com URL contextualizada.
+- **Verificação:** Executado `npx vitest run src/components/WhatsAppButton.test.jsx`, passando 9/9 testes.
 
 ---
 
@@ -167,6 +175,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Teste escrito apenas para pontuar em métricas de cobertura sem implementar testes unitários de ciclo de vida com React Testing Library / renderHook.
 - **Sugestão de correção:** Implementar testes reais utilizando `@testing-library/react` (`renderHook`) mockando o Firebase e as funções de `../lib/notifications`, testando o retorno dos estados e execução dos métodos.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/hooks/useNotifications.test.js`, substituído o teste superficial por uma suíte completa de 10 testes unitários testando a API real do hook: inicialização do estado de notificações via `getNotifications()`, cálculo reativo do `unreadCount` filtrando notificações lidas vs não lidas, e delegação das ações do hook para a biblioteca (`markAsRead`, `markAllAsRead`, `addNotification`, `removeNotification` e `clearAllNotifications`).
+- **Verificação:** Executado `npx vitest run src/hooks/useNotifications.test.js`, passando 10/10 testes.
 
 ---
 
@@ -184,6 +195,10 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O módulo `../lib/firebase.js` roda a inicialização do Firebase e `connectFirestoreEmulator` no nível superior do arquivo (top-level execution) sem isolamento de teste.
 - **Sugestão de correção:** Em `useNotifications.test.js`, mockar `../lib/firebase` antes das importações (`vi.mock('../lib/firebase', () => ({ db: {} }))`) para garantir isolamento e evitar efeitos colaterais indesejados.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/hooks/useNotifications.test.js`, adicionados mocks defensivos de topo para `../lib/firebase`, `../lib/auth` e `firebase/firestore`, evitando a inicialização do Firebase e eliminando completamente a emissão de logs de conexão a emuladores durante o teste unitário.
+- **Verificação:** Executado `npx vitest run src/hooks/useNotifications.test.js`, confirmando ausência total de mensagens de emulador no stdout do teste e isolamento estrito.
+
 
 ---
 
