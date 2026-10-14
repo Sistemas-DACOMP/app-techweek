@@ -297,6 +297,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O teste focou no caso direto do Firebase e não incluiu o ciclo de vida do evento customizado do navegador.
 - **Sugestão de correção:** Adicionar asserções disparando o `CustomEvent('facom_auth_state_changed')` no objeto global `window` para testar se `mockCb` é acionado e executar a função de retorno para verificar se `removeEventListener` e o `unsub` do Firebase são chamados.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/auth.test.js`, expandido o bloco `describe('Sessão Global')` adicionando cenários de teste para: (1) reação a eventos `facom_auth_state_changed` disparados na janela propagando dados de usuário autenticado cross-tab ou `null` (logout) para o callback registrado, e (2) invocação limpa da desmontagem (`unsubscribe`), garantindo que tanto a função retornada por `onAuthStateChanged` do Firebase quanto `window.removeEventListener` sejam devidamente chamadas.
+- **Verificação:** Executado `npx vitest run src/lib/auth.test.js`, passando 40/40 testes.
 
 ---
 
@@ -316,6 +319,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Falta de mock global do `localStorage` no teste de login (foi criado apenas dentro de `describe('logoutUser')`).
 - **Sugestão de correção:** Mover o mock de `localStorage` para o `beforeEach` da suíte ou adicionar stub de `window.localStorage` no teste de login para validar a gravação de `facom_logged_in`.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/auth.test.js`, adicionado stub de `window.localStorage` no teste de sucesso de `loginWithEmailAndPassword`, assertando explicitamente as chamadas `setItem('facom_logged_in', 'true')` e `removeItem('facom_test_session')`.
+- **Verificação:** Executado `npx vitest run src/lib/auth.test.js`, passando 40/40 testes.
 
 ---
 
@@ -344,6 +350,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O autor do teste percebeu que `document` não existia no ambiente Node e adicionou uma guarda condicional em vez de configurar o ambiente de teste para `jsdom`/`happy-dom` ou criar um mock global para `global.document`.
 - **Sugestão de correção:** Configurar o teste para rodar com comentário diretiva `// @vitest-environment jsdom` ou mockar `globalThis.document = { querySelectorAll: vi.fn(...) }` antes da execução para que o fluxo com asserções seja sempre executado.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/cameraUtils.test.js`, eliminada a condicional de bypass `if (typeof document !== 'undefined')` e adicionado stub global de `document` com `querySelectorAll` mockado retornando o elemento de vídeo com faixas ativas. Agora o teste executa incondicionalmente no ambiente Node, assertando que `mockTrack1.stop()`, `mockTrack2.stop()` e a limpeza de `video.srcObject = null` acontecem com sucesso.
+- **Verificação:** Executado `npx vitest run src/lib/cameraUtils.test.js`, passando 3/3 testes com asserções ativas.
 
 ---
 
@@ -360,6 +369,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Falta de mock de `./firebase` no arquivo de teste, somado ao acoplamento de funções utilitárias puras de formatação dentro do serviço de banco de dados.
 - **Sugestão de correção:** Adicionar `vi.mock('./firebase', () => ({ db: {} }))` em `designTokens.test.js` ou desacoplar `formatActivityType` para um módulo auxiliar puro.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/designTokens.test.js`, adicionado mock para `./firebase` (`db` e `auth`), isolando a suíte de tokens de design e eliminando por completo a inicialização do Firebase e o ruído de log de emuladores.
+- **Verificação:** Executado `npx vitest run src/lib/designTokens.test.js`, passando 3/3 testes com 0 logs de emulador.
 
 ---
 
