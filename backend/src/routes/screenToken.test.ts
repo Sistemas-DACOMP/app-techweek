@@ -9,6 +9,7 @@ vi.mock('../config/firebaseAdmin', () => ({
 
 import router from './screenToken';
 import { db } from '../config/firebaseAdmin';
+import { staffActionLimiter } from '../middlewares/rateLimiter';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -30,7 +31,7 @@ function mockActivity(exists: boolean) {
   }));
 }
 
-// A rota encadeia requireAuth -> requireRole(['STAFF','ADMIN']) -> handler.
+// A rota encadeia requireAuth -> requireRole(['STAFF','ADMIN']) -> staffActionLimiter -> handler.
 // requireAuth já tem cobertura própria em authMiddleware.test.ts; aqui simulamos
 // que ele já rodou (req.user pronto, mesma técnica de booking.test.ts/checkin.test.ts)
 // e encadeamos requireRole + handler de verdade, pra provar que ESTA rota está
@@ -54,7 +55,9 @@ async function runChain(handlers: Array<(req: Request, res: Response, next: () =
   await next();
 }
 
-const [, requireRoleHandler, finalHandler] = getScreenTokenHandlers();
+const allHandlers = getScreenTokenHandlers();
+const requireRoleHandler = allHandlers[1];
+const finalHandler = allHandlers[allHandlers.length - 1];
 
 describe('GET /:activityId/screen-token (KAN-51/D1)', () => {
   beforeAll(() => {
@@ -143,5 +146,11 @@ describe('GET /:activityId/screen-token (KAN-51/D1)', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INTERNAL_ERROR' }));
+  });
+
+  it('staffActionLimiter está montado na rota real, antes do handler final (ERR-080)', () => {
+    const handlers = getScreenTokenHandlers();
+    expect(handlers).toContain(staffActionLimiter);
+    expect(handlers.indexOf(staffActionLimiter)).toBeLessThan(handlers.length - 1);
   });
 });

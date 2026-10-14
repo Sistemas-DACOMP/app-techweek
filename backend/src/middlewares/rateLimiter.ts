@@ -64,6 +64,14 @@ export const adminSponsorLimiter = rateLimit({
   limit: 60
 });
 
+// Screen-token / KAN-51 (ERR-080): emissão de token de telão por STAFF/ADMIN.
+// Limite de 60 requisições por minuto por usuário autenticado.
+export const staffActionLimiter = rateLimit({
+  ...shared,
+  windowMs: 1 * 60 * 1000,
+  limit: 60
+});
+
 // KAN-124: rotas PÚBLICAS de convite (sem auth no GET, auth só depois no
 // accept): chave = IP (padrão do express-rate-limit, sem keyGenerator de uid).
 // 60 req/15min por IP (CGNAT/Wi-Fi do evento junta muita gente num IP só).

@@ -4,6 +4,7 @@ import {
   participantActionLimiter,
   adminBroadcastLimiter,
   adminSponsorLimiter,
+  staffActionLimiter,
   sponsorInviteIpLimiter,
   debugClientIp,
   keyGenerator
@@ -128,6 +129,30 @@ describe('adminSponsorLimiter (KAN-124 / ERR-061)', () => {
 
     for (let i = 0; i < 61; i++) {
       await adminSponsorLimiter(req, res, next);
+    }
+
+    expect(nextCalls).toBe(60);
+    expect(blockedStatus).toBe(429);
+  });
+});
+
+describe('staffActionLimiter (KAN-51 / ERR-080)', () => {
+  it('permite até 60 requisições por minuto do mesmo staff e bloqueia a 61ª com 429', async () => {
+    const uid = `staff-rate-${Date.now()}`;
+    const req = makeReq(uid);
+    const res = makeRes();
+    let nextCalls = 0;
+    let blockedStatus: number | null = null;
+    (res as any).status = (code: number) => {
+      blockedStatus = code;
+      return res;
+    };
+    const next = () => {
+      nextCalls++;
+    };
+
+    for (let i = 0; i < 61; i++) {
+      await staffActionLimiter(req, res, next);
     }
 
     expect(nextCalls).toBe(60);

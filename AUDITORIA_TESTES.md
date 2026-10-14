@@ -1799,6 +1799,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Premissa de que apenas rotas de participantes ou rotas públicas precisam de limitação de taxa de requisições.
 - **Sugestão de correção:** Configurar limitador de taxa (ex: teto de 60 requisições por minuto por usuário/IP) e testar a presença do middleware na suíte de testes.
+- **Status:** Corrigido
+- **Correção aplicada:** Criado o limitador `staffActionLimiter` (teto de 60 requisições por minuto por UID autenticado) em `backend/src/middlewares/rateLimiter.ts` e acoplado na rota `GET /:activityId/screen-token` em `backend/src/routes/screenToken.ts`. Adicionados testes unitários em `rateLimiter.test.ts` (validando o bloqueio 429 na 61ª requisição) e em `screenToken.test.ts` (comprovando a presença e ordenação do middleware antes do handler final).
+- **Verificação:** Executado `npm --prefix backend test src/routes/screenToken.test.ts src/middlewares/rateLimiter.test.ts`. Todos os 25 testes passaram. Prova de falha comprovada: remover `staffActionLimiter` da rota quebra a asserção de middlewares imediatamente.
 
 ---
 
@@ -1818,6 +1821,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhuma dessas rotas ou handlers é importado ou testado em `sponsorInvitesBody.test.ts` (ou em qualquer outro arquivo de teste HTTP).
 - **Causa provável:** O autor concentrou os testes de negócio no serviço (`services/sponsorInvites.test.ts`) e tratou a rota apenas com testes unitários pontuais de payload, omitindo a camada de integração HTTP.
 - **Sugestão de correção:** Criar testes de integração HTTP (usando `supertest` ou simulando Request/Response) mockando os retornos do serviço para cobrir todos os fluxos e códigos HTTP (200, 201, 400, 404, 409, 410, 500).
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/sponsorInvitesBody.test.ts`, adicionada suíte completa de testes de integração HTTP mockando o serviço `sponsorInvites` e validando: montagem dos middlewares `debugClientIp`, `sponsorInviteIpLimiter` e `requireAuth`; endpoint `GET /:token` com respostas 200 (preview público), 404 (`INVITE_NOT_FOUND`), 410 (`INVITE_EXPIRED`) e 500 (`INTERNAL_ERROR`); e endpoint `POST /:token/accept` com 400 (`TERMS_NOT_ACCEPTED`), 400 (`INVALID_PAYLOAD`), 201 (sucesso de aceite), 404, 409 (`INVITE_ALREADY_USED`), 410 e 500 (`ROLE_PARTIALLY_UPDATED` e `INTERNAL_ERROR`).
+- **Verificação:** Executado `npm --prefix backend test src/routes/sponsorInvitesBody.test.ts`. Todos os 21 testes passaram. Prova de falha comprovada: alterar status code de retorno ou remover tratamento de `InviteError` gera falha direta nas asserções.
 
 ---
 
@@ -1844,6 +1850,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   `sponsorInvitesBody.test.ts` tem apenas 2 testes que cobrem unicamente URLs https e valores de array.
 - **Causa provável:** Foco estrito em checagens de sanitização de segurança (XSS/URL e enum) deixando os testes de validação de formulário de fora.
 - **Sugestão de correção:** Expandir `sponsorInvitesBody.test.ts` adicionando casos para strings vazias/espaços, limites estourados de caracteres e validações numéricas de telefone.
+- **Status:** Corrigido
+- **Correção aplicada:** Expandidos os testes unitários de `parseAcceptBody` em `backend/src/routes/sponsorInvitesBody.test.ts` cobrindo exaustivamente: campos obrigatórios ausentes, vazios ou apenas com espaços em branco (`firstName`, `lastName`, `jobTitle`); limites máximos de caracteres (rejeição acima de 80/100 caracteres e aceitação no limite exato); validação de dígitos de telefone (<10 ou >15 dígitos rejeitados, formatos com 10, 11 e 15 dígitos aceitos); validação de arrays de `lookingFor` (rejeição de tipos não-array ou >10 itens); e validação de tamanho de URLs (`photoURL` > 500 e `linkedin` > 200).
+- **Verificação:** Executado `npm --prefix backend test src/routes/sponsorInvitesBody.test.ts`. Cobertura completa de casos de borda sem regressões.
 
 ---
 
@@ -1868,6 +1877,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   `symplaRoutes.test.ts` não possui nenhum teste para o endpoint `/checkin`.
 - **Causa provável:** O arquivo de teste focou nos tickets KAN-108 (unicidade de ingresso) e SEC-002 (proteção de PII de participantes), deixando a operação de portaria sem testes.
 - **Sugestão de correção:** Implementar testes unitários e de rota para `POST /checkin` cobrindo o fluxo de sucesso (`symplaService.checkInParticipant`), validação de `ticketNumber`, retorno 400 em caso de ingresso inválido/já utilizado e restrição de role (403 para `PARTICIPANT`).
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/symplaRoutes.test.ts`, adicionado mock de `checkInParticipant` no `symplaService` e criada suíte de testes para `POST /api/sympla/checkin` cobrindo: presença de `requireAuth` e `requireRole(['STAFF', 'ADMIN'])`; bloqueio 403 para usuários `PARTICIPANT`; validação 400 para `ticketNumber` ausente/vazio; sucesso de check-in para STAFF e ADMIN com retorno 200; retorno 400 quando o Sympla recusa o check-in (`success: false`); e retorno 500 para falhas inesperadas na API do Sympla.
+- **Verificação:** Executado `npm --prefix backend test src/routes/symplaRoutes.test.ts`. Todos os 17 testes passaram. Prova de falha verificada: a remoção do guarda de role ou da checagem de `ticketNumber` quebra imediatamente os testes correspondentes.
 
 ---
 

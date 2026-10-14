@@ -29,7 +29,8 @@ vi.mock('../services/symplaService', () => ({
   symplaService: {
     findParticipantByTicket: vi.fn(),
     findParticipantByEmail: vi.fn(),
-    getEventDetails: vi.fn()
+    getEventDetails: vi.fn(),
+    checkInParticipant: vi.fn()
   }
 }));
 
@@ -296,5 +297,153 @@ describe('KAN-108: ingresso Sympla único por conta', () => {
     await run('/verify-ticket', 'uid-1');
     expect(store.has('symplaTickets/TCK-7')).toBe(false);
     expect(store.get('symplaTickets/TCK-8')).toMatchObject({ uid: 'uid-1' });
+  });
+});
+
+describe('POST /api/sympla/checkin (ERR-083: Check-in de portaria)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const checkinHandlers = getRouteHandlers('/checkin', 'post');
+  // checkinHandlers[0] = requireAuth, checkinHandlers[1] = requireRole(['STAFF', 'ADMIN']), checkinHandlers[2] = handler
+  const requireRoleHandler = checkinHandlers[1];
+  const finalHandler = checkinHandlers[checkinHandlers.length - 1];
+
+  it('exige autenticação e papel STAFF ou ADMIN na cadeia de middlewares', () => {
+    expect(checkinHandlers.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('bloqueia PARTICIPANT com 403 Forbidden antes de chamar o serviço', async () => {
+    const req = {
+      user: { uid: 'user-p', email: 'part@ufu.br', role: 'PARTICIPANT' },
+      body: { ticketNumber: 'TCK-123' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await runChain([requireRoleHandler, finalHandler], req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(symplaService.checkInParticipant).not.toHaveBeenCalled();
+  });
+
+  it('rejeita requisição sem ticketNumber com 400', async () => {
+    const req = {
+      user: { uid: 'staff-1', role: 'STAFF' },
+      body: {}
+    } as unknown as Request;
+    const res = makeRes();
+
+    await finalHandler(req, res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      status: 'error',
+      message: 'Número do ingresso é obrigatório para check-in.'
+    });
+    expect(symplaService.checkInParticipant).not.toHaveBeenCalled();
+  });
+
+  it('realiza check-in com sucesso por STAFF e retorna 200', async () => {
+    vi.mocked(symplaService.checkInParticipant).mockResolvedValueOnce({
+      success: true,
+      message: 'Check-in realizado com sucesso.'
+    });
+
+    const req = {
+      user: { uid: 'staff-1', role: 'STAFF' },
+      body: { ticketNumber: 'TCK-100' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await runChain([requireRoleHandler, finalHandler], req, res);
+
+    expect(symplaService.checkInParticipant).toHaveBeenCalledWith('TCK-100');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      status: 'success',
+      message: 'Check-in realizado com sucesso.'
+    });
+  });
+
+  it('permite que ADMIN realize check-in com sucesso', async () => {
+    vi.mocked(symplaService.checkInParticipant).mockResolvedValueOnce({
+      success: true,
+      message: 'Check-in realizado com sucesso.'
+    });
+
+    const req = {
+      user: { uid: 'admin-1', role: 'ADMIN' },
+      body: { ticketNumber: 'TCK-200' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await runChain([requireRoleHandler, finalHandler], req, res);
+
+    expect(symplaService.checkInParticipant).toHaveBeenCalledWith('TCK-200');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      status: 'success',
+      message: 'Check-in realizado com sucesso.'
+    });
+  });
+
+  it('retorna 400 se o serviço Sympla reportar falha (ingresso inválido ou já utilizado)', async () => {
+    vi.mocked(symplaService.checkInParticipant).mockResolvedValueOnce({
+      success: false,
+      message: 'Ingresso já realizou check-in anteriormente.'
+    });
+
+    const req = {
+      user: { uid: 'staff-1', role: 'STAFF' },
+      body: { ticketNumber: 'TCK-ALREADY-USED' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await finalHandler(req, res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      status: 'error',
+      message: 'Ingresso já realizou check-in anteriormente.'
+    });
+  });
+
+  it('retorna 500 se o serviço Sympla lançar exceção inesperada', async () => {
+    vi.mocked(symplaService.checkInParticipant).mockRejectedValueOnce(
+      new Error('Erro de conexão com API Sympla')
+    );
+
+    const req = {
+      user: { uid: 'staff-1', role: 'STAFF' },
+      body: { ticketNumber: 'TCK-FAIL' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await finalHandler(req, res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      status: 'error',
+      message: 'Erro de conexão com API Sympla'
+    });
+  });
+
+  it('retorna 500 com mensagem padrão quando o erro não tem message', async () => {
+    vi.mocked(symplaService.checkInParticipant).mockRejectedValueOnce({});
+
+    const req = {
+      user: { uid: 'staff-1', role: 'STAFF' },
+      body: { ticketNumber: 'TCK-FAIL-UNKNOWN' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await finalHandler(req, res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      status: 'error',
+      message: 'Erro ao processar check-in.'
+    });
   });
 });
