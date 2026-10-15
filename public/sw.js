@@ -106,8 +106,8 @@ function buildNotificationOptions(payload = {}) {
     title,
     options: {
       body,
-      icon: payload.icon || DEFAULT_ICON,
-      badge: payload.badge || DEFAULT_BADGE,
+      icon: new URL(payload.icon || DEFAULT_ICON, self.location.origin).href,
+      badge: new URL(payload.badge || DEFAULT_BADGE, self.location.origin).href,
       tag: String(tag),
       renotify: true,
       silent: false,
