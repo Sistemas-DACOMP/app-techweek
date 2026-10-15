@@ -1292,6 +1292,7 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
 ---
 
 ### ERR-052
+- **Status:** Corrigido
 - **Arquivo e linha:** `tests/unit/whatsappOneClickClarity.test.js:4`
 - **Teste:** `describe('WhatsApp Modelo Padrão Clarity & Design System')`
 - **Tipo:** Efeito colateral / Falta de mock
@@ -1305,10 +1306,12 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Ausência de mocks para a camada de serviços de banco e storage.
 - **Sugestão de correção:** Adicionar `vi.mock('../../src/lib/firebase', () => ({ auth: {}, db: {}, storage: {} }))` no topo do arquivo.
+- **Correção aplicada:** Adicionado `// @vitest-environment happy-dom` e mocks explícitos para `../../src/lib/firebase`, `../../src/lib/feedService` e `../../src/lib/sponsorService` no topo de `tests/unit/whatsappOneClickClarity.test.js`, eliminando a conexão com os emuladores locais.
 
 ---
 
 ### ERR-053
+- **Status:** Corrigido
 - **Arquivo e linha:** `tests/unit/whatsappOneClickClarity.test.js:8`
 - **Teste:** `describe('WhatsApp Modelo Padrão Clarity & Design System')`
 - **Tipo:** Falso positivo / Teste puramente textual
@@ -1323,6 +1326,7 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O teste foi adicionado especificamente para impedir a reintrodução acidental de termos como "1-Clique" e emojis na interface do patrocinador após uma rodada de revisão de design.
 - **Sugestão de correção:** Manter as restrições de vocabulário se forem política de design da equipe, mas adicionar testes funcionais que validem a correta codificação da URL do WhatsApp (`encodeURIComponent`) e substituição das variáveis dinâmicas ao clicar nas ações de contato.
+- **Correção aplicada:** Adicionados testes interativos com `@testing-library/react` em `tests/unit/whatsappOneClickClarity.test.js` validando o disparo de `window.open` com a URL `https://wa.me/55...` codificada e a interpolação real das variáveis (`{nome}`, `{empresa}`, `{curso}`) tanto no `LeadDossier` (incluindo troca de template de rádio para "Convite p/ Vagas") quanto no botão de WhatsApp do `SponsorLeadModal`.
 
 ---
 
