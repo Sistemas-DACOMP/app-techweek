@@ -1136,6 +1136,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Acoplamento transitivo através de `feedService` sem mock preventivo no arquivo de teste do componente.
 - **Sugestão de correção:** Adicionar `vi.mock('../../src/lib/feedService', () => ({ uploadFeedMedia: vi.fn() }))` e `vi.mock('../../src/lib/firebase', () => ({ db: {}, storage: {}, auth: {} }))` no topo de `sponsorSettingsUI.test.js`.
+- **Status:** Corrigido
+- **Correção aplicada:** Adicionados mocks explícitos de `../../src/lib/firebase` (`db`, `storage`, `auth`) e `../../src/lib/feedService` (`uploadFeedMedia`) no topo de `tests/unit/sponsorSettingsUI.test.js`, impedindo a inicialização desnecessária dos emuladores do Firebase.
+- **Verificação:** Executado `npx vitest run tests/unit/sponsorSettingsUI.test.js`, sem logs de conexão aos emuladores e passando 16/16 testes (5x estável).
 
 ---
 
@@ -1154,6 +1157,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhuma asserção de eventos, estado interativo ou chamadas aos métodos de persistência `saveSponsorSettings`, `resetTagsToDefault`, etc.
 - **Causa provável:** O teste foi concebido para conferir se os elementos visuais e de acessibilidade estavam presentes na montagem inicial, deixando as interações de estado e persistência descobertas.
 - **Sugestão de correção:** Migrar os testes principais para `@testing-library/react`, simulando digitação de nova tag e clique em "Adicionar", remoção de tag clicando no botão X, alternância entre as abas e salvamento de configurações, assertando as chamadas a `onSettingsSaved` e `saveSponsorSettings`.
+- **Status:** Corrigido
+- **Correção aplicada:** Adicionada suíte `describe('Interações Reais do Usuário — Abas, Perfil no Feed, Templates e Tags (ERR-045)')` em `tests/unit/sponsorSettingsUI.test.js` com `@testing-library/react` (`happy-dom`), cobrindo: edição e salvamento do Perfil do Feed com sanitização do `@handle` e Nome de Exibição; adição de nova tag (`"Python"`), remoção de chip de tag e restauração das tags padrão; e edição de template de WhatsApp com inserção de variável dinâmica `{curso}` e salvamento via `saveSponsorSettings` / `onSettingsSaved`.
+- **Verificação:** Executado `npx vitest run tests/unit/sponsorSettingsUI.test.js`, passando 16/16 testes (5x estável).
 
 ---
 
@@ -1178,6 +1184,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   O componente padrão `SymplaRequirementModal` sequer é importado ou renderizado no teste.
 - **Causa provável:** O teste foi criado exclusivamente para validar a correção da issue KAN-112 (sobreposição de z-index do modal em relação ao painel de atividades) sem implementar a suíte funcional do componente.
 - **Sugestão de correção:** Implementar testes de componente utilizando `@testing-library/react`, renderizando o modal com mock de `verifySymplaTicket` e `updateUserProfile`, testando submissão de e-mail com sucesso, exibição de mensagem de erro e fechamento via botão/Escape.
+- **Status:** Corrigido
+- **Correção aplicada:** Expandido `tests/unit/symplaRequirementModal.test.js` com `@testing-library/react` em ambiente `happy-dom` para testar o componente `SymplaRequirementModal` real: retorno `null` quando `isOpen={false}`, renderização via portal com benefícios e e-mail pré-preenchido quando `isOpen={true}`, vinculação com sucesso (`verifySymplaTicket` + `updateUserProfile` + tela `"Ingresso vinculado"` + callback `onLinked`), mensagens de erro para campo vazio ou ingresso não encontrado e fechamento via `Escape` ou clique no `.ds-scrim`.
+- **Verificação:** Executado `npx vitest run tests/unit/symplaRequirementModal.test.js`, passando 5/5 testes (5x estável).
 
 ---
 
@@ -1195,6 +1204,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Acoplamento da constante de z-index dentro do arquivo do componente React em vez de um arquivo isolado de constantes de layout/design tokens.
 - **Sugestão de correção:** Adicionar `vi.mock('../../src/lib/firebase', () => ({ auth: {} }))` no topo do teste ou mover constantes de layout como `SYMPLA_SHEET_Z` para `designTokens.js`.
+- **Status:** Corrigido
+- **Correção aplicada:** Adicionados mocks explícitos de `../../src/lib/firebase`, `../../src/lib/sympla` e `../../src/lib/userService` no topo de `tests/unit/symplaRequirementModal.test.js`, isolando o módulo da inicialização dos emuladores do Firebase.
+- **Verificação:** Executado `npx vitest run tests/unit/symplaRequirementModal.test.js`, sem logs de emuladores no `stdout` e passando 5/5 testes (5x estável).
 
 ---
 
