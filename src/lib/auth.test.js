@@ -101,7 +101,16 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
   });
 
   describe('loginWithEmailAndPassword', () => {
-    it('deve autenticar com sucesso quando as credenciais forem válidas', async () => {
+    it('deve autenticar com sucesso quando as credenciais forem válidas e persistir facom_logged_in no localStorage', async () => {
+      const setItem = vi.fn();
+      const removeItem = vi.fn();
+      vi.stubGlobal('window', {
+        localStorage: {
+          setItem,
+          removeItem
+        }
+      });
+
       signInWithEmailAndPassword.mockResolvedValue({
         user: { uid: 'u123', email: 'aluno@ufu.br' }
       });
@@ -111,6 +120,10 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
       expect(res.success).toBe(true);
       expect(res.user.uid).toBe('u123');
       expect(res.error).toBeNull();
+      expect(setItem).toHaveBeenCalledWith('facom_logged_in', 'true');
+      expect(removeItem).toHaveBeenCalledWith('facom_test_session');
+
+      vi.unstubAllGlobals();
     });
 
     it('deve normalizar e-mail com espaços ou maiúsculas antes do login', async () => {
@@ -268,6 +281,54 @@ describe('Módulo de Autenticação Firebase (auth.js)', () => {
       const mockCb = vi.fn();
       onAuthChange(mockCb);
       expect(onAuthStateChanged).toHaveBeenCalledWith(expect.anything(), mockCb);
+    });
+
+    it('deve reagir a eventos facom_auth_state_changed da janela e notificar callback com dados do evento', () => {
+      let registeredHandler = null;
+      vi.stubGlobal('window', {
+        addEventListener: vi.fn((event, handler) => {
+          if (event === 'facom_auth_state_changed') {
+            registeredHandler = handler;
+          }
+        }),
+        removeEventListener: vi.fn()
+      });
+
+      const mockCb = vi.fn();
+      onAuthChange(mockCb);
+
+      expect(registeredHandler).toBeInstanceOf(Function);
+
+      // Simula evento com novo usuário cross-tab
+      registeredHandler({ detail: { user: { uid: 'u_cross_tab', email: 'cross@ufu.br' } } });
+      expect(mockCb).toHaveBeenCalledWith({ uid: 'u_cross_tab', email: 'cross@ufu.br' });
+
+      // Simula evento sem usuário (logout)
+      registeredHandler({ detail: null });
+      expect(mockCb).toHaveBeenCalledWith(null);
+
+      vi.unstubAllGlobals();
+    });
+
+    it('deve invocar unsubscribe do Firebase e remover o listener da janela na desmontagem', () => {
+      const mockUnsubFirebase = vi.fn();
+      onAuthStateChanged.mockReturnValueOnce(mockUnsubFirebase);
+
+      const removeEventListener = vi.fn();
+      vi.stubGlobal('window', {
+        addEventListener: vi.fn(),
+        removeEventListener
+      });
+
+      const mockCb = vi.fn();
+      const unsub = onAuthChange(mockCb);
+
+      unsub();
+
+      expect(mockUnsubFirebase).toHaveBeenCalled();
+      expect(removeEventListener).toHaveBeenCalledWith('facom_auth_state_changed', expect.any(Function));
+
+      vi.unstubAllGlobals();
     });
 
     it('deve retornar o currentUser', () => {

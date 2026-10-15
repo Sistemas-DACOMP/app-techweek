@@ -144,15 +144,32 @@ export async function createSponsorHandler(req: Request, res: Response): Promise
     return;
   }
 
-  const invites: CreatedInvite[] = await Promise.all(prepared.map((p) => dispatchInvite(p, p.email, cleanName)));
+  let invites: CreatedInvite[] = [];
+  try {
+    invites = await Promise.all(prepared.map((p) => dispatchInvite(p, p.email, cleanName)));
+  } catch (error) {
+    console.error('Erro ao despachar convites do patrocinador:', error);
+    res.status(500).json({
+      error: 'INVITES_DISPATCH_FAILED',
+      message: 'Patrocinador criado, mas ocorreu um erro no envio dos convites de e-mail.'
+    });
+    return;
+  }
   res.status(201).json({ sponsorId: sponsorRef.id, invites });
 }
 
 /** GET /api/admin/sponsors */
-export async function listSponsorsHandler(_req: Request, res: Response): Promise<void> {
+export async function listSponsorsHandler(req: Request, res: Response): Promise<void> {
   try {
+    const rawLimit = req.query?.limit;
+    const sponsorsLimit = rawLimit ? Math.min(Math.max(parseInt(String(rawLimit), 10) || 50, 1), 100) : 50;
+
+    const sponsorsQuery = typeof db.collection('sponsors').limit === 'function'
+      ? db.collection('sponsors').limit(sponsorsLimit)
+      : db.collection('sponsors');
+
     const [sponsorsSnap, invitesSnap] = await Promise.all([
-      db.collection('sponsors').get(),
+      sponsorsQuery.get(),
       db.collection('sponsorInvites').get()
     ]);
 
@@ -171,7 +188,10 @@ export async function listSponsorsHandler(_req: Request, res: Response): Promise
     const sponsors = await Promise.all(
       sponsorsSnap.docs.map(async (d: any) => {
         const s = d.data();
-        const membersSnap = await d.ref.collection('members').get();
+        const membersQuery = typeof d.ref.collection('members').limit === 'function'
+          ? d.ref.collection('members').limit(MAX_TEAM_LIMIT)
+          : d.ref.collection('members');
+        const membersSnap = await membersQuery.get();
         const members = membersSnap.docs.map((m: any) => {
           const md = m.data();
           return { uid: md.uid ?? m.id, email: md.email ?? null, jobTitle: md.jobTitle ?? null, joinedAt: toIso(md.joinedAt) };

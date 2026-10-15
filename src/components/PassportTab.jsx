@@ -23,11 +23,52 @@ export const TIER_STYLE = {
 };
 
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-const formatVisitDate = (visitedAt) => {
+export const formatVisitDate = (visitedAt) => {
   const date = visitedAt?.toDate ? visitedAt.toDate() : new Date(visitedAt);
   if (!visitedAt || isNaN(date.getTime())) return 'Visitado';
   return `Visitado · ${date.getDate()} ${MONTHS[date.getMonth()]}`;
 };
+
+/**
+ * Elegível aos sorteios: Kanastra (Diamante) + Bayer (Ouro) + pelo menos 1 parceira Prata.
+ */
+export function checkPrizeEligibility(visitedSponsors = {}) {
+  const kanastraVisited = !!visitedSponsors?.kanastra;
+  const bayerVisited = !!visitedSponsors?.bayer;
+  const partnerCount = ['aimirim', 'bip', 'hyperflow'].filter((id) => !!visitedSponsors?.[id]).length;
+  return kanastraVisited && bayerVisited && partnerCount >= 1;
+}
+
+/**
+ * Critério do Bilhete Dourado: todas as 5 empresas visitadas (ou flag goldenTicketAwarded).
+ */
+export function checkGoldenTicketEligibility(visitedSponsors = {}, goldenTicketAwarded = false) {
+  const totalVisited = Object.keys(SPONSORS_CONFIG).filter((id) => !!visitedSponsors?.[id]).length;
+  return totalVisited === Object.keys(SPONSORS_CONFIG).length || Boolean(goldenTicketAwarded);
+}
+
+/**
+ * Calcula o resumo completo de progresso do Passaporte TechWeek.
+ */
+export function getPassportProgress(visitedSponsors = {}, goldenTicketAwarded = false) {
+  const kanastraVisited = !!visitedSponsors?.kanastra;
+  const bayerVisited = !!visitedSponsors?.bayer;
+  const partnerCount = ['aimirim', 'bip', 'hyperflow'].filter((id) => !!visitedSponsors?.[id]).length;
+  const totalVisited = Object.keys(SPONSORS_CONFIG).filter((id) => !!visitedSponsors?.[id]).length;
+  const isEligibleForPrizes = checkPrizeEligibility(visitedSponsors);
+  const isFullPassport = checkGoldenTicketEligibility(visitedSponsors, goldenTicketAwarded);
+  const missingForDraw = [!kanastraVisited && 'Kanastra', !bayerVisited && 'Bayer', partnerCount < 1 && '1 prata'].filter(Boolean);
+
+  return {
+    kanastraVisited,
+    bayerVisited,
+    partnerCount,
+    totalVisited,
+    isEligibleForPrizes,
+    isFullPassport,
+    missingForDraw
+  };
+}
 
 function VisitStatus({ visit }) {
   if (!visit) {
@@ -93,15 +134,12 @@ export default function PassportTab({ userProfile }) {
   const visitedSponsors = liveProfile?.visitedSponsors || userProfile?.visitedSponsors || {};
   const isGoldenTicket = liveProfile?.goldenTicketAwarded || userProfile?.goldenTicketAwarded || false;
 
-  const kanastraVisited = !!visitedSponsors?.kanastra;
-  const bayerVisited = !!visitedSponsors?.bayer;
-  const partnerCount = ['aimirim', 'bip', 'hyperflow'].filter((id) => !!visitedSponsors?.[id]).length;
-  const totalVisited = Object.keys(SPONSORS_CONFIG).filter((id) => !!visitedSponsors?.[id]).length;
-
-  // Elegível aos prêmios: Kanastra + Bayer (obrigatórias) + pelo menos 1 parceira
-  const isEligibleForPrizes = kanastraVisited && bayerVisited && partnerCount >= 1;
-  const isFullPassport = totalVisited === 5 || isGoldenTicket;
-  const missingForDraw = [!kanastraVisited && 'Kanastra', !bayerVisited && 'Bayer', partnerCount < 1 && '1 prata'].filter(Boolean);
+  const {
+    totalVisited,
+    isEligibleForPrizes,
+    isFullPassport,
+    missingForDraw
+  } = getPassportProgress(visitedSponsors, isGoldenTicket);
 
   const { kanastra, bayer } = SPONSORS_CONFIG;
   const silvers = [SPONSORS_CONFIG.aimirim, SPONSORS_CONFIG.bip, SPONSORS_CONFIG.hyperflow];

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db, FieldValue } from '../config/firebaseAdmin';
 import { requireAuth, requireRole } from '../middlewares/authMiddleware';
+import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 import { verifyScreenToken } from '../lib/screenToken';
 import { resolveAttendanceMode } from '../lib/attendanceMode';
@@ -27,7 +28,7 @@ const DEFAULT_ACTIVITIES_FALLBACK: Record<string, { points: number; attendanceMo
 // Staff/ADMIN registra a entrada do participante numa atividade com
 // attendanceMode DOUBLE_CHECK (D2 do SPEC KAN-51). Sem isso registrado,
 // o checkout do próprio aluno é recusado (ver ENTRANCE_NOT_FOUND abaixo).
-router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (req: Request, res: Response) => {
+router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), participantActionLimiter, async (req: Request, res: Response) => {
   const rawUid = req.body?.uid || req.body?.participantUid;
   const { activityId } = req.body ?? {};
   const staffUid = req.user!.uid;
@@ -162,7 +163,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
 // O próprio aluno chama isto escaneando o QR dinâmico do telão. uid vem
 // sempre do JWT (req.user), nunca do corpo — o token só prova "este QR era
 // da atividade X e ainda não expirou", não quem está escaneando.
-router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
+router.post('/checkout', requireAuth, participantActionLimiter, async (req: Request, res: Response) => {
   const { token } = req.body ?? {};
   const uid = req.user!.uid;
 

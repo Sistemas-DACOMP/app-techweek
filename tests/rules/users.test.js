@@ -210,6 +210,12 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
       const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
       await assertSucceeds(deleteDoc(doc(authDb, 'users', 'user-1')));
     });
+
+    it('deleção do próprio perfil por participante sem vínculo de patrocinador (sem sponsorId) deve ser permitida (KAN-124 A1)', async () => {
+      await seedUser('user-delete-no-sponsor', { firstName: 'Dono Sem Sponsor' });
+      const authDb = testEnv.authenticatedContext('user-delete-no-sponsor', { email: 'user-delete-no-sponsor@ufu.br' }).firestore();
+      await assertSucceeds(deleteDoc(doc(authDb, 'users', 'user-delete-no-sponsor')));
+    });
   });
 
   // ==========================================
@@ -584,6 +590,46 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
       await seedUser('user-2', {});
       const adminDb = testEnv.authenticatedContext('admin-1', { role: 'ADMIN', email: 'admin@ufu.br' }).firestore();
       await assertFails(deleteDoc(doc(adminDb, 'users', 'user-2')));
+    });
+
+    it('deleção do próprio perfil por participante vinculado a patrocinador (com sponsorId) deve falhar (KAN-124 A1)', async () => {
+      await seedUser('user-sponsor-delete', { firstName: 'Membro Patrocinador', sponsorId: 'sponsor-123' });
+      const authDb = testEnv.authenticatedContext('user-sponsor-delete', { email: 'user-sponsor-delete@ufu.br' }).firestore();
+      await assertFails(deleteDoc(doc(authDb, 'users', 'user-sponsor-delete')));
+    });
+
+    it('criação de perfil injetando campos de vínculo de empresa/termo deve falhar (KAN-124 A1)', async () => {
+      for (const field of ['sponsorId', 'companyId', 'company', 'empresa', 'companyName', 'sponsorTermsVersion']) {
+        const uid = `user-create-${field.toLowerCase()}`;
+        const authDb = testEnv.authenticatedContext(uid, { email: `${uid}@ufu.br` }).firestore();
+        await assertFails(
+          setDoc(doc(authDb, 'users', uid), {
+            uid,
+            email: `${uid}@ufu.br`,
+            role: 'PARTICIPANT',
+            totalPoints: 0,
+            pontuacaoTotal: 0,
+            [field]: field === 'sponsorTermsVersion' ? 1 : 'valor-proibido',
+            termsAcceptedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          })
+        );
+      }
+    });
+
+    it('atualização de perfil tentando injetar campos de vínculo de patrocinador ou ingresso deve falhar (KAN-124 A1)', async () => {
+      for (const field of ['sponsorId', 'companyId', 'company', 'empresa', 'companyName', 'jobTitle', 'hasSymplaTicket']) {
+        const uid = `user-upd-${field.toLowerCase()}`;
+        await seedUser(uid, { firstName: 'Carlos' });
+        const authDb = testEnv.authenticatedContext(uid, { email: `${uid}@ufu.br`, email_verified: true }).firestore();
+        await assertFails(
+          updateDoc(doc(authDb, 'users', uid), {
+            [field]: field === 'hasSymplaTicket' ? true : 'tentativa-vinculo',
+            updatedAt: serverTimestamp(),
+          })
+        );
+      }
     });
 
     it('tentativa de atualização de perfil por participante com email_verified: false (deve falhar com assertFails)', async () => {

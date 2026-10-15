@@ -151,8 +151,14 @@ router.put('/users/:uid/role', requireAuth, requireRole(['ADMIN']), updateUserRo
 // bloqueio, nao pensados como paragrafo longo.
 const MAX_TITLE_LENGTH = 150;
 const MAX_BODY_LENGTH = 1000;
+const HTML_TAG_REGEX = /<[a-z/!][\s\S]*?>/i;
 
 export async function broadcastNotificationHandler(req: Request, res: Response): Promise<void> {
+  if (!req.user?.uid) {
+    res.status(401).json({ error: 'UNAUTHENTICATED', message: 'Usuario nao autenticado.' });
+    return;
+  }
+
   const { title, body } = req.body ?? {};
 
   if (typeof title !== 'string' || !title.trim()) {
@@ -167,6 +173,14 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
 
   const trimmedTitle = title.trim();
   const trimmedBody = body.trim();
+
+  if (HTML_TAG_REGEX.test(trimmedTitle) || HTML_TAG_REGEX.test(trimmedBody)) {
+    res.status(400).json({
+      error: 'INVALID_PAYLOAD',
+      message: 'title e body nao podem conter tags HTML ou scripts.'
+    });
+    return;
+  }
 
   if (trimmedTitle.length > MAX_TITLE_LENGTH) {
     res.status(400).json({ error: 'INVALID_PAYLOAD', message: `title deve ter no maximo ${MAX_TITLE_LENGTH} caracteres.` });
@@ -183,7 +197,7 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
     await announcementRef.set({
       title: trimmedTitle,
       body: trimmedBody,
-      createdBy: req.user!.uid,
+      createdBy: req.user.uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
   } catch (error) {

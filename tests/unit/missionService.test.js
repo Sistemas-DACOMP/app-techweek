@@ -5,9 +5,14 @@ import {
   validateQuizAnswer, 
   isFlashMissionActive,
   subscribeToMissions,
-  seedDefaultMissions
+  seedDefaultMissions,
+  createMission,
+  updateMission,
+  deleteMission,
+  toggleMissionStatus,
+  triggerFlashMission
 } from '../../src/lib/missionService';
-import { collection, onSnapshot, doc, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, doc, writeBatch, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 const mockBatch = {
   set: vi.fn(),
@@ -212,6 +217,186 @@ describe('missionService - Regras e Validações de Missões (KAN-104 e KAN-106)
 
       expect(onError).toHaveBeenCalledWith(mockError);
       expect(callback).toHaveBeenCalledWith(DEFAULT_MISSIONS);
+    });
+  });
+
+  describe('createMission (ERR-033)', () => {
+    it('cria missão com valores padrão quando campos opcionais são omitidos', async () => {
+      addDoc.mockResolvedValueOnce({ id: 'new_mission_1' });
+
+      const result = await createMission({});
+
+      expect(collection).toHaveBeenCalledWith({ _type: 'mock_firestore_db' }, 'missions');
+      expect(addDoc).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({
+        id: 'new_mission_1',
+        title: 'Nova Missão',
+        description: '',
+        category: 'networking',
+        points: 10,
+        icon: 'Sparkles',
+        status: 'active',
+        type: 'manual',
+        triggerMode: 'form',
+        order: 99,
+        createdAt: 'MOCK_SERVER_TIMESTAMP',
+        updatedAt: 'MOCK_SERVER_TIMESTAMP'
+      });
+    });
+
+    it('sanitiza secretConfig (uppercase + trim), preserva cardStyle e marca isSecret em triggerMode="secret"', async () => {
+      addDoc.mockResolvedValueOnce({ id: 'secret_mission_1' });
+
+      const result = await createMission({
+        title: 'Segredo no Stand',
+        description: 'Ache a senha',
+        category: 'sponsors',
+        points: '35',
+        triggerMode: 'secret',
+        order: '4',
+        cardStyle: 'neon',
+        cardStyleOptions: { accent: '#00FFAA' },
+        secretConfig: { secretWord: '  techweek 2026  ' }
+      });
+
+      expect(result.id).toBe('secret_mission_1');
+      expect(result.points).toBe(35);
+      expect(result.order).toBe(4);
+      expect(result.type).toBe('manual');
+      expect(result.isSecret).toBe(true);
+      expect(result.secretConfig).toEqual({ secretWord: 'TECHWEEK 2026' });
+      expect(result.cardStyle).toBe('neon');
+      expect(result.cardStyleOptions).toEqual({ accent: '#00FFAA' });
+    });
+
+    it('configura quizConfig, fields de formulário, qrCodeConfig e autoConfig conforme o triggerMode', async () => {
+      addDoc.mockResolvedValue({ id: 'm_mode' });
+
+      const quizMission = await createMission({
+        title: 'Quiz Tech',
+        triggerMode: 'quiz',
+        quizConfig: {
+          question: 'Qual a linguagem?',
+          options: ['JS', 'Rust'],
+          correctOptionIndex: '1'
+        }
+      });
+      expect(quizMission.quizConfig).toEqual({
+        question: 'Qual a linguagem?',
+        options: ['JS', 'Rust'],
+        correctOptionIndex: 1
+      });
+
+      const formMission = await createMission({
+        title: 'Form Tech',
+        triggerMode: 'form',
+        fields: [{ id: 'f1', type: 'text', label: 'Nome', required: true }]
+      });
+      expect(formMission.fields).toEqual([{ id: 'f1', type: 'text', label: 'Nome', required: true }]);
+
+      const qrMission = await createMission({
+        title: 'QR Hunt',
+        triggerMode: 'qr',
+        qrCodeConfig: { qrCodeValue: '  QR_CODE_123  ' }
+      });
+      expect(qrMission.qrCodeValue).toBe('QR_CODE_123');
+      expect(qrMission.qrCodeConfig).toEqual({ qrCodeValue: 'QR_CODE_123' });
+
+      const autoMission = await createMission({
+        title: 'Auto Visit',
+        triggerMode: 'auto',
+        autoConfig: { eventType: 'sponsor_visit', targetId: 'Bayer' }
+      });
+      expect(autoMission.type).toBe('auto');
+      expect(autoMission.autoConfig).toEqual({ eventType: 'sponsor_visit', targetId: 'Bayer' });
+    });
+
+    it('calcula startsAt, expiresAt e mascotDialogue quando isFlash e flashConfig são fornecidos', async () => {
+      addDoc.mockResolvedValueOnce({ id: 'flash_mission_1' });
+
+      const before = Date.now();
+      const result = await createMission({
+        title: 'Relâmpago!',
+        isFlash: true,
+        flashConfig: {
+          durationMinutes: '10',
+          maxWinners: '25',
+          mascotDialogue: 'Corram para o auditório!'
+        }
+      });
+      const after = Date.now();
+
+      expect(result.isFlash).toBe(true);
+      expect(result.flashConfig.durationMinutes).toBe(10);
+      expect(result.flashConfig.maxWinners).toBe(25);
+      expect(result.flashConfig.mascotDialogue).toBe('Corram para o auditório!');
+      expect(result.flashConfig.startsAt.getTime()).toBeGreaterThanOrEqual(before);
+      expect(result.flashConfig.startsAt.getTime()).toBeLessThanOrEqual(after);
+      expect(result.flashConfig.expiresAt.getTime() - result.flashConfig.startsAt.getTime()).toBe(10 * 60 * 1000);
+    });
+  });
+
+  describe('updateMission, deleteMission, toggleMissionStatus e triggerFlashMission (ERR-033)', () => {
+    it('updateMission atualiza documento no Firestore anexando updatedAt', async () => {
+      updateDoc.mockResolvedValueOnce(undefined);
+
+      const res = await updateMission('mission_42', { title: 'Título Editado', points: 80 });
+
+      expect(doc).toHaveBeenCalledWith({ _type: 'mock_firestore_db' }, 'missions', 'mission_42');
+      expect(updateDoc).toHaveBeenCalledWith(
+        { id: 'mission_42', col: 'missions' },
+        {
+          title: 'Título Editado',
+          points: 80,
+          updatedAt: 'MOCK_SERVER_TIMESTAMP'
+        }
+      );
+      expect(res).toEqual({ id: 'mission_42', title: 'Título Editado', points: 80 });
+    });
+
+    it('deleteMission exclui o documento no Firestore e retorna confirmação', async () => {
+      deleteDoc.mockResolvedValueOnce(undefined);
+
+      const res = await deleteMission('mission_99');
+
+      expect(doc).toHaveBeenCalledWith({ _type: 'mock_firestore_db' }, 'missions', 'mission_99');
+      expect(deleteDoc).toHaveBeenCalledWith({ id: 'mission_99', col: 'missions' });
+      expect(res).toEqual({ id: 'mission_99', deleted: true });
+    });
+
+    it('toggleMissionStatus alterna corretamente entre active e paused', async () => {
+      updateDoc.mockResolvedValue(undefined);
+
+      const pausedRes = await toggleMissionStatus('m_toggle', 'active');
+      expect(pausedRes).toEqual({ id: 'm_toggle', status: 'paused' });
+      expect(updateDoc).toHaveBeenLastCalledWith(
+        { id: 'm_toggle', col: 'missions' },
+        { status: 'paused', updatedAt: 'MOCK_SERVER_TIMESTAMP' }
+      );
+
+      const activeRes = await toggleMissionStatus('m_toggle', 'paused');
+      expect(activeRes).toEqual({ id: 'm_toggle', status: 'active' });
+      expect(updateDoc).toHaveBeenLastCalledWith(
+        { id: 'm_toggle', col: 'missions' },
+        { status: 'active', updatedAt: 'MOCK_SERVER_TIMESTAMP' }
+      );
+    });
+
+    it('triggerFlashMission ativa missão relâmpago com cálculo de expiração e diálogo padrão ou customizado', async () => {
+      updateDoc.mockResolvedValue(undefined);
+
+      const resDefault = await triggerFlashMission('flash_id');
+      expect(resDefault.id).toBe('flash_id');
+      expect(resDefault.isFlash).toBe(true);
+      expect(resDefault.status).toBe('active');
+      expect(resDefault.flashConfig.durationMinutes).toBe(5);
+      expect(resDefault.flashConfig.expiresAt.getTime() - resDefault.flashConfig.startsAt.getTime()).toBe(5 * 60 * 1000);
+      expect(resDefault.flashConfig.mascotDialogue).toContain('MISSÃO RELÂMPAGO LIBERADA');
+
+      const resCustom = await triggerFlashMission('flash_id_2', 15, 'Valendo brinde exclusivo!');
+      expect(resCustom.flashConfig.durationMinutes).toBe(15);
+      expect(resCustom.flashConfig.expiresAt.getTime() - resCustom.flashConfig.startsAt.getTime()).toBe(15 * 60 * 1000);
+      expect(resCustom.flashConfig.mascotDialogue).toBe('Valendo brinde exclusivo!');
     });
   });
 });

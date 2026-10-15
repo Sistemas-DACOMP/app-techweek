@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   generateTimeBuckets,
   normalizeDate,
@@ -9,9 +9,23 @@ import {
   calculateMissionAnalytics,
   calculateDemographicProfile,
   getMockAnalyticsData,
+  subscribeToLiveAnalytics,
   EVENT_START_HOUR,
   EVENT_END_HOUR
 } from './analyticsService';
+import { collection, query, onSnapshot } from 'firebase/firestore';
+
+vi.mock('./firebase', () => ({
+  db: { mock: 'db' }
+}));
+
+vi.mock('firebase/firestore', () => {
+  return {
+    collection: vi.fn((_db, path) => ({ path })),
+    query: vi.fn((coll) => ({ coll })),
+    onSnapshot: vi.fn(() => vi.fn())
+  };
+});
 
 describe('analyticsService - Algoritmos e Agregações', () => {
   describe('generateTimeBuckets', () => {
@@ -187,6 +201,163 @@ describe('analyticsService - Algoritmos e Agregações', () => {
       expect(mock.missions.mostCompleted.length).toBeGreaterThan(0);
       expect(mock.demographics.totalParticipants).toBeGreaterThan(0);
       expect(mock.summaryKpis.activeAudienceNow).toBeGreaterThan(0);
+    });
+  });
+
+  describe('subscribeToLiveAnalytics (ERR-008)', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('deve lançar erro se onUpdate não for uma função', () => {
+      expect(() => subscribeToLiveAnalytics({})).toThrow('onUpdate deve ser uma função.');
+      expect(() => subscribeToLiveAnalytics({ onUpdate: null })).toThrow('onUpdate deve ser uma função.');
+    });
+
+    it('deve registrar listeners para as 5 coleções e invocar unsubs na desmontagem', () => {
+      const unsubs = [vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn()];
+      let callCount = 0;
+      onSnapshot.mockImplementation(() => {
+        const u = unsubs[callCount] || vi.fn();
+        callCount += 1;
+        return u;
+      });
+
+      const onUpdate = vi.fn();
+      const unsub = subscribeToLiveAnalytics({ onUpdate });
+
+      expect(collection).toHaveBeenCalledWith(expect.anything(), 'activities');
+      expect(collection).toHaveBeenCalledWith(expect.anything(), 'checkins');
+      expect(collection).toHaveBeenCalledWith(expect.anything(), 'users');
+      expect(collection).toHaveBeenCalledWith(expect.anything(), 'missions');
+      expect(collection).toHaveBeenCalledWith(expect.anything(), 'pointEvents');
+
+      unsub();
+      unsubs.forEach((u) => {
+        expect(u).toHaveBeenCalled();
+      });
+    });
+
+    it('deve consolidar e emitir dados após throttleMs (300ms) ao receber eventos do Firestore', () => {
+      vi.useFakeTimers();
+
+      const listeners = {};
+      onSnapshot.mockImplementation((target, onNext) => {
+        const path = target?.path || target?.coll?.path || 'unknown';
+        listeners[path] = onNext;
+        return vi.fn();
+      });
+
+      const onUpdate = vi.fn();
+      const unsub = subscribeToLiveAnalytics({ onUpdate, throttleMs: 300 });
+
+      // Simula disparo de checkin e user
+      if (listeners['checkins']) {
+        listeners['checkins']({
+          docs: [
+            {
+              id: 'chk_1',
+              data: () => ({
+                activityId: 'act_1',
+                status: 'CHECKED_IN',
+                entranceAt: new Date('2026-10-21T10:00:00Z')
+              })
+            }
+          ]
+        });
+      }
+
+      if (listeners['users']) {
+        listeners['users']({
+          docs: [
+            {
+              id: 'usr_1',
+              data: () => ({
+                role: 'PARTICIPANT',
+                course: 'Ciência da Computação',
+                affiliation: 'UFU'
+              })
+            }
+          ]
+        });
+      }
+
+      // Durante o tempo de throttling, onUpdate não deve ter sido invocado
+      expect(onUpdate).not.toHaveBeenCalled();
+
+      // Avança os timers além de 300ms
+      vi.advanceTimersByTime(300);
+
+      expect(onUpdate).toHaveBeenCalledTimes(1);
+      const payload = onUpdate.mock.calls[0][0];
+      expect(payload.isMock).toBe(false);
+      expect(payload.summaryKpis.totalCheckedInToday).toBe(1);
+      expect(payload.demographics.totalParticipants).toBe(1);
+
+      unsub();
+      vi.useRealTimers();
+    });
+
+    it('deve acionar fallback com mock data se não houver resposta dentro de 1500ms', () => {
+      vi.useFakeTimers();
+      onSnapshot.mockImplementation(() => vi.fn());
+
+      const onUpdate = vi.fn();
+      const unsub = subscribeToLiveAnalytics({ onUpdate });
+
+      // Antes de 1500ms, sem dados
+      vi.advanceTimersByTime(1400);
+      expect(onUpdate).not.toHaveBeenCalled();
+
+      // Ao completar 1500ms, emite fallback mock data
+      vi.advanceTimersByTime(100);
+      expect(onUpdate).toHaveBeenCalledTimes(1);
+      expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ isMock: true }));
+
+      unsub();
+      vi.useRealTimers();
+    });
+
+    it('deve invocar onError se o processamento dos cálculos em triggerUpdate falhar', () => {
+      vi.useFakeTimers();
+      let checkinListener = null;
+
+      onSnapshot.mockImplementation((target, onNext) => {
+        const path = target?.path || target?.coll?.path;
+        if (path === 'checkins') checkinListener = onNext;
+        return vi.fn();
+      });
+
+      const onUpdate = vi.fn();
+      const onError = vi.fn();
+      const unsub = subscribeToLiveAnalytics({ onUpdate, onError, throttleMs: 300 });
+
+      // Passa um dado cujo cálculo lance erro dentro do try/catch de triggerUpdate
+      if (checkinListener) {
+        checkinListener({
+          docs: [
+            {
+              id: 'broken',
+              data: () => ({
+                activityId: 'act_1',
+                status: 'CHECKED_IN',
+                entranceAt: {
+                  toDate: () => {
+                    throw new Error('Falha no toDate ao calcular buckets');
+                  }
+                }
+              })
+            }
+          ]
+        });
+      }
+
+      vi.advanceTimersByTime(300);
+
+      expect(onError).toHaveBeenCalledWith(expect.any(Error));
+
+      unsub();
+      vi.useRealTimers();
     });
   });
 });

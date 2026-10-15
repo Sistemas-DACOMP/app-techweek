@@ -11,6 +11,7 @@ vi.mock('../config/firebaseAdmin', () => ({
 import router, { calculateAgeGroup, buildWhatsAppPayload, leadsHandler } from './leads';
 import { db } from '../config/firebaseAdmin';
 import { requireVerifiedEmail } from '../middlewares/authMiddleware';
+import { adminSponsorLimiter } from '../middlewares/rateLimiter';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -154,6 +155,182 @@ describe('POST /api/leads handler (KAN-55)', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ error: 'PARTICIPANT_NOT_FOUND' })
     );
+  });
+
+  it('resolve participantUid enviado como e-mail para o ID do documento do usuário (ERR-077)', async () => {
+    const req = makeReq({
+      participantUid: 'aluno@ufu.br',
+      notes: 'Contato via e-mail',
+      rating: 5
+    });
+    const res = makeRes();
+
+    (db.collection as any).mockImplementation((name: string) => {
+      if (name === 'users') {
+        return {
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              get: vi.fn().mockResolvedValue({
+                empty: false,
+                docs: [{ id: 'part-resolved' }]
+              })
+            })
+          }),
+          doc: (id: string) => ({
+            path: `users/${id}`,
+            collection: (sub: string) => ({
+              doc: (subId: string) => ({ path: `users/${id}/${sub}/${subId}` })
+            })
+          })
+        };
+      }
+      return {
+        doc: (id: string) => ({
+          path: `${name}/${id}`,
+          collection: (sub: string) => ({
+            doc: (subId: string) => ({ path: `${name}/${id}/${sub}/${subId}` })
+          })
+        })
+      };
+    });
+
+    const mockTx = {
+      get: vi.fn((ref: { path: string }) => {
+        if (ref.path === 'users/part-resolved') {
+          return Promise.resolve({
+            exists: true,
+            data: () => ({
+              name: 'Aluno Resolvido',
+              email: 'aluno@ufu.br',
+              phone: '34991112233'
+            })
+          });
+        }
+        return Promise.resolve({ exists: false });
+      }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
+
+    await leadsHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        lead: expect.objectContaining({
+          participantUid: 'part-resolved'
+        })
+      })
+    );
+  });
+
+  it('gera ID sintético email_* e conclui captura quando e-mail não é encontrado no Firestore mas possui participantData (ERR-077)', async () => {
+    const req = makeReq({
+      participantUid: 'naoexiste@ufu.br',
+      participantData: { name: 'Visitante Avulso', email: 'naoexiste@ufu.br' }
+    });
+    const res = makeRes();
+
+    (db.collection as any).mockImplementation((name: string) => {
+      if (name === 'users') {
+        return {
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              get: vi.fn().mockResolvedValue({ empty: true, docs: [] })
+            })
+          }),
+          doc: (id: string) => ({
+            path: `users/${id}`,
+            collection: (sub: string) => ({
+              doc: (subId: string) => ({ path: `users/${id}/${sub}/${subId}` })
+            })
+          })
+        };
+      }
+      return {
+        doc: (id: string) => ({
+          path: `${name}/${id}`,
+          collection: (sub: string) => ({
+            doc: (subId: string) => ({ path: `${name}/${id}/${sub}/${subId}` })
+          })
+        })
+      };
+    });
+
+    const mockTx = {
+      get: vi.fn().mockResolvedValue({ exists: false }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
+
+    await leadsHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        lead: expect.objectContaining({
+          participantUid: 'email_naoexiste_ufu_br'
+        })
+      })
+    );
+  });
+
+  it('trata falha de rede ao resolver e-mail logando aviso e retornando 404 PARTICIPANT_NOT_FOUND quando não há participantData (ERR-077)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const req = makeReq({ participantUid: 'erro@ufu.br' });
+    const res = makeRes();
+
+    (db.collection as any).mockImplementation((name: string) => {
+      if (name === 'users') {
+        return {
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              get: vi.fn().mockRejectedValue(new Error('Network error'))
+            })
+          }),
+          doc: (id: string) => ({
+            path: `users/${id}`,
+            collection: (sub: string) => ({
+              doc: (subId: string) => ({ path: `users/${id}/${sub}/${subId}` })
+            })
+          })
+        };
+      }
+      return {
+        doc: (id: string) => ({
+          path: `${name}/${id}`,
+          collection: (sub: string) => ({
+            doc: (subId: string) => ({ path: `${name}/${id}/${sub}/${subId}` })
+          })
+        })
+      };
+    });
+
+    const mockTx = {
+      get: vi.fn().mockResolvedValue({ exists: false }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
+
+    await leadsHandler(req, res);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Erro ao resolver UID por e-mail'),
+      expect.any(Error)
+    );
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'PARTICIPANT_NOT_FOUND'
+      })
+    );
+    warnSpy.mockRestore();
   });
 
   it('grava lead, calcula faixa etária e credita +50 pontos na primeira visita (HTTP 201)', async () => {
@@ -593,6 +770,121 @@ describe('GET /api/leads handler', () => {
       })
     );
   });
+
+  it('aplica limit e orderBy createdAt desc na busca e retorna metadados de paginação (ERR-075)', async () => {
+    const { getLeadsHandler } = await import('./leads');
+    const req = {
+      body: {},
+      user: { uid: 'sponsor-1', role: 'SPONSOR', email: 'contato@kanastra.com.br' },
+      query: { limit: '25' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    const mockOrderBy = vi.fn();
+    const mockLimit = vi.fn();
+
+    (db.collection as any).mockImplementation((colName: string) => {
+      if (colName === 'users') {
+        return {
+          doc: () => ({
+            get: () => Promise.resolve({
+              exists: true,
+              data: () => ({ companyId: 'kanastra' })
+            })
+          })
+        };
+      }
+      if (colName === 'leads' || colName === 'company_leads') {
+        return {
+          doc: () => ({
+            collection: () => {
+              const queryObj: any = {
+                orderBy: mockOrderBy.mockImplementation(() => queryObj),
+                limit: mockLimit.mockImplementation(() => queryObj),
+                get: () => Promise.resolve({
+                  docs: [
+                    { id: 'part-1', data: () => ({ name: 'Aluno 1' }) },
+                    { id: 'part-2', data: () => ({ name: 'Aluno 2' }) }
+                  ]
+                })
+              };
+              return queryObj;
+            }
+          })
+        };
+      }
+      return { doc: () => ({ get: () => Promise.resolve({ exists: false }) }) };
+    });
+
+    await getLeadsHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(mockOrderBy).toHaveBeenCalledWith('createdAt', 'desc');
+    expect(mockLimit).toHaveBeenCalledWith(25);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        pagination: {
+          limit: 25,
+          totalReturned: 2
+        }
+      })
+    );
+  });
+
+  it('aplica teto máximo de 100 itens e fallback de 50 para limit ausente ou inválido (ERR-075)', async () => {
+    const { getLeadsHandler } = await import('./leads');
+    const mockLimit = vi.fn();
+
+    (db.collection as any).mockImplementation((colName: string) => {
+      if (colName === 'users') {
+        return {
+          doc: () => ({
+            get: () => Promise.resolve({
+              exists: true,
+              data: () => ({ companyId: 'kanastra' })
+            })
+          })
+        };
+      }
+      if (colName === 'leads') {
+        return {
+          doc: () => ({
+            collection: () => {
+              const queryObj: any = {
+                orderBy: vi.fn().mockImplementation(() => queryObj),
+                limit: mockLimit.mockImplementation(() => queryObj),
+                get: () => Promise.resolve({ docs: [] })
+              };
+              return queryObj;
+            }
+          })
+        };
+      }
+      return { doc: () => ({ collection: () => ({ get: () => Promise.resolve({ docs: [] }) }) }) };
+    });
+
+    // Caso 1: limit acima de 100 deve ser limitado a 100
+    const reqOverLimit = {
+      body: {},
+      user: { uid: 'sponsor-1', role: 'SPONSOR', email: 'contato@kanastra.com.br' },
+      query: { limit: '500' }
+    } as unknown as Request;
+    const resOver = makeRes();
+    await getLeadsHandler(reqOverLimit, resOver);
+    expect(mockLimit).toHaveBeenCalledWith(100);
+
+    // Caso 2: limit ausente/inválido deve ser 50
+    mockLimit.mockClear();
+    const reqDefault = {
+      body: {},
+      user: { uid: 'sponsor-1', role: 'SPONSOR', email: 'contato@kanastra.com.br' },
+      query: { limit: 'invalido' }
+    } as unknown as Request;
+    const resDefault = makeRes();
+    await getLeadsHandler(reqDefault, resDefault);
+    expect(mockLimit).toHaveBeenCalledWith(50);
+  });
 });
 
 describe('PATCH /api/leads/:participantUid handler', () => {
@@ -658,31 +950,36 @@ describe('PATCH /api/leads/:participantUid handler', () => {
   });
 });
 
-describe('leads route middleware configuration', () => {
-  it('registra a rota POST / com middleware de autenticação e papel restrito', () => {
+describe('leads route middleware configuration (ERR-076)', () => {
+  it('registra a rota POST / com middleware de autenticação, rate limiter e papel restrito', () => {
     const postRoute = (router as unknown as { stack: any[] }).stack.find(
       (layer) => layer.route?.path === '/' && layer.route?.methods?.post
     );
     expect(postRoute).toBeDefined();
-    expect(postRoute.route.stack.length).toBeGreaterThanOrEqual(4); // requireAuth, requireRole, requireVerifiedEmail, leadsHandler
+    expect(postRoute.route.stack.length).toBeGreaterThanOrEqual(5); // requireAuth, requireRole, adminSponsorLimiter, requireVerifiedEmail, leadsHandler
     const handles = postRoute.route.stack.map((l: any) => l.handle);
     expect(handles).toContain(requireVerifiedEmail);
+    expect(handles).toContain(adminSponsorLimiter);
   });
 
-  it('registra a rota GET / com middleware de autenticação e papel restrito', () => {
+  it('registra a rota GET / com middleware de autenticação, rate limiter e papel restrito', () => {
     const getRoute = (router as unknown as { stack: any[] }).stack.find(
       (layer) => layer.route?.path === '/' && layer.route?.methods?.get
     );
     expect(getRoute).toBeDefined();
-    expect(getRoute.route.stack.length).toBeGreaterThanOrEqual(3);
+    expect(getRoute.route.stack.length).toBeGreaterThanOrEqual(4); // requireAuth, requireRole, adminSponsorLimiter, getLeadsHandler
+    const handles = getRoute.route.stack.map((l: any) => l.handle);
+    expect(handles).toContain(adminSponsorLimiter);
   });
 
-  it('registra a rota PATCH /:participantUid com middleware de autenticação e papel restrito', () => {
+  it('registra a rota PATCH /:participantUid com middleware de autenticação, rate limiter e papel restrito', () => {
     const patchRoute = (router as unknown as { stack: any[] }).stack.find(
       (layer) => layer.route?.path === '/:participantUid' && layer.route?.methods?.patch
     );
     expect(patchRoute).toBeDefined();
-    expect(patchRoute.route.stack.length).toBeGreaterThanOrEqual(3);
+    expect(patchRoute.route.stack.length).toBeGreaterThanOrEqual(4); // requireAuth, requireRole, adminSponsorLimiter, updateLeadHandler
+    const handles = patchRoute.route.stack.map((l: any) => l.handle);
+    expect(handles).toContain(adminSponsorLimiter);
   });
 });
 
