@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { 
   createUserProfile, 
   getUserProfile, 
@@ -9,7 +9,12 @@ import {
   syncUserEmailWithAuth,
   getLeaderboardUsers,
   subscribeToLeaderboardUsers,
-  updateUserRoleInFirestore
+  updateUserRoleInFirestore,
+  checkUsernameAvailability,
+  findUserByUsername,
+  getUserPointEvents,
+  subscribeToAllUsers,
+  getCachedUserProfile
 } from './userService';
 import { apiRequest } from './api';
 import { doc, setDoc, getDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot, deleteField } from 'firebase/firestore';
@@ -478,6 +483,283 @@ describe('userService', () => {
       apiRequest.mockRejectedValue(Object.assign(new Error('FORBIDDEN'), { data: { message: 'Sem permissão.' } }));
       const res = await updateUserRoleInFirestore('u1', 'STAFF');
       expect(res).toEqual({ success: false, error: 'Sem permissão.' });
+    });
+  });
+
+  describe('checkUsernameAvailability', () => {
+    it('retorna indisponível para usernames vazios, não-strings ou inválidos', async () => {
+      expect(await checkUsernameAvailability(null)).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability(undefined)).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability('')).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability(123)).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability('ab')).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability('a'.repeat(21))).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability('user name com espaco')).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability('user#symbol!')).toEqual({ available: false, existingUser: null });
+    });
+
+    it('remove arroba inicial e normaliza antes de verificar', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({ empty: true, docs: [] });
+
+      const res = await checkUsernameAvailability('@Dev_User.123');
+      expect(where).toHaveBeenCalledWith('username', '==', 'dev_user.123');
+      expect(res).toEqual({ available: true, existingUser: null });
+    });
+
+    it('retorna available: false e dados do existingUser quando encontrado', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              displayName: 'Erick Dev',
+              avatarUrl: 'https://cdn.example.com/erick.png'
+            })
+          }
+        ]
+      });
+
+      const res = await checkUsernameAvailability('erick_dev');
+      expect(res.available).toBe(false);
+      expect(res.existingUser).toEqual({
+        name: 'Erick Dev',
+        avatarUrl: 'https://cdn.example.com/erick.png'
+      });
+    });
+
+    it('formata existingUser usando firstName/lastName e photoURL como fallback', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              firstName: 'Carlos',
+              lastName: 'Silva',
+              photoURL: 'https://cdn.example.com/photo.png'
+            })
+          }
+        ]
+      });
+
+      const res = await checkUsernameAvailability('carlos.silva');
+      expect(res.available).toBe(false);
+      expect(res.existingUser).toEqual({
+        name: 'Carlos Silva',
+        avatarUrl: 'https://cdn.example.com/photo.png'
+      });
+    });
+
+    it('retorna available: true quando o username não existe no Firestore', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({ empty: true, docs: [] });
+      const res = await checkUsernameAvailability('novo_usuario');
+      expect(res).toEqual({ available: true, existingUser: null });
+    });
+
+    it('retorna available: true em caso de exceção no Firestore', async () => {
+      vi.mocked(getDocs).mockRejectedValueOnce(new Error('Network error'));
+      const res = await checkUsernameAvailability('usuario_offline');
+      expect(res).toEqual({ available: true, existingUser: null });
+    });
+  });
+
+  describe('findUserByUsername', () => {
+    it('retorna null se username não for informado', async () => {
+      expect(await findUserByUsername(null)).toBeNull();
+      expect(await findUserByUsername('')).toBeNull();
+      expect(await findUserByUsername(undefined)).toBeNull();
+    });
+
+    it('retorna null se usuário não for encontrado', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({ empty: true, docs: [] });
+      const res = await findUserByUsername('desconhecido');
+      expect(res).toBeNull();
+    });
+
+    it('retorna dados do usuário quando encontrado', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        empty: false,
+        docs: [{ id: 'user-77', data: () => ({ username: 'lucas', email: 'lucas@exemplo.com' }) }]
+      });
+
+      const res = await findUserByUsername('Lucas ');
+      expect(where).toHaveBeenCalledWith('username', '==', 'lucas');
+      expect(res).toEqual({ id: 'user-77', username: 'lucas', email: 'lucas@exemplo.com' });
+    });
+  });
+
+  describe('getUserPointEvents', () => {
+    it('retorna array vazio quando uid não for informado', async () => {
+      expect(await getUserPointEvents(null)).toEqual([]);
+      expect(await getUserPointEvents('')).toEqual([]);
+    });
+
+    it('retorna lista de eventos de pontuação quando encontrados', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        docs: [
+          { id: 'evt-1', data: () => ({ type: 'PRESENCE', points: 10 }) },
+          { id: 'evt-2', data: () => ({ type: 'BONUS', points: 5 }) }
+        ]
+      });
+
+      const res = await getUserPointEvents('user-123');
+      expect(res).toEqual([
+        { id: 'evt-1', type: 'PRESENCE', points: 10 },
+        { id: 'evt-2', type: 'BONUS', points: 5 }
+      ]);
+    });
+
+    it('retorna array vazio silenciosamente em caso de permission-denied', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const permErr = new Error('Permission denied');
+      permErr.code = 'permission-denied';
+      vi.mocked(getDocs).mockRejectedValueOnce(permErr);
+
+      const res = await getUserPointEvents('user-123');
+      expect(res).toEqual([]);
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('retorna array vazio e loga aviso em caso de outros erros', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.mocked(getDocs).mockRejectedValueOnce(new Error('Internal Firestore Error'));
+
+      const res = await getUserPointEvents('user-123');
+      expect(res).toEqual([]);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('subscribeToAllUsers', () => {
+    it('notifica callback com lista de usuários no snapshot', () => {
+      const mockUnsub = vi.fn();
+      let successCb;
+
+      vi.mocked(onSnapshot).mockImplementationOnce((_ref, onNext) => {
+        successCb = onNext;
+        return mockUnsub;
+      });
+
+      const cb = vi.fn();
+      const unsub = subscribeToAllUsers(cb);
+
+      successCb({
+        docs: [
+          { id: 'u1', data: () => ({ name: 'User 1', email: 'u1@ufu.br' }) },
+          { id: 'u2', data: () => ({ name: 'User 2', email: 'u2@ufu.br' }) }
+        ]
+      });
+
+      expect(cb).toHaveBeenCalledWith([
+        { id: 'u1', uid: 'u1', name: 'User 1', email: 'u1@ufu.br' },
+        { id: 'u2', uid: 'u2', name: 'User 2', email: 'u2@ufu.br' }
+      ]);
+
+      unsub();
+      expect(mockUnsub).toHaveBeenCalled();
+    });
+
+    it('em caso de erro, recorre a perfis armazenados em localStorage', () => {
+      const mockStorage = {
+        'facom_profile_u1': JSON.stringify({ id: 'u1', name: 'User Cache' }),
+        'other_key': 'not_profile'
+      };
+      const storageKeys = Object.keys(mockStorage);
+      const fakeLocalStorage = {
+        length: storageKeys.length,
+        key: (idx) => storageKeys[idx] || null,
+        getItem: (k) => mockStorage[k] || null
+      };
+
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      let errorCb;
+      vi.mocked(onSnapshot).mockImplementationOnce((_ref, _onNext, onError) => {
+        errorCb = onError;
+        return vi.fn();
+      });
+
+      const cb = vi.fn();
+      subscribeToAllUsers(cb);
+
+      errorCb(new Error('Network disconnected'));
+
+      expect(cb).toHaveBeenCalledWith([
+        { id: 'u1', name: 'User Cache' }
+      ]);
+
+      warnSpy.mockRestore();
+      vi.unstubAllGlobals();
+    });
+  });
+
+  describe('getCachedUserProfile', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('retorna perfil do localStorage para o UID fornecido', () => {
+      const fakeLocalStorage = {
+        getItem: vi.fn((k) => k === 'facom_profile_user-99' ? JSON.stringify({ uid: 'user-99', name: 'Lucas', email: 'lucas@exemplo.com' }) : null)
+      };
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+
+      const profile = getCachedUserProfile('user-99');
+      expect(profile).toEqual({ uid: 'user-99', name: 'Lucas', email: 'lucas@exemplo.com' });
+      expect(fakeLocalStorage.getItem).toHaveBeenCalledWith('facom_profile_user-99');
+    });
+
+    it('eleva perfil para ADMIN quando o email pertence a ADMIN_EMAILS', () => {
+      const fakeLocalStorage = {
+        getItem: vi.fn((k) => k === 'facom_profile_admin-1' ? JSON.stringify({ uid: 'admin-1', email: 'sam03amorim@gmail.com', role: 'PARTICIPANT' }) : null)
+      };
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+
+      const profile = getCachedUserProfile('admin-1');
+      expect(profile.role).toBe('ADMIN');
+      expect(profile.participantType).toBe('Organizador');
+    });
+
+    it('usa auth.currentUser.uid quando uid não for informado', () => {
+      const fakeLocalStorage = {
+        getItem: vi.fn((k) => k === 'facom_profile_user-123' ? JSON.stringify({ uid: 'user-123', name: 'Atual' }) : null)
+      };
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+
+      const profile = getCachedUserProfile();
+      expect(profile).toEqual({ uid: 'user-123', name: 'Atual' });
+      expect(fakeLocalStorage.getItem).toHaveBeenCalledWith('facom_profile_user-123');
+    });
+
+    it('faz fallback procurando qualquer chave facom_profile_* quando o uid específico não existir', () => {
+      const mockStorage = {
+        'other_key': 'abc',
+        'facom_profile_fallback': JSON.stringify({ uid: 'fallback', name: 'Fallback User', email: 'fb@ufu.br' })
+      };
+      const keys = Object.keys(mockStorage);
+      const fakeLocalStorage = {
+        length: keys.length,
+        key: (idx) => keys[idx] || null,
+        getItem: (k) => mockStorage[k] || null
+      };
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+
+      const profile = getCachedUserProfile('uid_inexistente');
+      expect(profile).toMatchObject({ uid: 'fallback', name: 'Fallback User' });
+    });
+
+    it('retorna null se nada for encontrado ou se o json for inválido', () => {
+      const fakeLocalStorage = {
+        length: 1,
+        key: () => 'facom_profile_broken',
+        getItem: () => 'invalid-json{'
+      };
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+
+      const profile = getCachedUserProfile('uid_inexistente');
+      expect(profile).toBeNull();
     });
   });
 });

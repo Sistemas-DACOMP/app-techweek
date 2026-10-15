@@ -690,6 +690,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Nenhuma dessas 5 funções é importada ou testada em `src/lib/userService.test.js`.
 - **Causa provável:** O arquivo de testes foi expandido incrementalmente durante migrações pontuais (KAN-69, KAN-116, KAN-55, KAN-120), deixando as funções auxiliares e administrativas mais antigas sem testes unitários.
 - **Sugestão de correção:** Expandir `userService.test.js` com novos blocos `describe` mockando os retornos do Firestore e `localStorage` para testar cada uma dessas 5 funções, incluindo cenários felizes, listas vazias e tratamento de erros/permissões.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/lib/userService.test.js`, importadas as 5 funções (`checkUsernameAvailability`, `findUserByUsername`, `getUserPointEvents`, `subscribeToAllUsers`, `getCachedUserProfile`) e adicionados blocos `describe` cobrindo todas as validações de input, queries do Firestore, tratamento de snapshots em tempo real, fallbacks de erro/permissões e persistência/promoção de privilégios em `localStorage`.
+- **Verificação:** Executado `npx vitest run src/lib/userService.test.js`, passando 46/46 testes unitários.
 
 ---
 
@@ -721,6 +724,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O autor do teste pretendia validar a regra antes de integrá-la ou não desacoplou a função de filtro de palestrantes do componente React em um arquivo utilitário puro em `src/lib/` ou `src/pages/admin/`.
 - **Sugestão de correção:** Extrair a função de filtro de palestrantes do componente React para uma função pura (ex: `filterSpeakers(speakers, search, classification)`) em módulo auxiliar e refatorar o teste para importar e testar essa função real.
+- **Status:** Corrigido
+- **Correção aplicada:** A lógica de filtro foi extraída para uma função pura reutilizável `filterSpeakers(speakers, search, classification)` em `src/lib/activityService.js`, adotada pelo componente de produção `src/pages/Admin.jsx`, e testada diretamente em `tests/unit/adminSpeakersFilter.test.js` eliminando a implementação tautológica anterior.
+- **Verificação:** Executado `npx vitest run tests/unit/adminSpeakersFilter.test.js`, passando 10/10 testes.
 
 ---
 
@@ -738,6 +744,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O arquivo de teste importou dados estáticos de um módulo que possui efeitos colaterais de inicialização de rede sem mocká-los.
 - **Sugestão de correção:** Adicionar `vi.mock('../../src/lib/firebase', () => ({ db: {}, auth: {} }));` no topo do arquivo ou mover constantes puras como `DEFAULT_SPEAKERS` para um módulo de constantes sem dependências de infraestrutura Firebase.
+- **Status:** Corrigido
+- **Correção aplicada:** Adicionado `vi.mock('../../src/lib/firebase', () => ({ db: {}, auth: {} }))` no topo de `tests/unit/adminSpeakersFilter.test.js`, isolando a suíte de rede e emuladores do Firebase.
+- **Verificação:** Executado `npx vitest run tests/unit/adminSpeakersFilter.test.js` com zero logs de conexão de emuladores.
 
 ---
 
@@ -756,6 +765,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   `onConfirm` e `onCancel` são passados como callbacks vazios `() => {}` e seus disparos nunca são verificados via `fireEvent` ou `userEvent`.
 - **Causa provável:** O autor optou por `renderToStaticMarkup` para evitar a configuração de ambiente de DOM (JSDOM/Happy-DOM) e dependências de `@testing-library/react`.
 - **Sugestão de correção:** Migrar os testes do componente para `@testing-library/react` (com ambiente JSDOM ou Happy-DOM) simulando cliques nos botões de ação e digitação nos campos de confirmação textual e senha para testar o ciclo interativo completo.
+- **Status:** Corrigido
+- **Correção aplicada:** A suíte de testes de `ConfirmModal` em `tests/unit/confirmModal.test.js` foi migrada para `@testing-library/react` em ambiente `happy-dom`, substituindo as asserções estáticas por testes interativos reais cobrindo cliques em confirmar/cancelar/fechar, tecla Escape, clique no backdrop, habilitação condicionada por digitação de texto (`requireConfirmationText`), habilitação condicionada por senha (`requirePassword`) e bloqueio durante estado de `isLoading`.
+- **Verificação:** Executado `npx vitest run tests/unit/confirmModal.test.js`, passando 15/15 testes interativos.
 
 ---
 

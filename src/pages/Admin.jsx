@@ -68,7 +68,8 @@ import {
   DEFAULT_SPEAKERS,
   subscribeToLocations,
   createLocation,
-  DEFAULT_LOCATIONS
+  DEFAULT_LOCATIONS,
+  filterSpeakers
 } from '../lib/activityService';
 import { 
   subscribeToFeedPosts, 
@@ -1181,13 +1182,7 @@ export default function Admin() {
 
   // Filtros de Palestrantes & Convidados
   const filteredSpeakers = useMemo(() => {
-    return (speakers || []).filter((spk) => {
-      const matchText = (spk.name || '').toLowerCase().includes((speakerSearch || '').toLowerCase()) ||
-                        (spk.institution || '').toLowerCase().includes((speakerSearch || '').toLowerCase()) ||
-                        (spk.role || '').toLowerCase().includes((speakerSearch || '').toLowerCase());
-      const matchClass = speakerClassificationFilter === 'ALL' || spk.classification === speakerClassificationFilter;
-      return matchText && matchClass;
-    });
+    return filterSpeakers(speakers, speakerSearch, speakerClassificationFilter);
   }, [speakers, speakerSearch, speakerClassificationFilter]);
 
   // Filtros de Missões & Desafios (KAN-106)

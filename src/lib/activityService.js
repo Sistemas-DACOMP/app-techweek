@@ -1018,6 +1018,25 @@ export function subscribeToSpeakers(callback) {
 }
 
 /**
+ * Filtra palestrantes/convidados por texto de busca e classificação.
+ * @param {Array} speakers - Lista de palestrantes
+ * @param {string} search - Termo de busca (nome, instituição ou cargo)
+ * @param {string} classification - Classificação ('ALL' ou categoria específica)
+ * @returns {Array} Lista filtrada de palestrantes
+ */
+export function filterSpeakers(speakers, search = '', classification = 'ALL') {
+  const query = (search || '').trim().toLowerCase();
+  return (speakers || []).filter((spk) => {
+    const matchText = !query ||
+      (spk.name || '').toLowerCase().includes(query) ||
+      (spk.institution || '').toLowerCase().includes(query) ||
+      (spk.role || '').toLowerCase().includes(query);
+    const matchClass = !classification || classification === 'ALL' || spk.classification === classification;
+    return matchText && matchClass;
+  });
+}
+
+/**
  * Cria ou atualiza um convidado no Firestore.
  */
 export async function createSpeaker(speakerData) {
