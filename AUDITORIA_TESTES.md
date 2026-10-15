@@ -1048,6 +1048,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O autor do teste mockou apenas o que impedia a renderização estática e não isolou os módulos de dados importados no nível de componente.
 - **Sugestão de correção:** Adicionar `vi.mock('../../src/lib/sponsorService', () => ({ submitLead: vi.fn(), updateLead: vi.fn() }))` e `vi.mock('../../src/lib/sponsorSettingsService', () => ({ getSponsorSettings: vi.fn().mockResolvedValue({}), getActiveOutreachMessage: vi.fn() }))` no topo do arquivo de teste.
+- **Status:** Corrigido
+- **Correção aplicada:** Adicionados mocks explícitos de `../../src/lib/firebase`, `../../src/lib/sponsorService` (`submitLead`, `updateLead`) e `../../src/lib/sponsorSettingsService` (`getSponsorSettings`, `getActiveOutreachMessage`) no topo de `tests/unit/sponsorLeadModal.test.js`, isolando completamente o componente da inicialização dos emuladores do Firebase.
+- **Verificação:** Executado `npx vitest run tests/unit/sponsorLeadModal.test.js`, sem logs de conexão aos emuladores do Firebase e passando 20/20 testes (5x estável).
 
 ---
 
@@ -1066,6 +1069,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Não há uso de `@testing-library/react`, `fireEvent`, `userEvent` ou asserções contra chamadas a `submitLead` ou `updateLead`.
 - **Causa provável:** O autor optou por `renderToStaticMarkup` para validar unicamente a adesão estética e estrutural das "5 Melhorias de UX/UI" (design system e layout responsivo), omitindo a cobertura dos fluxos de negócio do componente.
 - **Sugestão de correção:** Migrar os testes principais para `@testing-library/react`, simulando cliques de seleção de estrelas, seleção de chips rápidos, digitação no campo de notas e clique em "Salvar Lead", validando o payload transmitido para `submitLead` / `updateLead`.
+- **Status:** Corrigido
+- **Correção aplicada:** Adicionada a suíte `describe('7. Interações Reais do Usuário — Qualificação, Chips, Notas e Persistência (ERR-041)')` em `tests/unit/sponsorLeadModal.test.js` com `@testing-library/react` (`happy-dom`), cobrindo: seleção de estrelas (1 a 5), alternância de chips rápidos (`Frontend`, `Estágio`, `Destaque`), digitação de anotação livre, submissão via `"Salvar Lead"` (`submitLead` + `onLeadCaptured`), ação `"Somente Validar"` (`submitLead` com `validateOnly: true` + `onValidateOnly` + `onClose`), edição de lead existente no CRM (`isExistingLead: true`, `"Editar Avaliação"`, atualização de nota/tags e `"Salvar Alterações"` via `updateLead` + `onLeadUpdated`) e exibição de erro quando `submitLead` falha.
+- **Verificação:** Executado `npx vitest run tests/unit/sponsorLeadModal.test.js`, passando 20/20 testes (5x estável).
 
 ---
 
@@ -1085,6 +1091,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Falta de mock explícito de `./firebase` e ausência de `vi.spyOn(console, 'error').mockImplementation(() => {})` nos testes de fallback offline.
 - **Sugestão de correção:** Adicionar `vi.mock('../../src/lib/firebase', () => ({ auth: {}, db: {} }))` e silenciar os erros esperados do console durante os testes de fallback de resiliência.
+- **Status:** Corrigido
+- **Correção aplicada:** Adicionado `vi.mock('../../src/lib/firebase', ...)` no topo de `tests/unit/sponsorRoiAndTags.test.js` e adicionado `vi.spyOn(console, 'warn').mockImplementation(() => {})` (com asserção `expect(warnSpy).toHaveBeenCalled()` e `mockRestore()` no `finally`) nos testes de fallback offline de `submitLead` e `fetchLeads`.
+- **Verificação:** Executado `npx vitest run tests/unit/sponsorRoiAndTags.test.js`, sem logs espúrios de emuladores ou `stderr` e passando 12/12 testes (5x estável).
 
 ---
 
@@ -1107,6 +1116,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O desenvolvedor quis garantir que as regras de CSS para impressão em PDF do relatório de ROI não fossem removidas acidentalmente, mas usou inspeção textual rígida em vez de testes de renderização ou testes visuais/E2E.
 - **Sugestão de correção:** Mover validações de impressão para testes de integração ou E2E (Playwright) ou, se mantidos como testes estáticos de sanidade, usar expressões regulares flexíveis em vez de substrings exatas com classes CSS encadeadas.
+- **Status:** Corrigido
+- **Correção aplicada:** Substituídas as asserções estáticas frágeis de `fs.readFileSync` sobre `.jsx` em `tests/unit/sponsorRoiAndTags.test.js` por testes reais de renderização e interação do componente `SponsorRoiDashboard` com `@testing-library/react` (verificando o cabeçalho oficial de impressão `.print:flex`, botões de ação `.print:hidden`, alternância de abas de escopo `"Toda a Empresa"` vs `"Meus Leads"`, disparo de `window.print()` e chamada de `onExportCsv(leads, 'company')`), além de validação com expressões regulares flexíveis para a regra `@media print` e `print-color-adjust: exact` em `src/index.css`.
+- **Verificação:** Executado `npx vitest run tests/unit/sponsorRoiAndTags.test.js`, passando 12/12 testes (5x estável).
 
 ---
 
