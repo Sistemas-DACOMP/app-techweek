@@ -794,6 +794,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O teste foi escrito como um placeholder de renderização visual estática durante a implementação da issue KAN-116 sem avançar para os testes de comportamento.
 - **Sugestão de correção:** Reescrever a suíte usando `@testing-library/react` e `vi.useFakeTimers()`, testando os disparos de clique dos 3 botões, o cooldown de 60 segundos após o reenvio e a resolução da verificação disparando a prop `onVerified`.
+- **Status:** Corrigido
+- **Correção aplicada:** A suíte em `tests/unit/emailVerificationGate.test.js` foi migrada para `@testing-library/react` e `happy-dom` (com mock de `../../src/lib/firebase`), cobrindo verificação manual (`reloadUser` não verificado, verificado disparando `onVerified` após 800ms e erro de rede), auto-checagem em `window.focus`, reenvio de e-mail com contagem regressiva de cooldown de 60 segundos (`vi.useFakeTimers`), modal interativo de correção de e-mail (`requestEmailCorrection`, validação de e-mail idêntico, fechamento via Cancelar/Escape) e acionamento de `logout`.
+- **Verificação:** Executado `npx vitest run tests/unit/emailVerificationGate.test.js`, passando 15/15 testes.
 
 ---
 
@@ -815,6 +818,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O teste unitário foi modelado apenas para o fluxo de UIDs resolvidos diretamente, e os arquivos de rota/teste foram salvos ou convertidos com encoding ISO-8859-1/ASCII em vez de UTF-8.
 - **Sugestão de correção:** Adicionar casos de teste cobrindo a resolução de e-mails (`user@facom.ufu.br`, `mailto:...`) e usernames (`@erick`), mockando `db.collection('users').where().get()`, e corrigir a codificação de caracteres acentuados nos arquivos de rota e testes.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `backend/src/routes/entrance.ts`, restaurada a codificação UTF-8 das mensagens de erro e corrigida a ordem de avaliação para checar `resolvedUid.startsWith('@')` antes de `resolvedUid.includes('@')` (evitando que `@username` caísse na busca por e-mail). Em `tests/unit/entranceCheckin.test.js`, atualizadas as mensagens UTF-8 e adicionados testes cobrindo `req.body.uid`, resolução por e-mail (`mailto:`, lowercase e fallback case-sensitive) e resolução por `@username`.
+- **Verificação:** Executado `npx vitest run tests/unit/entranceCheckin.test.js`, passando 26/26 testes.
 
 ---
 
@@ -833,6 +839,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   `exportUfuAuditCsv` sequer é importada em `tests/unit/liveOpsService.test.js`.
 - **Causa provável:** O autor não implementou o mock do DOM (`Blob`, `URL.createObjectURL`, `document.createElement('a')`, `click`) e omitiu o teste de geração de CSV.
 - **Sugestão de correção:** Criar teste unitário mockando `URL.createObjectURL`, `URL.revokeObjectURL` e o elemento `<a>` para verificar a formatação dos cabeçalhos, separadores e conteúdo do CSV gerado.
+- **Status:** Corrigido
+- **Correção aplicada:** Adicionados testes unitários para `exportUfuAuditCsv` em `tests/unit/liveOpsService.test.js` validando retorno seguro para entradas vazias/inválidas, geração do `Blob` CSV com cabeçalhos, separador `;`, escape de aspas duplas, status de homologação (`HOMOLOGADO`/`PENDENTE`), acionamento de download via elemento `<a>` e revogação com `URL.revokeObjectURL` (com restauração limpa em `afterEach`).
+- **Verificação:** Executado `npx vitest run tests/unit/liveOpsService.test.js`, passando 17/17 testes.
 
 ---
 
@@ -852,6 +861,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O teste foi desenhado apenas como uma checagem de conformidade estética inicial de cores de gradiente e tokens de tamanho conforme `DESIGN.md §8`.
 - **Sugestão de correção:** Expandir os testes para validar a renderização condicional dos braços e olhos do mascote para cada mood (`coveringEyes`, `peeking`, `sad`, `error`) e o posicionamento das pupilas com valores normais e extremos de `lookOffset` e `lookOffsetY`.
+- **Status:** Corrigido
+- **Correção aplicada:** Migrada e expandida a suíte `tests/unit/mascot.test.js` para `@testing-library/react` em ambiente `happy-dom`, cobrindo estados do braço direito (`isWaving`, `mood="waving"`, `mood="happy"` vs neutro), cobertura de olhos (`isCoveringEyes`, `coveringEyes`, `sad`, `error`), estado de espiar (`isCoveringEyes + isPeeking`) e deslocamento das pupilas/brilhos com clamping entre `-8` e `+8` para `lookOffset` e `lookOffsetY`.
+- **Verificação:** Executado `npx vitest run tests/unit/mascot.test.js`, passando 7/7 testes.
 
 ---
 

@@ -1,8 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+// @vitest-environment happy-dom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import EmailVerificationGate, { validateEmailCorrection } from '../../src/components/EmailVerificationGate';
 import { mapUpdateEmailError, requestEmailCorrection } from '../../src/lib/auth';
+
+vi.mock('../../src/lib/firebase', () => ({
+  auth: {},
+  db: {},
+  storage: {}
+}));
 
 const mockReloadUser = vi.fn();
 const mockResendVerification = vi.fn();
@@ -38,80 +45,232 @@ describe('EmailVerificationGate (KAN-116)', () => {
     vi.clearAllMocks();
   });
 
-  describe('1. Renderização da Tela Principal', () => {
-    it('renderiza o e-mail do participante, ações manuais, botão de reenvio, logout e botão de correção de e-mail', () => {
-      const html = renderToStaticMarkup(
-        React.createElement(EmailVerificationGate, { onVerified: vi.fn() })
-      );
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
-      // E-mail do participante autenticado
-      expect(html).toContain('participante.facom@ufu.br');
+  describe('1. Renderização e Ações Principais do Gate', () => {
+    it('renderiza o e-mail do participante, botões de ação e mantém modal fechado por padrão', () => {
+      render(React.createElement(EmailVerificationGate, { onVerified: vi.fn() }));
 
-      // Título e mensagens instrucionais
-      expect(html).toContain('Confirme seu');
-      expect(html).toContain('e-mail');
-      expect(html).toContain('Enviamos um link de confirmação oficial para:');
+      expect(screen.getByText('participante.facom@ufu.br')).toBeTruthy();
+      expect(screen.getByText(/Enviamos um link de confirmação oficial para:/i)).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Digitou o e-mail errado\?/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Já confirmei meu e-mail/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Reenviar e-mail de confirmação/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Sair \/ Entrar com outra conta/i })).toBeTruthy();
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
 
-      // Ponto de Ação Visual (KAN-116 UX): Botão Alterar e-mail
-      expect(html).toContain('Digitou o e-mail errado?');
-      expect(html).toContain('Alterar e-mail');
+    it('exibe alerta informativo quando "Já confirmei meu e-mail" é clicado e o e-mail ainda não foi verificado', async () => {
+      mockReloadUser.mockResolvedValueOnce({ ...mockUser, emailVerified: false });
+      const onVerified = vi.fn();
 
-      // Botões de ação
-      expect(html).toContain('Já confirmei meu e-mail');
-      expect(html).toContain('Reenviar e-mail de confirmação');
-      expect(html).toContain('Sair / Entrar com outra conta');
+      render(React.createElement(EmailVerificationGate, { onVerified }));
 
-      // Modal fechado por padrão
-      expect(html).not.toContain('Corrigir endereço de e-mail');
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Já confirmei meu e-mail/i }));
+      });
+
+      expect(mockReloadUser).toHaveBeenCalledTimes(1);
+      expect(onVerified).not.toHaveBeenCalled();
+      expect(screen.getByRole('alert').textContent).toContain('Seu e-mail ainda não consta como verificado.');
+    });
+
+    it('exibe sucesso e dispara onVerified após 800ms quando "Já confirmei meu e-mail" confirma verificação', async () => {
+      vi.useFakeTimers();
+      mockReloadUser.mockResolvedValueOnce({ ...mockUser, emailVerified: true });
+      const onVerified = vi.fn();
+
+      render(React.createElement(EmailVerificationGate, { onVerified }));
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Já confirmei meu e-mail/i }));
+      });
+
+      expect(mockReloadUser).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('alert').textContent).toContain('E-mail confirmado com sucesso! Redirecionando...');
+      expect(onVerified).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(800);
+      });
+
+      expect(onVerified).toHaveBeenCalledTimes(1);
+    });
+
+    it('exibe mensagem de erro quando reloadUser falha na verificação manual', async () => {
+      mockReloadUser.mockRejectedValueOnce(new Error('Network error'));
+      const onVerified = vi.fn();
+
+      render(React.createElement(EmailVerificationGate, { onVerified }));
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Já confirmei meu e-mail/i }));
+      });
+
+      expect(mockReloadUser).toHaveBeenCalledTimes(1);
+      expect(onVerified).not.toHaveBeenCalled();
+      expect(screen.getByRole('alert').textContent).toContain('Erro ao verificar o status da conta.');
+    });
+
+    it('verifica automaticamente ao focar na janela (window.focus) e dispara onVerified se confirmado', async () => {
+      vi.useFakeTimers();
+      mockReloadUser.mockResolvedValueOnce({ ...mockUser, emailVerified: true });
+      const onVerified = vi.fn();
+
+      render(React.createElement(EmailVerificationGate, { onVerified }));
+
+      await act(async () => {
+        window.dispatchEvent(new Event('focus'));
+      });
+
+      expect(mockReloadUser).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('alert').textContent).toContain('E-mail confirmado com sucesso! Redirecionando...');
+
+      act(() => {
+        vi.advanceTimersByTime(800);
+      });
+
+      expect(onVerified).toHaveBeenCalledTimes(1);
+    });
+
+    it('reenvia e-mail de confirmação, inicia cooldown de 60 segundos e reabilita botão ao final', async () => {
+      vi.useFakeTimers();
+      mockResendVerification.mockResolvedValueOnce({
+        success: true,
+        message: 'E-mail de confirmação reenviado com sucesso!'
+      });
+
+      render(React.createElement(EmailVerificationGate, { onVerified: vi.fn() }));
+
+      const resendBtn = screen.getByRole('button', { name: /Reenviar e-mail de confirmação/i });
+      expect(resendBtn.disabled).toBe(false);
+
+      await act(async () => {
+        fireEvent.click(resendBtn);
+      });
+
+      expect(mockResendVerification).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('alert').textContent).toContain('E-mail de confirmação reenviado com sucesso!');
+
+      const cooldownBtn = screen.getByRole('button', { name: /Reenviar em 60s/i });
+      expect(cooldownBtn.disabled).toBe(true);
+
+      // Avança 1 segundo por vez para verificar a contagem regressiva
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(screen.getByRole('button', { name: /Reenviar em 59s/i }).disabled).toBe(true);
+
+      // Avança os 59 segundos restantes
+      for (let i = 0; i < 59; i++) {
+        act(() => {
+          vi.advanceTimersByTime(1000);
+        });
+      }
+
+      const enabledAgainBtn = screen.getByRole('button', { name: /Reenviar e-mail de confirmação/i });
+      expect(enabledAgainBtn.disabled).toBe(false);
+    });
+
+    it('exibe erro sem ativar cooldown quando resendVerification retorna falha', async () => {
+      mockResendVerification.mockResolvedValueOnce({
+        success: false,
+        error: 'Limite de envios excedido.'
+      });
+
+      render(React.createElement(EmailVerificationGate, { onVerified: vi.fn() }));
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Reenviar e-mail de confirmação/i }));
+      });
+
+      expect(mockResendVerification).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('alert').textContent).toContain('Limite de envios excedido.');
+      expect(screen.getByRole('button', { name: /Reenviar e-mail de confirmação/i }).disabled).toBe(false);
+    });
+
+    it('aciona logout ao clicar em "Sair / Entrar com outra conta"', async () => {
+      mockLogout.mockResolvedValueOnce(undefined);
+
+      render(React.createElement(EmailVerificationGate, { onVerified: vi.fn() }));
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Sair \/ Entrar com outra conta/i }));
+      });
+
+      expect(mockLogout).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('2. Modal de Correção de E-mail', () => {
-    it('renderiza o modal completo quando aberto (acessibilidade, campos e botões)', () => {
-      const html = renderToStaticMarkup(
-        React.createElement(EmailVerificationGate, {
-          onVerified: vi.fn(),
-          initialModalOpen: true
-        })
-      );
+  describe('2. Modal Interativo de Correção de E-mail', () => {
+    it('abre o modal ao clicar em "Alterar e-mail" e fecha ao clicar em "Cancelar" ou pressionar Escape', () => {
+      render(React.createElement(EmailVerificationGate, { onVerified: vi.fn() }));
 
-      // Acessibilidade do Modal
-      expect(html).toContain('role="dialog"');
-      expect(html).toContain('aria-modal="true"');
-      expect(html).toContain('modal-edit-email-title');
+      fireEvent.click(screen.getByRole('button', { name: /Digitou o e-mail errado\?/i }));
 
-      // Conteúdo e Instruções
-      expect(html).toContain('Corrigir endereço de e-mail');
-      expect(html).toContain('Informe o e-mail correto para onde devemos enviar o link de confirmação.');
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeTruthy();
+      expect(screen.getByText('Corrigir endereço de e-mail')).toBeTruthy();
 
-      // Campos de Entrada
-      expect(html).toContain('Novo e-mail');
-      expect(html).toContain('type="email"');
-      expect(html).toContain('Sua senha atual');
-      expect(html).toContain('type="password"');
+      // Fecha com Cancelar
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
 
-      // Botões de Ação
-      expect(html).toContain('Enviar confirmação para o novo e-mail');
-      expect(html).toContain('Cancelar');
+      // Abre novamente e fecha com Escape
+      fireEvent.click(screen.getByRole('button', { name: /Digitou o e-mail errado\?/i }));
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
     });
 
-    it('reflete o novo e-mail e exibe alerta de sucesso quando o e-mail pendente é atualizado', () => {
-      const novoEmail = 'erick.correto@ufu.br';
-      const html = renderToStaticMarkup(
-        React.createElement(EmailVerificationGate, {
-          onVerified: vi.fn(),
-          initialPendingEmail: novoEmail,
-          initialFeedback: {
-            type: 'success',
-            message: `Enviamos um novo link de confirmação para ${novoEmail}! Verifique sua caixa de entrada e spam.`
-          }
-        })
-      );
+    it('valida e barra submissão no modal se o novo e-mail for idêntico ao atual', async () => {
+      render(React.createElement(EmailVerificationGate, { onVerified: vi.fn(), initialModalOpen: true }));
 
-      // Caixa de exibição reflete o novo e-mail pendente
-      expect(html).toContain(novoEmail);
-      // Alerta de sucesso visível com o e-mail corrigido
-      expect(html).toContain(`Enviamos um novo link de confirmação para ${novoEmail}! Verifique sua caixa de entrada e spam.`);
+      const emailInput = screen.getByLabelText(/Novo e-mail/i);
+      fireEvent.change(emailInput, { target: { value: 'participante.facom@ufu.br' } });
+
+      await act(async () => {
+        fireEvent.submit(emailInput.closest('form'));
+      });
+
+      expect(requestEmailCorrection).not.toHaveBeenCalled();
+      expect(screen.getByRole('alert').textContent).toContain('O novo e-mail informado é idêntico ao atual.');
+    });
+
+    it('submete novo e-mail válido e senha para requestEmailCorrection, fecha modal e atualiza e-mail exibido', async () => {
+      requestEmailCorrection.mockResolvedValueOnce({
+        success: true,
+        newEmail: 'erick.correto@ufu.br'
+      });
+
+      render(React.createElement(EmailVerificationGate, { onVerified: vi.fn() }));
+
+      fireEvent.click(screen.getByRole('button', { name: /Digitou o e-mail errado\?/i }));
+
+      const emailInput = screen.getByLabelText(/Novo e-mail/i);
+      const passwordInput = screen.getByLabelText(/Sua senha atual/i);
+
+      fireEvent.change(emailInput, { target: { value: '  Erick.Correto@UFU.BR  ' } });
+      fireEvent.change(passwordInput, { target: { value: 'senhaSegura123' } });
+
+      await act(async () => {
+        fireEvent.submit(emailInput.closest('form'));
+      });
+
+      expect(requestEmailCorrection).toHaveBeenCalledWith(
+        mockUser,
+        'erick.correto@ufu.br',
+        'senhaSegura123'
+      );
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.getByText('erick.correto@ufu.br')).toBeTruthy();
+      expect(screen.getByRole('alert').textContent).toContain(
+        'Enviamos um novo link de confirmação para erick.correto@ufu.br!'
+      );
+      expect(screen.getByRole('button', { name: /Reenviar em 60s/i }).disabled).toBe(true);
     });
   });
 
@@ -131,7 +290,6 @@ describe('EmailVerificationGate (KAN-116)', () => {
       expect(res.valid).toBe(false);
       expect(res.error).toBe('O novo e-mail informado é idêntico ao atual.');
 
-      // Testa indiferença a maiúsculas e espaços
       const resCase = validateEmailCorrection('  PARTICIPANTE.FACOM@UFU.BR  ', 'participante.facom@ufu.br');
       expect(resCase.valid).toBe(false);
       expect(resCase.error).toBe('O novo e-mail informado é idêntico ao atual.');
@@ -145,51 +303,21 @@ describe('EmailVerificationGate (KAN-116)', () => {
   });
 
   describe('4. Tratamento Amigável de Erros (mapUpdateEmailError)', () => {
-    it('traduz auth/email-already-in-use', () => {
+    it('traduz códigos de erro do Firebase Auth ao atualizar e-mail', () => {
       expect(mapUpdateEmailError({ code: 'auth/email-already-in-use' }))
         .toBe('Este e-mail já está em uso por outra conta.');
-    });
-
-    it('traduz auth/invalid-email', () => {
       expect(mapUpdateEmailError({ code: 'auth/invalid-email' }))
         .toBe('Por favor, insira um e-mail válido.');
-    });
-
-    it('traduz auth/wrong-password e auth/invalid-credential', () => {
       expect(mapUpdateEmailError({ code: 'auth/wrong-password' }))
         .toBe('Senha incorreta. Tente novamente.');
       expect(mapUpdateEmailError({ code: 'auth/invalid-credential' }))
         .toBe('Senha incorreta. Tente novamente.');
-    });
-
-    it('traduz auth/requires-recent-login', () => {
       expect(mapUpdateEmailError({ code: 'auth/requires-recent-login' }))
         .toBe('Por segurança, informe sua senha para alterar o e-mail.');
-    });
-
-    it('traduz auth/too-many-requests', () => {
       expect(mapUpdateEmailError({ code: 'auth/too-many-requests' }))
         .toBe('Muitas tentativas seguidas. Aguarde alguns instantes.');
-    });
-
-    it('traduz auth/same-email', () => {
       expect(mapUpdateEmailError({ code: 'auth/same-email' }))
         .toBe('O novo e-mail informado é idêntico ao atual.');
-    });
-  });
-
-  describe('5. Simulação de Chamada de requestEmailCorrection', () => {
-    it('chama requestEmailCorrection com o usuário, novo e-mail e senha', async () => {
-      requestEmailCorrection.mockResolvedValueOnce({
-        success: true,
-        newEmail: 'correto@ufu.br'
-      });
-
-      const res = await requestEmailCorrection(mockUser, 'correto@ufu.br', 'senha123');
-
-      expect(res.success).toBe(true);
-      expect(res.newEmail).toBe('correto@ufu.br');
-      expect(requestEmailCorrection).toHaveBeenCalledWith(mockUser, 'correto@ufu.br', 'senha123');
     });
   });
 });

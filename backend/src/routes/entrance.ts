@@ -13,13 +13,23 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
   if (!rawUid || !activityId || typeof rawUid !== 'string') {
     res.status(400).json({
       error: 'INVALID_PAYLOAD',
-      message: 'participantUid e activityId so obrigatrios.'
+      message: 'participantUid e activityId são obrigatórios.'
     });
     return;
   }
 
   let resolvedUid = rawUid.replace(/^mailto:/i, '').trim();
-  if (resolvedUid.includes('@')) {
+  if (resolvedUid.startsWith('@')) {
+    try {
+      const cleanUsername = resolvedUid.replace(/^@/, '').toLowerCase();
+      const userSnap = await db.collection('users').where('username', '==', cleanUsername).limit(1).get();
+      if (!userSnap.empty) {
+        resolvedUid = userSnap.docs[0].id;
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar UID por username no checkin de entrada:', e);
+    }
+  } else if (resolvedUid.includes('@')) {
     try {
       const cleanEmail = resolvedUid.toLowerCase();
       const userSnap = await db.collection('users').where('email', '==', cleanEmail).limit(1).get();
@@ -33,16 +43,6 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
       }
     } catch (e) {
       console.warn('Erro ao buscar UID por e-mail no checkin de entrada:', e);
-    }
-  } else if (resolvedUid.startsWith('@')) {
-    try {
-      const cleanUsername = resolvedUid.replace(/^@/, '').toLowerCase();
-      const userSnap = await db.collection('users').where('username', '==', cleanUsername).limit(1).get();
-      if (!userSnap.empty) {
-        resolvedUid = userSnap.docs[0].id;
-      }
-    } catch (e) {
-      console.warn('Erro ao buscar UID por username no checkin de entrada:', e);
     }
   }
 
@@ -59,7 +59,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
       if (!activitySnap.exists) {
         return {
           status: 404 as const,
-          body: { error: 'ACTIVITY_NOT_FOUND', message: 'Palestra no encontrada.' }
+          body: { error: 'ACTIVITY_NOT_FOUND', message: 'Palestra não encontrada.' }
         };
       }
 
@@ -73,7 +73,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
         if (!bookingSnap.exists) {
           return {
             status: 403 as const,
-            body: { error: 'NOT_REGISTERED', message: 'Aluno no inscrito previamente.' }
+            body: { error: 'NOT_REGISTERED', message: 'Aluno não inscrito previamente.' }
           };
         }
       }
@@ -81,7 +81,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
       if (pointEventSnap.exists) {
         return {
           status: 409 as const,
-          body: { error: 'CHECKIN_DUPLICATE', message: 'Entrada duplicada (j havia feito check-in de entrada).' }
+          body: { error: 'CHECKIN_DUPLICATE', message: 'Entrada duplicada (já havia feito check-in de entrada).' }
         };
       }
 
@@ -117,7 +117,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
     console.error('Erro ao registrar check-in de entrada:', error);
     res.status(500).json({
       error: 'INTERNAL_ERROR',
-      message: 'No foi possvel registrar a entrada.'
+      message: 'Não foi possível registrar a entrada.'
     });
   }
 });
