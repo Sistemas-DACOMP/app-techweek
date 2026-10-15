@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   getNotifications,
   markAsRead as markAsReadLib,
@@ -19,20 +19,149 @@ import {
   requestNotificationPermission,
   triggerNativeNotification,
   sendTestNativeNotification,
+  syncBackgroundWatcherWithSw,
+  registerFcmPushSubscription,
   EVENT_NAME
 } from '../lib/notifications';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { onAuthChange } from '../lib/auth';
 
+// Singleton global de announcements para funcionar em qualquer tela do app
+// sem depender de estar na Home (/) e sem duplicar listeners do Firestore
+let sharedRawAnnouncements = [];
+let sharedSubscribers = new Set();
+let sharedAuthUnsub = null;
+let sharedFirestoreUnsub = null;
+let sharedInitialSnapshotHandled = false;
+
+function notifySharedSubscribers() {
+  for (const listener of sharedSubscribers) {
+    try {
+      listener(sharedRawAnnouncements);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function stopFirestoreAnnouncementsListener() {
+  if (typeof sharedFirestoreUnsub === 'function') {
+    sharedFirestoreUnsub();
+    sharedFirestoreUnsub = null;
+  }
+}
+
+function ensureGlobalAnnouncementsListener() {
+  if (sharedAuthUnsub) return;
+
+  sharedAuthUnsub = onAuthChange((currentUser) => {
+    stopFirestoreAnnouncementsListener();
+
+    if (!currentUser) {
+      sharedRawAnnouncements = [];
+      sharedInitialSnapshotHandled = false;
+      notifySharedSubscribers();
+      return;
+    }
+
+    if (getNotificationPermission() === 'granted') {
+      registerFcmPushSubscription().catch(() => {});
+      syncBackgroundWatcherWithSw({ startPolling: false }).catch(() => {});
+    }
+
+    try {
+      const announcementsRef = collection(db, 'announcements');
+
+      sharedFirestoreUnsub = onSnapshot(
+        announcementsRef,
+        (snapshot) => {
+          const isFirstSnapshot = !sharedInitialSnapshotHandled;
+          sharedInitialSnapshotHandled = true;
+          const nowMs = Date.now();
+
+          const addedDocIds = new Set();
+          if (typeof snapshot.docChanges === 'function') {
+            for (const change of snapshot.docChanges()) {
+              if (change.type === 'added') {
+                addedDocIds.add(change.doc.id);
+              }
+            }
+          }
+
+          const list = snapshot.docs.map((document) => {
+            const data = document.data() || {};
+
+            let timestamp = new Date().toISOString();
+            if (data.createdAt?.toDate) {
+              timestamp = data.createdAt.toDate().toISOString();
+            } else if (data.createdAt) {
+              const parsed = new Date(data.createdAt);
+              if (!Number.isNaN(parsed.getTime())) {
+                timestamp = parsed.toISOString();
+              }
+            }
+
+            const messageText = data.message || data.body || '';
+            const item = {
+              id: document.id,
+              title: data.title || 'Comunicado',
+              message: messageText,
+              body: messageText,
+              type: data.type || 'system',
+              actionUrl: data.actionUrl || null,
+              actionLabel: data.actionLabel || null,
+              priority: data.priority || 'NORMAL',
+              urgent: data.priority === 'HIGH' || data.priority === 'URGENT' || Boolean(data.urgent),
+              timestamp,
+              source: 'announcement'
+            };
+
+            const createdMs = new Date(timestamp).getTime();
+            const isRecent = Number.isFinite(createdMs) && nowMs - createdMs < 5 * 60 * 1000;
+
+            if (isFirstSnapshot && !isRecent) {
+              markIdAsNotified(item.id);
+            } else if (!hasAlreadyNotifiedId(item.id) && (!isFirstSnapshot || isRecent || addedDocIds.has(item.id))) {
+              triggerNativeNotification({
+                id: item.id,
+                title: item.title,
+                message: item.message,
+                type: item.type,
+                actionUrl: item.actionUrl || '/',
+                urgent: item.urgent,
+              }).catch(() => {});
+            }
+
+            return item;
+          });
+
+          list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+          sharedRawAnnouncements = list;
+          notifySharedSubscribers();
+          syncBackgroundWatcherWithSw({ startPolling: false }).catch(() => {});
+        },
+        (error) => {
+          if (error?.code !== 'permission-denied') {
+            console.warn('Aviso ao sincronizar announcements:', error?.message || error);
+          }
+          sharedRawAnnouncements = [];
+          notifySharedSubscribers();
+        }
+      );
+    } catch (err) {
+      console.warn('Aviso ao inicializar listener de announcements:', err);
+    }
+  });
+}
+
 export function useNotifications() {
   const [notifications, setNotifications] = useState(() => getNotifications());
-  const [rawAnnouncements, setRawAnnouncements] = useState([]);
+  const [rawAnnouncements, setRawAnnouncements] = useState(() => sharedRawAnnouncements);
   const [readAnnouncementIds, setReadAnnouncementIds] = useState(() => getReadAnnouncementIds());
   const [dismissedAnnouncementIds, setDismissedAnnouncementIds] = useState(() => getDismissedAnnouncementIds());
   const [permission, setPermission] = useState(() => getNotificationPermission());
   const [nativeEnabled, setNativeEnabled] = useState(() => isNotificationEnabled());
-  const initialSnapshotHandledRef = useRef(false);
 
   const syncState = useCallback(() => {
     setNotifications(getNotifications());
@@ -79,94 +208,15 @@ export function useNotifications() {
   }, [syncState]);
 
   useEffect(() => {
-    let unsubscribeAnnouncements = () => {};
-
-    const unsubAuth = onAuthChange((currentUser) => {
-      if (typeof unsubscribeAnnouncements === 'function') {
-        unsubscribeAnnouncements();
-        unsubscribeAnnouncements = () => {};
-      }
-
-      if (!currentUser) {
-        setRawAnnouncements([]);
-        initialSnapshotHandledRef.current = false;
-        return;
-      }
-
-      try {
-        const announcementsRef = collection(db, 'announcements');
-
-        unsubscribeAnnouncements = onSnapshot(
-          announcementsRef,
-          (snapshot) => {
-            const isFirstSnapshot = !initialSnapshotHandledRef.current;
-            initialSnapshotHandledRef.current = true;
-            const nowMs = Date.now();
-
-            const list = snapshot.docs.map((document) => {
-              const data = document.data();
-
-              let timestamp = new Date().toISOString();
-
-              if (data.createdAt?.toDate) {
-                timestamp = data.createdAt.toDate().toISOString();
-              } else if (data.createdAt) {
-                timestamp = new Date(data.createdAt).toISOString();
-              }
-
-              const item = {
-                id: document.id,
-                title: data.title || 'Comunicado',
-                message: data.message || '',
-                type: data.type || 'system',
-                actionUrl: data.actionUrl || null,
-                actionLabel: data.actionLabel || null,
-                priority: data.priority || 'NORMAL',
-                urgent: data.priority === 'HIGH' || data.priority === 'URGENT' || Boolean(data.urgent),
-                timestamp,
-                source: 'announcement'
-              };
-
-              // Disparo de notificação nativa no celular para novos comunicados em tempo real
-              const createdMs = new Date(timestamp).getTime();
-              const isRecent = Number.isFinite(createdMs) && nowMs - createdMs < 2 * 60 * 1000;
-
-              if (isFirstSnapshot && !isRecent) {
-                markIdAsNotified(item.id);
-              } else if (!hasAlreadyNotifiedId(item.id)) {
-                triggerNativeNotification({
-                  id: item.id,
-                  title: item.title,
-                  message: item.message,
-                  type: item.type,
-                  actionUrl: item.actionUrl || '/',
-                  urgent: item.urgent,
-                }).catch(() => {});
-              }
-
-              return item;
-            });
-
-            list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            setRawAnnouncements(list);
-          },
-          (error) => {
-            if (error?.code !== 'permission-denied') {
-              console.warn('Aviso ao sincronizar announcements:', error?.message || error);
-            }
-            setRawAnnouncements([]);
-          }
-        );
-      } catch (err) {
-        console.warn('Aviso ao inicializar listener de announcements:', err);
-      }
-    });
+    const subscriber = (nextList) => {
+      setRawAnnouncements(nextList);
+    };
+    sharedSubscribers.add(subscriber);
+    setRawAnnouncements(sharedRawAnnouncements);
+    ensureGlobalAnnouncementsListener();
 
     return () => {
-      unsubAuth();
-      if (typeof unsubscribeAnnouncements === 'function') {
-        unsubscribeAnnouncements();
-      }
+      sharedSubscribers.delete(subscriber);
     };
   }, []);
 
@@ -246,3 +296,4 @@ export function useNotifications() {
     sendTestNotification,
   };
 }
+

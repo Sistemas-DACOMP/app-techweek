@@ -151,8 +151,14 @@ router.put('/users/:uid/role', requireAuth, requireRole(['ADMIN']), updateUserRo
 // bloqueio, nao pensados como paragrafo longo.
 const MAX_TITLE_LENGTH = 150;
 const MAX_BODY_LENGTH = 1000;
+const HTML_TAG_REGEX = /<[a-z/!][\s\S]*?>/i;
 
 export async function broadcastNotificationHandler(req: Request, res: Response): Promise<void> {
+  if (!req.user?.uid) {
+    res.status(401).json({ error: 'UNAUTHENTICATED', message: 'Usuario nao autenticado.' });
+    return;
+  }
+
   const { title, body } = req.body ?? {};
 
   if (typeof title !== 'string' || !title.trim()) {
@@ -167,6 +173,14 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
 
   const trimmedTitle = title.trim();
   const trimmedBody = body.trim();
+
+  if (HTML_TAG_REGEX.test(trimmedTitle) || HTML_TAG_REGEX.test(trimmedBody)) {
+    res.status(400).json({
+      error: 'INVALID_PAYLOAD',
+      message: 'title e body nao podem conter tags HTML ou scripts.'
+    });
+    return;
+  }
 
   if (trimmedTitle.length > MAX_TITLE_LENGTH) {
     res.status(400).json({ error: 'INVALID_PAYLOAD', message: `title deve ter no maximo ${MAX_TITLE_LENGTH} caracteres.` });
@@ -183,7 +197,7 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
     await announcementRef.set({
       title: trimmedTitle,
       body: trimmedBody,
-      createdBy: req.user!.uid,
+      createdBy: req.user.uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
   } catch (error) {
@@ -213,4 +227,29 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
 // POST /api/admin/notifications/broadcast - apenas ADMIN dispara aviso global (KAN-61).
 router.post('/notifications/broadcast', requireAuth, requireRole(['ADMIN']), adminBroadcastLimiter, broadcastNotificationHandler);
 
+/**
+ * Handler do endpoint POST /api/admin/notifications/subscribe.
+ * Inscreve o token FCM Web Push do dispositivo do participante no tópico
+ * global 'todos_participantes' para recebimento de notificações em segundo plano.
+ */
+export async function subscribeNotificationTopicHandler(req: Request, res: Response): Promise<void> {
+  const { token } = req.body ?? {};
+
+  if (typeof token !== 'string' || !token.trim() || token.trim().length > 4096) {
+    res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'token FCM é obrigatório.' });
+    return;
+  }
+
+  try {
+    await admin.messaging().subscribeToTopic([token.trim()], 'todos_participantes');
+    res.status(200).json({ success: true, topic: 'todos_participantes' });
+  } catch (error: any) {
+    console.error('Erro ao inscrever token FCM no tópico todos_participantes:', error?.message || error);
+    res.status(502).json({ error: 'FCM_SUBSCRIBE_FAILED', message: 'Não foi possível registrar o token de push.' });
+  }
+}
+
+router.post('/notifications/subscribe', requireAuth, subscribeNotificationTopicHandler);
+
 export default router;
+

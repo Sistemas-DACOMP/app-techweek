@@ -1,5 +1,7 @@
 import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
+import { UserRole } from '../types/express';
+import { isValidFirestoreId } from '../lib/firestoreId';
 
 export interface RegisterProfileData {
   firstName?: string;
@@ -17,7 +19,7 @@ export interface RegisterProfileData {
 
 export type RegisterUserResult =
   | { status: 'already-registered' }
-  | { status: 'created'; user: { uid: string; email: string | null; role: 'PARTICIPANT' | 'ADMIN'; profile?: RegisterProfileData } };
+  | { status: 'created'; user: { uid: string; email: string | null; role: UserRole; profile?: RegisterProfileData } };
 
 /**
  * Grava o perfil do usuário em /users/{uid} dentro de uma transação, garantindo que
@@ -33,9 +35,13 @@ export async function registerUser(
   email: string | null,
   profileData?: RegisterProfileData
 ): Promise<RegisterUserResult> {
+  if (!isValidFirestoreId(uid)) {
+    throw new Error('Identificador de usuário (uid) inválido para o Firestore.');
+  }
+
   const userRef = db.collection('users').doc(uid);
 
-  let userRole: 'PARTICIPANT' | 'ADMIN' = 'PARTICIPANT';
+  let userRole: UserRole = 'PARTICIPANT';
 
   const alreadyRegistered = await db.runTransaction(async (tx) => {
     const snapshot = await tx.get(userRef);

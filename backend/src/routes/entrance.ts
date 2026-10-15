@@ -28,7 +28,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
   if (!rawUid || !activityId || typeof rawUid !== 'string') {
     res.status(400).json({
       error: 'INVALID_PAYLOAD',
-      message: 'participantUid e activityId so obrigatrios.'
+      message: 'participantUid e activityId são obrigatórios.'
     });
     return;
   }
@@ -37,7 +37,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
   if (!resolvedUid) {
     res.status(400).json({
       error: 'INVALID_PAYLOAD',
-      message: 'participantUid e activityId so obrigatrios.'
+      message: 'participantUid e activityId são obrigatórios.'
     });
     return;
   }
@@ -105,7 +105,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
       if (!activitySnap.exists && !fallbackActivity) {
         return {
           status: 404 as const,
-          body: { error: 'ACTIVITY_NOT_FOUND', message: 'Palestra no encontrada.' }
+          body: { error: 'ACTIVITY_NOT_FOUND', message: 'Palestra não encontrada.' }
         };
       }
 
@@ -119,7 +119,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
         if (!bookingSnap.exists || bookingSnap.data?.()?.status === 'CANCELLED') {
           return {
             status: 403 as const,
-            body: { error: 'NOT_REGISTERED', message: 'Aluno no inscrito previamente.' }
+            body: { error: 'NOT_REGISTERED', message: 'Aluno não inscrito previamente.' }
           };
         }
       }
@@ -127,7 +127,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
       if (pointEventSnap.exists) {
         return {
           status: 409 as const,
-          body: { error: 'CHECKIN_DUPLICATE', message: 'Entrada duplicada (j havia feito check-in de entrada).' }
+          body: { error: 'CHECKIN_DUPLICATE', message: 'Entrada duplicada (já havia feito check-in de entrada).' }
         };
       }
 
@@ -170,7 +170,7 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
     console.error('Erro ao registrar check-in de entrada:', error);
     res.status(500).json({
       error: 'INTERNAL_ERROR',
-      message: 'No foi possvel registrar a entrada.'
+      message: 'Não foi possível registrar a entrada.'
     });
   }
 });

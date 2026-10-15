@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
 import { requireAuth, requireRole } from '../middlewares/authMiddleware';
+import { staffActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 import { issueScreenToken } from '../lib/screenToken';
 
@@ -13,7 +14,7 @@ const router = Router();
 // minutos. Não decrementa nem grava nada — só emite um token HMAC de curta
 // duração; toda a regra de negócio pesada (entrance prévio, dedup) acontece
 // em POST /api/checkin/checkout, na hora de validar o token.
-router.get('/:activityId/screen-token', requireAuth, requireRole(['STAFF', 'ADMIN']), async (req: Request, res: Response) => {
+router.get('/:activityId/screen-token', requireAuth, requireRole(['STAFF', 'ADMIN']), staffActionLimiter, async (req: Request, res: Response) => {
   const { activityId } = req.params;
 
   if (!isValidFirestoreId(activityId)) {

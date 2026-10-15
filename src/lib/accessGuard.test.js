@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('./userService', () => ({
+  isAdminEmail: vi.fn((email) => email === 'sam03amorim@gmail.com')
+}));
+
 import { decideAccess } from './accessGuard';
+
 
 const base = { authLoading: false, user: { uid: 'u' }, profileReady: true, role: 'PARTICIPANT', allowed: ['ADMIN'] };
 

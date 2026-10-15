@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
 import * as admin from 'firebase-admin';
 import { requireAuth, requireRole, requireVerifiedEmail } from '../middlewares/authMiddleware';
+import { adminSponsorLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 
 const router = Router();
@@ -163,7 +164,9 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
           resolvedUid = ticketData.uid;
         }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Erro ao resolver UID por e-mail em leadsHandler:', e);
+    }
   }
 
   if (typeof resolvedUid === 'string' && resolvedUid.includes('@')) {
@@ -462,17 +465,34 @@ export async function getLeadsHandler(req: Request, res: Response): Promise<void
     const resolved = await resolveSponsorCompany((ref) => ref.get(), sponsorData, req.user?.email);
     const companyId = queryCompany ? (resolveCompanyId(queryCompany) || queryCompany.toLowerCase()) : resolved.companyId;
 
-    const myLeadsSnap = await db.collection('leads').doc(sponsorUid).collection('contacts').get();
-    const myLeads: any[] = myLeadsSnap.docs ? myLeadsSnap.docs.map(d => ({ ...d.data(), id: d.id })) : [];
+    const rawLimit = Number(req.query?.limit);
+    const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50;
+
+    let myLeadsRef: any = db.collection('leads').doc(sponsorUid).collection('contacts');
+    if (typeof myLeadsRef.orderBy === 'function') {
+      myLeadsRef = myLeadsRef.orderBy('createdAt', 'desc');
+    }
+    if (typeof myLeadsRef.limit === 'function') {
+      myLeadsRef = myLeadsRef.limit(limit);
+    }
+    const myLeadsSnap = await myLeadsRef.get();
+    const myLeads: any[] = myLeadsSnap.docs ? myLeadsSnap.docs.map((d: any) => ({ ...d.data(), id: d.id })) : [];
 
     let companyLeads = [...myLeads];
     // Decisão do Fabio (KAN-124): leads por pessoa. Conta vinculada a sponsors/ não
     // enxerga leads dos colegas; o compartilhamento por empresa só sobra pro legado.
     if (companyId && (queryCompany || !resolved.linked)) {
-      const compLeadsSnap = await db.collection('company_leads').doc(companyId).collection('contacts').get();
+      let compLeadsRef: any = db.collection('company_leads').doc(companyId).collection('contacts');
+      if (typeof compLeadsRef.orderBy === 'function') {
+        compLeadsRef = compLeadsRef.orderBy('createdAt', 'desc');
+      }
+      if (typeof compLeadsRef.limit === 'function') {
+        compLeadsRef = compLeadsRef.limit(limit);
+      }
+      const compLeadsSnap = await compLeadsRef.get();
       if (compLeadsSnap.docs && compLeadsSnap.docs.length > 0) {
         const map = new Map<string, any>();
-        compLeadsSnap.docs.forEach(d => map.set(d.id, { ...d.data(), id: d.id }));
+        compLeadsSnap.docs.forEach((d: any) => map.set(d.id, { ...d.data(), id: d.id }));
         myLeads.forEach(l => map.set(l.participantUid || l.id, { ...map.get(l.participantUid || l.id), ...l }));
         companyLeads = Array.from(map.values());
       }
@@ -482,7 +502,11 @@ export async function getLeadsHandler(req: Request, res: Response): Promise<void
       success: true,
       myLeads,
       companyLeads,
-      companyId
+      companyId,
+      pagination: {
+        limit,
+        totalReturned: myLeads.length
+      }
     });
   } catch (error) {
     console.error('Erro ao buscar leads:', error);
@@ -587,10 +611,10 @@ export async function updateLeadHandler(req: Request, res: Response): Promise<vo
   }
 }
 
-// Registro das rotas com RBAC: apenas SPONSOR e ADMIN podem gerenciar leads
-router.get('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), getLeadsHandler);
-router.post('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), requireVerifiedEmail, leadsHandler);
-router.patch('/:participantUid', requireAuth, requireRole(['SPONSOR', 'ADMIN']), updateLeadHandler);
+// Registro das rotas com RBAC e Rate Limiting: apenas SPONSOR e ADMIN podem gerenciar leads
+router.get('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), adminSponsorLimiter, getLeadsHandler);
+router.post('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), adminSponsorLimiter, requireVerifiedEmail, leadsHandler);
+router.patch('/:participantUid', requireAuth, requireRole(['SPONSOR', 'ADMIN']), adminSponsorLimiter, updateLeadHandler);
 
 export default router;
 

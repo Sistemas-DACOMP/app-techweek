@@ -4,6 +4,10 @@ import { describe, it, expect } from 'vitest';
 const sources = import.meta.glob(['../**/*.js', '../**/*.jsx', '!../**/*.test.*'], { query: '?raw', import: 'default', eager: true });
 
 describe('atalhos de demonstração', () => {
+  it('garante que arquivos de código foram efetivamente carregados para análise', () => {
+    expect(Object.keys(sources).length).toBeGreaterThan(10);
+  });
+
   it('nenhum arquivo de src/ lê ?demo=true da URL', () => {
     const offenders = Object.entries(sources).filter(([, code]) => /location\.search.*demo/.test(code)).map(([f]) => f);
     expect(offenders).toEqual([]);

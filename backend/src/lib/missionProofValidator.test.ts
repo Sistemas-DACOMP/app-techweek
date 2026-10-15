@@ -157,6 +157,92 @@ describe('validateMissionProof (KAN-80)', () => {
 
       expect(result.valid).toBe(true);
     });
+
+    it('em ambiente de desenvolvimento/teste aceita blob: e localhost', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'test';
+      try {
+        const tx = makeMockTx();
+        const userSnap = { exists: true, data: () => ({}) } as any;
+        const missionSnap = { exists: true, data: () => ({}) } as any;
+
+        const blobRes = await validateMissionProof(tx, {
+          uid: 'user-1',
+          missionId: 'social_mascot_photo',
+          eventType: 'challenge',
+          referenceId: 'social_mascot_photo',
+          metadata: { photo_url: 'blob:http://localhost:5173/12345-6789' },
+          userSnap,
+          missionSnap
+        });
+        expect(blobRes.valid).toBe(true);
+
+        const localRes = await validateMissionProof(tx, {
+          uid: 'user-1',
+          missionId: 'social_mascot_photo',
+          eventType: 'challenge',
+          referenceId: 'social_mascot_photo',
+          metadata: { photo_url: 'http://localhost:5000/uploads/photo.jpg' },
+          userSnap,
+          missionSnap
+        });
+        expect(localRes.valid).toBe(true);
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+      }
+    });
+
+    it('em produção rejeita estritamente blob: e http://localhost (ERR-056)', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        const tx = makeMockTx();
+        const userSnap = { exists: true, data: () => ({}) } as any;
+        const missionSnap = { exists: true, data: () => ({}) } as any;
+
+        const blobRes = await validateMissionProof(tx, {
+          uid: 'user-1',
+          missionId: 'social_mascot_photo',
+          eventType: 'challenge',
+          referenceId: 'social_mascot_photo',
+          metadata: { photo_url: 'blob:https://facom-techweek.web.app/fake-proof' },
+          userSnap,
+          missionSnap
+        });
+        expect(blobRes.valid).toBe(false);
+        if (!blobRes.valid) {
+          expect(blobRes.error).toBe('INVALID_PHOTO_URL');
+        }
+
+        const localRes = await validateMissionProof(tx, {
+          uid: 'user-1',
+          missionId: 'social_mascot_photo',
+          eventType: 'challenge',
+          referenceId: 'social_mascot_photo',
+          metadata: { photo_url: 'http://localhost:5000/photo.jpg' },
+          userSnap,
+          missionSnap
+        });
+        expect(localRes.valid).toBe(false);
+        if (!localRes.valid) {
+          expect(localRes.error).toBe('INVALID_PHOTO_URL');
+        }
+
+        // URL HTTPS do Firebase Storage oficial é aceita em produção
+        const prodStorageRes = await validateMissionProof(tx, {
+          uid: 'user-1',
+          missionId: 'social_mascot_photo',
+          eventType: 'challenge',
+          referenceId: 'social_mascot_photo',
+          metadata: { photo_url: 'https://firebasestorage.googleapis.com/v0/b/facom-techweek.appspot.com/o/mission_photos%2Fphoto.jpg' },
+          userSnap,
+          missionSnap
+        });
+        expect(prodStorageRes.valid).toBe(true);
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+      }
+    });
   });
 
   describe('Palavra Secreta (secret_password)', () => {
@@ -426,6 +512,201 @@ describe('validateMissionProof (KAN-80)', () => {
       });
       expect(calouro.valid).toBe(true);
     });
+
+    it('network_course reporta INCOMPLETE_PROFILE se perfil do usuário ou alvo estiver sem curso (ERR-057)', async () => {
+      const tx = makeMockTx({
+        'users/no-course': {},
+        'users/with-course': { curso: 'Engenharia de Software' }
+      });
+      (db.collection as any).mockImplementation((col: string) => ({
+        doc: (id: string) => ({ path: `${col}/${id}` })
+      }));
+      const missionSnap = { exists: true, data: () => ({}) } as any;
+
+      // Usuário atual sem curso
+      const emptyUserRes = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'network_course',
+        eventType: 'scan',
+        referenceId: 'scan',
+        metadata: { targetUid: 'with-course' },
+        userSnap: { exists: true, data: () => ({}) } as any,
+        missionSnap
+      });
+      expect(emptyUserRes.valid).toBe(false);
+      if (!emptyUserRes.valid) {
+        expect(emptyUserRes.error).toBe('INCOMPLETE_PROFILE');
+      }
+
+      // Alvo sem curso
+      const emptyTargetRes = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'network_course',
+        eventType: 'scan',
+        referenceId: 'scan',
+        metadata: { targetUid: 'no-course' },
+        userSnap: { exists: true, data: () => ({ course: 'Ciência da Computação' }) } as any,
+        missionSnap
+      });
+      expect(emptyTargetRes.valid).toBe(false);
+      if (!emptyTargetRes.valid) {
+        expect(emptyTargetRes.error).toBe('INCOMPLETE_PROFILE');
+      }
+
+      // Sucesso com curso preenchido em curso vs course
+      const successRes = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'network_course',
+        eventType: 'scan',
+        referenceId: 'scan',
+        metadata: { targetUid: 'with-course' },
+        userSnap: { exists: true, data: () => ({ curso: 'Ciência da Computação' }) } as any,
+        missionSnap
+      });
+      expect(successRes.valid).toBe(true);
+    });
+
+    it('network_period lida com períodos como string (ex: "1", "1º") e reporta perfil incompleto (ERR-057)', async () => {
+      const tx = makeMockTx({
+        'users/string-calouro': { period: '1' },
+        'users/ordinal-calouro': { periodo: '1º período' },
+        'users/no-period': {},
+        'users/other-period': { period: '3º' }
+      });
+      (db.collection as any).mockImplementation((col: string) => ({
+        doc: (id: string) => ({ path: `${col}/${id}` })
+      }));
+      const userSnap = { exists: true, data: () => ({}) } as any;
+      const missionSnap = { exists: true, data: () => ({}) } as any;
+
+      const strRes = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'network_period',
+        eventType: 'scan',
+        referenceId: 'scan',
+        metadata: { targetUid: 'string-calouro' },
+        userSnap,
+        missionSnap
+      });
+      expect(strRes.valid).toBe(true);
+
+      const ordRes = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'network_period',
+        eventType: 'scan',
+        referenceId: 'scan',
+        metadata: { targetUid: 'ordinal-calouro' },
+        userSnap,
+        missionSnap
+      });
+      expect(ordRes.valid).toBe(true);
+
+      const noPeriodRes = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'network_period',
+        eventType: 'scan',
+        referenceId: 'scan',
+        metadata: { targetUid: 'no-period' },
+        userSnap,
+        missionSnap
+      });
+      expect(noPeriodRes.valid).toBe(false);
+      if (!noPeriodRes.valid) {
+        expect(noPeriodRes.error).toBe('INCOMPLETE_PROFILE');
+      }
+
+      const otherRes = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'network_period',
+        eventType: 'scan',
+        referenceId: 'scan',
+        metadata: { targetUid: 'other-period' },
+        userSnap,
+        missionSnap
+      });
+      expect(otherRes.valid).toBe(false);
+      if (!otherRes.valid) {
+        expect(otherRes.error).toBe('CRITERIA_NOT_MET');
+      }
+    });
+
+    it('network_type valida tipo de participante externo à UFU', async () => {
+      const tx = makeMockTx({
+        'users/aluno-ufu': { participantType: 'Aluno da UFU' },
+        'users/externo': { participantType: 'Empresa Parceira' },
+        'users/sem-tipo': {}
+      });
+      (db.collection as any).mockImplementation((col: string) => ({
+        doc: (id: string) => ({ path: `${col}/${id}` })
+      }));
+      const userSnap = { exists: true, data: () => ({}) } as any;
+      const missionSnap = { exists: true, data: () => ({}) } as any;
+
+      const ufuRes = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'network_type',
+        eventType: 'scan',
+        referenceId: 'scan',
+        metadata: { targetUid: 'aluno-ufu' },
+        userSnap,
+        missionSnap
+      });
+      expect(ufuRes.valid).toBe(false);
+      if (!ufuRes.valid) {
+        expect(ufuRes.error).toBe('CRITERIA_NOT_MET');
+      }
+
+      const extRes = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'network_type',
+        eventType: 'scan',
+        referenceId: 'scan',
+        metadata: { targetUid: 'externo' },
+        userSnap,
+        missionSnap
+      });
+      expect(extRes.valid).toBe(true);
+
+      const emptyRes = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'network_type',
+        eventType: 'scan',
+        referenceId: 'scan',
+        metadata: { targetUid: 'sem-tipo' },
+        userSnap,
+        missionSnap
+      });
+      expect(emptyRes.valid).toBe(false);
+      if (!emptyRes.valid) {
+        expect(emptyRes.error).toBe('INCOMPLETE_PROFILE');
+      }
+    });
+
+    it('trata erro de transação/I/O na busca do usuário alvo graciosamente (ERR-057)', async () => {
+      const tx = {
+        get: vi.fn().mockRejectedValue(new Error('Firestore timeout / network error'))
+      } as any;
+      (db.collection as any).mockImplementation((col: string) => ({
+        doc: (id: string) => ({ path: `${col}/${id}` })
+      }));
+      const userSnap = { exists: true, data: () => ({}) } as any;
+      const missionSnap = { exists: true, data: () => ({}) } as any;
+
+      const result = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'network_first',
+        eventType: 'scan',
+        referenceId: 'scan',
+        metadata: { targetUid: 'target-error' },
+        userSnap,
+        missionSnap
+      });
+
+      expect(result.valid).toBe(false);
+      if (!result.valid) {
+        expect(result.error).toBe('TARGET_LOOKUP_FAILED');
+      }
+    });
   });
 
   describe('Formulários (sponsor_vaga, sponsor_tecnologia)', () => {
@@ -490,7 +771,7 @@ describe('validateMissionProof (KAN-80)', () => {
   });
 
   describe('Stands e Caça ao QR (sponsor_visit, secret_qr)', () => {
-    it('sponsor_visit valida token de visita a stand', async () => {
+    it('sponsor_visit valida token de visita a stand e aceita patrocinadores parceiros (ERR-056)', async () => {
       const tx = makeMockTx();
       const userSnap = { exists: true, data: () => ({}) } as any;
       const missionSnap = { exists: true, data: () => ({}) } as any;
@@ -509,7 +790,8 @@ describe('validateMissionProof (KAN-80)', () => {
         expect(invalid.error).toBe('INVALID_QR_CODE');
       }
 
-      const valid = await validateMissionProof(tx, {
+      // Stand padrão Kanastra
+      const validKanastra = await validateMissionProof(tx, {
         uid: 'me',
         missionId: 'sponsor_visit',
         eventType: 'challenge',
@@ -518,7 +800,62 @@ describe('validateMissionProof (KAN-80)', () => {
         userSnap,
         missionSnap
       });
-      expect(valid.valid).toBe(true);
+      expect(validKanastra.valid).toBe(true);
+
+      // Patrocinadores parceiros (Levty, Bayer, Hyperflow, etc.)
+      const validLevty = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'sponsor_visit',
+        eventType: 'challenge',
+        referenceId: 'sponsor_visit',
+        metadata: { scannedCode: 'levty_code' },
+        userSnap,
+        missionSnap
+      });
+      expect(validLevty.valid).toBe(true);
+
+      const validBayer = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'sponsor_visit',
+        eventType: 'challenge',
+        referenceId: 'sponsor_visit',
+        metadata: { scannedCode: 'sponsor_bayer' },
+        userSnap,
+        missionSnap
+      });
+      expect(validBayer.valid).toBe(true);
+
+      // Patrocinador configurado em autoConfig.targetId
+      const customMissionSnap = {
+        exists: true,
+        data: () => ({ autoConfig: { targetId: 'EmpresaX' } })
+      } as any;
+      const validCustomTarget = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'sponsor_visit',
+        eventType: 'challenge',
+        referenceId: 'sponsor_visit',
+        metadata: { scannedCode: 'visita_EmpresaX_2026' },
+        userSnap,
+        missionSnap: customMissionSnap
+      });
+      expect(validCustomTarget.valid).toBe(true);
+
+      // Códigos customizados em missionData.validCodes
+      const codesMissionSnap = {
+        exists: true,
+        data: () => ({ validCodes: ['STAND_CODE_ABC_123'] })
+      } as any;
+      const validCodeList = await validateMissionProof(tx, {
+        uid: 'me',
+        missionId: 'sponsor_visit',
+        eventType: 'challenge',
+        referenceId: 'sponsor_visit',
+        metadata: { scannedCode: 'STAND_CODE_ABC_123' },
+        userSnap,
+        missionSnap: codesMissionSnap
+      });
+      expect(validCodeList.valid).toBe(true);
     });
 
     it('secret_qr valida token do QR code secreto', async () => {

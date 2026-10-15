@@ -421,13 +421,59 @@ export async function togglePinFeedPost(postId, currentPinned) {
 }
 
 /**
- * Dispara um comunicado / aviso em tempo real para todos os participantes (Sino de Notificações).
+ * Dispara um comunicado / aviso em tempo real para todos os participantes (Sino + Push Nativo no Celular).
  */
 export async function broadcastAnnouncement({ title, message, priority = 'HIGH', actionUrl = null, actionLabel = null }) {
+  const cleanTitle = String(title || '').trim();
+  const cleanMessage = String(message || '').trim();
+
+  // 1. Tenta disparar pelo endpoint backend (que grava em /announcements e envia Web Push FCM para 'todos_participantes')
+  try {
+    const { apiFetch } = await import('./api');
+    const apiRes = await apiFetch('/api/admin/notifications/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({ title: cleanTitle, body: cleanMessage }),
+    });
+    const announcementId = apiRes?.announcementId;
+    if (announcementId) {
+      try {
+        await updateDoc(doc(db, 'announcements', announcementId), {
+          message: cleanMessage,
+          body: cleanMessage,
+          priority,
+          actionUrl,
+          actionLabel,
+        });
+      } catch {
+        // ignore update error
+      }
+      return { success: true, id: announcementId };
+    }
+  } catch (apiErr) {
+    // Se retornou 502 (BROADCAST_PARTIALLY_SENT), o doc já foi criado no Firestore pelo backend!
+    const partialId = apiErr?.data?.announcementId;
+    if (partialId) {
+      try {
+        await updateDoc(doc(db, 'announcements', partialId), {
+          message: cleanMessage,
+          body: cleanMessage,
+          priority,
+          actionUrl,
+          actionLabel,
+        });
+      } catch {
+        // ignore
+      }
+      return { success: true, id: partialId };
+    }
+  }
+
+  // 2. Fallback direto no Firestore (dispara em tempo real para o listener global e para o Background Watcher do Service Worker)
   try {
     const docRef = await addDoc(collection(db, 'announcements'), {
-      title,
-      message,
+      title: cleanTitle,
+      message: cleanMessage,
+      body: cleanMessage,
       priority,
       actionUrl,
       actionLabel,
@@ -439,3 +485,4 @@ export async function broadcastAnnouncement({ title, message, priority = 'HIGH',
     throw err;
   }
 }
+
