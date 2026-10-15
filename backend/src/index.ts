@@ -1,6 +1,9 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { onRequest } from 'firebase-functions/v2/https';
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { db } from './config/firebaseAdmin';
+import { dispatchWebPushBroadcast } from './services/webPushService';
 import { requireAuth, requireRole } from './middlewares/authMiddleware';
 import authRouter from './routes/auth';
 import checkinRouter from './routes/checkin';
@@ -105,3 +108,31 @@ export const api = onRequest(
   },
   app
 );
+
+// Trigger automático de Web Push quando qualquer comunicado é criado em /announcements/{announcementId}
+export const onAnnouncementCreated = onDocumentCreated(
+  {
+    document: 'announcements/{announcementId}',
+    region: 'us-east1',
+    memory: '256MiB',
+  },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data() || {};
+    const announcementId = event.params.announcementId;
+
+    await dispatchWebPushBroadcast(db, {
+      id: announcementId,
+      title: data.title || 'FACOM TechWeek 2026',
+      body: data.body || data.message || '',
+      message: data.message || data.body || '',
+      actionUrl: data.actionUrl || '/',
+      actionLabel: data.actionLabel || 'Abrir App',
+      priority: data.priority || 'HIGH',
+      urgent: true,
+      tag: announcementId,
+    });
+  }
+);
+

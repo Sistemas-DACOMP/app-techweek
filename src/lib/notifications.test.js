@@ -311,5 +311,64 @@ describe('Notifications System', () => {
       })
     );
   });
+
+  it('registra inscrição W3C Web Push VAPID (pushManager.subscribe) para acordar o SW com app fechado no iOS/Android', async () => {
+    const { urlBase64ToUint8Array, DEFAULT_VAPID_PUBLIC_KEY, registerFcmPushSubscription } = await import(
+      './notifications'
+    );
+
+    const keyBytes = urlBase64ToUint8Array(DEFAULT_VAPID_PUBLIC_KEY);
+    expect(keyBytes).toBeInstanceOf(Uint8Array);
+    expect(keyBytes.length).toBe(65);
+    expect(keyBytes[0]).toBe(4); // Ponto EC P-256 descomprimido (0x04)
+
+    const subscribeSpy = vi.fn().mockResolvedValue({
+      endpoint: 'https://web.push.apple.com/QTEST_IOS_APNS_ENDPOINT',
+      toJSON: () => ({
+        endpoint: 'https://web.push.apple.com/QTEST_IOS_APNS_ENDPOINT',
+        keys: {
+          p256dh: 'BOgJT40xkre0x9-zEttJCnDsJrLVhsPNV2F6KCkoxcfp_ayNGY8DqrUISh79LfQ0JTYEk9mq9BEjx9FIoiSmJXw',
+          auth: 'c2VjcmV0QXV0aEtleVRlc3Q',
+        },
+      }),
+    });
+
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)',
+        serviceWorker: {
+          register: vi.fn().mockResolvedValue({
+            active: { postMessage: vi.fn() },
+            pushManager: {
+              getSubscription: vi.fn().mockResolvedValue(null),
+              subscribe: subscribeSpy,
+            },
+          }),
+          getRegistration: vi.fn().mockResolvedValue({
+            active: { postMessage: vi.fn() },
+            pushManager: {
+              getSubscription: vi.fn().mockResolvedValue(null),
+              subscribe: subscribeSpy,
+            },
+          }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const MockNotification = vi.fn();
+    MockNotification.permission = 'granted';
+    globalThis.window.Notification = MockNotification;
+
+    const endpoint = await registerFcmPushSubscription({ force: true });
+    expect(endpoint).toBe('https://web.push.apple.com/QTEST_IOS_APNS_ENDPOINT');
+    expect(subscribeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userVisibleOnly: true,
+        applicationServerKey: expect.any(Uint8Array),
+      })
+    );
+  });
 });
 

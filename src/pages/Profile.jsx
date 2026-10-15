@@ -3,9 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { updateProfile } from 'firebase/auth';
 import {
   ChevronLeft, ChevronRight, Camera, Loader2, Ticket, Link as LinkIcon, ShieldCheck, Lock, Check, Trash2, LogOut,
-  ExternalLink, CalendarCheck, QrCode, Trophy, Mail
+  ExternalLink, CalendarCheck, QrCode, Trophy, Mail, BellRing
 } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
+import { useNotifications } from '../hooks/useNotifications';
 import { getMyProfile, uploadAvatar } from '../lib/gameplay';
 import { logoutUser, onAuthChange, deleteCurrentUserAccount } from '../lib/auth';
 import { auth } from '../lib/firebase';
@@ -68,6 +69,7 @@ const initialsOf = (first, last) =>
 
 export default function Profile() {
   const { points, userLevel, role, profile: userProfile } = useUser();
+  const notif = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef(null);
@@ -1224,6 +1226,30 @@ export default function Profile() {
             ? <span className="rounded-[9px] bg-[rgba(111,216,166,0.14)] px-[9px] py-[3px] text-[12px] font-extrabold text-ok">Ativo</span>
             : <span className="rounded-[9px] bg-[rgba(242,196,106,0.16)] px-[9px] py-[3px] text-[12px] font-extrabold text-warn">Vincular</span>}
           onClick={openTicketSheet}
+        />
+        <AccountRow
+          color="#38BDF8"
+          icon={BellRing}
+          title="Notificações e alertas"
+          desc={
+            notif.permission === 'granted' && notif.enabled
+              ? 'Ativas neste aparelho (funciona mesmo sem instalar o app)'
+              : notif.permission === 'denied'
+                ? 'Bloqueadas nas permissões do navegador'
+                : 'Toque para ativar avisos no navegador ou no celular'
+          }
+          badge={
+            notif.permission === 'granted' && notif.enabled
+              ? <span className="rounded-[9px] bg-[rgba(111,216,166,0.14)] px-[9px] py-[3px] text-[12px] font-extrabold text-ok">Ativo</span>
+              : <span className="rounded-[9px] bg-[rgba(143,160,255,0.16)] px-[9px] py-[3px] text-[12px] font-extrabold text-link">Ativar</span>
+          }
+          onClick={() => {
+            if (notif.permission !== 'granted') {
+              notif.requestPermission();
+            } else {
+              notif.toggleEnabled();
+            }
+          }}
         />
         <AccountRow color="#8FA0FF" icon={LinkIcon} title="Redes sociais" desc={socialsText} onClick={() => openEdit('redes')} />
         <AccountRow color="#6FD8A6" icon={ShieldCheck} title="Privacidade e dados" desc="O que os outros veem de você" onClick={() => openEdit('privacidade')} last />
