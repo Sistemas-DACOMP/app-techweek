@@ -441,7 +441,7 @@ export default function SponsorLeadModal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '12px 14px',
+        padding: 'max(14px, env(safe-area-inset-top, 0px)) 14px max(14px, env(safe-area-inset-bottom, 0px))',
         animation: 'fadeIn 0.2s ease-out'
       }}
       onClick={(e) => {

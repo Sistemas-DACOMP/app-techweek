@@ -320,7 +320,7 @@ export default function ActivityModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="atividade-titulo"
-        className="fixed inset-x-0 bottom-0 top-12 z-[2001] mx-auto flex max-w-[430px] flex-col overflow-hidden rounded-t-[24px] bg-surface text-text animate-[dsSheetUp_250ms_var(--ease-out)]"
+        className="fixed inset-x-0 bottom-0 top-[max(48px,calc(env(safe-area-inset-top)+12px))] z-[2001] mx-auto flex max-w-[430px] flex-col overflow-hidden rounded-t-[24px] bg-surface text-text animate-[dsSheetUp_250ms_var(--ease-out)]"
         style={{
           transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
           transition: isDragging.current ? 'none' : 'transform 200ms var(--ease-out)'
@@ -466,7 +466,7 @@ export default function ActivityModal({
           )}
         </div>
 
-        <div className="shrink-0 px-5 pb-7 pt-4">{footer}</div>
+        <div className="shrink-0 px-5 pb-[max(28px,calc(env(safe-area-inset-bottom)+12px))] pt-4">{footer}</div>
       </div>
       <ConfirmModal
         isOpen={confirmingCancel}

@@ -1105,7 +1105,7 @@ export default function Staff() {
 
       {/* Resultado em tela cheia no celular (3.03 · 3.04 · 3.05); no desktop vira o banner acima */}
       {scanResult && result && (
-        <div role="alert" data-kind={tone(resultKind)} className="staff-result fixed inset-0 z-[3000] flex flex-col items-center px-6 pb-8 pt-[72px] lg:hidden">
+        <div role="alert" data-kind={tone(resultKind)} className="staff-result fixed inset-0 z-[3000] flex flex-col items-center px-6 pb-[max(32px,calc(env(safe-area-inset-bottom)+16px))] pt-[max(72px,calc(env(safe-area-inset-top)+28px))] lg:hidden">
           <span aria-hidden="true" className="staff-result-icon flex h-28 w-28 items-center justify-center rounded-full">
             <result.Icon size={60} strokeWidth={2.6} />
           </span>

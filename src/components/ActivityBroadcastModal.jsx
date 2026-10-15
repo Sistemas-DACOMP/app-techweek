@@ -115,7 +115,7 @@ export default function ActivityBroadcastModal({ activity, onClose, onSuccess })
         role="dialog"
         aria-modal="true"
         aria-labelledby="broadcast-modal-title"
-        className="fixed inset-x-0 bottom-0 top-12 z-[2002] mx-auto flex max-w-[560px] flex-col overflow-hidden rounded-t-[24px] bg-surface text-text shadow-2xl lg:inset-y-auto lg:top-1/2 lg:-translate-y-1/2 lg:rounded-[24px]"
+        className="fixed inset-x-0 bottom-0 top-[max(48px,calc(env(safe-area-inset-top)+12px))] z-[2002] mx-auto flex max-w-[560px] flex-col overflow-hidden rounded-t-[24px] bg-surface text-text shadow-2xl lg:inset-y-auto lg:top-1/2 lg:-translate-y-1/2 lg:rounded-[24px]"
       >
         {/* Cabeçalho */}
         <div className="shrink-0 border-b border-line bg-surface-raised px-5 py-4">
@@ -143,7 +143,7 @@ export default function ActivityBroadcastModal({ activity, onClose, onSuccess })
         </div>
 
         {/* Corpo com Scroll */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-5 pb-[max(20px,calc(env(safe-area-inset-bottom)+12px))] space-y-4">
           {sentSuccess ? (
             <div className="flex flex-col items-center justify-center py-10 text-center animate-fadeIn">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-ok/20 text-ok mb-3">

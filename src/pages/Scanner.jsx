@@ -907,7 +907,7 @@ export default function Scanner() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="cracha-result-title"
-            className="relative mx-auto flex h-full max-w-[430px] flex-col px-4 pt-10 pb-[max(28px,env(safe-area-inset-bottom))]"
+            className="relative mx-auto flex h-full max-w-[430px] flex-col px-4 pt-[max(40px,calc(env(safe-area-inset-top)+16px))] pb-[max(28px,calc(env(safe-area-inset-bottom)+12px))]"
           >
             <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-center overflow-y-auto rounded-[28px] border border-[#2E3878] bg-[#0F1530] p-[18px] text-center shadow-[0_24px_60px_rgba(0,0,0,0.5)] [animation:dsFadeUp_300ms_var(--ease-out)_both]">
               {isParticipantResult ? (

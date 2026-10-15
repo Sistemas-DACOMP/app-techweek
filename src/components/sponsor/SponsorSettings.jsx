@@ -444,7 +444,7 @@ export default function SponsorSettings({
       {toast && (
         <div
           role="status"
-          className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 rounded-2xl bg-surface-selected border border-ok px-4 py-3 text-[13px] font-bold text-text shadow-2xl animate-fade-in"
+          className="fixed top-[max(20px,calc(env(safe-area-inset-top)+12px))] left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 rounded-2xl bg-surface-selected border border-ok px-4 py-3 text-[13px] font-bold text-text shadow-2xl animate-fade-in"
         >
           <Check size={16} className="text-ok shrink-0" />
           <span>{toast.message}</span>

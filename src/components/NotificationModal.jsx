@@ -125,8 +125,8 @@ export default function NotificationModal({ isOpen, onClose }) {
       aria-labelledby="avisos-title"
       style={{ animation: 'dsFade 200ms var(--ease-out)' }}
     >
-      <div className="mx-auto max-w-[430px] pb-10">
-        <header className="sticky top-0 z-10 flex items-center justify-between bg-bg pl-2 pr-3 pt-2.5">
+      <div className="mx-auto max-w-[430px] pb-[max(40px,calc(env(safe-area-inset-bottom)+20px))]">
+        <header className="sticky top-0 z-10 flex items-center justify-between bg-bg pl-2 pr-3 pt-[max(10px,calc(env(safe-area-inset-top)+8px))]">
           <button
             ref={backRef}
             type="button"

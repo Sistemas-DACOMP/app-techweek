@@ -33,7 +33,7 @@ export default function Terms({ isModal = false, onClose }) {
   return (
     <div className={`w-full bg-bg text-text ${isModal ? 'min-h-full' : 'h-full overflow-y-auto'}`}>
       <div className="mx-auto w-full max-w-[720px] px-5 pb-12">
-        <header className="grid grid-cols-[44px_1fr_44px] items-center pt-2.5">
+        <header className="grid grid-cols-[44px_1fr_44px] items-center pt-[max(10px,calc(env(safe-area-inset-top)+8px))]">
           <button type="button" onClick={handleBack} aria-label="Voltar" className="flex size-11 cursor-pointer items-center justify-center border-0 bg-transparent text-text">
             <ChevronLeft size={22} aria-hidden="true" />
           </button>

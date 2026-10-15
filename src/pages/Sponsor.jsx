@@ -774,7 +774,7 @@ export default function Sponsor() {
           className="animate-fade-in"
           style={{
             position: 'fixed',
-            top: '20px',
+            top: 'max(20px, calc(env(safe-area-inset-top, 0px) + 12px))',
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 9999,

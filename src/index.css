@@ -163,6 +163,12 @@
   --sidebar-accent-foreground: #EEF1FA;
   --sidebar-border: #1C2548;
   --sidebar-ring: #8FA0FF;
+
+  /* Safe Area Insets para iOS PWA (notch/dynamic island/home indicator) */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
 }
 
 /* Reset dentro de @layer base pra não vencer as utilities do Tailwind (p-*, m-*). */
@@ -221,6 +227,9 @@ body {
   overflow-x: hidden;
   overscroll-behavior-x: none;
   box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 @media (min-width: 431px) {
@@ -240,6 +249,14 @@ body {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+}
+
+@media (max-width: 1023px) {
+  .portal-wrapper {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
 }
 
 @media (max-width: 768px) {
@@ -830,7 +847,7 @@ select.field {
   background: var(--surface); border-radius: var(--r-sheet) var(--r-sheet) 0 0;
   padding: 10px 20px max(20px, env(safe-area-inset-bottom));
   z-index: 2001; animation: dsSheetUp 250ms var(--ease-out);
-  max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain;
+  max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 20px)); overflow-y: auto; overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   transition: bottom 150ms var(--ease-out), max-height 150ms var(--ease-out);
 }
