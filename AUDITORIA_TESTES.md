@@ -888,6 +888,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Os testes foram implementados inicialmente focando nas regras de negócio estáticas (validação de palavras secretas, quiz e seed inicial) e as funções de mutação do painel de administração ficaram sem cobertura unitária.
 - **Sugestão de correção:** Adicionar blocos `describe` cobrindo `createMission` (sanitização de payload, triggerModes, flashConfig), `updateMission`, `deleteMission`, `toggleMissionStatus` (transição active <-> paused) e `triggerFlashMission` (cálculo de expiresAt e mensagem do mascote), verificando as chamadas a `addDoc`, `updateDoc` e `deleteDoc`.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `tests/unit/missionService.test.js`, adicionadas suítes para `createMission` (valores padrão, sanitização de `secretConfig.secretWord` em uppercase/trim, `cardStyle`, `quizConfig`, `fields`, `qrCodeConfig`, `autoConfig` e cálculo de `startsAt`/`expiresAt`/`mascotDialogue` em `flashConfig`), `updateMission`, `deleteMission`, `toggleMissionStatus` (`active` <-> `paused`) e `triggerFlashMission`.
+- **Verificação:** Executado `npx vitest run tests/unit/missionService.test.js`, passando 17/17 testes (5x estável).
 
 ---
 
@@ -912,6 +915,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O autor do teste rascunhou a regra como prova de conceito sem extraí-la para uma função pura em um módulo utilitário da aplicação (`src/lib/passportUtils.js` ou `src/lib/sponsorService.js`).
 - **Sugestão de correção:** Extrair as regras de elegibilidade (`isEligibleForPrizes`, `isGoldenTicketFull`) do componente `PassportTab.jsx` para um módulo de regras de negócio em `src/lib/` e refatorar o teste para importar e validar essas funções reais de produção.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `src/components/PassportTab.jsx`, extraídas e exportadas as funções puras `checkPrizeEligibility`, `checkGoldenTicketEligibility`, `getPassportProgress` e `formatVisitDate` (utilizadas diretamente pelo componente `PassportTab`). Em `tests/unit/passport.test.js`, removidas as funções locais tautológicas e adicionadas asserções diretas contra as funções exportadas de produção.
+- **Verificação:** Executado `npx vitest run tests/unit/passport.test.js`, passando 8/8 testes (5x estável).
 
 ---
 
@@ -929,6 +935,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Acoplamento de constantes de configuração estática dentro do arquivo de componente que importa a infraestrutura do Firebase.
 - **Sugestão de correção:** Adicionar `vi.mock('../../src/lib/firebase', () => ({ auth: {}, db: {} }));` ou mover `SPONSORS_CONFIG` para um arquivo dedicado de constantes desacoplado de dependências do Firebase.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `tests/unit/passport.test.js`, adicionados mocks para `../../src/lib/firebase` e `firebase/firestore`, eliminando a conexão desnecessária aos emuladores locais durante a execução dos testes unitários.
+- **Verificação:** Executado `npx vitest run tests/unit/passport.test.js`, passando sem logs de conexão com emuladores.
 
 ---
 
@@ -966,6 +975,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   `PassportTab` não é renderizado em nenhum teste do projeto.
 - **Causa provável:** Falta de testes de componente para as abas secundárias da área de Conquistas.
 - **Sugestão de correção:** Implementar testes de renderização do componente `PassportTab` com mock de `userProfile` testando o estado inicial (0 estandes visitados), estado parcial e estado completo com Bilhete Dourado ativo.
+- **Status:** Corrigido
+- **Correção aplicada:** Em `tests/unit/passport.test.js`, adicionada suíte com `@testing-library/react` em ambiente `happy-dom` cobrindo o estado inicial (`0/5` estandes visitados), estado parcial elegível aos sorteios (`3/5` com datas formatadas), estado completo (`5/5` com Bilhete Dourado garantido), atualização reativa via `onSnapshot` com unsubscribe no `unmount` e troca para `fallbackLogo` em erro de carregamento de imagem (`onError`).
+- **Verificação:** Executado `npx vitest run tests/unit/passport.test.js`, passando 8/8 testes (5x estável).
 
 ---
 
