@@ -84,9 +84,20 @@ jobs:
           printf '%s' "$SERVICE_ACCOUNT_KEY" > "$RUNNER_TEMP/service-account.json"
           printf '%s' "$SERVICE_ACCOUNT_KEY" > "backend/service-account.json"
 
-      - name: Deploy to Firebase (Hosting, Functions, Firestore Rules, Storage Rules)
+      - name: Deploy to Firebase (Hosting, Firestore Rules, Storage Rules)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
         run: |
           PROJECT_ID="${{ secrets.VITE_FIREBASE_PROJECT_ID || 'facom-techweek-homolog' }}"
-          npx firebase-tools deploy --only functions,hosting,firestore:rules,storage --project "$PROJECT_ID" --non-interactive
+          npx firebase-tools deploy --only hosting,firestore:rules,storage --project "$PROJECT_ID" --non-interactive
+
+      - name: Deploy to Firebase (Cloud Functions)
+        continue-on-error: true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
+        run: |
+          PROJECT_ID="${{ secrets.VITE_FIREBASE_PROJECT_ID || 'facom-techweek-homolog' }}"
+          npx firebase-tools deploy --only functions --project "$PROJECT_ID" --non-interactive || {
+            echo "::warning::Deploy de Cloud Functions (2nd Gen) exige que a Service Account possua Project IAM Admin ou que os 3 comandos gcloud projects add-iam-policy-binding sejam executados uma vez pelo Owner do projeto GCP."
+            exit 1
+          }
