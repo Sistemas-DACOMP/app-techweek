@@ -125,10 +125,12 @@ export default function AdminMissoes({
         <button type="button" className={btn('secondary', 'flex-1')} onClick={onSeed} disabled={seeding}><RefreshCw size={18} aria-hidden="true" /> Popular</button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 lg:gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4">
         <Kpi label="Missões ativas" value={active} />
         <Kpi label="Relâmpago" value={flash} />
-        <Kpi label="Pontos disponíveis" value={totalPts.toLocaleString('pt-BR')} />
+        <div className="col-span-2 sm:col-span-1">
+          <Kpi label="Pontos disponíveis" value={totalPts.toLocaleString('pt-BR')} />
+        </div>
       </div>
 
       <div className="adm-noscroll -mx-5 mt-5 flex gap-2 overflow-x-auto px-5 lg:mx-0 lg:flex-wrap lg:px-0">
@@ -141,14 +143,15 @@ export default function AdminMissoes({
           <span className="sr-only">Buscar missão</span>
           <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Buscar por título, descrição ou palavra-chave" className="min-w-0 flex-1 border-0 bg-transparent text-[14px] text-text outline-none placeholder:text-text-4" />
         </label>
-        <select aria-label="Filtrar por status" className="field h-11 w-auto" value={status} onChange={(e) => onStatus(e.target.value)}>
+        <select aria-label="Filtrar por status" className="field h-11 w-full sm:w-auto" value={status} onChange={(e) => onStatus(e.target.value)}>
           <option value="ALL">Todos os status</option>
           <option value="active">Ativas</option>
           <option value="paused">Pausadas</option>
         </select>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-[20px] bg-surface px-2 pb-1 pt-4">
+      {/* Tabela (desktop) */}
+      <div className="mt-4 hidden overflow-x-auto rounded-[20px] bg-surface px-2 pb-1 pt-4 lg:block">
         <table className="w-full min-w-[760px] border-collapse">
           <thead>
             <tr>
@@ -203,6 +206,60 @@ export default function AdminMissoes({
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Cards (celular) */}
+      <div className="mt-4 flex flex-col gap-3 lg:hidden">
+        {loading && <EmptyState>Carregando missões...</EmptyState>}
+        {!loading && missions.length === 0 && <EmptyState>Nenhuma missão com esses filtros.</EmptyState>}
+        {missions.map((m) => {
+          const meta = STYLE_BY_KEY[styleOfMission(m)] || CARD_STYLES[0];
+          const Icon = meta.icon;
+          const name = m.title || m.name || 'Missão';
+          return (
+            <article key={m.id} className="rounded-[18px] border border-line bg-surface p-3.5">
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ background: `${meta.color}24`, color: meta.color }}>
+                    <Icon size={18} aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-bold text-text">{name}</span>
+                    <span className="block truncate text-[12px] text-text-3">{meta.label} · {howCompletes(m)}</span>
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-[10px] bg-[rgba(124,58,237,0.22)] px-2.5 py-1 text-[13px] font-extrabold text-[#D6CBFF]">
+                  +{Number(m.points) || 0}
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5">
+                <div className="flex items-center gap-2">
+                  <Switch checked={isOn(m)} label={`Missão ${name} ativa`} onChange={() => onToggle(m)} />
+                  <span className="text-[12px] font-semibold text-text-2">{isOn(m) ? 'Ativa' : 'Pausada'}</span>
+                </div>
+                <span className="inline-flex gap-1.5">
+                  {m.triggerMode === 'qr' && (
+                    <button
+                      type="button"
+                      aria-label={`Baixar QR Code de ${name}`}
+                      title="Baixar QR Code do Estande/Totem"
+                      className={`${ICON_BTN} text-link`}
+                      onClick={() => setQrModalMission(m)}
+                    >
+                      <QrCode size={16} aria-hidden="true" />
+                    </button>
+                  )}
+                  <button type="button" aria-label={`Editar ${name}`} title="Editar missão" className={ICON_BTN} onClick={() => onEdit(m)}><Pencil size={16} aria-hidden="true" /></button>
+                  <MoreMenu label={`Mais ações de ${name}`} items={[
+                    { label: 'Baixar QR Code (PNG)', icon: QrCode, onClick: () => setQrModalMission(m) },
+                    { label: 'Disparar como relâmpago', icon: Zap, onClick: () => onFlash(m) },
+                    { label: 'Excluir missão', icon: Trash2, danger: true, onClick: () => onDelete(m) },
+                  ]} />
+                </span>
+              </div>
+            </article>
+          );
+        })}
       </div>
 
       {/* Modal de Prévia e Download do QR Code da Missão */}

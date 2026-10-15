@@ -100,7 +100,8 @@ export const api = onRequest(
     region: 'us-east1',
     cors: false,
     memory: '256MiB',
-    maxInstances: 10
+    maxInstances: 10,
+    invoker: 'public'
   },
   app
 );

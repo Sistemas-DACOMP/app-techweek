@@ -35,7 +35,19 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     const tokenRole = decodedToken.role as UserRole | undefined;
     const isUserAdmin = Boolean(tokenRole === 'ADMIN' || decodedToken.admin === true);
-    const userRole: UserRole = isUserAdmin ? 'ADMIN' : (tokenRole || 'PARTICIPANT');
+    let userRole: UserRole = isUserAdmin ? 'ADMIN' : (tokenRole || 'PARTICIPANT');
+
+    if (userRole === 'PARTICIPANT' && db && typeof db.collection === 'function') {
+      try {
+        const userSnap = await db.collection('users').doc(decodedToken.uid).get();
+        const firestoreRole = String(userSnap?.data?.()?.role || '').trim().toUpperCase();
+        if (['ADMIN', 'STAFF', 'SPONSOR', 'PARTICIPANT'].includes(firestoreRole)) {
+          userRole = firestoreRole as UserRole;
+        }
+      } catch {
+        // Fallback silencioso caso o Firestore não esteja disponível ou mockado
+      }
+    }
 
     const user: AuthUser = {
       uid: decodedToken.uid,
@@ -50,6 +62,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     console.error('❌ Erro na verificação do token JWT:', error?.message || error);
     res.status(401).json({
       error: 'INVALID_TOKEN',
+      code: error?.code || 'auth/invalid-token',
       message: 'Token de autenticação inválido, expirado ou revogado.'
     });
     return;

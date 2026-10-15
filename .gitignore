@@ -45,6 +45,7 @@ claude-context/
 *.sln
 *.sw?
 .vercel
+.firebase/
 .env*
 test-results/
 docs/redesign/screens/
