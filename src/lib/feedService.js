@@ -484,7 +484,12 @@ export async function broadcastAnnouncement({ title, message, priority = 'HIGH',
     const { apiFetch } = await import('./api');
     const apiRes = await apiFetch('/api/admin/notifications/broadcast', {
       method: 'POST',
-      body: JSON.stringify({ title: cleanTitle, body: cleanMessage }),
+      body: JSON.stringify({
+        title: cleanTitle,
+        body: cleanMessage,
+        actionUrl: actionUrl || undefined,
+        actionLabel: actionLabel || undefined,
+      }),
     });
     const announcementId = apiRes?.announcementId;
     if (announcementId) {

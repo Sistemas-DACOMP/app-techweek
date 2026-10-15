@@ -1,6 +1,37 @@
 import { useRef, useState } from 'react';
-import { Send, Image as ImageIcon, Video, X, Pin, Trash2, Bell, Smartphone, Radio, Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
+import {
+  Send,
+  Image as ImageIcon,
+  Video,
+  X,
+  Pin,
+  Trash2,
+  Bell,
+  Smartphone,
+  Radio,
+  Sparkles,
+  Loader2,
+  CheckCircle2,
+  Navigation,
+  Link2,
+  Calendar,
+  QrCode,
+  Trophy,
+  Award,
+  Home,
+  Newspaper
+} from 'lucide-react';
 import { btn, ICON_BTN, PageHead, Section, Switch, EmptyState } from './ui';
+
+export const PUSH_DESTINATIONS = [
+  { id: '/feed', label: 'Feed Oficial', path: '/feed', desc: 'Timeline de comunicados', icon: Newspaper, defaultAction: 'Ver no Feed' },
+  { id: '/agenda', label: 'Programação', path: '/agenda', desc: 'Grade de palestras e horários', icon: Calendar, defaultAction: 'Ver Programação' },
+  { id: '/scanner', label: 'Scanner QR', path: '/scanner', desc: 'Check-in e conexões', icon: QrCode, defaultAction: 'Abrir Scanner' },
+  { id: '/challenges', label: 'Missões', path: '/challenges', desc: 'Gamificação e desafios', icon: Trophy, defaultAction: 'Ver Missões' },
+  { id: '/ranking', label: 'Ranking', path: '/ranking', desc: 'Pontuação dos participantes', icon: Award, defaultAction: 'Ver Ranking' },
+  { id: '/', label: 'Início', path: '/', desc: 'Página inicial do app', icon: Home, defaultAction: 'Abrir Início' },
+  { id: 'custom', label: 'Outro Link', path: 'custom', desc: 'Rota interna ou link web', icon: Link2, defaultAction: 'Abrir Detalhes' }
+];
 
 const DEFAULT_TEMPLATES = [
   { label: '📢 Palestra em 15 min', text: '📢 ATENÇÃO: A próxima palestra no Anfiteatro Principal iniciará em 15 minutos! Preparem o app para fazer o check-in presencial.' },
@@ -15,6 +46,12 @@ export default function AdminFeed({
   setFeedInput,
   feedChannel = 'feed',
   setFeedChannel,
+  feedActionUrl = '/feed',
+  setFeedActionUrl,
+  feedCustomUrl = '',
+  setFeedCustomUrl,
+  feedActionLabel = '',
+  setFeedActionLabel,
   feedIsPinned = false,
   setFeedIsPinned,
   feedMediaFile = null,
@@ -89,6 +126,88 @@ export default function AdminFeed({
                   })}
                 </div>
               </div>
+
+              {/* Seletor de Redirecionamento da Notificação Push */}
+              {(feedChannel === 'broadcast' || feedChannel === 'both') && (
+                <div className="rounded-2xl border border-line-2 bg-surface-raised p-4">
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 text-[13px] font-extrabold text-text">
+                      <Navigation size={15} className="text-link" />
+                      <span>Destino ao Clicar na Notificação</span>
+                    </label>
+                    <span className="text-[11px] font-medium text-text-3">
+                      Onde o app abrirá
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {PUSH_DESTINATIONS.map((dest) => {
+                      const isSelected = feedActionUrl === dest.id;
+                      const DestIcon = dest.icon;
+                      return (
+                        <button
+                          key={dest.id}
+                          type="button"
+                          onClick={() => setFeedActionUrl(dest.id)}
+                          className={`press flex flex-col items-start gap-1 rounded-xl border p-2.5 text-left transition-all ${
+                            isSelected
+                              ? 'border-link bg-action/20 text-text shadow-[0_0_0_2px_rgba(143,160,255,0.3)]'
+                              : 'border-line-2 bg-bg text-text-3 hover:border-line hover:text-text'
+                          }`}
+                        >
+                          <div className="flex w-full items-center justify-between">
+                            <DestIcon size={15} className={isSelected ? 'text-link' : 'text-text-3'} />
+                            {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-link" />}
+                          </div>
+                          <span className="text-[12px] font-bold leading-tight">{dest.label}</span>
+                          <span className="text-[10px] leading-tight text-text-4">{dest.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Campo de link personalizado caso escolha 'custom' */}
+                  {feedActionUrl === 'custom' && (
+                    <div className="mt-3 flex flex-col gap-2 rounded-xl border border-line bg-bg p-3">
+                      <div>
+                        <label htmlFor="feed-custom-url" className="mb-1 block text-[11px] font-extrabold text-text-2">
+                          URL ou Rota Personalizada
+                        </label>
+                        <input
+                          id="feed-custom-url"
+                          type="text"
+                          required={feedActionUrl === 'custom'}
+                          placeholder="/perfil, /recompensas ou https://link-externo.com"
+                          value={feedCustomUrl}
+                          onChange={(e) => setFeedCustomUrl(e.target.value)}
+                          className="w-full rounded-xl border border-line-2 bg-surface-raised px-3 py-2 text-[13px] text-text outline-none focus:border-link"
+                        />
+                        <span className="mt-1 block text-[10px] text-text-4">
+                          Rotas internas começam com / (ex: /agenda). Links externos devem começar com https://
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Rótulo opcional do botão da notificação */}
+                  <div className="mt-3">
+                    <label htmlFor="feed-action-label" className="mb-1 block text-[11px] font-extrabold text-text-2">
+                      Texto do Botão de Ação <span className="font-normal text-text-4">(Opcional)</span>
+                    </label>
+                    <input
+                      id="feed-action-label"
+                      type="text"
+                      maxLength={32}
+                      placeholder={
+                        PUSH_DESTINATIONS.find((d) => d.id === feedActionUrl)?.defaultAction || 'Abrir Notificação'
+                      }
+                      value={feedActionLabel}
+                      onChange={(e) => setFeedActionLabel(e.target.value)}
+                      className="w-full rounded-xl border border-line-2 bg-bg px-3 py-2 text-[13px] text-text outline-none focus:border-link"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Modelos Rápidos (Templates) */}
               <div>
@@ -233,12 +352,32 @@ export default function AdminFeed({
                 {feedSubmitting || isUploadingFeedMedia ? (
                   <>
                     <Loader2 size={18} className="animate-spin" />
-                    <span>{isUploadingFeedMedia ? 'Fazendo Upload de Mídia...' : 'Publicando Transmissão...'}</span>
+                    <span>
+                      {isUploadingFeedMedia
+                        ? 'Fazendo Upload de Mídia...'
+                        : feedChannel === 'broadcast'
+                        ? 'Disparando Notificação Push...'
+                        : feedChannel === 'both'
+                        ? 'Publicando & Disparando Push...'
+                        : 'Publicando no Feed...'}
+                    </span>
                   </>
                 ) : (
                   <>
-                    <Send size={16} />
-                    <span>Publicar Transmissão Oficial</span>
+                    {feedChannel === 'broadcast' ? (
+                      <Bell size={16} />
+                    ) : feedChannel === 'both' ? (
+                      <Radio size={16} />
+                    ) : (
+                      <Send size={16} />
+                    )}
+                    <span>
+                      {feedChannel === 'broadcast'
+                        ? 'Disparar Notificação Push'
+                        : feedChannel === 'both'
+                        ? 'Publicar no Feed & Disparar Push'
+                        : 'Publicar no Feed Oficial'}
+                    </span>
                   </>
                 )}
               </button>
@@ -246,59 +385,114 @@ export default function AdminFeed({
           </Section>
         </div>
 
-        {/* COLUNA DIREITA: Live Preview + Publicações Ativas */}
+        {/* COLUNA DIREITA: Live Previews + Publicações Ativas */}
         <div className="flex flex-col gap-5">
-          {/* Live Preview no Formato do Participante */}
-          <div className="rounded-[24px] border border-line-2 bg-surface p-5 shadow-xl">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-[13px] font-extrabold text-text-2">Prévia no App do Participante</span>
-              <span className="rounded-full bg-surface-raised px-2.5 py-0.5 text-[11px] font-bold text-text-3">
-                Live Preview
-              </span>
-            </div>
-
-            {/* Card estilo feed do participante */}
-            <div className="rounded-[20px] border border-line-2 bg-bg p-4 shadow-inner">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={currentAdminAvatar || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80'}
-                    alt="Comissão"
-                    className="h-10 w-10 rounded-full border border-action object-cover"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-extrabold text-text">Comissão FACOM TechWeek</span>
-                      <span className="rounded bg-action/20 px-1.5 py-0.5 text-[10px] font-black uppercase text-link">
-                        Oficial
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-text-4">Agora mesmo · Aberto a todos</span>
-                  </div>
-                </div>
-
-                {feedIsPinned && (
-                  <span className="flex items-center gap-1 rounded-full bg-link/15 px-2.5 py-1 text-[11px] font-extrabold text-link">
-                    <Pin size={12} /> Fixado
-                  </span>
-                )}
+          {/* Live Preview de Notificação Push */}
+          {(feedChannel === 'broadcast' || feedChannel === 'both') && (
+            <div className="rounded-[24px] border border-link/40 bg-surface p-5 shadow-xl">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[13px] font-extrabold text-link">
+                  <Bell size={14} />
+                  <span>Prévia da Notificação Push (Tela de Bloqueio)</span>
+                </span>
+                <span className="rounded-full bg-link/15 px-2.5 py-0.5 text-[11px] font-extrabold text-link">
+                  Push Preview
+                </span>
               </div>
 
-              <p className="mt-3 whitespace-pre-wrap text-[13px] leading-relaxed text-text">
-                {feedInput.trim() || 'A sua mensagem aparecerá aqui em tempo real enquanto você digita...'}
-              </p>
+              {/* Card estilo banner de notificação móvel / Web Push */}
+              <div className="overflow-hidden rounded-2xl border border-line-2 bg-bg/95 p-3.5 shadow-lg backdrop-blur-md">
+                <div className="flex items-center justify-between text-[11px] text-text-3">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <div className="flex h-4 w-4 items-center justify-center rounded bg-link text-[9px] font-black text-black">
+                      TW
+                    </div>
+                    <span>FACOM TECHWEEK</span>
+                  </div>
+                  <span>Agora</span>
+                </div>
 
-              {feedMediaPreview && (
-                <div className="mt-3 overflow-hidden rounded-xl bg-black">
-                  {feedMediaPreview.type === 'video' ? (
-                    <video src={feedMediaPreview.url} className="max-h-[200px] w-full object-contain" />
-                  ) : (
-                    <img src={feedMediaPreview.url} alt="" className="max-h-[200px] w-full object-cover" />
+                <div className="mt-2">
+                  <p className="text-[13px] font-black text-text">Comunicado Oficial</p>
+                  <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-text-2">
+                    {feedInput.trim() || 'A mensagem da notificação aparecerá aqui para os participantes...'}
+                  </p>
+                </div>
+
+                {/* Destino e Botão de Ação */}
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-line/60 pt-2.5">
+                  <div className="flex items-center gap-1.5 text-[11px] text-text-3">
+                    <Navigation size={12} className="text-link" />
+                    <span>Destino:</span>
+                    <span className="font-bold text-text">
+                      {feedActionUrl === 'custom'
+                        ? feedCustomUrl || '/ (Início)'
+                        : PUSH_DESTINATIONS.find((d) => d.id === feedActionUrl)?.label || 'Feed Oficial'}
+                    </span>
+                  </div>
+                  <span className="rounded-lg bg-action/20 px-2.5 py-1 text-[11px] font-extrabold text-link">
+                    {feedActionLabel ||
+                      PUSH_DESTINATIONS.find((d) => d.id === feedActionUrl)?.defaultAction ||
+                      'Abrir Notificação'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Live Preview no Formato do Participante (Feed) */}
+          {feedChannel !== 'broadcast' && (
+            <div className="rounded-[24px] border border-line-2 bg-surface p-5 shadow-xl">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[13px] font-extrabold text-text-2">Prévia no Feed do Participante</span>
+                <span className="rounded-full bg-surface-raised px-2.5 py-0.5 text-[11px] font-bold text-text-3">
+                  Live Preview
+                </span>
+              </div>
+
+              {/* Card estilo feed do participante */}
+              <div className="rounded-[20px] border border-line-2 bg-bg p-4 shadow-inner">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={currentAdminAvatar || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80'}
+                      alt="Comissão"
+                      className="h-10 w-10 rounded-full border border-action object-cover"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-extrabold text-text">Comissão FACOM TechWeek</span>
+                        <span className="rounded bg-action/20 px-1.5 py-0.5 text-[10px] font-black uppercase text-link">
+                          Oficial
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-text-4">Agora mesmo · Aberto a todos</span>
+                    </div>
+                  </div>
+
+                  {feedIsPinned && (
+                    <span className="flex items-center gap-1 rounded-full bg-link/15 px-2.5 py-1 text-[11px] font-extrabold text-link">
+                      <Pin size={12} /> Fixado
+                    </span>
                   )}
                 </div>
-              )}
+
+                <p className="mt-3 whitespace-pre-wrap text-[13px] leading-relaxed text-text">
+                  {feedInput.trim() || 'A sua mensagem aparecerá aqui em tempo real enquanto você digita...'}
+                </p>
+
+                {feedMediaPreview && (
+                  <div className="mt-3 overflow-hidden rounded-xl bg-black">
+                    {feedMediaPreview.type === 'video' ? (
+                      <video src={feedMediaPreview.url} className="max-h-[200px] w-full object-contain" />
+                    ) : (
+                      <img src={feedMediaPreview.url} alt="" className="max-h-[200px] w-full object-cover" />
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Lista de Publicações Ativas */}
           <Section

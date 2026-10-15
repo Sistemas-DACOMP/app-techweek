@@ -165,7 +165,7 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
     return;
   }
 
-  const { title, body } = req.body ?? {};
+  const { title, body, actionUrl, actionLabel } = req.body ?? {};
 
   if (typeof title !== 'string' || !title.trim()) {
     res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'title e obrigatorio e deve ser uma string nao vazia.' });
@@ -197,15 +197,55 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
     res.status(400).json({ error: 'INVALID_PAYLOAD', message: `body deve ter no maximo ${MAX_BODY_LENGTH} caracteres.` });
     return;
   }
+
+  let validatedActionUrl: string | undefined;
+  if (actionUrl !== undefined && actionUrl !== null) {
+    if (typeof actionUrl !== 'string') {
+      res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'actionUrl deve ser uma string.' });
+      return;
+    }
+    const trimmedUrl = actionUrl.trim();
+    if (trimmedUrl.length > 500) {
+      res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'actionUrl deve ter no máximo 500 caracteres.' });
+      return;
+    }
+    if (trimmedUrl && !trimmedUrl.startsWith('/') && !trimmedUrl.startsWith('https://') && !trimmedUrl.startsWith('http://')) {
+      res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'actionUrl deve iniciar com "/" ou "https://".' });
+      return;
+    }
+    validatedActionUrl = trimmedUrl || undefined;
+  }
+
+  let validatedActionLabel: string | undefined;
+  if (actionLabel !== undefined && actionLabel !== null) {
+    if (typeof actionLabel !== 'string') {
+      res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'actionLabel deve ser uma string.' });
+      return;
+    }
+    const trimmedLabel = actionLabel.trim();
+    if (trimmedLabel.length > 60) {
+      res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'actionLabel deve ter no máximo 60 caracteres.' });
+      return;
+    }
+    validatedActionLabel = trimmedLabel || undefined;
+  }
+
   const announcementRef = db.collection('announcements').doc();
 
   try {
-    await announcementRef.set({
+    const announcementData: Record<string, any> = {
       title: trimmedTitle,
       body: trimmedBody,
       createdBy: req.user.uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    };
+    if (validatedActionUrl) {
+      announcementData.actionUrl = validatedActionUrl;
+    }
+    if (validatedActionLabel) {
+      announcementData.actionLabel = validatedActionLabel;
+    }
+    await announcementRef.set(announcementData);
   } catch (error) {
     console.error('Erro ao gravar comunicado em /announcements:', error);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Nao foi possivel gravar o comunicado.' });
@@ -213,10 +253,24 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
   }
 
   try {
-    await admin.messaging().send({
+    const fcmPayload: any = {
       topic: 'todos_participantes',
       notification: { title: trimmedTitle, body: trimmedBody }
-    });
+    };
+    if (validatedActionUrl) {
+      fcmPayload.data = {
+        announcementId: announcementRef.id,
+        actionUrl: validatedActionUrl,
+        url: validatedActionUrl,
+        ...(validatedActionLabel ? { actionLabel: validatedActionLabel } : {})
+      };
+      fcmPayload.webpush = {
+        fcmOptions: {
+          link: validatedActionUrl
+        }
+      };
+    }
+    await admin.messaging().send(fcmPayload);
   } catch (error: any) {
     console.error('Erro ao disparar push FCM do broadcast:', error?.message || error);
     res.status(502).json({
@@ -234,7 +288,8 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
       title: trimmedTitle,
       body: trimmedBody,
       message: trimmedBody,
-      actionUrl: '/',
+      actionUrl: validatedActionUrl || '/',
+      actionLabel: validatedActionLabel || 'Abrir App',
       priority: 'HIGH',
       urgent: true,
       type: 'system',

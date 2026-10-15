@@ -370,7 +370,12 @@ self.addEventListener('periodicsync', (event) => {
 // 4. Clique na notificação no celular -> foca o PWA ou abre na rota destino
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || '/';
+  const rawUrl = event.notification.data?.url || '/';
+  const openUrl = rawUrl.startsWith('/')
+    ? new URL('#' + rawUrl, self.location.origin).href
+    : (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
+      ? rawUrl
+      : new URL('#/' + rawUrl.replace(/^#\/?/, ''), self.location.origin).href;
 
   event.waitUntil(
     self.clients
@@ -380,14 +385,14 @@ self.addEventListener('notificationclick', (event) => {
           if ('focus' in client) {
             client.postMessage({
               type: 'NOTIFICATION_CLICK',
-              url: targetUrl,
+              url: rawUrl,
               notificationData: event.notification.data,
             });
             return client.focus();
           }
         }
         if (self.clients.openWindow) {
-          return self.clients.openWindow(targetUrl);
+          return self.clients.openWindow(openUrl);
         }
         return null;
       })

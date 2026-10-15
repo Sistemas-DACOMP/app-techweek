@@ -422,6 +422,60 @@ describe('POST /api/admin/notifications/broadcast (KAN-61)', () => {
     expect(res.json).toHaveBeenCalledWith({ success: true, announcementId: 'ann-1' });
   });
 
+  it('sucesso com redirecionamento customizado: grava actionUrl e actionLabel em /announcements, passa em data e webpush do FCM', async () => {
+    const req = makeBroadcastReq({
+      title: 'Aviso',
+      body: 'Palestra iniciando',
+      actionUrl: '/agenda',
+      actionLabel: 'Ver Programação'
+    });
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(announcementDoc.set).toHaveBeenCalledWith({
+      title: 'Aviso',
+      body: 'Palestra iniciando',
+      createdBy: 'admin-1',
+      createdAt: expect.anything(),
+      actionUrl: '/agenda',
+      actionLabel: 'Ver Programação'
+    });
+    expect(sendMock).toHaveBeenCalledWith({
+      topic: 'todos_participantes',
+      notification: { title: 'Aviso', body: 'Palestra iniciando' },
+      data: {
+        announcementId: 'ann-1',
+        actionUrl: '/agenda',
+        url: '/agenda',
+        actionLabel: 'Ver Programação'
+      },
+      webpush: {
+        fcmOptions: {
+          link: '/agenda'
+        }
+      }
+    });
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ success: true, announcementId: 'ann-1' });
+  });
+
+  it('400 INVALID_PAYLOAD se actionUrl tiver protocolo inseguro (ex: javascript:)', async () => {
+    const req = makeBroadcastReq({
+      title: 'Aviso',
+      body: 'Mensagem',
+      actionUrl: 'javascript:alert(1)'
+    });
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(db.collection).not.toHaveBeenCalled();
+    expect(admin.messaging).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
+  });
+
   it('400 INVALID_PAYLOAD se title estiver ausente ou vazio (após trim), nem toca Firestore/messaging', async () => {
     const req = makeBroadcastReq({ title: '   ', body: 'Mensagem geral' });
     const res = makeRes();

@@ -262,6 +262,9 @@ export default function Admin() {
   const [feedIsPinned, setFeedIsPinned] = useState(false);
   const [feedChannel, setFeedChannel] = useState('feed');
   const [feedSubmitting, setFeedSubmitting] = useState(false);
+  const [feedActionUrl, setFeedActionUrl] = useState('/feed');
+  const [feedCustomUrl, setFeedCustomUrl] = useState('');
+  const [feedActionLabel, setFeedActionLabel] = useState('');
 
   // Perfil dinâmico do Administrador logado
   const currentAdminName = profile?.displayName || profile?.fullName || [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || (profile?.email ? profile.email.split('@')[0] : 'Samuel Amorim');
@@ -744,12 +747,27 @@ export default function Admin() {
       }
 
       if (feedChannel === 'broadcast' || feedChannel === 'both') {
+        const resolvedActionUrl = feedActionUrl === 'custom'
+          ? (feedCustomUrl.trim() || '/feed')
+          : (feedActionUrl || '/feed');
+
+        const defaultLabels = {
+          '/feed': 'Ver no Feed',
+          '/agenda': 'Ver Programação',
+          '/scanner': 'Abrir Scanner',
+          '/challenges': 'Ver Missões',
+          '/ranking': 'Ver Ranking',
+          '/': 'Abrir Início',
+        };
+
+        const resolvedActionLabel = feedActionLabel.trim() || defaultLabels[resolvedActionUrl] || 'Ver no App';
+
         await broadcastAnnouncement({
           title: 'Aviso da Organização FACOM',
           message: content,
           priority: isPinned ? 'HIGH' : 'NORMAL',
-          actionUrl: '/feed',
-          actionLabel: 'Ver no Feed'
+          actionUrl: resolvedActionUrl,
+          actionLabel: resolvedActionLabel,
         });
       }
 
@@ -757,6 +775,9 @@ export default function Admin() {
       setFeedImageUrl('');
       handleRemoveAdminFeedMedia();
       setFeedIsPinned(false);
+      setFeedActionUrl('/feed');
+      setFeedCustomUrl('');
+      setFeedActionLabel('');
       setFeedback({
         type: 'success',
         title: 'Publicação Concluída',
@@ -1378,6 +1399,12 @@ export default function Admin() {
             <AdminFeed
               feedChannel={feedChannel}
               setFeedChannel={setFeedChannel}
+              feedActionUrl={feedActionUrl}
+              setFeedActionUrl={setFeedActionUrl}
+              feedCustomUrl={feedCustomUrl}
+              setFeedCustomUrl={setFeedCustomUrl}
+              feedActionLabel={feedActionLabel}
+              setFeedActionLabel={setFeedActionLabel}
               feedInput={feedInput}
               setFeedInput={setFeedInput}
               feedTemplates={FEED_TEMPLATES}

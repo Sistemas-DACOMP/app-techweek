@@ -139,15 +139,12 @@ export async function registerNotificationServiceWorker() {
         }
         if (data?.type === 'NOTIFICATION_CLICK' && data.url) {
           try {
-            const targetUrl = String(data.url);
-            if (targetUrl.startsWith('/')) {
-              const currentHashPath = window.location.hash ? window.location.hash.replace(/^#/, '') : '';
-              if (window.location.hash || window.location.pathname === '/') {
-                window.location.hash = `#${targetUrl}`;
-              } else if (currentHashPath !== targetUrl) {
-                window.history.pushState({}, '', targetUrl);
-                window.dispatchEvent(new PopStateEvent('popstate'));
-              }
+            const targetUrl = String(data.url).trim();
+            if (targetUrl.startsWith('/') || targetUrl.startsWith('#/')) {
+              const cleanHash = targetUrl.startsWith('#') ? targetUrl : `#${targetUrl}`;
+              window.location.hash = cleanHash;
+            } else if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+              window.open(targetUrl, '_blank', 'noopener,noreferrer');
             }
           } catch {
             // fallback
