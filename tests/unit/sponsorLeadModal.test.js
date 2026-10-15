@@ -1,6 +1,38 @@
-import { describe, it, expect } from 'vitest';
+// @vitest-environment happy-dom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+
+const { mockSubmitLead, mockUpdateLead, mockGetSponsorSettings, mockGetActiveOutreachMessage } = vi.hoisted(() => ({
+  mockSubmitLead: vi.fn(),
+  mockUpdateLead: vi.fn(),
+  mockGetSponsorSettings: vi.fn(() => ({
+    tags: [],
+    activeTemplateId: 'recruiter_outreach',
+    templates: [{ id: 'recruiter_outreach', title: 'Abordagem Geral' }],
+  })),
+  mockGetActiveOutreachMessage: vi.fn((companyId, ctx) =>
+    `Olá, ${ctx?.name || 'tudo bem'}! Mensagem da ${ctx?.companyName || companyId}.`
+  ),
+}));
+
+vi.mock('../../src/lib/firebase', () => ({
+  auth: { currentUser: null },
+  db: {},
+  storage: {},
+}));
+
+vi.mock('../../src/lib/sponsorService', () => ({
+  submitLead: (...args) => mockSubmitLead(...args),
+  updateLead: (...args) => mockUpdateLead(...args),
+}));
+
+vi.mock('../../src/lib/sponsorSettingsService', () => ({
+  getSponsorSettings: (...args) => mockGetSponsorSettings(...args),
+  getActiveOutreachMessage: (...args) => mockGetActiveOutreachMessage(...args),
+}));
+
 import SponsorLeadModal, {
   QUICK_RECRUITMENT_TAGS,
   RATING_CLASSIFICATIONS,
@@ -10,6 +42,15 @@ import SponsorLeadModal, {
 } from '../../src/components/SponsorLeadModal';
 
 describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
+  beforeEach(() => {
+    mockSubmitLead.mockReset().mockResolvedValue({ success: true, lead: { id: 'lead_1' } });
+    mockUpdateLead.mockReset().mockResolvedValue({ success: true });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
   const mockParticipant = {
     participantUid: 'usr_test_123',
     name: 'Ana Silva',
@@ -304,4 +345,181 @@ describe('SponsorLeadModal - 5 Melhorias de UX/UI para Estande', () => {
       expect(html).toContain('placeholder="Adicionar anotação... (opcional)"');
     });
   });
+
+  describe('7. Interações Reais do Usuário — Qualificação, Chips, Notas e Persistência (ERR-041)', () => {
+    it('seleciona estrelas, alterna chips rápidos, digita anotação e submete novo lead via submitLead', async () => {
+      const onLeadCaptured = vi.fn();
+      const onClose = vi.fn();
+
+      render(
+        React.createElement(SponsorLeadModal, {
+          participant: mockParticipant,
+          sponsorProfile: mockSponsorProfile,
+          isExistingLead: false,
+          onClose,
+          onLeadCaptured,
+        })
+      );
+
+      // Seleciona 5 estrelas
+      const star5Btn = screen.getByRole('button', { name: /5 estrelas - destaque máximo/i });
+      fireEvent.click(star5Btn);
+
+      // Alterna chips rápidos (adiciona Frontend e Estágio, depois remove Estágio e adiciona Destaque)
+      const frontendChip = screen.getByRole('button', { name: 'Frontend' });
+      const estagioChip = screen.getByRole('button', { name: 'Estágio' });
+      const destaqueChip = screen.getByRole('button', { name: 'Destaque' });
+
+      fireEvent.click(frontendChip);
+      fireEvent.click(estagioChip);
+      const textarea = screen.getByPlaceholderText('Adicionar anotação... (opcional)');
+      expect(textarea.value).toBe('[Frontend] [Estágio]');
+
+      // Remove chip Estágio com 1 toque e adiciona Destaque
+      fireEvent.click(estagioChip);
+      expect(textarea.value).toBe('[Frontend]');
+      fireEvent.click(destaqueChip);
+      expect(textarea.value).toBe('[Frontend] [Destaque]');
+
+      // Digita observação complementar
+      fireEvent.change(textarea, {
+        target: { value: '[Frontend] [Destaque] Excelente domínio de React e arquitetura.' },
+      });
+
+      // Clica em Salvar Lead
+      const saveBtn = screen.getByRole('button', { name: /salvar lead/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(mockSubmitLead).toHaveBeenCalledTimes(1);
+      });
+
+      expect(mockSubmitLead).toHaveBeenCalledWith(
+        expect.objectContaining({
+          participantUid: 'usr_test_123',
+          rating: 5,
+          notes: '[Frontend] [Destaque] Excelente domínio de React e arquitetura.',
+          tags: ['Frontend', 'Destaque'],
+          companyId: 'kanastra',
+        })
+      );
+      expect(onLeadCaptured).toHaveBeenCalledWith(
+        expect.objectContaining({
+          participantUid: 'usr_test_123',
+          rating: 5,
+          tags: ['Frontend', 'Destaque'],
+        })
+      );
+    });
+
+    it('aciona "Somente Validar" com validateOnly: true e fecha o modal após validar presença', async () => {
+      const onValidateOnly = vi.fn();
+      const onClose = vi.fn();
+
+      render(
+        React.createElement(SponsorLeadModal, {
+          participant: mockParticipant,
+          sponsorProfile: mockSponsorProfile,
+          isExistingLead: false,
+          onClose,
+          onValidateOnly,
+        })
+      );
+
+      const validateBtn = screen.getByRole('button', { name: /somente validar/i });
+      fireEvent.click(validateBtn);
+
+      await waitFor(() => {
+        expect(mockSubmitLead).toHaveBeenCalledWith({
+          participantUid: 'usr_test_123',
+          notes: '',
+          rating: undefined,
+          companyId: 'kanastra',
+          validateOnly: true,
+        });
+      });
+
+      expect(onValidateOnly).toHaveBeenCalledWith(mockParticipant);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('abre modo de edição em lead existente no CRM, atualiza nota/tags e chama updateLead', async () => {
+      const onLeadUpdated = vi.fn();
+      const existingLead = {
+        ...mockParticipant,
+        rating: 3,
+        notes: '[Backend] Bom perfil técnico',
+        tags: ['Backend'],
+      };
+
+      render(
+        React.createElement(SponsorLeadModal, {
+          participant: existingLead,
+          sponsorProfile: mockSponsorProfile,
+          isExistingLead: true,
+          onClose: () => {},
+          onLeadUpdated,
+        })
+      );
+
+      // Inicia na Ficha do Candidato e clica em Editar Avaliação
+      const editBtn = screen.getByRole('button', { name: /editar avaliação/i });
+      fireEvent.click(editBtn);
+
+      // Altera para 4 estrelas e adiciona chip Júnior
+      const star4Btn = screen.getByRole('button', { name: /4 estrelas - muito bom/i });
+      fireEvent.click(star4Btn);
+
+      const juniorChip = screen.getByRole('button', { name: 'Júnior' });
+      fireEvent.click(juniorChip);
+
+      const saveChangesBtn = screen.getByRole('button', { name: /salvar alterações/i });
+      fireEvent.click(saveChangesBtn);
+
+      await waitFor(() => {
+        expect(mockUpdateLead).toHaveBeenCalledTimes(1);
+      });
+
+      expect(mockUpdateLead).toHaveBeenCalledWith({
+        participantUid: 'usr_test_123',
+        rating: 4,
+        notes: '[Backend] [Júnior] Bom perfil técnico',
+        tags: ['Backend', 'Júnior'],
+        companyId: 'kanastra',
+      });
+      expect(onLeadUpdated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          participantUid: 'usr_test_123',
+          rating: 4,
+          tags: ['Backend', 'Júnior'],
+        })
+      );
+    });
+
+    it('exibe mensagem de erro amigável caso submitLead rejeite a requisição', async () => {
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockSubmitLead.mockRejectedValueOnce(new Error('Falha ao sincronizar lead com o servidor'));
+
+      try {
+        render(
+          React.createElement(SponsorLeadModal, {
+            participant: mockParticipant,
+            sponsorProfile: mockSponsorProfile,
+            isExistingLead: false,
+            onClose: () => {},
+          })
+        );
+
+        const saveBtn = screen.getByRole('button', { name: /salvar lead/i });
+        fireEvent.click(saveBtn);
+
+        await waitFor(() => {
+          expect(screen.getByText('Falha ao sincronizar lead com o servidor')).toBeDefined();
+        });
+      } finally {
+        errSpy.mockRestore();
+      }
+    });
+  });
 });
+

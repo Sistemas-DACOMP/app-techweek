@@ -21,7 +21,7 @@ import rateLimit, { Options } from 'express-rate-limit';
 // de wiring como "rate limit funcionando". Melhor: cada requisição sem uid
 // vira sua própria chave (randomUUID), nunca compete com outra, e o erro
 // fica visível no log em vez de silencioso.
-function keyGenerator(req: Request): string {
+export function keyGenerator(req: Request): string {
   if (req.user?.uid) return req.user.uid;
   console.error('rateLimiter: req.user.uid ausente — limiter montado antes/sem requireAuth?', req.method, req.path);
   return randomUUID();
@@ -62,6 +62,32 @@ export const adminSponsorLimiter = rateLimit({
   ...shared,
   windowMs: 10 * 60 * 1000,
   limit: 60
+});
+
+// Screen-token / KAN-51 (ERR-080): emissão de token de telão por STAFF/ADMIN.
+// Limite de 60 requisições por minuto por usuário autenticado.
+export const staffActionLimiter = rateLimit({
+  ...shared,
+  windowMs: 1 * 60 * 1000,
+  limit: 60
+});
+
+// Sympla (ERR-085): sincronização/verificação de ingressos contra a API externa do Sympla.
+// Protege a cota da organização no Sympla com teto de 10 req/min por participante autenticado.
+export const symplaSyncLimiter = rateLimit({
+  ...shared,
+  windowMs: 1 * 60 * 1000,
+  limit: 10
+});
+
+// Sympla (ERR-085): consulta pública dos detalhes do evento Sympla.
+// 30 req/5min por IP.
+export const symplaPublicLimiter = rateLimit({
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler,
+  windowMs: 5 * 60 * 1000,
+  limit: 30
 });
 
 // KAN-124: rotas PÚBLICAS de convite (sem auth no GET, auth só depois no

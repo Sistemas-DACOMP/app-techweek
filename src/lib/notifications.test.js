@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest';
 import {
   getNotifications,
   getUnreadCount,
@@ -20,6 +20,11 @@ import {
 
 describe('Notifications System', () => {
   let storage = {};
+  const originalLocalStorage = globalThis.localStorage;
+  const originalWindow = globalThis.window;
+  const originalCustomEvent = globalThis.CustomEvent;
+  const originalNavigator = globalThis.navigator;
+  let dispatchEventSpy;
 
   beforeAll(() => {
     const localStorageMock = {
@@ -35,10 +40,11 @@ describe('Notifications System', () => {
       }
     };
 
+    dispatchEventSpy = vi.fn();
     globalThis.localStorage = localStorageMock;
     globalThis.window = {
       ...globalThis,
-      dispatchEvent: () => true
+      dispatchEvent: dispatchEventSpy
     };
     if (typeof globalThis.CustomEvent === 'undefined') {
       globalThis.CustomEvent = class CustomEvent {
@@ -50,8 +56,34 @@ describe('Notifications System', () => {
     }
   });
 
+  afterAll(() => {
+    if (originalLocalStorage === undefined) {
+      delete globalThis.localStorage;
+    } else {
+      globalThis.localStorage = originalLocalStorage;
+    }
+    if (originalWindow === undefined) {
+      delete globalThis.window;
+    } else {
+      globalThis.window = originalWindow;
+    }
+    if (originalCustomEvent === undefined) {
+      delete globalThis.CustomEvent;
+    } else {
+      globalThis.CustomEvent = originalCustomEvent;
+    }
+    if (originalNavigator !== undefined) {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true,
+        writable: true,
+      });
+    }
+  });
+
   beforeEach(() => {
     globalThis.localStorage.clear();
+    dispatchEventSpy.mockClear();
   });
 
   it('retorna apenas a notificação padrão de boas-vindas quando o localStorage está vazio', () => {
@@ -167,6 +199,20 @@ describe('Notifications System', () => {
     expect(welcome.timestamp).toBe(userCreatedAt);
   });
 
+  it('despacha CustomEvent techweek_notifications_updated ao modificar notificações', () => {
+    dispatchEventSpy.mockClear();
+
+    addNotification({
+      title: 'Notificação de Teste de Evento',
+      message: 'Verificando propagação reativa via window dispatch',
+      type: 'system'
+    });
+
+    expect(dispatchEventSpy).toHaveBeenCalled();
+    const dispatched = dispatchEventSpy.mock.calls[0][0];
+    expect(dispatched.type).toBe('techweek_notifications_updated');
+  });
+
   it('dispara notificação nativa via ServiceWorkerRegistration.showNotification quando autorizado', async () => {
     const showNotificationSpy = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(globalThis, 'navigator', {
@@ -230,3 +276,4 @@ describe('Notifications System', () => {
     expect(isNotificationEnabled()).toBe(true);
   });
 });
+

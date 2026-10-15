@@ -31,9 +31,14 @@ import * as admin from 'firebase-admin';
 import { adminBroadcastLimiter } from '../middlewares/rateLimiter';
 
 function makeRes() {
-  const res: Partial<Response> = {};
+  const res: any = {};
+  res.setHeader = vi.fn().mockReturnValue(res);
+  res.getHeader = vi.fn().mockReturnValue(undefined);
+  res.removeHeader = vi.fn().mockReturnValue(res);
   res.status = vi.fn().mockReturnValue(res);
   res.json = vi.fn().mockReturnValue(res);
+  res.end = vi.fn().mockReturnValue(res);
+  res.on = vi.fn().mockReturnValue(res);
   return res as Response;
 }
 
@@ -80,8 +85,18 @@ function getBroadcastChain() {
 // o requireRoleHandler do /users/:uid/role.
 const [, broadcastRoleHandler] = getBroadcastChain();
 
-function makeBroadcastReq(body: any = {}, user: any = { uid: 'admin-1', role: 'ADMIN' }) {
-  return { body, user } as unknown as Request;
+function makeBroadcastReq(body: any = {}, user: any = { uid: 'admin-1', role: 'ADMIN' }, ip = '127.0.0.1') {
+  return {
+    body,
+    user,
+    method: 'POST',
+    path: '/notifications/broadcast',
+    headers: {},
+    ip,
+    app: {
+      get: (_key: string) => false
+    }
+  } as unknown as Request;
 }
 
 // KAN-75: prova que o rate limiter está montado na rota real, DEPOIS do
@@ -499,5 +514,70 @@ describe('POST /api/admin/notifications/broadcast (KAN-61)', () => {
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(db.collection).not.toHaveBeenCalled();
+  });
+
+  it('ERR-067: 400 INVALID_PAYLOAD se title contiver tags HTML ou scripts (prevenção Stored XSS)', async () => {
+    const req = makeBroadcastReq({ title: '<script>alert("xss")</script>', body: 'Mensagem normal' });
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(db.collection).not.toHaveBeenCalled();
+    expect(admin.messaging).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'INVALID_PAYLOAD', message: expect.stringContaining('HTML') })
+    );
+  });
+
+  it('ERR-067: 400 INVALID_PAYLOAD se body contiver tags HTML com atributos ou scripts', async () => {
+    const req = makeBroadcastReq({ title: 'Aviso', body: 'Comunicado <img src=x onerror=alert(1)> importante' });
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(db.collection).not.toHaveBeenCalled();
+    expect(admin.messaging).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'INVALID_PAYLOAD', message: expect.stringContaining('HTML') })
+    );
+  });
+
+  it('ERR-068: 401 UNAUTHENTICATED se req.user estiver ausente ao chamar broadcastNotificationHandler', async () => {
+    const req = { body: { title: 'Aviso', body: 'Mensagem' } } as Request;
+    const res = makeRes();
+
+    await broadcastNotificationHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'UNAUTHENTICATED' })
+    );
+  });
+
+  it('ERR-068: cadeia real: adminBroadcastLimiter bloqueia requisições excessivas com 429 RATE_LIMITED', async () => {
+    const handles = getBroadcastChain();
+    const limiter = handles.find((h) => h === adminBroadcastLimiter)!;
+    expect(limiter).toBeDefined();
+
+    // adminBroadcastLimiter tem limit: 10
+    const adminUser = { uid: 'admin-broadcast-limiter-tester', role: 'ADMIN' };
+    for (let i = 0; i < 10; i++) {
+      const req = makeBroadcastReq({ title: 'Aviso', body: 'Mensagem' }, adminUser);
+      const res = makeRes();
+      await runChain([limiter, broadcastNotificationHandler], req, res);
+      expect(res.status).toHaveBeenCalledWith(201);
+    }
+
+    // 11ª chamada excede o limite de 10 por 10min
+    const blockedReq = makeBroadcastReq({ title: 'Aviso', body: 'Mensagem' }, adminUser);
+    const blockedRes = makeRes();
+    await runChain([limiter, broadcastNotificationHandler], blockedReq, blockedRes);
+
+    expect(blockedRes.status).toHaveBeenCalledWith(429);
+    expect(blockedRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'RATE_LIMITED' })
+    );
   });
 });

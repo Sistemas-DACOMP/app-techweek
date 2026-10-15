@@ -17,7 +17,8 @@ import {
   isValidPhone, 
   passwordsMatch,
   normalizeGithub,
-  isValidGithub
+  isValidGithub,
+  validateAcademicProfile
 } from '../lib/validators';
 import { verifySymplaTicket } from '../lib/sympla';
 import '../styles/entrada.css';
@@ -236,19 +237,7 @@ export default function Register() {
       errors.phone = 'Insira um telefone válido com DDD (10 ou 11 dígitos numéricos).';
     }
 
-    const isStudent = formData.participantType === 'Aluno UFU Graduação' || formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
-    if (isStudent && formData.course === 'Outro (especificar)' && !formData.customCourse.trim()) {
-      errors.customCourse = 'Por favor, digite o nome do seu curso.';
-    }
-
-    const isPostgrad = formData.participantType === 'Aluno UFU Pós-graduação' || formData.participantType === 'Pós-graduação';
-    if (isPostgrad) {
-      if (!formData.institution) {
-        errors.institution = 'Por favor, selecione sua instituição.';
-      } else if (formData.institution === 'Outra' && !formData.customInstitution.trim()) {
-        errors.customInstitution = 'Por favor, digite o nome da sua instituição.';
-      }
-    }
+    Object.assign(errors, validateAcademicProfile(formData));
 
     if (!formData.password || formData.password.length < MIN_PASSWORD_LENGTH) {
       errors.password = `A senha deve ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`;
@@ -741,52 +730,15 @@ export default function Register() {
 
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
 
-            {/* Órbita: foto no centro, redes em volta (acendem quando preenchidas) */}
-            <div className="relative mx-auto mt-[18px] h-[230px] w-[280px] shrink-0">
-              <svg aria-hidden="true" width="280" height="230" viewBox="0 0 280 230" className="absolute top-0 left-0">
-                <defs>
-                  <linearGradient id="reg-arc" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#2563EB" /><stop offset="1" stopColor="#E1306C" /></linearGradient>
-                </defs>
-                <circle cx="140" cy="115" r="98" fill="none" stroke="#2A3460" strokeWidth="1.5" strokeDasharray="4 6" />
-                <circle cx="140" cy="115" r="98" fill="none" stroke="url(#reg-arc)" strokeWidth="2.5" strokeDasharray="120 500" strokeLinecap="round" transform="rotate(200 140 115)" />
-              </svg>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                aria-label={avatarPreview ? 'Trocar foto de perfil' : 'Adicionar foto de perfil'}
-                className="press absolute top-[51px] left-[76px] size-32 cursor-pointer rounded-full border-0 bg-[linear-gradient(135deg,#2563EB,#7C3AED)] p-1 shadow-[0_14px_36px_rgba(91,59,224,0.45)]"
-              >
-                {/* Moldura com overflow hidden só para a foto; o selo da câmera fica fora dela (KAN-103) */}
-                <span className="flex size-full items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-[#8F7BFF] bg-surface-raised text-you-text">
-                  {avatarPreview
-                    ? <img src={avatarPreview} alt="" className="size-full object-cover" />
-                    : <User size={56} strokeWidth={1.6} aria-hidden="true" />}
-                </span>
-                <span className="absolute right-0.5 bottom-1.5 flex size-[38px] items-center justify-center rounded-full border-[3px] border-bg bg-white text-[#3730A3]">
-                  <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
-                </span>
-              </button>
+            <RegisterAvatarSection
+              avatarPreview={avatarPreview}
+              onPickAvatar={() => fileInputRef.current?.click()}
+              onRemoveAvatar={() => { setAvatarFile(null); setAvatarPreview(null); }}
+            >
               <SocialBubble className="top-[26px] left-[28px]" filled={!!formData.linkedin} ok={socialOk('linkedin')} ring="#0A66C2"><LinkedInLogo size={26} /></SocialBubble>
               <SocialBubble className="top-[26px] left-[200px]" filled={!!formData.instagram} ok={socialOk('instagram')} ring="#E1306C"><InstagramLogo size={26} /></SocialBubble>
               <SocialBubble className="top-[148px] left-[218px]" filled={!!formData.github} ok={socialOk('github')} ring="#EEF1FA"><GithubLogo size={26} /></SocialBubble>
-            </div>
-
-            <div className="mt-1 flex justify-center gap-2">
-              {!avatarPreview ? (
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="press inline-flex h-11 cursor-pointer items-center gap-2 rounded-[22px] border-[1.5px] border-[#8F7BFF] bg-[rgba(124,58,237,0.16)] px-[18px] text-sm font-extrabold text-text">
-                  <Camera size={18} className="text-[#C4B5FD]" aria-hidden="true" /> Adicionar foto de perfil
-                </button>
-              ) : (
-                <>
-                  <button type="button" onClick={() => fileInputRef.current?.click()} className="press inline-flex h-11 cursor-pointer items-center gap-2 rounded-[22px] border-[1.5px] border-[#8F7BFF] bg-[rgba(124,58,237,0.16)] px-[18px] text-sm font-extrabold text-text">
-                    <Camera size={18} className="text-[#C4B5FD]" aria-hidden="true" /> Trocar foto
-                  </button>
-                  <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(null); }} className="press inline-flex h-11 cursor-pointer items-center gap-2 rounded-[22px] border-0 bg-[rgba(245,154,154,0.1)] px-4 text-sm font-bold text-err">
-                    <Trash2 size={16} aria-hidden="true" /> Remover
-                  </button>
-                </>
-              )}
-            </div>
+            </RegisterAvatarSection>
             <p className="mt-1.5 text-center text-xs text-text-3">Opcional · PNG, JPG ou WebP até 2 MB</p>
 
             <div className="mx-5 mt-[18px] flex flex-col gap-3.5">
@@ -859,6 +811,57 @@ export default function Register() {
         </div>
       )}
     </div>
+  );
+}
+
+export function RegisterAvatarSection({ avatarPreview, onPickAvatar, onRemoveAvatar, children }) {
+  return (
+    <>
+      {/* Órbita: foto no centro, redes em volta (acendem quando preenchidas) */}
+      <div className="relative mx-auto mt-[18px] h-[230px] w-[280px] shrink-0">
+        <svg aria-hidden="true" width="280" height="230" viewBox="0 0 280 230" className="absolute top-0 left-0">
+          <defs>
+            <linearGradient id="reg-arc" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#2563EB" /><stop offset="1" stopColor="#E1306C" /></linearGradient>
+          </defs>
+          <circle cx="140" cy="115" r="98" fill="none" stroke="#2A3460" strokeWidth="1.5" strokeDasharray="4 6" />
+          <circle cx="140" cy="115" r="98" fill="none" stroke="url(#reg-arc)" strokeWidth="2.5" strokeDasharray="120 500" strokeLinecap="round" transform="rotate(200 140 115)" />
+        </svg>
+        <button
+          type="button"
+          onClick={onPickAvatar}
+          aria-label={avatarPreview ? 'Trocar foto de perfil' : 'Adicionar foto de perfil'}
+          className="press absolute top-[51px] left-[76px] size-32 cursor-pointer rounded-full border-0 bg-[linear-gradient(135deg,#2563EB,#7C3AED)] p-1 shadow-[0_14px_36px_rgba(91,59,224,0.45)]"
+        >
+          {/* Moldura com overflow hidden só para a foto; o selo da câmera fica fora dela (KAN-103) */}
+          <span data-testid="avatar-circle-frame" className="flex size-full items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-[#8F7BFF] bg-surface-raised text-you-text">
+            {avatarPreview
+              ? <img src={avatarPreview} alt="" className="size-full object-cover" />
+              : <User size={56} strokeWidth={1.6} aria-hidden="true" />}
+          </span>
+          <span data-testid="avatar-camera-badge" className="absolute right-0.5 bottom-1.5 flex size-[38px] items-center justify-center rounded-full border-[3px] border-bg bg-white text-[#3730A3]">
+            <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
+          </span>
+        </button>
+        {children}
+      </div>
+
+      <div className="mt-1 flex justify-center gap-2">
+        {!avatarPreview ? (
+          <button type="button" onClick={onPickAvatar} className="press inline-flex h-11 cursor-pointer items-center gap-2 rounded-[22px] border-[1.5px] border-[#8F7BFF] bg-[rgba(124,58,237,0.16)] px-[18px] text-sm font-extrabold text-text">
+            <Camera size={18} className="text-[#C4B5FD]" aria-hidden="true" /> Adicionar foto de perfil
+          </button>
+        ) : (
+          <>
+            <button type="button" onClick={onPickAvatar} className="press inline-flex h-11 cursor-pointer items-center gap-2 rounded-[22px] border-[1.5px] border-[#8F7BFF] bg-[rgba(124,58,237,0.16)] px-[18px] text-sm font-extrabold text-text">
+              <Camera size={18} className="text-[#C4B5FD]" aria-hidden="true" /> Trocar foto
+            </button>
+            <button type="button" onClick={onRemoveAvatar} className="press inline-flex h-11 cursor-pointer items-center gap-2 rounded-[22px] border-0 bg-[rgba(245,154,154,0.1)] px-4 text-sm font-bold text-err">
+              <Trash2 size={16} aria-hidden="true" /> Remover
+            </button>
+          </>
+        )}
+      </div>
+    </>
   );
 }
 

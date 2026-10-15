@@ -61,11 +61,13 @@ describe('CORS Configuration (KAN-116 / SEC)', () => {
         expect(isOriginAllowed('https://facom-techweek-2026.web.app')).toBe(true);
         expect(isOriginAllowed('https://facom-techweek.web.app')).toBe(true);
         expect(isOriginAllowed('https://facom-techweek-staging.web.app')).toBe(true);
+        expect(isOriginAllowed('https://facom-techweek-layerx.web.app')).toBe(true);
       });
 
       it('permite domínios oficiais Firebase Hosting com .firebaseapp.com', () => {
         expect(isOriginAllowed('https://facom-techweek.firebaseapp.com')).toBe(true);
         expect(isOriginAllowed('https://facom-techweek-2026.firebaseapp.com')).toBe(true);
+        expect(isOriginAllowed('https://facom-techweek-layerx.firebaseapp.com')).toBe(true);
       });
 
       it('permite origens configuradas via ALLOWED_ORIGINS com suporte a vírgulas e trim', () => {
@@ -88,6 +90,10 @@ describe('CORS Configuration (KAN-116 / SEC)', () => {
         expect(isOriginAllowed('https://facom-techweek.attacker.com')).toBe(false);
         // Tentativa de prefixar domínio oficial
         expect(isOriginAllowed('https://attacker-facom-techweek.web.app')).toBe(false);
+        // Tentativa de registrar subdomínio malicioso com prefixo oficial (ERR-055)
+        expect(isOriginAllowed('https://facom-techweek-attacker.web.app')).toBe(false);
+        expect(isOriginAllowed('https://facom-techweek-malicious.web.app')).toBe(false);
+        expect(isOriginAllowed('https://facom-techweek-phishing.firebaseapp.com')).toBe(false);
         // Tentativa com http em vez de https nos domínios oficiais
         expect(isOriginAllowed('http://facom-techweek.web.app')).toBe(false);
       });

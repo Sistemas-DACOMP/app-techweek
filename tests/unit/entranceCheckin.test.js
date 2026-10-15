@@ -208,7 +208,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
         error: 'INVALID_PAYLOAD',
-        message: 'participantUid e activityId so obrigatrios.'
+        message: 'participantUid e activityId são obrigatórios.'
       });
       expect(db.runTransaction).not.toHaveBeenCalled();
     });
@@ -287,7 +287,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({
         error: 'ACTIVITY_NOT_FOUND',
-        message: 'Palestra no encontrada.'
+        message: 'Palestra não encontrada.'
       });
       expect(tx.set).not.toHaveBeenCalled();
     });
@@ -316,7 +316,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
         error: 'NOT_REGISTERED',
-        message: 'Aluno no inscrito previamente.'
+        message: 'Aluno não inscrito previamente.'
       });
       expect(tx.set).not.toHaveBeenCalled();
     });
@@ -387,7 +387,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(409);
       expect(res.json).toHaveBeenCalledWith({
         error: 'CHECKIN_DUPLICATE',
-        message: 'Entrada duplicada (j havia feito check-in de entrada).'
+        message: 'Entrada duplicada (já havia feito check-in de entrada).'
       });
       expect(tx.set).not.toHaveBeenCalled();
     });
@@ -528,7 +528,156 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
   });
 
   // =========================================================================
-  // 7. Resiliencia e Tratamento de Erros Internos (500)
+  // 7. Resolucao de Identidade por E-mail, mailto:, @username e req.body.uid
+  // =========================================================================
+  describe('Resolucao de Identidade de Participante (E-mail, mailto:, @username, uid)', () => {
+    it('aceita req.body.uid como alternativa a req.body.participantUid', async () => {
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 15, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = {
+        body: { uid: 'uid-via-campo-alternativo', activityId: 'palestra-1' },
+        user: { uid: 'staff-1', role: 'STAFF' }
+      };
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/uid-via-campo-alternativo_entrance_palestra-1' },
+        expect.objectContaining({ userId: 'uid-via-campo-alternativo', points: 15 })
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('resolve UID buscando usuario por e-mail normalizado (incluindo prefixo mailto:)', async () => {
+      const mockWhere = vi.fn().mockReturnValue({
+        limit: vi.fn().mockReturnValue({
+          get: vi.fn().mockResolvedValue({
+            empty: false,
+            docs: [{ id: 'uid-resolvido-email' }]
+          })
+        })
+      });
+
+      db.collection.mockImplementation((name) => ({
+        doc: (id) => ({ path: `${name}/${id}` }),
+        where: mockWhere
+      }));
+
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 20, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({
+        participantUid: 'mailto:  Participante.Teste@UFU.BR ',
+        activityId: 'palestra-email'
+      });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(mockWhere).toHaveBeenCalledWith('email', '==', 'participante.teste@ufu.br');
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/uid-resolvido-email_entrance_palestra-email' },
+        expect.objectContaining({ userId: 'uid-resolvido-email', points: 20 })
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('faz fallback para busca case-sensitive por e-mail quando busca lowercase retorna vazia', async () => {
+      const mockGet = vi.fn()
+        .mockResolvedValueOnce({ empty: true, docs: [] })
+        .mockResolvedValueOnce({ empty: false, docs: [{ id: 'uid-exact-email' }] });
+
+      const mockWhere = vi.fn().mockReturnValue({
+        limit: vi.fn().mockReturnValue({ get: mockGet })
+      });
+
+      db.collection.mockImplementation((name) => ({
+        doc: (id) => ({ path: `${name}/${id}` }),
+        where: mockWhere
+      }));
+
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 10, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({
+        participantUid: 'Aluno.Exact@ufu.br',
+        activityId: 'palestra-exact'
+      });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(mockWhere).toHaveBeenNthCalledWith(1, 'email', '==', 'aluno.exact@ufu.br');
+      expect(mockWhere).toHaveBeenNthCalledWith(2, 'email', '==', 'Aluno.Exact@ufu.br');
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/uid-exact-email_entrance_palestra-exact' },
+        expect.objectContaining({ userId: 'uid-exact-email' })
+      );
+    });
+
+    it('resolve UID buscando usuario por @username normalizado', async () => {
+      const mockWhere = vi.fn().mockReturnValue({
+        limit: vi.fn().mockReturnValue({
+          get: vi.fn().mockResolvedValue({
+            empty: false,
+            docs: [{ id: 'uid-resolvido-username' }]
+          })
+        })
+      });
+
+      db.collection.mockImplementation((name) => ({
+        doc: (id) => ({ path: `${name}/${id}` }),
+        where: mockWhere
+      }));
+
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 35, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({
+        participantUid: '@Erick_Facom',
+        activityId: 'palestra-handle'
+      });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(mockWhere).toHaveBeenCalledWith('username', '==', 'erick_facom');
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/uid-resolvido-username_entrance_palestra-handle' },
+        expect.objectContaining({ userId: 'uid-resolvido-username', points: 35 })
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+  });
+
+  // =========================================================================
+  // 8. Resiliencia e Tratamento de Erros Internos (500)
   // =========================================================================
   describe('Tratamento de Erros Inesperados (500)', () => {
     it('deve retornar 500 INTERNAL_ERROR caso a transacao do Firestore falhe', async () => {
@@ -542,7 +691,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
         error: 'INTERNAL_ERROR',
-        message: 'No foi possvel registrar a entrada.'
+        message: 'Não foi possível registrar a entrada.'
       });
     });
   });

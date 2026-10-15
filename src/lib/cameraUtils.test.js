@@ -6,7 +6,7 @@ describe('stopAllMediaTracks', () => {
     expect(() => stopAllMediaTracks()).not.toThrow();
   });
 
-  it('interrompe e limpa todas as faixas de video e audio ativas', () => {
+  it('interrompe e limpa todas as faixas de video e audio ativas conectadas a elementos do DOM', () => {
     const mockTrack1 = { stop: vi.fn() };
     const mockTrack2 = { stop: vi.fn() };
 
@@ -17,19 +17,17 @@ describe('stopAllMediaTracks', () => {
       }
     };
 
-    if (typeof document !== 'undefined') {
-      const origQuery = document.querySelectorAll;
-      document.querySelectorAll = vi.fn().mockReturnValue([mockVideoEl]);
+    vi.stubGlobal('document', {
+      querySelectorAll: vi.fn().mockReturnValue([mockVideoEl])
+    });
 
-      stopAllMediaTracks();
+    stopAllMediaTracks();
 
-      expect(mockTrack1.stop).toHaveBeenCalled();
-      expect(mockTrack2.stop).toHaveBeenCalled();
+    expect(mockTrack1.stop).toHaveBeenCalled();
+    expect(mockTrack2.stop).toHaveBeenCalled();
+    expect(mockVideoEl.srcObject).toBeNull();
 
-      document.querySelectorAll = origQuery;
-    } else {
-      stopAllMediaTracks();
-    }
+    vi.unstubAllGlobals();
   });
 
   it('interrompe streams registradas manualmente via registerMediaStream', () => {

@@ -12,6 +12,7 @@ import {
   DEFAULT_ACTIVITIES
 } from './activityService';
 import { apiRequest } from './api';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 vi.mock('./firebase', () => ({
   db: { mock: 'db' },
@@ -187,6 +188,81 @@ describe('activityService (KAN-50)', () => {
       expect(typeof unsub).toBe('function');
     });
 
+    it('subscribeToUserBookings deve registrar snapshot e mesclar dados locais com remotos do Firestore', () => {
+      const mockUnsubSnapshot = vi.fn();
+      const addEventListener = vi.fn();
+      const removeEventListener = vi.fn();
+
+      vi.stubGlobal('window', { addEventListener, removeEventListener });
+      vi.stubGlobal('localStorage', {
+        getItem: vi.fn(() => JSON.stringify([{ activityId: 'act_local', title: 'Local' }])),
+        setItem: vi.fn()
+      });
+
+      onSnapshot.mockImplementationOnce((_q, onNext) => {
+        onNext({
+          docs: [
+            { id: 'book_remote', data: () => ({ activityId: 'act_remote', title: 'Remote' }) }
+          ]
+        });
+        return mockUnsubSnapshot;
+      });
+
+      const onUpdate = vi.fn();
+      const unsub = subscribeToUserBookings('user_123', onUpdate);
+
+      expect(where).toHaveBeenCalledWith('userId', '==', 'user_123');
+      expect(collection).toHaveBeenCalledWith(expect.anything(), 'bookings');
+      expect(addEventListener).toHaveBeenCalledWith('techweek_bookings_updated', expect.any(Function));
+
+      // Deve ter sido chamado inicialmente com local, e depois mesclado com snapshot
+      expect(onUpdate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ activityId: 'act_local' }),
+          expect.objectContaining({ activityId: 'act_remote' })
+        ])
+      );
+
+      unsub();
+      expect(removeEventListener).toHaveBeenCalledWith('techweek_bookings_updated', expect.any(Function));
+      expect(mockUnsubSnapshot).toHaveBeenCalled();
+
+      vi.unstubAllGlobals();
+    });
+
+    it('subscribeToUserBookings deve responder a evento techweek_bookings_updated e propagar erro no listener', () => {
+      let windowHandler = null;
+      vi.stubGlobal('window', {
+        addEventListener: vi.fn((event, handler) => {
+          if (event === 'techweek_bookings_updated') windowHandler = handler;
+        }),
+        removeEventListener: vi.fn()
+      });
+      vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() });
+
+      let errorCallback = null;
+      onSnapshot.mockImplementationOnce((_q, _onNext, onError) => {
+        errorCallback = onError;
+        return vi.fn();
+      });
+
+      const onUpdate = vi.fn();
+      const onError = vi.fn();
+      subscribeToUserBookings('user_123', onUpdate, onError);
+
+      // Simula evento da janela emitido com atualização local
+      expect(windowHandler).toBeInstanceOf(Function);
+      windowHandler({ detail: { userId: 'user_123', bookings: [{ activityId: 'act_window', status: 'CONFIRMED' }] } });
+      expect(onUpdate).toHaveBeenCalledWith([expect.objectContaining({ activityId: 'act_window' })]);
+
+      // Simula erro no Firestore listener
+      const firestoreErr = { code: 'unavailable', message: 'Network offline' };
+      errorCallback(firestoreErr);
+      expect(onError).toHaveBeenCalledWith(firestoreErr);
+
+      vi.unstubAllGlobals();
+    });
+
     it('subscribeToUserCheckins deve chamar onUpdate com array vazio se userId for nulo', () => {
       const onUpdate = vi.fn();
       const unsub = subscribeToUserCheckins(null, onUpdate);
@@ -194,11 +270,83 @@ describe('activityService (KAN-50)', () => {
       expect(typeof unsub).toBe('function');
     });
 
+    it('subscribeToUserCheckins deve escutar /checkins filtrando por uid do usuário', () => {
+      const mockUnsub = vi.fn();
+      onSnapshot.mockImplementationOnce((_q, onNext) => {
+        onNext({
+          docs: [
+            { id: 'chk_1', data: () => ({ uid: 'user_123', activityId: 'act_10', status: 'COMPLETED' }) }
+          ]
+        });
+        return mockUnsub;
+      });
+
+      const onUpdate = vi.fn();
+      const unsub = subscribeToUserCheckins('user_123', onUpdate);
+
+      expect(where).toHaveBeenCalledWith('uid', '==', 'user_123');
+      expect(collection).toHaveBeenCalledWith(expect.anything(), 'checkins');
+      expect(onUpdate).toHaveBeenCalledWith([
+        { id: 'chk_1', uid: 'user_123', activityId: 'act_10', status: 'COMPLETED' }
+      ]);
+      expect(unsub).toBe(mockUnsub);
+    });
+
+    it('subscribeToUserCheckins deve invocar onError e emitir array vazio em caso de falha', () => {
+      onSnapshot.mockImplementationOnce((_q, _onNext, onErrorCb) => {
+        onErrorCb(new Error('Falha de permissão'));
+        return vi.fn();
+      });
+
+      const onUpdate = vi.fn();
+      const onError = vi.fn();
+      subscribeToUserCheckins('user_123', onUpdate, onError);
+
+      expect(onError).toHaveBeenCalled();
+      expect(onUpdate).toHaveBeenCalledWith([]);
+    });
+
     it('subscribeToUserPointEvents deve chamar onUpdate com array vazio se userId for nulo', () => {
       const onUpdate = vi.fn();
       const unsub = subscribeToUserPointEvents(null, onUpdate);
       expect(onUpdate).toHaveBeenCalledWith([]);
       expect(typeof unsub).toBe('function');
+    });
+
+    it('subscribeToUserPointEvents deve escutar /pointEvents filtrando por userId', () => {
+      const mockUnsub = vi.fn();
+      onSnapshot.mockImplementationOnce((_q, onNext) => {
+        onNext({
+          docs: [
+            { id: 'pe_1', data: () => ({ userId: 'user_123', points: 30, type: 'CHECKIN' }) }
+          ]
+        });
+        return mockUnsub;
+      });
+
+      const onUpdate = vi.fn();
+      const unsub = subscribeToUserPointEvents('user_123', onUpdate);
+
+      expect(where).toHaveBeenCalledWith('userId', '==', 'user_123');
+      expect(collection).toHaveBeenCalledWith(expect.anything(), 'pointEvents');
+      expect(onUpdate).toHaveBeenCalledWith([
+        { id: 'pe_1', userId: 'user_123', points: 30, type: 'CHECKIN' }
+      ]);
+      expect(unsub).toBe(mockUnsub);
+    });
+
+    it('subscribeToUserPointEvents deve invocar onError e emitir array vazio em caso de erro', () => {
+      onSnapshot.mockImplementationOnce((_q, _onNext, onErrorCb) => {
+        onErrorCb(new Error('Erro no firestore'));
+        return vi.fn();
+      });
+
+      const onUpdate = vi.fn();
+      const onError = vi.fn();
+      subscribeToUserPointEvents('user_123', onUpdate, onError);
+
+      expect(onError).toHaveBeenCalled();
+      expect(onUpdate).toHaveBeenCalledWith([]);
     });
   });
 

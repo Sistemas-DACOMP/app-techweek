@@ -8,7 +8,7 @@ vi.mock('../config/firebaseAdmin', () => ({
   }
 }));
 
-import router from './booking';
+import router, { DEFAULT_ACTIVITIES_CATALOG } from './booking';
 import { db } from '../config/firebaseAdmin';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { requireSymplaTicket, requireVerifiedEmail } from '../middlewares/authMiddleware';
@@ -82,14 +82,37 @@ it('KAN-116: requireVerifiedEmail está montado na rota de reserva e cancelament
   expect(cancelHandles).toContain(requireVerifiedEmail);
 });
 
+function makeQueryMock(name: string) {
+  const q: any = {
+    __kind: `${name}Query`,
+    where: vi.fn(() => q),
+    orderBy: vi.fn(() => q),
+    limit: vi.fn(() => q)
+  };
+  return q;
+}
 
-function makeTx(snaps: { bookingSnap: any; activitySnap: any }) {
-  const { bookingSnap, activitySnap } = snaps;
+function mockCollection(name: string) {
+  const q = makeQueryMock(name);
   return {
-    get: vi.fn((ref: { path: string }) => {
-      if (ref.path.startsWith('bookings/')) return Promise.resolve(bookingSnap);
-      if (ref.path.startsWith('activities/')) return Promise.resolve(activitySnap);
-      throw new Error(`ref inesperada no mock: ${ref.path}`);
+    doc: (id: string) => ({ path: `${name}/${id}` }),
+    where: q.where,
+    orderBy: q.orderBy,
+    limit: q.limit,
+    __kind: q.__kind
+  };
+}
+
+function makeTx(snaps: { bookingSnap: any; activitySnap: any; waitingSnap?: any }) {
+  const { bookingSnap, activitySnap, waitingSnap } = snaps;
+  return {
+    get: vi.fn((ref: any) => {
+      if (ref?.__kind === 'bookingsQuery') {
+        return Promise.resolve(waitingSnap ?? { empty: true, docs: [] });
+      }
+      if (ref?.path?.startsWith('bookings/')) return Promise.resolve(bookingSnap);
+      if (ref?.path?.startsWith('activities/')) return Promise.resolve(activitySnap);
+      throw new Error(`ref inesperada no mock: ${JSON.stringify(ref)}`);
     }),
     set: vi.fn(),
     update: vi.fn(),
@@ -100,9 +123,7 @@ function makeTx(snaps: { bookingSnap: any; activitySnap: any }) {
 describe('POST /:activityId/reserve (KAN-49)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (db.collection as any).mockImplementation((name: string) => ({
-      doc: (id: string) => ({ path: `${name}/${id}` })
-    }));
+    (db.collection as any).mockImplementation(mockCollection);
   });
 
   it('reserva com vaga disponível: 200 CONFIRMED, decrementa vagas e incrementa total_inscritos', async () => {
@@ -214,6 +235,97 @@ describe('POST /:activityId/reserve (KAN-49)', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'ACTIVITY_NOT_FOUND' }));
   });
 
+  it('ERR-071: auto-seed de atividade do DEFAULT_ACTIVITIES_CATALOG com vagas cria atividade e confirma reserva (200 CONFIRMED)', async () => {
+    const activityId = 'palestra_abertura';
+    const tx = makeTx({
+      bookingSnap: { exists: false },
+      activitySnap: { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq(activityId);
+    const res = makeRes();
+    await handler(req, res);
+
+    const defaultCatalogItem = DEFAULT_ACTIVITIES_CATALOG[activityId];
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: `activities/${activityId}` },
+      expect.objectContaining({
+        ...defaultCatalogItem,
+        vagas_disponiveis: defaultCatalogItem.vagas_disponiveis - 1,
+        total_inscritos: defaultCatalogItem.total_inscritos + 1,
+        createdAt: expect.any(Date)
+      })
+    );
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: `bookings/user-1_${activityId}` },
+      expect.objectContaining({
+        userId: 'user-1',
+        activityId,
+        status: 'CONFIRMED',
+        position: null,
+        createdAt: expect.any(Date)
+      })
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ status: 'CONFIRMED', position: null });
+  });
+
+  it('ERR-071: auto-seed de atividade do catálogo com zero vagas cria atividade com total_espera: 1 e reserva WAITING_LIST (200 WAITING_LIST)', async () => {
+    const activityId = 'workshop_esgotado_seed';
+    DEFAULT_ACTIVITIES_CATALOG[activityId] = {
+      title: 'Workshop Esgotado',
+      description: 'Workshop de teste esgotado',
+      speaker: 'Instrutor',
+      type: 'workshop',
+      day: '20/10',
+      date: '2026-10-20',
+      time: '14:00',
+      location: 'Lab 1',
+      vagas_disponiveis: 0,
+      vagas_totais: 30,
+      total_inscritos: 30,
+      total_espera: 0,
+      points: 25,
+      attendanceMode: 'SELF_SCAN'
+    };
+
+    try {
+      const tx = makeTx({
+        bookingSnap: { exists: false },
+        activitySnap: { exists: false }
+      });
+      (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+      const req = makeReq(activityId);
+      const res = makeRes();
+      await handler(req, res);
+
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: `activities/${activityId}` },
+        expect.objectContaining({
+          ...DEFAULT_ACTIVITIES_CATALOG[activityId],
+          total_espera: 1,
+          createdAt: expect.any(Date)
+        })
+      );
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: `bookings/user-1_${activityId}` },
+        expect.objectContaining({
+          userId: 'user-1',
+          activityId,
+          status: 'WAITING_LIST',
+          position: 1,
+          createdAt: expect.any(Date)
+        })
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ status: 'WAITING_LIST', position: 1 });
+    } finally {
+      delete DEFAULT_ACTIVITIES_CATALOG[activityId];
+    }
+  });
+
   it('erro inesperado do Firestore dentro da transação: 500 INTERNAL_ERROR, sem vazar detalhe do erro', async () => {
     (db.runTransaction as any).mockRejectedValue(new Error('boom - detalhe interno do Firestore'));
 
@@ -244,15 +356,13 @@ describe('POST /:activityId/cancel (KAN-110)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (db.collection as any).mockImplementation((name: string) => ({
-      doc: (id: string) => ({ path: `${name}/${id}` })
-    }));
+    (db.collection as any).mockImplementation(mockCollection);
   });
 
-  it('cancelar reserva confirmada devolve a vaga', async () => {
+  it('cancelar reserva confirmada devolve a vaga quando não há fila de espera', async () => {
     const tx = makeTx({
       bookingSnap: { exists: true, data: () => ({ status: 'CONFIRMED' }) },
-      activitySnap: { exists: true, data: () => ({ vagas_disponiveis: 2, total_inscritos: 8 }) }
+      activitySnap: { exists: true, data: () => ({ vagas_disponiveis: 2, total_inscritos: 8, total_espera: 0 }) }
     });
     (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
     const res = makeRes();
@@ -262,6 +372,62 @@ describe('POST /:activityId/cancel (KAN-110)', () => {
     expect(tx.update).toHaveBeenCalledWith(
       { path: 'activities/lecture-1' },
       { vagas_disponiveis: 3, total_inscritos: 7 }
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('ERR-070: cancelar reserva confirmada quando há fila de espera: promove o 1º da fila (WAITING_LIST -> CONFIRMED), decrementa total_espera e não altera vagas_disponiveis', async () => {
+    const promotedDocRef = { path: 'bookings/waiting-user-1_lecture-1' };
+    const waitingSnap = {
+      empty: false,
+      docs: [
+        {
+          ref: promotedDocRef,
+          data: () => ({ userId: 'waiting-user-1', activityId: 'lecture-1', status: 'WAITING_LIST', position: 1 })
+        }
+      ]
+    };
+
+    const tx = makeTx({
+      bookingSnap: { exists: true, data: () => ({ status: 'CONFIRMED' }) },
+      activitySnap: { exists: true, data: () => ({ vagas_disponiveis: 0, total_inscritos: 10, total_espera: 2 }) },
+      waitingSnap
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+    const res = makeRes();
+    await cancel(makeReq(), res);
+
+    expect(tx.delete).toHaveBeenCalledWith({ path: 'bookings/user-1_lecture-1' });
+    expect(tx.update).toHaveBeenCalledWith(
+      promotedDocRef,
+      expect.objectContaining({
+        status: 'CONFIRMED',
+        position: null,
+        promotedAt: expect.any(Date)
+      })
+    );
+    expect(tx.update).toHaveBeenCalledWith(
+      { path: 'activities/lecture-1' },
+      { total_espera: 1 }
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Reserva cancelada com sucesso.' });
+  });
+
+  it('ERR-070: se total_espera > 0 mas fila estiver vazia no Firestore, faz fallback liberando a vaga', async () => {
+    const tx = makeTx({
+      bookingSnap: { exists: true, data: () => ({ status: 'CONFIRMED' }) },
+      activitySnap: { exists: true, data: () => ({ vagas_disponiveis: 0, total_inscritos: 10, total_espera: 1 }) },
+      waitingSnap: { empty: true, docs: [] }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+    const res = makeRes();
+    await cancel(makeReq(), res);
+
+    expect(tx.delete).toHaveBeenCalledWith({ path: 'bookings/user-1_lecture-1' });
+    expect(tx.update).toHaveBeenCalledWith(
+      { path: 'activities/lecture-1' },
+      { vagas_disponiveis: 1, total_inscritos: 9 }
     );
     expect(res.status).toHaveBeenCalledWith(200);
   });
