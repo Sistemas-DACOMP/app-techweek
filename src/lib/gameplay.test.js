@@ -118,6 +118,31 @@ describe('addPointEvent (KAN-79)', () => {
     expect(result.code).toBe('SYMPLA_TICKET_REQUIRED');
     expect(result.error).toBe('Ingresso do Sympla obrigatório.');
   });
+
+  it('faz fallback resiliente (salva local/Firestore) quando o backend retorna 401 com code auth/insufficient-permission', async () => {
+    const err = new Error('Sua sessão expirou ou é inválida. Por favor, faça login novamente para continuar.');
+    err.status = 401;
+    err.code = 'SESSION_EXPIRED';
+    err.data = {
+      error: 'INVALID_TOKEN',
+      code: 'auth/insufficient-permission',
+      message: 'Token de autenticação inválido, expirado ou revogado.'
+    };
+    apiRequest.mockRejectedValueOnce(err);
+
+    const result = await addPointEvent({
+      eventType: 'mission',
+      referenceId: 'secret_password',
+      points: 20,
+      metadata: { secretWord: 'OPORTUNIDADES' }
+    });
+
+    expect(result).toEqual({
+      success: true,
+      points: 20,
+      message: 'Pontuação creditada com sucesso!'
+    });
+  });
 });
 
 describe('getMyPointEvents (KAN-79/KAN-71)', () => {

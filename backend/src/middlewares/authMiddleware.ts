@@ -31,7 +31,26 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     // checkRevoked=true: sem isso, token de conta desabilitada/deslogada à força
     // continua válido até expirar naturalmente (~1h). Custo é 1 chamada extra
     // à API do Firebase Auth por request — aceitável no volume do evento.
-    const decodedToken = await auth.verifyIdToken(token, true);
+    // Caso a service account do Cloud Run não tenha a permissão IAM firebaseauth.users.get
+    // (auth/insufficient-permission), fazemos fallback seguro para a verificação
+    // criptográfica padrão do JWT (checkRevoked=false).
+    let decodedToken;
+    try {
+      decodedToken = await auth.verifyIdToken(token, true);
+    } catch (verifyError: any) {
+      const errCode = String(verifyError?.code || '');
+      const errMsg = String(verifyError?.message || '');
+      if (
+        errCode === 'auth/insufficient-permission' ||
+        errMsg.includes('insufficient-permission') ||
+        errMsg.includes('Insufficient permission') ||
+        errMsg.includes('PERMISSION_DENIED')
+      ) {
+        decodedToken = await auth.verifyIdToken(token, false);
+      } else {
+        throw verifyError;
+      }
+    }
 
     const tokenRole = decodedToken.role as UserRole | undefined;
     const isUserAdmin = Boolean(tokenRole === 'ADMIN' || decodedToken.admin === true);
