@@ -136,12 +136,21 @@ router.post('/claim', requireAuth, requireVerifiedEmail, participantActionLimite
       }
 
       let missionPoints: number | undefined;
+      let shouldSeedMission = false;
       if (missionSnap.exists) {
-        missionPoints = missionSnap.data()?.points;
+        const rawPoints = missionSnap.data()?.points;
+        if (typeof rawPoints === 'number') {
+          missionPoints = rawPoints;
+        } else if (typeof rawPoints === 'string' && rawPoints.trim() !== '' && Number.isFinite(Number(rawPoints))) {
+          missionPoints = Number(rawPoints);
+        } else if (rawPoints === undefined && DEFAULT_MISSION_CATALOG[missionId] !== undefined) {
+          missionPoints = DEFAULT_MISSION_CATALOG[missionId];
+        } else {
+          missionPoints = rawPoints as any;
+        }
       } else if (DEFAULT_MISSION_CATALOG[missionId] !== undefined) {
         missionPoints = DEFAULT_MISSION_CATALOG[missionId];
-        // Auto-seed no Firestore para consistência futura
-        tx.set(missionRef, { points: missionPoints, createdAt: FieldValue.serverTimestamp() });
+        shouldSeedMission = true;
       } else {
         return {
           status: 404 as const,
@@ -156,6 +165,7 @@ router.post('/claim', requireAuth, requireVerifiedEmail, participantActionLimite
       }
 
       // Validação de comprovação de cumprimento da missão (KAN-80)
+      // IMPORTANTE: deve ocorrer ANTES de qualquer tx.set/tx.update na transação!
       const proofResult = await validateMissionProof(tx, {
         uid,
         missionId,
@@ -173,11 +183,19 @@ router.post('/claim', requireAuth, requireVerifiedEmail, participantActionLimite
         };
       }
 
+      if (shouldSeedMission) {
+        // Auto-seed no Firestore para consistência futura (após todas as leituras da transação)
+        tx.set(missionRef, { points: missionPoints, createdAt: FieldValue.serverTimestamp() });
+      }
+
+      const sanitizedMetadata =
+        metadata && typeof metadata === 'object' ? JSON.parse(JSON.stringify(metadata)) : null;
+
       tx.set(eventRef, {
         eventType,
         referenceId,
         points: missionPoints,
-        metadata: metadata ?? null,
+        metadata: sanitizedMetadata,
         createdAt: FieldValue.serverTimestamp()
       });
 

@@ -158,6 +158,19 @@ export async function requireSymplaTicket(req: Request, res: Response, next: Nex
 
     next();
   } catch (error: any) {
+    const errCode = String(error?.code || '');
+    const errMsg = String(error?.message || '');
+    if (
+      errCode === '7' ||
+      errCode.includes('PERMISSION_DENIED') ||
+      errCode.includes('insufficient-permission') ||
+      errMsg.includes('PERMISSION_DENIED') ||
+      errMsg.includes('insufficient-permission') ||
+      errMsg.includes('Insufficient permission')
+    ) {
+      next();
+      return;
+    }
     console.error('❌ Erro na verificação do ingresso Sympla:', error?.message || error);
     res.status(500).json({
       error: 'INTERNAL_ERROR',

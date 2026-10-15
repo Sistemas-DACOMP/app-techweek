@@ -143,6 +143,29 @@ describe('addPointEvent (KAN-79)', () => {
       message: 'Pontuação creditada com sucesso!'
     });
   });
+
+  it('faz fallback resiliente (salva local/Firestore) quando o backend retorna 500 com error INTERNAL_ERROR', async () => {
+    const err = new Error('Não foi possível registrar os pontos.');
+    err.status = 500;
+    err.data = {
+      error: 'INTERNAL_ERROR',
+      message: 'Não foi possível registrar os pontos.'
+    };
+    apiRequest.mockRejectedValueOnce(err);
+
+    const result = await addPointEvent({
+      eventType: 'mission',
+      referenceId: 'secret_password',
+      points: 20,
+      metadata: { secretWord: 'OPORTUNIDADES' }
+    });
+
+    expect(result).toEqual({
+      success: true,
+      points: 20,
+      message: 'Pontuação creditada com sucesso!'
+    });
+  });
 });
 
 describe('getMyPointEvents (KAN-79/KAN-71)', () => {
