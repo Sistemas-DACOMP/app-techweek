@@ -118,10 +118,17 @@ export function usePwaInstall() {
 
   const dismiss = () => {
     setDismissed(true);
-    setSheetOpen(false);
     try {
       localStorage.setItem(STORAGE_KEY, Date.now().toString());
     } catch {}
+    syncNotificationState();
+    const perm = getNotificationPermission();
+    if (!isNotificationEnabled() && perm !== 'unsupported' && perm !== 'denied' && !notifDismissed) {
+      setSheetStep('notifications');
+      setSheetOpen(true);
+    } else {
+      setSheetOpen(false);
+    }
   };
 
   const dismissNotifications = () => {
@@ -135,7 +142,11 @@ export function usePwaInstall() {
   const advanceToNotificationStep = () => {
     syncNotificationState();
     if (isNotificationEnabled()) {
-      dismiss();
+      setDismissed(true);
+      setSheetOpen(false);
+      try {
+        localStorage.setItem(STORAGE_KEY, Date.now().toString());
+      } catch {}
       return;
     }
     setSheetStep('notifications');
@@ -152,12 +163,17 @@ export function usePwaInstall() {
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
         setIsInstalled(true);
-        if (!isNotificationEnabled()) {
-          setSheetStep('notifications');
-          setSheetOpen(true);
-        } else {
-          setSheetOpen(false);
-        }
+      } else {
+        setDismissed(true);
+        try {
+          localStorage.setItem(STORAGE_KEY, Date.now().toString());
+        } catch {}
+      }
+      if (!isNotificationEnabled()) {
+        setSheetStep('notifications');
+        setSheetOpen(true);
+      } else {
+        setSheetOpen(false);
       }
     } catch {}
     setDeferredPrompt(null);
@@ -196,12 +212,13 @@ export function usePwaInstall() {
     !notifDismissed;
 
   const showInstallCard = !isInstalled && !dismissed;
-  const showNotificationCard = isInstalled && needsNotificationSetup;
+  const showNotificationCard = needsNotificationSetup && (isInstalled || dismissed);
 
   return {
     isInstalled,
     notificationsEnabled,
     notificationPermission,
+    needsNotificationSetup,
     activatingNotif,
     showCard: showInstallCard || showNotificationCard,
     cardMode: showInstallCard ? 'install' : 'notifications',
@@ -278,13 +295,13 @@ export function InstallAppSheet({ pwa }) {
               <Mascot color="blue" isWaving className="mascot-no-float shrink-0" style={{ width: 64, height: 64 }} />
               <div className="pb-1">
                 <span className="inline-block rounded-full bg-surface-selected px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-link">
-                  Passo 2 de 2 · Avisos no celular
+                  {pwa.isInstalled ? 'Passo 2 de 2 · Avisos no celular' : 'Avisos em tempo real · Sem instalar'}
                 </span>
                 <h2 id="install-sheet-title" className="m-0 mt-1 text-[21px] font-black text-text">
                   Ative as notificações
                 </h2>
                 <p className="m-0 mt-0.5 text-[13px] text-text-2">
-                  Receba os alertas do evento na barra do telefone, mesmo fora do app.
+                  Receba os alertas do evento no seu aparelho, mesmo sem instalar o app.
                 </p>
               </div>
             </div>
@@ -377,14 +394,16 @@ export function InstallAppSheet({ pwa }) {
             </ol>
 
             <p className="m-0 mt-1.5 text-xs text-text-3">
-              {platform === 'ios'
-                ? 'Depois de adicionar à tela de início, toque em "Continuar" para ativar as notificações.'
-                : 'Se aparecer o botão "Instalar" abaixo, toque nele e depois ative as notificações.'}
+              {pwa.needsNotificationSetup
+                ? 'Não quer instalar agora? Toque em "Só ativar avisos" para receber alertas mesmo pelo navegador.'
+                : platform === 'ios'
+                  ? 'Depois de adicionar à tela de início, toque em "Continuar" para ativar as notificações.'
+                  : 'Se aparecer o botão "Instalar" abaixo, toque nele e depois ative as notificações.'}
             </p>
 
-            <div className="mt-4 grid grid-cols-[1fr_1.6fr] gap-2.5">
+            <div className="mt-4 grid grid-cols-[1fr_1.5fr] gap-2.5">
               <button ref={closeRef} type="button" className="btn btn-secondary !min-h-[50px] !rounded-[14px] !font-bold" onClick={pwa.dismiss}>
-                Agora não
+                {pwa.needsNotificationSetup ? 'Só ativar avisos' : 'Agora não'}
               </button>
               {pwa.canPrompt ? (
                 <button type="button" className="btn btn-primary !min-h-[50px] text-base" onClick={pwa.promptNative}>
@@ -406,8 +425,8 @@ export function InstallAppSheet({ pwa }) {
 
 /**
  * Card dinâmico de Primeiros Passos na Home:
- * - Se ainda não instalou: "Primeiros passos · Passo 1 de 2 · Instale o app"
- * - Se já instalou mas falta ativar notificações: "Primeiros passos · Passo 2 de 2 · Ative as notificações"
+ * - Se ainda não instalou: "Primeiros passos · Instale o app" + botão direto "Ativar avisos" (sem exigir instalação)
+ * - Se já instalou (ou dispensou instalação) mas falta ativar notificações: "Ative as notificações"
  */
 export default function InstallPwaCard({ pwa }) {
   if (!pwa?.showCard) return null;
@@ -419,9 +438,15 @@ export default function InstallPwaCard({ pwa }) {
           <BellRing size={22} strokeWidth={2} aria-hidden="true" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-xs font-extrabold text-link">Primeiros passos · 2 de 2</span>
+          <span className="block text-xs font-extrabold text-link">
+            {pwa.isInstalled ? 'Primeiros passos · 2 de 2' : 'Avisos em tempo real'}
+          </span>
           <h2 id="install-card-title" className="m-0 mt-0.5 text-[15px] font-extrabold text-text">Ative as notificações</h2>
-          <span className="mt-0.5 block text-[13px] leading-[1.4] text-text-2">Receba avisos de palestras e missões na barra do celular.</span>
+          <span className="mt-0.5 block text-[13px] leading-[1.4] text-text-2">
+            {pwa.isInstalled
+              ? 'Receba avisos de palestras e missões na barra do celular.'
+              : 'Receba avisos de palestras e missões mesmo sem instalar o app.'}
+          </span>
         </span>
         <button type="button" onClick={pwa.openNotificationStep} className="btn btn-action btn-sm shrink-0 !px-3.5 !text-[13px]">
           Ativar
@@ -431,18 +456,40 @@ export default function InstallPwaCard({ pwa }) {
   }
 
   return (
-    <section aria-labelledby="install-card-title" className="inicio-gradient-border mx-5 mt-3.5 flex items-center gap-3 rounded-[18px] p-3.5">
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-[image:var(--brand-gradient)] text-white">
-        <Smartphone size={22} strokeWidth={2} aria-hidden="true" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-xs font-extrabold text-link">Primeiros passos · falta 1</span>
-        <h2 id="install-card-title" className="m-0 mt-0.5 text-[15px] font-extrabold text-text">Instale o app</h2>
-        <span className="mt-0.5 block text-[13px] leading-[1.4] text-text-2">Abre em tela cheia e te avisa antes da sua atividade.</span>
-      </span>
-      <button type="button" onClick={pwa.install} className="btn btn-action btn-sm shrink-0 !px-3.5 !text-[13px]">
-        Instalar
-      </button>
+    <section aria-labelledby="install-card-title" className="inicio-gradient-border mx-5 mt-3.5 flex flex-col gap-3 rounded-[18px] p-3.5">
+      <div className="flex items-center gap-3">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-[image:var(--brand-gradient)] text-white">
+          <Smartphone size={22} strokeWidth={2} aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-extrabold text-link">Primeiros passos · falta 1</span>
+          <h2 id="install-card-title" className="m-0 mt-0.5 text-[15px] font-extrabold text-text">Instale o app ou ative os avisos</h2>
+          <span className="mt-0.5 block text-[13px] leading-[1.4] text-text-2">Abre em tela cheia ou avisa direto pelo navegador quando sua atividade começar.</span>
+        </span>
+        {!pwa.needsNotificationSetup && (
+          <button type="button" onClick={pwa.install} className="btn btn-action btn-sm shrink-0 !px-3.5 !text-[13px]">
+            Instalar
+          </button>
+        )}
+      </div>
+      {pwa.needsNotificationSetup && (
+        <div className="flex items-center justify-end gap-2 border-t border-white/[0.08] pt-2.5">
+          <button
+            type="button"
+            onClick={pwa.openNotificationStep}
+            className="btn btn-secondary btn-sm flex-1 !min-h-[38px] !rounded-xl !px-3 !text-[12px] !font-bold"
+          >
+            <BellRing size={15} aria-hidden="true" /> Só ativar avisos
+          </button>
+          <button
+            type="button"
+            onClick={pwa.install}
+            className="btn btn-action btn-sm flex-1 !min-h-[38px] !rounded-xl !px-3 !text-[12px]"
+          >
+            <Smartphone size={15} aria-hidden="true" /> Instalar app
+          </button>
+        </div>
+      )}
     </section>
   );
 }

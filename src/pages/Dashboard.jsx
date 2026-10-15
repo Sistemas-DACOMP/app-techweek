@@ -679,7 +679,7 @@ function UpNext({ items, now, statusOf, onOpen, onAgenda }) {
 /* Primeiros passos (sem ingresso) — board InicioPendente              */
 /* ------------------------------------------------------------------ */
 function PendingHome({ installed, notificationsEnabled, onLink, onInstall, onEnableNotifications, upcoming, now, onOpen, onAgenda }) {
-  const step3Done = Boolean(installed && notificationsEnabled);
+  const step3Done = Boolean(notificationsEnabled);
   const done = 1 + (step3Done ? 1 : 0); // passo 2 (ingresso) está pendente por definição nesta tela
   const steps = [
     { title: 'Conta criada', text: 'Bem-vindo ao app da Tech Week.', state: 'done' },
@@ -696,7 +696,7 @@ function PendingHome({ installed, notificationsEnabled, onLink, onInstall, onEna
     installed && !notificationsEnabled
       ? {
           title: 'Ative as notificações no celular',
-          text: 'Passo 2 pós-instalação: receba avisos na tela do celular como nos outros apps.',
+          text: 'Receba avisos na tela do celular como nos outros apps.',
           state: 'todo',
           action: (
             <button type="button" onClick={onEnableNotifications} className="btn btn-secondary mt-2.5 !min-h-[44px] !rounded-xl !px-4 !text-sm !font-bold">
@@ -704,16 +704,34 @@ function PendingHome({ installed, notificationsEnabled, onLink, onInstall, onEna
             </button>
           )
         }
-      : {
-          title: 'Instale o app no celular',
-          text: 'Abre em tela cheia e avisa quando sua atividade vai começar.',
-          state: step3Done ? 'done' : 'todo',
-          action: step3Done ? null : (
-            <button type="button" onClick={onInstall} className="btn btn-secondary mt-2.5 !min-h-[44px] !rounded-xl !px-4 !text-sm !font-bold">
-              <Smartphone size={18} strokeWidth={1.9} aria-hidden="true" /> Como instalar
-            </button>
-          )
-        }
+      : !installed && !notificationsEnabled
+        ? {
+            title: 'Ative os avisos ou instale o app',
+            text: 'Receba alertas mesmo sem instalar o app, ou adicione à tela inicial para abrir em tela cheia.',
+            state: 'todo',
+            action: (
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                <button type="button" onClick={onEnableNotifications} className="btn btn-secondary !min-h-[44px] !rounded-xl !px-3.5 !text-sm !font-bold">
+                  <Bell size={17} strokeWidth={1.9} aria-hidden="true" /> Ativar notificações
+                </button>
+                <button type="button" onClick={onInstall} className="btn btn-secondary !min-h-[44px] !rounded-xl !px-3.5 !text-sm !font-bold">
+                  <Smartphone size={17} strokeWidth={1.9} aria-hidden="true" /> Como instalar
+                </button>
+              </div>
+            )
+          }
+        : {
+            title: installed ? 'App instalado e avisos ativos' : 'Notificações ativas no aparelho',
+            text: installed
+              ? 'Tudo pronto para receber alertas na tela do seu celular.'
+              : 'Você já recebe os alertas do evento mesmo sem instalar o app.',
+            state: 'done',
+            action: !installed ? (
+              <button type="button" onClick={onInstall} className="btn btn-secondary mt-2.5 !min-h-[40px] !rounded-xl !px-3.5 !text-xs !font-bold">
+                <Smartphone size={16} strokeWidth={1.9} aria-hidden="true" /> Quero instalar o app também
+              </button>
+            ) : null
+          }
   ];
 
   return (
