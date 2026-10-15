@@ -1211,6 +1211,7 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
 ---
 
 ### ERR-048
+- **Status:** Corrigido
 - **Arquivo e linha:** `tests/unit/testSponsorRender.test.js:32`
 - **Teste:** `describe('Render Sponsor page with SPONSOR role')`
 - **Tipo:** Efeito colateral / Falta de mock
@@ -1224,10 +1225,12 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Mocks parciais que interceptaram os hooks de usuário mas não interceptaram os módulos de banco e persistência subjacentes.
 - **Sugestão de correção:** Adicionar `vi.mock('../../src/lib/firebase', () => ({ auth: {}, db: {}, storage: {} }))` para desacoplar totalmente o carregamento da página de qualquer rede ou emuladores.
+- **Correção aplicada:** Adicionado `// @vitest-environment happy-dom` e mocks explícitos para `../../src/lib/firebase` (`auth`, `db`, `storage`) e serviços dependentes (`auth`, `activityService`, `feedService`, `ticketService`, `sponsorService`) no topo de `tests/unit/testSponsorRender.test.js`, eliminando completamente conexões aos emuladores locais durante a suíte.
 
 ---
 
 ### ERR-049
+- **Status:** Corrigido
 - **Arquivo e linha:** `tests/unit/testSponsorRender.test.js:32`
 - **Teste:** `describe('Render Sponsor page with SPONSOR role')`
 - **Tipo:** Cobertura insuficiente / Teste superficial
@@ -1243,10 +1246,12 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O teste foi concebido como um teste de fumaça rápido (smoke test) para validar se a renderização da página com perfil de patrocinador não quebrava por exceções não capturadas.
 - **Sugestão de correção:** Expandir os testes da página ou adicionar testes de integração cobrindo a navegação entre abas (`/sponsor?tab=crm`, `/sponsor?tab=roi`, `/sponsor?tab=settings`), abertura do modal de scanner e tratamento de patrocinador sem permissão.
+- **Correção aplicada:** Expandida a suíte `tests/unit/testSponsorRender.test.js` com testes interativos via `@testing-library/react` cobrindo navegação entre as abas CRM (`Leads do estande`), ROI (`Relatório executivo`) e Configurações (`Configurações`), abertura do modal de Chamados e Suporte (`SupportTicketModal`) e bloqueio de acesso (`Acesso Restrito: Portal Patrocinador`) para perfis sem permissão (`PARTICIPANT`).
 
 ---
 
 ### ERR-050
+- **Status:** Corrigido
 - **Arquivo e linha:** `tests/unit/uniqueUsername.test.js:2`
 - **Teste:** `describe('Validação de Unicidade de Username')`
 - **Tipo:** Efeito colateral / Falta de mock
@@ -1260,10 +1265,12 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** Falta de `vi.mock('../../src/lib/firebase')` no arquivo de teste.
 - **Sugestão de correção:** Adicionar `vi.mock('../../src/lib/firebase', () => ({ auth: {}, db: {} }))` no topo do arquivo.
+- **Correção aplicada:** Adicionados `vi.mock('../../src/lib/firebase')` e `vi.mock('firebase/firestore')` em `tests/unit/uniqueUsername.test.js`, isolando o teste de conexões de rede e dos emuladores do Firebase.
 
 ---
 
 ### ERR-051
+- **Status:** Corrigido
 - **Arquivo e linha:** `tests/unit/uniqueUsername.test.js:13`
 - **Teste:** `it('normaliza o username removendo @ e caracteres especiais')`
 - **Tipo:** Falso positivo / Asserção fraca
@@ -1280,6 +1287,7 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   Não há nenhum mock de `getDocs`, e qualquer retorno booleano faz o teste passar sem validar nada.
 - **Causa provável:** O teste foi escrito apenas para cobrir a linha na ferramenta de cobertura de código sem checar a lógica de negócio do Firestore.
 - **Sugestão de correção:** Mockar `getDocs` da coleção `/users` para simular colisão (retornando documento existente com `displayName`) e assertar `available: false`, além de testar caso de sucesso assertando `available: true`.
+- **Correção aplicada:** Reescritos os testes em `tests/unit/uniqueUsername.test.js` com mock determinístico de `getDocs` e `where`, validando a rejeição imediata de formatos inválidos sem chamada ao Firestore, a normalização exata (`where('username', '==', 'dev_user.01')`) com retorno `available: true`, e a detecção de colisão retornando `available: false` com `existingUser` populado (`name` e `avatarUrl`).
 
 ---
 
