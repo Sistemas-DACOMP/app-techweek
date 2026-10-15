@@ -82,6 +82,7 @@ jobs:
           SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_FACOM_TECHWEEK_LAYERX }}
         run: |
           printf '%s' "$SERVICE_ACCOUNT_KEY" > "$RUNNER_TEMP/service-account.json"
+          printf '%s' "$SERVICE_ACCOUNT_KEY" > "backend/service-account.json"
 
       - name: Deploy to Firebase (Hosting, Functions, Firestore Rules, Storage Rules)
         env:
