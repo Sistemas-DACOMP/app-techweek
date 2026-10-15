@@ -74,12 +74,17 @@ export function markIdAsNotified(id) {
   }
 }
 
+export function getNotifiedIds() {
+  return readJsonArray(NOTIFIED_IDS_KEY);
+}
+
 // ---------------------------------------------------------------------------
 // SUPORTE A NOTIFICAÇÕES NATIVAS NO CELULAR / PWA (Service Worker + Web Push)
 // ---------------------------------------------------------------------------
 
 let swRegistrationPromise = null;
 let swClickListenerAttached = false;
+let fcmRegisterAttempted = false;
 
 export function isNativeNotificationSupported() {
   if (typeof window === 'undefined') return false;
@@ -111,6 +116,7 @@ export function setNotificationEnabled(enabled) {
   try {
     localStorage.setItem(NATIVE_ENABLED_KEY, enabled ? 'true' : 'false');
     triggerUpdate();
+    syncBackgroundWatcherWithSw().catch(() => {});
   } catch {
     // ignore
   }
@@ -126,12 +132,22 @@ export async function registerNotificationServiceWorker() {
       swClickListenerAttached = true;
       navigator.serviceWorker.addEventListener('message', (event) => {
         const data = event?.data;
+        if (data?.type === 'SW_ANNOUNCEMENT_NOTIFIED' && data.id) {
+          markIdAsNotified(data.id);
+          triggerUpdate();
+          return;
+        }
         if (data?.type === 'NOTIFICATION_CLICK' && data.url) {
           try {
             const targetUrl = String(data.url);
-            if (targetUrl.startsWith('/') && window.location.pathname + window.location.search !== targetUrl) {
-              window.history.pushState({}, '', targetUrl);
-              window.dispatchEvent(new PopStateEvent('popstate'));
+            if (targetUrl.startsWith('/')) {
+              const currentHashPath = window.location.hash ? window.location.hash.replace(/^#/, '') : '';
+              if (window.location.hash || window.location.pathname === '/') {
+                window.location.hash = `#${targetUrl}`;
+              } else if (currentHashPath !== targetUrl) {
+                window.history.pushState({}, '', targetUrl);
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }
             }
           } catch {
             // fallback
@@ -146,8 +162,118 @@ export async function registerNotificationServiceWorker() {
         .catch(() => null);
     }
 
-    const reg = await swRegistrationPromise;
-    return reg || (await navigator.serviceWorker.getRegistration?.()) || null;
+    let reg = await swRegistrationPromise;
+    if ((!reg || !reg.active) && typeof navigator.serviceWorker.getRegistration === 'function') {
+      const latestReg = await navigator.serviceWorker.getRegistration().catch(() => null);
+      if (latestReg) reg = latestReg;
+    }
+
+    // Garante que o Service Worker já esteja ativo (essential no Android Chrome / iOS PWA)
+    if (reg && !reg.active && navigator.serviceWorker.ready && typeof navigator.serviceWorker.ready.then === 'function') {
+      const readyReg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((resolve) => setTimeout(() => resolve(reg), 1500)),
+      ]).catch(() => reg);
+      reg = readyReg || reg;
+    }
+
+    return reg || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Sincroniza o estado de notificações e token de autenticação com o Service Worker
+ * para que ele possa vigiar novos comunicados (/announcements) em segundo plano
+ * mesmo quando o usuário bloqueia a tela ou sai do aplicativo no celular.
+ */
+export async function syncBackgroundWatcherWithSw({ startPolling = false, idToken = null, projectId = null } = {}) {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return false;
+  }
+
+  try {
+    const reg = await registerNotificationServiceWorker();
+    const targetSw = reg?.active || reg?.waiting || navigator.serviceWorker.controller;
+    if (!targetSw || typeof targetSw.postMessage !== 'function') return false;
+
+    const resolvedProjectId =
+      projectId ||
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_PROJECT_ID) ||
+      'facom-techweek';
+
+    let resolvedToken = idToken;
+    if (!resolvedToken) {
+      try {
+        const { auth } = await import('./firebase');
+        if (auth?.currentUser && typeof auth.currentUser.getIdToken === 'function') {
+          resolvedToken = await auth.currentUser.getIdToken(false);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    targetSw.postMessage({
+      type: startPolling ? 'APP_BACKGROUNDED' : 'SYNC_BACKGROUND_WATCHER',
+      payload: {
+        projectId: resolvedProjectId,
+        idToken: resolvedToken || null,
+        enabled: isNotificationEnabled(),
+        notifiedIds: readJsonArray(NOTIFIED_IDS_KEY),
+        startPolling: Boolean(startPolling),
+      },
+    });
+
+    if (startPolling && reg?.sync && typeof reg.sync.register === 'function') {
+      reg.sync.register('tw-check-announcements').catch(() => {});
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Registra o token FCM Web Push do aparelho e inscreve no tópico 'todos_participantes'
+ * para recebimento nativo em segundo plano quando suportado pelo navegador/SO.
+ */
+export async function registerFcmPushSubscription() {
+  if (typeof window === 'undefined' || getNotificationPermission() !== 'granted') return null;
+  if (fcmRegisterAttempted) return null;
+  fcmRegisterAttempted = true;
+
+  try {
+    const reg = await registerNotificationServiceWorker();
+    if (!reg) return null;
+
+    const [{ isSupported, getMessaging, getToken }, { default: app }, { apiFetch }] = await Promise.all([
+      import('firebase/messaging'),
+      import('./firebase'),
+      import('./api'),
+    ]);
+
+    const supported = await isSupported().catch(() => false);
+    if (!supported) return null;
+
+    const messaging = getMessaging(app);
+    const vapidKey =
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_VAPID_KEY) || undefined;
+
+    const token = await getToken(messaging, {
+      serviceWorkerRegistration: reg,
+      ...(vapidKey ? { vapidKey } : {}),
+    }).catch(() => null);
+
+    if (token) {
+      await apiFetch('/api/admin/notifications/subscribe', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      }).catch(() => {});
+    }
+    return token;
   } catch {
     return null;
   }
@@ -180,8 +306,10 @@ export async function triggerNativeNotification(
     badge: '/icon-192.png',
     tag,
     renotify: true,
+    silent: false,
     requireInteraction: Boolean(urgent),
-    vibrate: urgent ? [250, 100, 250, 100, 300] : [180, 80, 180],
+    vibrate: urgent ? [250, 100, 250, 100, 300] : [200, 100, 200],
+    timestamp: Date.now(),
     data: {
       url: actionUrl || '/',
       id: tag,
@@ -195,17 +323,31 @@ export async function triggerNativeNotification(
     const reg = await registerNotificationServiceWorker();
     if (reg && typeof reg.showNotification === 'function') {
       await reg.showNotification(title, options);
+      syncBackgroundWatcherWithSw().catch(() => {});
       return true;
     }
-    if (reg?.active && typeof reg.active.postMessage === 'function') {
-      reg.active.postMessage({
+    const targetSw = reg?.active || navigator.serviceWorker?.controller;
+    if (targetSw && typeof targetSw.postMessage === 'function') {
+      targetSw.postMessage({
         type: 'SHOW_NOTIFICATION',
-        payload: { id: tag, title, message, type, actionUrl: actionUrl || '/', urgent },
+        payload: { id: tag, title, message, body: message, type, actionUrl: actionUrl || '/', urgent },
       });
       return true;
     }
   } catch {
-    // Continua para fallback da API Notification
+    // Se showNotification falhou mas existe SW controller ativo, delega via postMessage
+    try {
+      const targetSw = navigator.serviceWorker?.controller;
+      if (targetSw && typeof targetSw.postMessage === 'function') {
+        targetSw.postMessage({
+          type: 'SHOW_NOTIFICATION',
+          payload: { id: tag, title, message, body: message, type, actionUrl: actionUrl || '/', urgent },
+        });
+        return true;
+      }
+    } catch {
+      // Continua para fallback da API Notification
+    }
   }
 
   // 2. Fallback: API Notification na thread principal (Desktop / navegadores sem SW ativo)
@@ -249,12 +391,14 @@ export async function requestNotificationPermission({ sendWelcomeTest = true } =
     const result = await window.Notification.requestPermission();
     if (result === 'granted') {
       setNotificationEnabled(true);
+      registerFcmPushSubscription().catch(() => {});
+      syncBackgroundWatcherWithSw({ startPolling: false }).catch(() => {});
       if (sendWelcomeTest) {
         await triggerNativeNotification(
           {
             id: `welcome_push_${Date.now()}`,
             title: 'Notificações ativadas na TechWeek!',
-            message: 'Você receberá avisos de palestras, missões e novidades direto no seu celular.',
+            message: 'Você receberá avisos de palestras, missões e novidades direto na barra de notificações do celular.',
             type: 'system',
             actionUrl: '/agenda',
           },
