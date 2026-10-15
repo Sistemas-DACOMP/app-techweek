@@ -16,6 +16,7 @@ import {
   getStageDisplayMode,
   setStageDisplayMode,
   calculateUfuExtensionAudit,
+  exportUfuAuditCsv,
   resetLiveOpsStorage,
   sendActivityBroadcast,
   getActivityBroadcasts,
@@ -195,6 +196,34 @@ describe('liveOpsService - Live Operations & Event Steering Engine', () => {
 
       expect(bruno.isEligible).toBe(false);
       expect(bruno.statusLabel).toBe('FREQUÊNCIA INSUFICIENTE');
+    });
+
+    it('suporta assinatura posicional (AdminPessoas) e documentos incompletos sem quebrar', () => {
+      const mockUsers = [
+        { uid: 'u1', fullName: 'Ana Silva', email: 'ana@ufu.br', totalPoints: 500, hasSymplaTicket: true, course: 'BCC', period: 6 },
+        { id: 'u2', firstName: 'Bruno', totalPoints: 40 },
+        null,
+        undefined,
+        {},
+      ];
+      const mockActivities = [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }];
+
+      const audit = calculateUfuExtensionAudit(mockUsers, mockActivities, 75);
+
+      expect(Array.isArray(audit.students)).toBe(true);
+      expect(audit.students.length).toBe(3);
+      expect(audit.totalUfuStudents).toBe(3);
+      expect(audit.requiredHours).toBe(18);
+      expect(audit.eligibleCount).toBe(1);
+      expect(audit.ineligibleCount).toBe(2);
+      expect(typeof audit.avgAttendanceRate).toBe('number');
+      expect(audit.students[0].id).toBe('u1');
+      expect(audit.students[0].attendancePercentage).toBeGreaterThanOrEqual(75);
+      expect(audit.students[0].attendedActivitiesCount).toBeGreaterThanOrEqual(1);
+
+      const csv = exportUfuAuditCsv(audit, { download: false });
+      expect(csv).toContain('Nome Completo;E-mail;Curso / Vínculo');
+      expect(csv).toContain('Ana Silva');
     });
   });
 

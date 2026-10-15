@@ -226,7 +226,15 @@ export default function Challenges() {
     }
 
     if (challenge.type === 'auto' || challenge.triggerMode === 'auto') {
-      setSelectedAutoChallenge(challenge);
+      if (challenge.autoConfig?.eventType === 'lecture_checkin' || challenge.id?.includes('lecture')) {
+        setSelectedAutoChallenge(challenge);
+        return;
+      }
+      if (isPassportMission(challenge)) {
+        navigate('/challenges?tab=passport', { replace: true });
+        return;
+      }
+      navigate('/scanner?tab=scan', { state: { tab: 'scan', missionId: challenge.id } });
       return;
     }
 
@@ -498,10 +506,13 @@ export default function Challenges() {
                     type="text"
                     value={manualForm['secretWord'] || ''}
                     onChange={(e) => setManualForm(prev => ({ ...prev, secretWord: e.target.value }))}
+                    onFocus={(e) => {
+                      const target = e.currentTarget;
+                      setTimeout(() => target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' }), 220);
+                    }}
                     className="field"
                     required
                     placeholder="Digite a palavra que você encontrou"
-                    autoFocus
                   />
                 </div>
               )}
@@ -698,8 +709,9 @@ export default function Challenges() {
                   type="button"
                   className="btn btn-primary btn-block"
                   onClick={() => {
+                    const missionId = selectedAutoChallenge?.id;
                     setSelectedAutoChallenge(null);
-                    navigate('/scanner');
+                    navigate('/scanner?tab=scan', { state: { tab: 'scan', missionId } });
                   }}
                 >
                   <Camera size={18} aria-hidden="true" />

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
 import {
   getNotifications,
   getUnreadCount,
@@ -8,7 +8,14 @@ import {
   removeNotification,
   clearAllNotifications,
   initWelcomeNotifications,
-  syncWelcomeNotificationWithUserCreatedAt
+  syncWelcomeNotificationWithUserCreatedAt,
+  getReadAnnouncementIds,
+  getDismissedAnnouncementIds,
+  getNotificationPermission,
+  isNotificationEnabled,
+  setNotificationEnabled,
+  triggerNativeNotification,
+  requestNotificationPermission,
 } from './notifications';
 
 describe('Notifications System', () => {
@@ -104,7 +111,7 @@ describe('Notifications System', () => {
     expect(getUnreadCount()).toBe(initialUnread + 1);
   });
 
-  it('marca uma notificação individual como lida', () => {
+  it('marca uma notificação individual como lida e registra IDs de comunicados lidos', () => {
     const list = getNotifications();
     const unreadItem = list.find(n => !n.read);
     expect(unreadItem).toBeDefined();
@@ -114,18 +121,20 @@ describe('Notifications System', () => {
     const updatedList = getNotifications();
     const itemAfter = updatedList.find(n => n.id === unreadItem.id);
     expect(itemAfter.read).toBe(true);
+    expect(getReadAnnouncementIds()).toContain(unreadItem.id);
   });
 
-  it('marca todas as notificações como lidas', () => {
-    getNotifications(); // inicializa
-    markAllAsRead();
+  it('marca todas as notificações como lidas incluindo comunicados externos', () => {
+    getNotifications();
+    markAllAsRead(['ann_1', 'ann_2']);
 
     expect(getUnreadCount()).toBe(0);
     const updatedList = getNotifications();
     expect(updatedList.every(n => n.read)).toBe(true);
+    expect(getReadAnnouncementIds()).toEqual(expect.arrayContaining(['ann_1', 'ann_2']));
   });
 
-  it('remove uma notificação pelo id', () => {
+  it('remove uma notificação pelo id e salva comunicado dispensado', () => {
     const list = getNotifications();
     const itemToRemove = list[0];
 
@@ -134,25 +143,90 @@ describe('Notifications System', () => {
     const updatedList = getNotifications();
     expect(updatedList.find(n => n.id === itemToRemove.id)).toBeUndefined();
     expect(updatedList.length).toBe(list.length - 1);
+    expect(getDismissedAnnouncementIds()).toContain(itemToRemove.id);
   });
 
   it('limpa todas as notificações', () => {
     getNotifications();
-    clearAllNotifications();
+    clearAllNotifications(['ann_99']);
 
     const list = getNotifications();
     expect(list).toEqual([]);
     expect(getUnreadCount()).toBe(0);
+    expect(getDismissedAnnouncementIds()).toContain('ann_99');
   });
 
   it('sincroniza o timestamp da notificação de boas-vindas com a data de criação do usuário', () => {
     initWelcomeNotifications();
-    const userCreatedAt = new Date(Date.now() - 1000 * 60 * 45).toISOString(); // 45 minutos atrás
+    const userCreatedAt = new Date(Date.now() - 1000 * 60 * 45).toISOString();
 
     syncWelcomeNotificationWithUserCreatedAt(userCreatedAt);
 
     const list = getNotifications();
     const welcome = list.find(n => n.id === 'welcome_tw');
     expect(welcome.timestamp).toBe(userCreatedAt);
+  });
+
+  it('dispara notificação nativa via ServiceWorkerRegistration.showNotification quando autorizado', async () => {
+    const showNotificationSpy = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        serviceWorker: {
+          register: vi.fn().mockResolvedValue({
+            showNotification: showNotificationSpy,
+          }),
+          getRegistration: vi.fn().mockResolvedValue({
+            showNotification: showNotificationSpy,
+          }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const MockNotification = vi.fn();
+    MockNotification.permission = 'granted';
+    MockNotification.requestPermission = vi.fn().mockResolvedValue('granted');
+    globalThis.window.Notification = MockNotification;
+
+    expect(getNotificationPermission()).toBe('granted');
+    expect(isNotificationEnabled()).toBe(true);
+
+    const delivered = await triggerNativeNotification({
+      id: 'push_test_1',
+      title: 'Palestra começando',
+      message: 'Dirija-se ao Anfiteatro 5R',
+      type: 'lecture',
+      actionUrl: '/agenda',
+      urgent: true,
+    });
+
+    expect(delivered).toBe(true);
+    expect(showNotificationSpy).toHaveBeenCalledWith(
+      'Palestra começando',
+      expect.objectContaining({
+        body: 'Dirija-se ao Anfiteatro 5R',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: 'push_test_1',
+      })
+    );
+
+    // Deduplicação: não deve disparar novamente o mesmo ID sem force
+    const duplicate = await triggerNativeNotification({
+      id: 'push_test_1',
+      title: 'Palestra começando',
+      message: 'Dirija-se ao Anfiteatro 5R',
+    });
+    expect(duplicate).toBe(false);
+
+    // Pausa manual pelo usuário
+    setNotificationEnabled(false);
+    expect(isNotificationEnabled()).toBe(false);
+
+    // Solicitação de permissão reativa e envia confirmação
+    const perm = await requestNotificationPermission({ sendWelcomeTest: true });
+    expect(perm).toBe('granted');
+    expect(isNotificationEnabled()).toBe(true);
   });
 });

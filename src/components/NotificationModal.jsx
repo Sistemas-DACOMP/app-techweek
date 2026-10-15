@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, CalendarCheck, Zap, Trophy, MessageSquare } from 'lucide-react';
+import { ChevronLeft, CalendarCheck, Zap, Trophy, MessageSquare, BellRing, BellOff, Check } from 'lucide-react';
 import { useNotifications } from '../hooks/useNotifications';
 import { useScrollLock } from '../hooks/useScrollLock';
 import Mascot from './Mascot';
@@ -66,8 +66,20 @@ export default function NotificationModal({ isOpen, onClose }) {
   useScrollLock(isOpen);
 
   const navigate = useNavigate();
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    isNativeSupported,
+    permission,
+    nativeEnabled,
+    requestPermission,
+    toggleNativeNotifications,
+    sendTestNotification,
+  } = useNotifications();
   const backRef = useRef(null);
+  const [testSent, setTestSent] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -86,6 +98,14 @@ export default function NotificationModal({ isOpen, onClose }) {
     if (notification.actionUrl) {
       onClose();
       navigate(notification.actionUrl);
+    }
+  };
+
+  const handleSendTest = async () => {
+    const ok = await sendTestNotification();
+    if (ok) {
+      setTestSent(true);
+      setTimeout(() => setTestSent(false), 3000);
     }
   };
 
@@ -129,6 +149,98 @@ export default function NotificationModal({ isOpen, onClose }) {
             <span className="w-11" aria-hidden="true" />
           )}
         </header>
+
+        {/* Bloco de ativação de notificações nativas no celular / PWA */}
+        {isNativeSupported && permission !== 'unsupported' && (
+          <div className="mx-5 mt-3">
+            {permission === 'granted' ? (
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-3.5 py-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span
+                    className={`flex size-9 shrink-0 items-center justify-center rounded-full ${
+                      nativeEnabled
+                        ? 'bg-[rgba(111,216,166,0.16)] text-ok'
+                        : 'bg-surface-raised text-text-3'
+                    }`}
+                  >
+                    {nativeEnabled ? (
+                      <BellRing size={18} strokeWidth={2} aria-hidden="true" />
+                    ) : (
+                      <BellOff size={18} strokeWidth={2} aria-hidden="true" />
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="m-0 truncate text-[13.5px] font-bold text-text">
+                      {nativeEnabled ? 'Alertas no celular ativos' : 'Alertas no celular pausados'}
+                    </p>
+                    <p className="m-0 truncate text-xs text-text-3">
+                      {nativeEnabled
+                        ? 'Você recebe avisos na tela do aparelho'
+                        : 'Ative para receber avisos fora do app'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {nativeEnabled && (
+                    <button
+                      type="button"
+                      onClick={handleSendTest}
+                      className="h-9 cursor-pointer rounded-xl border border-line bg-surface-raised px-2.5 font-sans text-xs font-bold text-link transition-colors hover:bg-surface-selected"
+                    >
+                      {testSent ? (
+                        <span className="inline-flex items-center gap-1 text-ok">
+                          <Check size={14} strokeWidth={2.4} aria-hidden="true" /> Enviado
+                        </span>
+                      ) : (
+                        'Testar'
+                      )}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleNativeNotifications(!nativeEnabled)}
+                    className="h-9 cursor-pointer rounded-xl border-0 bg-surface-selected px-2.5 font-sans text-xs font-bold text-text"
+                  >
+                    {nativeEnabled ? 'Pausar' : 'Ativar'}
+                  </button>
+                </div>
+              </div>
+            ) : permission === 'denied' ? (
+              <div className="flex items-start gap-3 rounded-2xl border border-line bg-surface p-3.5">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-raised text-text-3">
+                  <BellOff size={18} strokeWidth={2} aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="m-0 text-sm font-bold text-text">Notificações bloqueadas no aparelho</p>
+                  <p className="m-0 mt-0.5 text-xs leading-[1.45] text-text-2">
+                    Para receber alertas de palestras e missões na tela do celular, libere a permissão de notificações nas configurações do navegador.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-[rgba(143,160,255,0.28)] bg-[#161F45] p-3.5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[rgba(143,160,255,0.18)] text-link">
+                    <BellRing size={20} strokeWidth={2} aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="m-0 text-sm font-bold text-text">Receber alertas no celular</p>
+                    <p className="m-0 mt-0.5 text-xs leading-[1.4] text-text-2">
+                      Saiba quando suas palestras começarem ou saírem missões novas.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => requestPermission({ sendWelcomeTest: true })}
+                  className="btn btn-primary btn-sm shrink-0 !min-h-[38px] !rounded-xl !px-3.5 !text-xs !font-extrabold"
+                >
+                  Ativar
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {notifications.length === 0 ? (
           <div className="flex flex-col items-center px-8 pt-16 text-center">

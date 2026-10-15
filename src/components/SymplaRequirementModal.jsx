@@ -29,14 +29,49 @@ function LinkTicketSheet({ onClose, onLinked }) {
   const [email, setEmail] = useState(() => auth?.currentUser?.email || '');
   const [state, setState] = useState('idle'); // idle | loading | error | done
   const [message, setMessage] = useState('');
+  const [keyboardStyle, setKeyboardStyle] = useState({});
+  const sheetRef = useRef(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
-    inputRef.current?.focus({ preventScroll: true });
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    const updateViewport = () => {
+      if (!vv) return;
+      const keyboardInset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      if (keyboardInset > 40) {
+        setKeyboardStyle({
+          bottom: `${keyboardInset}px`,
+          maxHeight: `${Math.max(240, Math.round(vv.height - 12))}px`
+        });
+      } else {
+        setKeyboardStyle({});
+      }
+    };
+
+    if (vv) {
+      updateViewport();
+      vv.addEventListener('resize', updateViewport);
+      vv.addEventListener('scroll', updateViewport);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (vv) {
+        vv.removeEventListener('resize', updateViewport);
+        vv.removeEventListener('scroll', updateViewport);
+      }
+    };
   }, [onClose]);
+
+  const handleInputFocus = (e) => {
+    const target = e.currentTarget;
+    setTimeout(() => {
+      target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }, 220);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -86,7 +121,14 @@ function LinkTicketSheet({ onClose, onLinked }) {
   return (
     <>
       <div className="ds-scrim" style={{ zIndex: SYMPLA_SHEET_Z }} aria-hidden="true" onClick={onClose} />
-      <div className="ds-sheet !px-[22px]" style={{ zIndex: SYMPLA_SHEET_Z + 1 }} role="dialog" aria-modal="true" aria-labelledby="sympla-sheet-title">
+      <div
+        ref={sheetRef}
+        className="ds-sheet !px-[22px]"
+        style={{ zIndex: SYMPLA_SHEET_Z + 1, ...keyboardStyle }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sympla-sheet-title"
+      >
         {state === 'done' ? (
           <div className="flex flex-col items-center py-4 text-center" role="status">
             <span className="flex size-14 items-center justify-center rounded-full bg-ok text-[#0A2A1C]" style={{ animation: 'dsPop 380ms var(--spring) both' }}>
@@ -130,6 +172,7 @@ function LinkTicketSheet({ onClose, onLinked }) {
                   autoComplete="email"
                   className="field !min-h-[54px] !rounded-2xl !px-4"
                   value={email}
+                  onFocus={handleInputFocus}
                   onChange={(e) => { setEmail(e.target.value); if (state === 'error') setState('idle'); }}
                   aria-invalid={state === 'error'}
                   aria-describedby="sympla-email-hint"

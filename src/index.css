@@ -181,6 +181,7 @@ html, body {
   overscroll-behavior-x: none;
   touch-action: pan-y pinch-zoom;
   position: relative;
+  color-scheme: dark;
 }
 
 body {
@@ -268,11 +269,13 @@ body {
 }
 
 /* Esconde barras de rolagem nativas sem impedir o scroll */
-.no-scrollbar {
+.no-scrollbar,
+.adm-noscroll {
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
 }
-.no-scrollbar::-webkit-scrollbar {
+.no-scrollbar::-webkit-scrollbar,
+.adm-noscroll::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
@@ -827,7 +830,9 @@ select.field {
   background: var(--surface); border-radius: var(--r-sheet) var(--r-sheet) 0 0;
   padding: 10px 20px max(20px, env(safe-area-inset-bottom));
   z-index: 2001; animation: dsSheetUp 250ms var(--ease-out);
-  max-height: 92dvh; overflow-y: auto;
+  max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  transition: bottom 150ms var(--ease-out), max-height 150ms var(--ease-out);
 }
 .ds-sheet::before { content: ''; display: block; width: 36px; height: 4px; border-radius: 999px; background: var(--line-2); margin: 0 auto 14px; }
 

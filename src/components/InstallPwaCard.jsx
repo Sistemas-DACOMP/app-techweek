@@ -169,8 +169,8 @@ export function InstallAppSheet({ pwa }) {
               </span>
               <span className="flex-1 text-sm leading-[1.4] text-text">{text}</span>
               {app ? (
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-[#F4F5FA]">
-                  <img src={icone} alt="" className="h-[26px] w-6 object-contain" />
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] border border-line bg-bg shadow-sm">
+                  <img src={icone} alt="" className="h-[26px] w-[26px] object-contain" />
                 </span>
               ) : (
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-surface-raised text-link">

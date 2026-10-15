@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -48,6 +48,7 @@ function badgeFromProfile(profile) {
   const first = profile.firstName || profile.first_name || '';
   const last = profile.lastName || profile.last_name || '';
   const username = (profile.username || '').replace(/^@/, '');
+  const symplaTicket = profile.symplaTicket || profile.sympla_ticket || null;
   return {
     name: profile.displayName || [first, last].filter(Boolean).join(' ') || username || 'Participante',
     username,
@@ -56,7 +57,8 @@ function badgeFromProfile(profile) {
     institution: profile.institution || '',
     participantType: profile.participantType || profile.participant_type || 'Participante',
     avatarUrl: profile.avatarUrl || profile.avatar_url || profile.photoURL || null,
-    symplaTicket: profile.symplaTicket || profile.sympla_ticket || null,
+    symplaTicket,
+    ticketId: profile.ticketId || symplaTicket?.ticketNumber || null,
     uid: profile.uid || profile.id || '',
     email: profile.email || '',
     phone: profile.phone || '',
@@ -108,7 +110,7 @@ const cardClass =
 
 // Meu QR (board Cracha)
 function MyBadge({ badge, points, onZoom }) {
-  const id = badge.symplaTicket?.ticketNumber || badge.uid.slice(0, 8).toUpperCase();
+  const id = badge.symplaTicket?.ticketNumber || badge.ticketId || badge.uid.slice(0, 8).toUpperCase();
   return (
     <>
       <section aria-label="Meu crachá digital" className={`${cardClass} pb-4 shadow-[0_18px_44px_rgba(0,0,0,0.45)]`}>
@@ -234,21 +236,53 @@ export function CameraFrame({ live }) {
   );
 }
 
+function resolveRequestedTab(location) {
+  const params = new URLSearchParams(location?.search || '');
+  const queryTab = (params.get('tab') || params.get('mode') || '').toLowerCase();
+  if (queryTab === 'qr' || queryTab === 'badge' || queryTab === 'cracha') {
+    return 'qr';
+  }
+  if (queryTab === 'scan' || queryTab === 'escanear' || queryTab === 'reader' || params.get('scan') === '1' || params.get('scan') === 'true') {
+    return 'scan';
+  }
+  const stateTab = String(location?.state?.tab || location?.state?.mode || '').toLowerCase();
+  if (stateTab === 'qr' || stateTab === 'badge' || stateTab === 'cracha') {
+    return 'qr';
+  }
+  if (stateTab === 'scan' || stateTab === 'escanear') {
+    return 'scan';
+  }
+  return null;
+}
+
 export default function Scanner() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [scanResult, setScanResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [tab, setTab] = useState('qr'); // o botão central da barra abre em Meu QR (DESIGN.md §5)
+  const [tab, setTab] = useState(() => resolveRequestedTab(location) || 'scan'); // O fluxo padrão abre no leitor/scan; a aba 'Meu QR' fica disponível na alternância
   const [cameraAttempt, setCameraAttempt] = useState(0);
+
+  useEffect(() => {
+    const requested = resolveRequestedTab(location);
+    if (requested) {
+      isProcessingRef.current = false;
+      setScanResult(null);
+      setTab(requested);
+    }
+  }, [location.search, location.state]);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   const [showLinkTicket, setShowLinkTicket] = useState(false);
   const [qrZoom, setQrZoom] = useState(false);
-  const { registerCodeScan, profile, points, hasSymplaTicket } = useUser();
+  const { registerCodeScan, profile, points, hasSymplaTicket, ticketLoading } = useUser();
   const badge = badgeFromProfile(profile);
+  const hasResolvedSymplaQr = Boolean(
+    badge?.symplaTicket?.qrCodeData || badge?.symplaTicket?.ticketNumber || badge?.ticketId
+  );
 
   const scannerRef = useRef(null);
   const isStartingRef = useRef(false);
@@ -563,10 +597,21 @@ export default function Scanner() {
     // Detectar auto-scan no frontend antes de acionar a pontuação
     const myUid = profile?.uid || profile?.id;
     const myUsername = (profile?.username || '').replace(/^@/, '').toLowerCase();
+    const myTicket = profile?.symplaTicket || profile?.sympla_ticket;
+    const myQrData = myTicket?.qrCodeData || null;
+    const myTicketNumber = myTicket?.ticketNumber || profile?.ticketId || null;
     const targetUid = consolidatedParticipant?.uid || participantData?.uid || participantData?.participantUid || fetchedProfile?.uid || fetchedProfile?.id;
     const targetUsername = (consolidatedParticipant?.username || participantData?.username || usernameToValidate || fetchedProfile?.username || '').replace(/^@/, '').toLowerCase();
+    const trimmedRaw = typeof data === 'string' ? data.trim() : '';
+    const isMyOwnSymplaCode = Boolean(
+      (myQrData && trimmedRaw && trimmedRaw === myQrData) ||
+      (myTicketNumber && trimmedRaw && (trimmedRaw === myTicketNumber || trimmedRaw.replace(/^SYMPLA:/i, '') === myTicketNumber))
+    );
 
-    if (isUserQr && ((myUid && targetUid && myUid === targetUid) || (myUsername && targetUsername && myUsername !== 'user' && myUsername === targetUsername))) {
+    if (
+      isMyOwnSymplaCode ||
+      (isUserQr && ((myUid && targetUid && myUid === targetUid) || (myUsername && targetUsername && myUsername !== 'user' && myUsername === targetUsername)))
+    ) {
       setIsLoading(false);
       setScanResult({
         status: 'self_scan',
@@ -818,7 +863,7 @@ export default function Scanner() {
             </div>
           ) : (
             <div role="tabpanel" id="cracha-panel-qr" aria-labelledby="cracha-tab-qr">
-              {!badge ? (
+              {!badge || (ticketLoading && !hasResolvedSymplaQr) ? (
                 <div className="skeleton mt-4 h-[540px] rounded-[26px]" aria-label="Carregando crachá" />
               ) : hasSymplaTicket ? (
                 <MyBadge badge={badge} points={points} onZoom={() => setQrZoom(true)} />

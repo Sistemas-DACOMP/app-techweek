@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getMyProfile, updateMascot, uploadAvatar, getMyPointEvents, addPointEvent } from '../lib/gameplay';
 import { onAuthChange } from '../lib/auth';
-import { getCachedUserProfile, isAdminEmail } from '../lib/userService';
+import { getCachedUserProfile, isAdminEmail, updateUserProfile, syncUserRankingInFirestore } from '../lib/userService';
+import { verifySymplaTicket, getCachedSymplaTicket, setCachedSymplaTicket } from '../lib/sympla';
 import { calculateLevel } from '../lib/level';
 import { useNotifications } from './useNotifications';
 
@@ -9,21 +10,47 @@ export function useUser() {
   const [profile, setProfile] = useState(() => getCachedUserProfile());
   const [pointEvents, setPointEvents] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [ticketLoading, setTicketLoading] = useState(false);
   const [profileReady, setProfileReady] = useState(false); // true só quando há sessão e o perfil chegou
   const scannedCodesRef = useRef(new Set());
+  const syncedTicketEmailRef = useRef(null);
   const { addNotification } = useNotifications();
 
   const load = useCallback(async () => {
     try {
       const [profileData, events] = await Promise.all([getMyProfile(), getMyPointEvents()]);
       setProfile(prev => {
-        if (!prev) return profileData;
+        if (!prev && !profileData) return null;
+        const targetUid = profileData?.uid || profileData?.id || prev?.uid || prev?.id;
+        const targetEmail = profileData?.email || prev?.email;
+        const resolvedTicket =
+          profileData?.symplaTicket ||
+          profileData?.sympla_ticket ||
+          prev?.symplaTicket ||
+          prev?.sympla_ticket ||
+          getCachedSymplaTicket(targetEmail, targetUid) ||
+          null;
+        if (!prev) {
+          return resolvedTicket
+            ? {
+                ...profileData,
+                symplaTicket: resolvedTicket,
+                ticketId: profileData?.ticketId || resolvedTicket.ticketNumber || null,
+                hasSymplaTicket: true
+              }
+            : profileData;
+        }
         return {
           ...prev,
           ...profileData,
           avatarUrl: profileData?.avatarUrl || profileData?.avatar_url || prev.avatarUrl || prev.avatar_url,
-          symplaTicket: profileData?.symplaTicket || profileData?.sympla_ticket || prev.symplaTicket || prev.sympla_ticket,
-          hasSymplaTicket: !!(profileData?.hasSymplaTicket || profileData?.symplaTicket || prev.hasSymplaTicket || prev.symplaTicket)
+          symplaTicket: resolvedTicket,
+          ticketId: profileData?.ticketId || prev.ticketId || resolvedTicket?.ticketNumber || null,
+          hasSymplaTicket: !!(
+            profileData?.hasSymplaTicket ||
+            resolvedTicket ||
+            prev.hasSymplaTicket
+          )
         };
       });
       setProfileReady(!!profileData);
@@ -51,25 +78,131 @@ export function useUser() {
           if (exists) return prev;
           return [...prev, e.detail.event];
         });
+      } else if (typeof e.detail?.delta === 'number' && e.detail.delta > 0) {
+        setProfile((prev) => {
+          if (!prev) return prev;
+          const nextTotal = Math.max(Number(prev.totalPoints || prev.pontuacaoTotal || 0) + e.detail.delta, 0);
+          return {
+            ...prev,
+            totalPoints: nextTotal,
+            pontuacaoTotal: nextTotal
+          };
+        });
+      }
+    };
+
+    const handleProfileUpdated = (e) => {
+      if (e.detail && typeof e.detail === 'object') {
+        setProfile((prev) => ({ ...(prev || {}), ...e.detail }));
+      } else {
+        const freshCached = getCachedUserProfile();
+        if (freshCached) {
+          setProfile((prev) => ({ ...(prev || {}), ...freshCached }));
+        }
       }
     };
 
     if (typeof window !== 'undefined') {
       window.addEventListener('facom_points_updated', handlePointsUpdated);
+      window.addEventListener('facom_profile_updated', handleProfileUpdated);
     }
 
     return () => {
       unsubscribe();
       if (typeof window !== 'undefined') {
         window.removeEventListener('facom_points_updated', handlePointsUpdated);
+        window.removeEventListener('facom_profile_updated', handleProfileUpdated);
       }
     };
   }, [load]);
+
+  // Auto-sincronização proativa do ingresso Sympla caso não esteja no perfil nem no cache
+  useEffect(() => {
+    const email = profile?.email ? String(profile.email).trim().toLowerCase() : '';
+    const uid = profile?.uid || profile?.id || null;
+    if (!email) return;
+
+    const existingTicket =
+      profile?.symplaTicket ||
+      profile?.sympla_ticket ||
+      getCachedSymplaTicket(email, uid);
+
+    if (existingTicket?.qrCodeData || existingTicket?.ticketNumber || profile?.ticketId) {
+      if (!profile?.symplaTicket && existingTicket) {
+        setProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                symplaTicket: existingTicket,
+                ticketId: prev.ticketId || existingTicket.ticketNumber || null,
+                hasSymplaTicket: true
+              }
+            : prev
+        );
+      }
+      return;
+    }
+
+    if (syncedTicketEmailRef.current === email) return;
+    syncedTicketEmailRef.current = email;
+
+    let cancelled = false;
+    setTicketLoading(true);
+
+    verifySymplaTicket({ email })
+      .then((res) => {
+        if (cancelled) return;
+        const ticketData = res?.symplaTicket || res?.participant;
+        if ((res?.verified || res?.hasTicket) && ticketData) {
+          const normalizedTicket = {
+            ...ticketData,
+            ticketNumber: ticketData.ticketNumber || ticketData.ticket_number || null,
+            qrCodeData: ticketData.qrCodeData || ticketData.ticket_num_qr_code || ticketData.ticketNumber || null
+          };
+          setCachedSymplaTicket(email, uid, normalizedTicket, res?.participant || null);
+          setProfile((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  hasSymplaTicket: true,
+                  symplaTicket: normalizedTicket,
+                  ticketId: prev.ticketId || normalizedTicket.ticketNumber || null
+                }
+              : prev
+          );
+          if (uid) {
+            updateUserProfile(uid, {
+              hasSymplaTicket: true,
+              symplaTicket: normalizedTicket,
+              ticketId: normalizedTicket.ticketNumber || null
+            }).catch(() => {});
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          setTicketLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.email, profile?.uid, profile?.id, profile?.symplaTicket, profile?.sympla_ticket, profile?.ticketId]);
 
   const eventPoints = pointEvents.reduce((sum, event) => sum + (event.points || 0), 0);
   const profilePoints = profile?.totalPoints || profile?.pontuacaoTotal || profile?.total_points || 0;
   const points = Math.max(eventPoints, profilePoints);
   const userLevel = calculateLevel(points);
+
+  useEffect(() => {
+    const uid = profile?.uid || profile?.id;
+    if (!uid || points <= 0) return;
+    if (typeof syncUserRankingInFirestore === 'function') {
+      syncUserRankingInFirestore(uid, points, profile).catch(() => {});
+    }
+  }, [points, profile?.uid, profile?.id, profile?.username, profile?.firstName, profile?.avatarUrl, profile?.avatar_url]);
 
   const scannedCodes = pointEvents
     .filter(event => (event.event_type || event.eventType) === 'scan')
@@ -188,10 +321,19 @@ export function useUser() {
     // 1. Detectar auto-scan (escanear o próprio crachá)
     const myUid = profile?.uid || profile?.id;
     const myUsername = (profile?.username || '').replace(/^@/, '').toLowerCase();
+    const myTicket = profile?.symplaTicket || profile?.sympla_ticket;
+    const myQrData = myTicket?.qrCodeData || null;
+    const myTicketNumber = myTicket?.ticketNumber || profile?.ticketId || null;
     const targetUid = scannedProfile?.uid || scannedProfile?.participantUid;
     const targetUsername = (scannedProfile?.username || '').replace(/^@/, '').toLowerCase();
+    const trimmedRaw = typeof data === 'string' ? data.trim() : '';
 
-    if ((myUid && targetUid && myUid === targetUid) || (myUsername && targetUsername && myUsername === targetUsername)) {
+    if (
+      (myUid && targetUid && myUid === targetUid) ||
+      (myUsername && targetUsername && myUsername === targetUsername) ||
+      (myQrData && trimmedRaw && trimmedRaw === myQrData) ||
+      (myTicketNumber && trimmedRaw && (trimmedRaw === myTicketNumber || trimmedRaw.replace(/^SYMPLA:/i, '') === myTicketNumber))
+    ) {
       return { success: false, selfScan: true, error: 'Você escaneou o seu próprio crachá.' };
     }
 
@@ -284,18 +426,19 @@ export function useUser() {
     }
 
     // Check for specific hardcoded mission QR codes
-    if (data === 'kanastra_code' || data === 'sponsor_visit') {
+    const normalizedData = typeof data === 'string' ? data.trim() : '';
+    if (normalizedData === 'kanastra_code' || normalizedData === 'sponsor_visit' || normalizedData === 'Kanastra') {
       if (!hasCompletedChallenge('sponsor_visit')) {
-        const evRes = await recordEvent('challenge', 'sponsor_visit', 15, { scannedCode: data });
+        const evRes = await recordEvent('challenge', 'sponsor_visit', 15, { scannedCode: normalizedData });
         if (evRes && (evRes.success || evRes.alreadyClaimed)) {
           unlockedChallenges.push('sponsor_visit');
         }
       }
     }
 
-    if (data === 'secret_qr_code') {
+    if (normalizedData === 'secret_qr_code' || normalizedData === 'QR_HUNT_MASTER') {
       if (!hasCompletedChallenge('secret_qr')) {
-        const evRes = await recordEvent('challenge', 'secret_qr', 40, { scannedCode: data });
+        const evRes = await recordEvent('challenge', 'secret_qr', 40, { scannedCode: normalizedData });
         if (evRes && (evRes.success || evRes.alreadyClaimed)) {
           unlockedChallenges.push('secret_qr');
         }
@@ -394,6 +537,7 @@ export function useUser() {
     participantType: isUserAdmin ? 'Organizador' : (profile?.participantType || profile?.participant_type || 'Aluno da UFU'),
     hasSymplaTicket,
     symplaTicket,
+    ticketLoading,
     refreshProfile: load,
     loading,
     points,

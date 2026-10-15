@@ -1,6 +1,6 @@
 import { auth, db } from './firebase';
 import { doc, getDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
-import { verifySymplaDirectly } from './sympla';
+import { verifySymplaTicket, verifySymplaDirectly, getCachedSymplaByCode } from './sympla';
 
 const getApiBaseUrl = () => {
   return import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL || '/api';
@@ -38,28 +38,78 @@ export async function resolveParticipantFromQr(rawData) {
     } catch {}
   }
 
+  // Helper para consultar o diretório local de perfis salvo no navegador
+  const lookupLocalDirectoryProfile = (uid, email) => {
+    if (typeof localStorage === 'undefined') return null;
+    try {
+      const merged = {};
+      let found = false;
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const keys = [];
+      if (uid) {
+        keys.push(`facom_profile_${uid}`, `facom_user_dir_${uid}`, `facom_user_profile_${uid}`);
+      }
+      if (cleanEmail) {
+        keys.push(`facom_user_dir_email_${cleanEmail}`);
+      }
+      for (const k of keys) {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            Object.assign(merged, parsed);
+            found = true;
+          }
+        }
+      }
+      return found ? merged : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const hasRealParticipantName = (d) => {
+    if (!d || typeof d !== 'object') return false;
+    const p = d.participant && typeof d.participant === 'object' ? d.participant : {};
+    const fn = (d.firstName || d.first_name || p.firstName || p.first_name || '').trim();
+    const ln = (d.lastName || d.last_name || p.lastName || p.last_name || '').trim();
+    const dn = (d.displayName || d.name || p.displayName || p.name || '').trim();
+    if (fn && fn.toLowerCase() !== 'participante') return true;
+    if (ln) return true;
+    if (dn && dn.toLowerCase() !== 'participante' && !dn.startsWith('Participante #')) return true;
+    return false;
+  };
+
   // Se o JSON contiver UID direto
   if (parsedJson?.uid || parsedJson?.participantUid) {
     const targetUid = parsedJson.uid || parsedJson.participantUid;
+    const localDir = lookupLocalDirectoryProfile(targetUid, parsedJson?.email);
     try {
       const userDoc = await getDoc(doc(db, 'users', targetUid));
       if (userDoc?.exists()) {
-        return formatParticipant(userDoc.id, userDoc.data(), parsedJson);
+        return formatParticipant(userDoc.id, { ...(localDir || {}), ...userDoc.data() }, parsedJson);
       }
     } catch {}
+    if (localDir && hasRealParticipantName(localDir)) {
+      return formatParticipant(targetUid, localDir, parsedJson);
+    }
   }
 
   // Se contiver email no JSON
   if (parsedJson?.email) {
+    const cleanEmail = String(parsedJson.email).trim().toLowerCase();
+    const localDir = lookupLocalDirectoryProfile(parsedJson?.uid, cleanEmail);
     try {
-      const cleanEmail = String(parsedJson.email).trim().toLowerCase();
       const q = query(collection(db, 'users'), where('email', '==', cleanEmail), limit(1));
       const snap = await getDocs(q);
       if (snap && !snap.empty) {
         const docSnap = snap.docs[0];
-        return formatParticipant(docSnap.id, docSnap.data(), parsedJson);
+        return formatParticipant(docSnap.id, { ...(localDir || {}), ...docSnap.data() }, parsedJson);
       }
     } catch {}
+    if (localDir && hasRealParticipantName(localDir)) {
+      return formatParticipant(localDir.uid || cleanEmail, localDir, parsedJson);
+    }
   }
 
   // Se contiver username no JSON
@@ -70,7 +120,8 @@ export async function resolveParticipantFromQr(rawData) {
       const snap = await getDocs(q);
       if (snap && !snap.empty) {
         const docSnap = snap.docs[0];
-        return formatParticipant(docSnap.id, docSnap.data(), parsedJson);
+        const localDir = lookupLocalDirectoryProfile(docSnap.id, docSnap.data()?.email);
+        return formatParticipant(docSnap.id, { ...(localDir || {}), ...docSnap.data() }, parsedJson);
       }
     } catch {}
   }
@@ -79,20 +130,25 @@ export async function resolveParticipantFromQr(rawData) {
   const emailCandidate = decodedText.replace(/^mailto:/i, '').trim();
   const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailCandidate);
   if (isEmail) {
+    const localDir = lookupLocalDirectoryProfile(null, emailCandidate);
     try {
       const q = query(collection(db, 'users'), where('email', '==', emailCandidate.toLowerCase()), limit(1));
       const snap = await getDocs(q);
       if (snap && !snap.empty) {
         const docSnap = snap.docs[0];
-        return formatParticipant(docSnap.id, docSnap.data(), parsedJson);
+        return formatParticipant(docSnap.id, { ...(localDir || {}), ...docSnap.data() }, parsedJson);
       }
       const qExact = query(collection(db, 'users'), where('email', '==', emailCandidate), limit(1));
       const snapExact = await getDocs(qExact);
       if (snapExact && !snapExact.empty) {
         const docSnap = snapExact.docs[0];
-        return formatParticipant(docSnap.id, docSnap.data(), parsedJson);
+        return formatParticipant(docSnap.id, { ...(localDir || {}), ...docSnap.data() }, parsedJson);
       }
     } catch {}
+
+    if (localDir && hasRealParticipantName(localDir)) {
+      return formatParticipant(localDir.uid || emailCandidate, localDir, parsedJson);
+    }
 
     // Fallback gracioso com os dados inferidos do e-mail para não bloquear a operação
     const namePart = emailCandidate.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -116,12 +172,16 @@ export async function resolveParticipantFromQr(rawData) {
 
   // 3. Se o dado lido for diretamente um ID de documento do Firestore (UID)
   if (!parsedJson && /^[a-zA-Z0-9_-]{15,40}$/.test(trimmed)) {
+    const localDir = lookupLocalDirectoryProfile(trimmed, null);
     try {
       const directDoc = await getDoc(doc(db, 'users', trimmed));
       if (directDoc?.exists()) {
-        return formatParticipant(directDoc.id, directDoc.data());
+        return formatParticipant(directDoc.id, { ...(localDir || {}), ...directDoc.data() });
       }
     } catch {}
+    if (localDir && hasRealParticipantName(localDir)) {
+      return formatParticipant(trimmed, localDir);
+    }
   }
 
   // 4. Se for username direto (ex: @erickraposo ou erickraposo)
@@ -132,7 +192,8 @@ export async function resolveParticipantFromQr(rawData) {
       const snap = await getDocs(q);
       if (snap && !snap.empty) {
         const docSnap = snap.docs[0];
-        return formatParticipant(docSnap.id, docSnap.data());
+        const localDir = lookupLocalDirectoryProfile(docSnap.id, docSnap.data()?.email);
+        return formatParticipant(docSnap.id, { ...(localDir || {}), ...docSnap.data() });
       }
     } catch {}
   }
@@ -144,59 +205,242 @@ export async function resolveParticipantFromQr(rawData) {
     : null;
 
   if (ticketNumber && !ticketNumber.startsWith('QR_')) {
-    const candidates = Array.from(new Set([ticketNumber, ticketNumber.toUpperCase(), rawTicketCandidate.trim()]));
+    const cleanAlphaNum = ticketNumber.toUpperCase().replace(/[-\s]/g, '');
+    const candidates = Array.from(new Set([
+      ticketNumber,
+      ticketNumber.toUpperCase(),
+      cleanAlphaNum,
+      `SYMPLA:${ticketNumber.toUpperCase()}`,
+      rawTicketCandidate.trim()
+    ]));
+
+    let partialUid = parsedJson?.uid || parsedJson?.participantUid || null;
+    let partialData = { ...(parsedJson || {}) };
+
+    const mergePartial = (uidCandidate, obj) => {
+      if (uidCandidate && !partialUid) partialUid = uidCandidate;
+      if (!obj || typeof obj !== 'object') return;
+      for (const [k, v] of Object.entries(obj)) {
+        if (v !== undefined && v !== null && v !== '') {
+          partialData[k] = v;
+        }
+      }
+    };
+
+    // 5a. Busca direta na collection symplaTickets/{ticketNumber}
+    for (const candidate of [ticketNumber.toUpperCase(), ticketNumber, cleanAlphaNum]) {
+      try {
+        const ticketDoc = await getDoc(doc(db, 'symplaTickets', encodeURIComponent(candidate)));
+        if (ticketDoc?.exists()) {
+          const ticketData = ticketDoc.data();
+          mergePartial(ticketData?.uid, ticketData);
+          if (ticketData?.uid) {
+            const localDir = lookupLocalDirectoryProfile(ticketData.uid, ticketData.email);
+            mergePartial(ticketData.uid, localDir);
+            const linkedUserDoc = await getDoc(doc(db, 'users', ticketData.uid));
+            if (linkedUserDoc?.exists()) {
+              mergePartial(linkedUserDoc.id, linkedUserDoc.data());
+              const localDir2 = lookupLocalDirectoryProfile(linkedUserDoc.id, linkedUserDoc.data()?.email);
+              mergePartial(linkedUserDoc.id, localDir2);
+              if (hasRealParticipantName(partialData)) {
+                return formatParticipant(linkedUserDoc.id, partialData, parsedJson);
+              }
+            }
+          }
+          if (ticketData?.email) {
+            const cleanTicketEmail = String(ticketData.email).toLowerCase().trim();
+            mergePartial(null, lookupLocalDirectoryProfile(ticketData?.uid, cleanTicketEmail));
+            const qEmail = query(collection(db, 'users'), where('email', '==', cleanTicketEmail), limit(1));
+            const snapEmail = await getDocs(qEmail);
+            if (snapEmail && !snapEmail.empty) {
+              mergePartial(snapEmail.docs[0].id, snapEmail.docs[0].data());
+              if (hasRealParticipantName(partialData)) {
+                return formatParticipant(snapEmail.docs[0].id, partialData, parsedJson);
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // 5b. Busca na collection users por ticketId, symplaTicket.ticketNumber ou symplaTicket.qrCodeData
     for (const candidate of candidates) {
       try {
         const q1 = query(collection(db, 'users'), where('ticketId', '==', candidate), limit(1));
         const snap1 = await getDocs(q1);
         if (snap1 && !snap1.empty) {
-          return formatParticipant(snap1.docs[0].id, snap1.docs[0].data(), parsedJson);
+          const d = snap1.docs[0].data();
+          mergePartial(snap1.docs[0].id, lookupLocalDirectoryProfile(snap1.docs[0].id, d?.email));
+          mergePartial(snap1.docs[0].id, d);
+          if (hasRealParticipantName(partialData)) {
+            return formatParticipant(snap1.docs[0].id, partialData, parsedJson);
+          }
         }
 
         const q2 = query(collection(db, 'users'), where('symplaTicket.ticketNumber', '==', candidate), limit(1));
         const snap2 = await getDocs(q2);
         if (snap2 && !snap2.empty) {
-          return formatParticipant(snap2.docs[0].id, snap2.docs[0].data(), parsedJson);
+          const d = snap2.docs[0].data();
+          mergePartial(snap2.docs[0].id, lookupLocalDirectoryProfile(snap2.docs[0].id, d?.email));
+          mergePartial(snap2.docs[0].id, d);
+          if (hasRealParticipantName(partialData)) {
+            return formatParticipant(snap2.docs[0].id, partialData, parsedJson);
+          }
         }
 
         const q3 = query(collection(db, 'users'), where('symplaTicket.qrCodeData', '==', candidate), limit(1));
         const snap3 = await getDocs(q3);
         if (snap3 && !snap3.empty) {
-          return formatParticipant(snap3.docs[0].id, snap3.docs[0].data(), parsedJson);
+          const d = snap3.docs[0].data();
+          mergePartial(snap3.docs[0].id, lookupLocalDirectoryProfile(snap3.docs[0].id, d?.email));
+          mergePartial(snap3.docs[0].id, d);
+          if (hasRealParticipantName(partialData)) {
+            return formatParticipant(snap3.docs[0].id, partialData, parsedJson);
+          }
         }
       } catch {}
     }
 
-    // Fallback: consulta o ingresso na API do Sympla e cruza pelo e-mail no Firestore para obter redes sociais e perfil completo
-    try {
-      const symplaResult = await verifySymplaDirectly({ ticketNumber });
-      const symplaParticipant = symplaResult?.participant;
-      if (symplaParticipant) {
-        const symplaEmail = (symplaParticipant.email || '').trim();
-        if (symplaEmail) {
-          try {
-            const qEmail = query(collection(db, 'users'), where('email', '==', symplaEmail.toLowerCase()), limit(1));
-            const snapEmail = await getDocs(qEmail);
-            if (snapEmail && !snapEmail.empty) {
-              return formatParticipant(snapEmail.docs[0].id, snapEmail.docs[0].data(), parsedJson);
-            }
-            const qEmailExact = query(collection(db, 'users'), where('email', '==', symplaEmail), limit(1));
-            const snapEmailExact = await getDocs(qEmailExact);
-            if (snapEmailExact && !snapEmailExact.empty) {
-              return formatParticipant(snapEmailExact.docs[0].id, snapEmailExact.docs[0].data(), parsedJson);
-            }
-          } catch {}
-        }
+    // 5c. Verifica cache local de ingressos e perfis no dispositivo
+    const cachedTicket = getCachedSymplaByCode(rawTicketCandidate);
+    if (cachedTicket) {
+      const cachedUid = cachedTicket.uid || partialUid;
+      const cachedEmail = (cachedTicket.email || partialData.email || '').trim();
+      if (cachedTicket.participant && typeof cachedTicket.participant === 'object') {
+        mergePartial(cachedUid, cachedTicket.participant);
+      }
+      mergePartial(cachedUid, cachedTicket);
+      mergePartial(cachedUid, lookupLocalDirectoryProfile(cachedUid, cachedEmail));
 
-        const fullName = [symplaParticipant.first_name, symplaParticipant.last_name].filter(Boolean).join(' ').trim() || 'Participante';
+      if (cachedUid) {
+        try {
+          const uDoc = await getDoc(doc(db, 'users', cachedUid));
+          if (uDoc?.exists()) {
+            const uData = uDoc.data();
+            mergePartial(uDoc.id, lookupLocalDirectoryProfile(uDoc.id, uData?.email || cachedEmail));
+            mergePartial(uDoc.id, uData);
+          }
+        } catch {}
+      }
+
+      if (cachedEmail) {
+        try {
+          const qEmail = query(collection(db, 'users'), where('email', '==', cachedEmail.toLowerCase()), limit(1));
+          const snapEmail = await getDocs(qEmail);
+          if (snapEmail && !snapEmail.empty) {
+            const uData = snapEmail.docs[0].data();
+            mergePartial(snapEmail.docs[0].id, lookupLocalDirectoryProfile(snapEmail.docs[0].id, cachedEmail));
+            mergePartial(snapEmail.docs[0].id, uData);
+          }
+        } catch {}
+      }
+
+      // Só retorna imediatamente se já tivermos o nome real E dados de perfil (curso/username/telefone);
+      // caso contrário, prossegue para 5d/5e para enriquecer com a API do Sympla e varredura do Firestore!
+      const hasProfileDetails = Boolean(partialData.course || partialData.username || partialData.phone);
+      if (hasRealParticipantName(partialData) && hasProfileDetails) {
         return formatParticipant(
-          parsedJson?.uid || symplaEmail || `sympla_${symplaParticipant.ticket_number || ticketNumber}`,
+          partialUid || cachedUid || cachedEmail || `sympla_${ticketNumber.toUpperCase()}`,
+          partialData,
+          parsedJson
+        );
+      }
+    }
+
+    // 5d. Consulta o ingresso no backend (/api/sympla/verify-ticket) com fallback direto na API do Sympla
+    try {
+      let symplaParticipant = null;
+      const verifyPayload = {
+        ticketNumber,
+        ...(partialData.email ? { email: partialData.email } : {})
+      };
+      const backendResult = await verifySymplaTicket(verifyPayload).catch(() => null);
+      if (backendResult?.participant || backendResult?.symplaTicket) {
+        symplaParticipant = backendResult.participant || backendResult.symplaTicket;
+        mergePartial(null, symplaParticipant);
+      }
+      if (backendResult?.userProfile && backendResult.userProfile.uid) {
+        const up = backendResult.userProfile;
+        mergePartial(up.uid, lookupLocalDirectoryProfile(up.uid, up.email));
+        mergePartial(up.uid, up);
+        if (hasRealParticipantName(partialData) && (partialData.course || partialData.username || partialData.phone)) {
+          return formatParticipant(up.uid, partialData, { ...(symplaParticipant || {}), ...(parsedJson || {}) });
+        }
+      }
+      if (!symplaParticipant) {
+        const directResult = await verifySymplaDirectly(verifyPayload).catch(() => null);
+        symplaParticipant = directResult?.participant || null;
+        if (symplaParticipant) {
+          mergePartial(null, symplaParticipant);
+        }
+      }
+
+      const symplaEmail = (symplaParticipant?.email || partialData.email || '').trim();
+      if (symplaEmail) {
+        mergePartial(partialUid, lookupLocalDirectoryProfile(partialUid, symplaEmail));
+        try {
+          const qEmail = query(collection(db, 'users'), where('email', '==', symplaEmail.toLowerCase()), limit(1));
+          const snapEmail = await getDocs(qEmail);
+          if (snapEmail && !snapEmail.empty) {
+            mergePartial(snapEmail.docs[0].id, lookupLocalDirectoryProfile(snapEmail.docs[0].id, symplaEmail));
+            mergePartial(snapEmail.docs[0].id, snapEmail.docs[0].data());
+            return formatParticipant(snapEmail.docs[0].id, partialData, { ...(symplaParticipant || {}), ...(parsedJson || {}) });
+          }
+          const qEmailExact = query(collection(db, 'users'), where('email', '==', symplaEmail), limit(1));
+          const snapEmailExact = await getDocs(qEmailExact);
+          if (snapEmailExact && !snapEmailExact.empty) {
+            mergePartial(snapEmailExact.docs[0].id, lookupLocalDirectoryProfile(snapEmailExact.docs[0].id, symplaEmail));
+            mergePartial(snapEmailExact.docs[0].id, snapEmailExact.docs[0].data());
+            return formatParticipant(snapEmailExact.docs[0].id, partialData, { ...(symplaParticipant || {}), ...(parsedJson || {}) });
+          }
+        } catch {}
+      }
+
+      // 5e. Fallback resiliente na coleção users (caso e-mail tenha maiúsculas/minúsculas ou ticket esteja aninhado)
+      try {
+        const allUsersSnap = await getDocs(query(collection(db, 'users'), limit(200)));
+        if (allUsersSnap && Array.isArray(allUsersSnap.docs) && allUsersSnap.docs.length > 0) {
+          const upperTicket = ticketNumber.toUpperCase();
+          const lowerEmail = symplaEmail.toLowerCase();
+          const matchedDoc = allUsersSnap.docs.find((d) => {
+            if (partialUid && d.id === partialUid) return true;
+            const u = typeof d.data === 'function' ? d.data() : {};
+            if (!u) return false;
+            const uTicket = String(u.ticketId || u.symplaTicket?.ticketNumber || '').trim().toUpperCase();
+            const uQr = String(u.symplaTicket?.qrCodeData || '').trim().toUpperCase();
+            const uEmail = String(u.email || '').trim().toLowerCase();
+            return (
+              (upperTicket && (uTicket === upperTicket || uQr === upperTicket || uTicket.replace(/[-\s]/g, '') === cleanAlphaNum || uQr.replace(/[-\s]/g, '') === cleanAlphaNum)) ||
+              (lowerEmail && uEmail === lowerEmail)
+            );
+          });
+          if (matchedDoc) {
+            const mData = matchedDoc.data();
+            mergePartial(matchedDoc.id, lookupLocalDirectoryProfile(matchedDoc.id, mData?.email || symplaEmail));
+            mergePartial(matchedDoc.id, mData);
+            return formatParticipant(matchedDoc.id, partialData, { ...(symplaParticipant || {}), ...(parsedJson || {}) });
+          }
+        }
+      } catch {}
+
+      if (symplaParticipant || hasRealParticipantName(partialData) || partialData.email) {
+        const firstName = partialData.firstName || partialData.first_name || symplaParticipant?.firstName || symplaParticipant?.first_name || '';
+        const lastName = partialData.lastName || partialData.last_name || symplaParticipant?.lastName || symplaParticipant?.last_name || '';
+        const resolvedTicketNumber = symplaParticipant?.ticketNumber || symplaParticipant?.ticket_number || ticketNumber;
+        const fullName =
+          [firstName, lastName].filter(Boolean).join(' ').trim() ||
+          (partialData.displayName && partialData.displayName !== 'Participante' ? partialData.displayName : '') ||
+          (partialData.name && partialData.name !== 'Participante' ? partialData.name : '') ||
+          'Participante';
+        return formatParticipant(
+          partialUid || symplaEmail || `sympla_${resolvedTicketNumber}`,
           {
+            ...partialData,
             displayName: fullName,
-            firstName: symplaParticipant.first_name || '',
-            lastName: symplaParticipant.last_name || '',
+            firstName,
+            lastName,
             email: symplaEmail,
-            username: symplaEmail ? symplaEmail.split('@')[0] : ''
+            username: partialData.username || (symplaEmail ? symplaEmail.split('@')[0] : '')
           },
           parsedJson
         );
@@ -205,11 +449,13 @@ export async function resolveParticipantFromQr(rawData) {
   }
 
   // 6. Fallback: se os dados parsed contiverem informações locais suficientes
-  if (parsedJson && (parsedJson.name || parsedJson.username || parsedJson.email)) {
+  if (parsedJson && (parsedJson.uid || parsedJson.participantUid || parsedJson.name || parsedJson.username || parsedJson.email || parsedJson.participantType)) {
+    const resolvedUid = parsedJson.uid || parsedJson.participantUid || parsedJson.email || `temp_${Date.now()}`;
     return {
-      participantUid: parsedJson.uid || parsedJson.participantUid || parsedJson.email || `temp_${Date.now()}`,
-      name: parsedJson.name || parsedJson.username || parsedJson.email || 'Participante',
+      participantUid: resolvedUid,
+      name: parsedJson.name || parsedJson.displayName || parsedJson.username || parsedJson.email || 'Participante',
       username: parsedJson.username || (parsedJson.email ? parsedJson.email.split('@')[0] : ''),
+      firstName: parsedJson.firstName || (parsedJson.name || 'Participante').split(' ')[0],
       course: parsedJson.course || 'Computação',
       period: parsedJson.period || null,
       institution: parsedJson.institution || '',
@@ -223,38 +469,109 @@ export async function resolveParticipantFromQr(rawData) {
     };
   }
 
+  // 7. Fallback offline/resiliente para QR Codes válidos de ingresso Sympla (ex: SYMPLA:T123456, ABCD-01-2345, T123456)
+  const isSymplaBadgeFormat =
+    ticketNumber &&
+    !ticketNumber.startsWith('QR_') &&
+    (/^(SYMPLA:[A-Z0-9-]+|T\d{4,14}|[A-Z0-9]{4}-[A-Z0-9]{2}-[A-Z0-9]{4}|[A-Z0-9]{8,16})$/i.test(trimmed) ||
+      /^SYMPLA:/i.test(trimmed));
+
+  if (isSymplaBadgeFormat) {
+    const cleanTicket = ticketNumber.toUpperCase();
+    return {
+      participantUid: `sympla_${cleanTicket}`,
+      name: `Participante #${cleanTicket}`,
+      username: `sympla_${cleanTicket.toLowerCase()}`,
+      firstName: 'Participante',
+      course: 'TechWeek',
+      period: null,
+      institution: 'UFU',
+      phone: '',
+      email: '',
+      linkedin: '',
+      instagram: '',
+      github: '',
+      participantType: 'Participante Credenciado',
+      ticketId: cleanTicket,
+      avatarUrl: null
+    };
+  }
+
   return null;
 }
 
 function formatParticipant(uid, data = {}, fallback = null) {
   const fb = fallback || {};
-  const name = (
-    data.displayName ||
-    [data.firstName, data.lastName].filter(Boolean).join(' ') ||
-    [data.first_name, data.last_name].filter(Boolean).join(' ') ||
-    data.name ||
-    fb.name ||
-    fb.displayName ||
+  const dp = data.participant && typeof data.participant === 'object' ? data.participant : {};
+  const fbp = fb.participant && typeof fb.participant === 'object' ? fb.participant : {};
+
+  const firstName =
+    data.firstName ||
+    data.first_name ||
+    dp.firstName ||
+    dp.first_name ||
+    fb.firstName ||
+    fb.first_name ||
+    fbp.firstName ||
+    fbp.first_name ||
+    '';
+  const lastName =
+    data.lastName ||
+    data.last_name ||
+    dp.lastName ||
+    dp.last_name ||
+    fb.lastName ||
+    fb.last_name ||
+    fbp.lastName ||
+    fbp.last_name ||
+    '';
+  const joinedName = [firstName, lastName].filter(Boolean).join(' ').trim();
+
+  const pickValidName = (...candidates) => {
+    for (const c of candidates) {
+      const s = String(c || '').trim();
+      if (s && s.toLowerCase() !== 'participante') return s;
+    }
+    return '';
+  };
+
+  const email = data.email || dp.email || fb.email || fbp.email || '';
+  const username =
     data.username ||
+    dp.username ||
     fb.username ||
-    'Participante'
-  ).trim();
+    fbp.username ||
+    (email ? email.split('@')[0] : '');
+
+  const name =
+    pickValidName(
+      joinedName,
+      data.displayName,
+      data.name,
+      dp.displayName,
+      dp.name,
+      fb.name,
+      fb.displayName,
+      fbp.name,
+      fbp.displayName,
+      username
+    ) || 'Participante';
 
   return {
-    participantUid: uid || data.uid || fb.uid || fb.participantUid || '',
+    participantUid: uid || data.uid || dp.uid || fb.uid || fb.participantUid || '',
     name,
-    username: data.username || fb.username || '',
-    firstName: data.firstName || name.split(' ')[0],
-    email: data.email || fb.email || '',
-    phone: data.phone || fb.phone || '',
-    course: data.course || fb.course || 'Não informado',
-    period: data.period ?? fb.period ?? null,
-    institution: data.institution || fb.institution || '',
-    linkedin: data.linkedin || fb.linkedin || '',
-    instagram: data.instagram || fb.instagram || '',
-    github: data.github || fb.github || '',
-    participantType: data.participantType || data.participant_type || fb.participantType || 'Aluno',
-    avatarUrl: data.avatarUrl || data.photoURL || fb.avatarUrl || fb.photoURL || null
+    username,
+    firstName: firstName || name.split(' ')[0],
+    email,
+    phone: data.phone || data.telefone || dp.phone || fb.phone || '',
+    course: data.course || data.curso || dp.course || fb.course || 'Não informado',
+    period: data.period ?? data.periodo ?? dp.period ?? fb.period ?? null,
+    institution: data.institution || data.instituicao || dp.institution || fb.institution || '',
+    linkedin: data.linkedin || dp.linkedin || fb.linkedin || '',
+    instagram: data.instagram || dp.instagram || fb.instagram || '',
+    github: data.github || dp.github || fb.github || '',
+    participantType: data.participantType || data.participant_type || dp.participantType || fb.participantType || 'Aluno',
+    avatarUrl: data.avatarUrl || data.photoURL || dp.avatarUrl || fb.avatarUrl || fb.photoURL || null
   };
 }
 
@@ -363,10 +680,10 @@ export async function submitLead({ participantUid, notes, rating, companyId, val
     throw new Error('participantUid é obrigatório.');
   }
 
-  // Se o UID for temporário ou contiver e-mail, resolve o UID real no Firestore
+  // Se o UID for temporário, sympla_ ou contiver e-mail, resolve o UID real no Firestore
   let effectiveUid = participantUid;
   const emailToLookup = participantData?.email || (typeof effectiveUid === 'string' && effectiveUid.includes('@') ? effectiveUid : null);
-  if (emailToLookup && (typeof effectiveUid !== 'string' || effectiveUid.startsWith('temp_') || effectiveUid.includes('@'))) {
+  if (emailToLookup && (typeof effectiveUid !== 'string' || effectiveUid.startsWith('temp_') || effectiveUid.startsWith('sympla_') || effectiveUid.includes('@'))) {
     try {
       const cleanEmail = emailToLookup.replace(/^mailto:/i, '').trim().toLowerCase();
       const snap = await getDocs(query(collection(db, 'users'), where('email', '==', cleanEmail), limit(1)));
@@ -390,14 +707,18 @@ export async function submitLead({ participantUid, notes, rating, companyId, val
     updatedAt: nowIso,
     name: participantData?.name || participantData?.displayName || 'Participante',
     firstName: participantData?.firstName || participantData?.name?.split(' ')[0] || 'Participante',
+    username: participantData?.username || '',
+    avatarUrl: participantData?.avatarUrl || participantData?.photoURL || null,
     email: participantData?.email || (typeof participantUid === 'string' && participantUid.includes('@') ? participantUid : ''),
     phone: participantData?.phone || '',
     course: participantData?.course || 'Não informado',
     period: participantData?.period || null,
     participantType: participantData?.participantType || 'Aluno UFU Graduação',
-    instituicao: participantData?.instituicao || 'UFU',
+    instituicao: participantData?.instituicao || participantData?.institution || 'UFU',
+    institution: participantData?.institution || participantData?.instituicao || 'UFU',
     github: participantData?.github || '',
-    linkedin: participantData?.linkedin || ''
+    linkedin: participantData?.linkedin || '',
+    instagram: participantData?.instagram || ''
   };
 
   const token = auth?.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
@@ -422,13 +743,25 @@ export async function submitLead({ participantUid, notes, rating, companyId, val
         rating: rating ? Number(rating) : undefined,
         companyId: companyId || undefined,
         validateOnly: validateOnly ? true : undefined,
-        tags: Array.isArray(tags) ? tags : undefined
+        tags: Array.isArray(tags) ? tags : undefined,
+        participantData: participantData || undefined
       })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
+      if (response.status === 404 || response.status >= 500 || data?.error === 'EMAIL_NOT_VERIFIED') {
+        if (!validateOnly) {
+          saveLocalSponsorLead(localLead, companyId);
+        }
+        return {
+          success: true,
+          message: validateOnly ? 'Presença validada com sucesso.' : 'Lead registrado com sucesso.',
+          lead: localLead,
+          offline: true
+        };
+      }
       const errorMsg = data?.message || data?.error || 'Erro ao registrar lead de patrocinador.';
       const error = new Error(errorMsg);
       error.status = response.status;

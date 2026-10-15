@@ -131,6 +131,7 @@ export default function Register() {
   });
   const navigate = useNavigate();
   const scrollRef = useRef(null);
+  const termsRef = useRef(null);
 
   // Troca de etapa começa do topo da tela
   useEffect(() => {
@@ -191,6 +192,9 @@ export default function Register() {
     // Limpa o erro do campo quando o usuário edita
     if (fieldErrors[name]) {
       setFieldErrors(prev => ({ ...prev, [name]: '' }));
+    }
+    if (name === 'termsAccepted' && checked) {
+      setError(null);
     }
   };
 
@@ -300,7 +304,10 @@ export default function Register() {
     }
 
     if (!formData.termsAccepted) {
-      setError("Você precisa aceitar os termos de privacidade (LGPD).");
+      const msg = "Você precisa aceitar os termos de privacidade (LGPD).";
+      setFieldErrors(prev => ({ ...prev, termsAccepted: msg }));
+      setError(msg);
+      termsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
       return;
     }
 
@@ -788,10 +795,18 @@ export default function Register() {
               <SocialField id="reg-gh" name="github" label="GitHub" prefix="github.com/" placeholder="usuario" brand="#8FA0FF" value={formData.github} ok={socialOk('github')} onChange={handleChange} logo={<GithubLogo />} />
             </div>
 
-            <div className="mx-5 mt-5 flex items-start gap-3 text-[13px] leading-normal text-[#C3C9DE]">
+            <div
+              ref={termsRef}
+              className={`mx-5 mt-5 mb-4 flex items-start gap-3 rounded-xl text-[13px] leading-normal text-[#C3C9DE] transition-colors ${
+                fieldErrors.termsAccepted
+                  ? 'border border-err/60 bg-[rgba(245,154,154,0.1)] p-3'
+                  : ''
+              }`}
+            >
               <input
                 id="terms" name="termsAccepted" type="checkbox"
                 checked={formData.termsAccepted} onChange={handleChange}
+                aria-invalid={fieldErrors.termsAccepted ? 'true' : undefined}
                 className="m-0 mt-px size-[22px] shrink-0 cursor-pointer accent-[#5B3BE0]"
                 required
               />
@@ -808,13 +823,12 @@ export default function Register() {
           </>
         )}
 
-        {error && (
-          <p role="alert" className="mx-5 mt-4 rounded-xl bg-[rgba(245,154,154,0.1)] px-3.5 py-2.5 text-[13px] font-semibold text-err">
-            {error}
-          </p>
-        )}
-
-        <div className="sticky bottom-0 z-20 mt-auto bg-[linear-gradient(180deg,rgba(10,15,36,0),#0A0F24_30%)] px-5 pt-3.5 pb-[26px]">
+        <div className="sticky bottom-0 z-20 mt-auto flex flex-col gap-2.5 bg-[linear-gradient(180deg,rgba(10,15,36,0),#0A0F24_24%)] px-5 pt-4 pb-[26px]">
+          {error && (
+            <p role="alert" className="m-0 rounded-xl border border-err/35 bg-[#1B1630] px-3.5 py-2.5 text-[13px] font-semibold text-err shadow-lg">
+              {error}
+            </p>
+          )}
           <button type="submit" className="btn btn-primary btn-block ent-btn-lg ent-cta" disabled={loading}>
             {loading
               ? <><Loader2 className="animate-spin" size={20} aria-hidden="true" /> {step === 1 ? 'Verificando' : 'Criando seu crachá'}</>

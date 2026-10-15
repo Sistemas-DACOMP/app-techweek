@@ -76,7 +76,7 @@ describe('Scanner & Conexões (Resolução de Falso Código Já Processado)', ()
   });
 
   describe('Renderização e Estrutura do Scanner', () => {
-    it('renderiza abas do Scanner e CameraFrame sem falhas', () => {
+    it('renderiza abas do Scanner e CameraFrame sem falhas (padrão em Escanear)', () => {
       const html = renderToStaticMarkup(
         React.createElement(
           MemoryRouter,
@@ -86,6 +86,50 @@ describe('Scanner & Conexões (Resolução de Falso Código Já Processado)', ()
       );
       expect(html).toContain('Escanear');
       expect(html).toContain('Meu QR');
+      expect(html).toContain('id="cracha-panel-scan"');
+      expect(html).toContain('techweek-camera-viewport');
+    });
+
+    it('abre diretamente na aba Meu QR quando navegado com ?tab=qr ou state.tab=qr', () => {
+      const htmlQuery = renderToStaticMarkup(
+        React.createElement(
+          MemoryRouter,
+          { initialEntries: ['/scanner?tab=qr'] },
+          React.createElement(Scanner)
+        )
+      );
+      expect(htmlQuery).toContain('id="cracha-panel-qr"');
+
+      const htmlState = renderToStaticMarkup(
+        React.createElement(
+          MemoryRouter,
+          { initialEntries: [{ pathname: '/scanner', state: { tab: 'qr' } }] },
+          React.createElement(Scanner)
+        )
+      );
+      expect(htmlState).toContain('id="cracha-panel-qr"');
+    });
+
+    it('abre diretamente na aba Escanear (leitor de QR Code) quando navegado com ?tab=scan ou state.tab=scan', () => {
+      const htmlQuery = renderToStaticMarkup(
+        React.createElement(
+          MemoryRouter,
+          { initialEntries: ['/scanner?tab=scan'] },
+          React.createElement(Scanner)
+        )
+      );
+      expect(htmlQuery).toContain('id="cracha-panel-scan"');
+      expect(htmlQuery).toContain('techweek-camera-viewport');
+
+      const htmlState = renderToStaticMarkup(
+        React.createElement(
+          MemoryRouter,
+          { initialEntries: [{ pathname: '/scanner', state: { tab: 'scan', missionId: 'sponsor_visit' } }] },
+          React.createElement(Scanner)
+        )
+      );
+      expect(htmlState).toContain('id="cracha-panel-scan"');
+      expect(htmlState).toContain('techweek-camera-viewport');
     });
 
     it('CameraFrame desenha o visor com linhas e gradiente do Design System', () => {
@@ -199,7 +243,7 @@ describe('Scanner & Conexões (Resolução de Falso Código Já Processado)', ()
       expect(res.code).toBe('SYMPLA_TICKET_REQUIRED');
     });
 
-    it('crachá digital com ingresso Sympla vinculado preserva dados de perfil e redes sociais no QR e renderiza ParticipantCard na 1ª e 2ª leituras', async () => {
+    it('crachá digital com ingresso Sympla vinculado usa o código Sympla no QR e renderiza ParticipantCard com redes sociais na 1ª e 2ª leituras', async () => {
       const { getBadgeQrValue } = await import('../../src/lib/sympla');
       const ParticipantCard = (await import('../../src/components/ParticipantCard')).default;
       const { apiRequest } = await import('../../src/lib/api');
@@ -219,6 +263,7 @@ describe('Scanner & Conexões (Resolução de Falso Código Já Processado)', ()
 
       const peerProfileWithTicket = {
         uid: 'usr_ana_777',
+        name: 'Ana Beatriz',
         username: 'anabeatriz',
         displayName: 'Ana Beatriz',
         email: 'ana@ufu.br',
@@ -236,27 +281,20 @@ describe('Scanner & Conexões (Resolução de Falso Código Já Processado)', ()
       };
 
       const qrValue = getBadgeQrValue(peerProfileWithTicket);
-      const parsedQr = JSON.parse(qrValue);
-
-      expect(parsedQr.username).toBe('anabeatriz');
-      expect(parsedQr.uid).toBe('usr_ana_777');
-      expect(parsedQr.ticketNumber).toBe('SYMPLA:T987654');
-      expect(parsedQr.instagram).toBe('@anabeatriz.dev');
-      expect(parsedQr.linkedin).toBe('https://linkedin.com/in/anabeatriz');
-      expect(parsedQr.github).toBe('anabeatriz-dev');
+      expect(qrValue).toBe('SYMPLA:T987654');
 
       let userHook = null;
       renderToStaticMarkup(React.createElement(HookTester, { onReady: (u) => { userHook = u; } }));
 
       // 1ª Leitura
-      const firstScan = await userHook.registerCodeScan(qrValue, 5, parsedQr);
+      const firstScan = await userHook.registerCodeScan(qrValue, 5, peerProfileWithTicket);
       expect(firstScan.success).toBe(true);
       expect(firstScan.points).toBe(5);
       expect(firstScan.alreadyScanned).toBe(false);
 
       const firstCardHtml = renderToStaticMarkup(
         React.createElement(ParticipantCard, {
-          participant: parsedQr,
+          participant: peerProfileWithTicket,
           points: firstScan.points,
           eyebrow: 'Conexão feita!',
           eyebrowTone: 'ok'
@@ -271,7 +309,7 @@ describe('Scanner & Conexões (Resolução de Falso Código Já Processado)', ()
       expect(firstCardHtml).toContain('+5 pts');
 
       // 2ª Leitura (pontua 0 mas mantém crachá digital com redes sociais)
-      const secondScan = await userHook.registerCodeScan(qrValue, 5, parsedQr);
+      const secondScan = await userHook.registerCodeScan(qrValue, 5, peerProfileWithTicket);
       expect(secondScan.success).toBe(true);
       expect(secondScan.points).toBe(0);
       expect(secondScan.alreadyScanned).toBe(true);
@@ -279,7 +317,7 @@ describe('Scanner & Conexões (Resolução de Falso Código Já Processado)', ()
 
       const secondCardHtml = renderToStaticMarkup(
         React.createElement(ParticipantCard, {
-          participant: parsedQr,
+          participant: peerProfileWithTicket,
           points: secondScan.points > 0 ? secondScan.points : null,
           eyebrow: 'Conexão feita!',
           eyebrowTone: 'ok'

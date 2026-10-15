@@ -94,9 +94,16 @@ router.post('/:activityId/checkin', requireAuth, participantActionLimiter, async
 
       if (points > 0) {
         const userRef = db.collection('users').doc(uid);
+        const rankingRef = db.collection('ranking').doc(uid);
         tx.set(userRef, {
           totalPoints: FieldValue.increment(points),
           pontuacaoTotal: FieldValue.increment(points)
+        }, { merge: true });
+        tx.set(rankingRef, {
+          uid,
+          totalPoints: FieldValue.increment(points),
+          pontuacaoTotal: FieldValue.increment(points),
+          updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
       }
 

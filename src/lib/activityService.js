@@ -12,6 +12,7 @@ import {
 import { db, auth } from './firebase';
 import { apiRequest } from './api';
 import { getCachedUserProfile } from './userService';
+import { saveLocalPointEvent } from './gameplay';
 
 /**
  * Atividades padrão de fallback caso a collection do Firestore ainda esteja vazia.
@@ -737,6 +738,18 @@ export async function registerActivityAttendance(activityId, sessionToken = null
   }
 
   const uid = auth?.currentUser?.uid || 'anon';
+  const buildAttendanceEvent = (pointsAwarded) => ({
+    id: `local_checkin_${activityId}`,
+    userId: uid,
+    user_id: uid,
+    eventType: 'lecture_attendance',
+    event_type: 'lecture_attendance',
+    referenceId: String(activityId),
+    reference_id: String(activityId),
+    points: pointsAwarded,
+    metadata: { activityId, rating },
+    createdAt: new Date().toISOString()
+  });
 
   // 1. Se houver sessionToken informado (QR dinâmico do telão), tenta o fluxo de checkout
   if (sessionToken) {
@@ -744,10 +757,16 @@ export async function registerActivityAttendance(activityId, sessionToken = null
       const checkoutRes = await checkoutDoubleCheck(sessionToken);
       const points = typeof checkoutRes?.pointsCredited === 'number' ? checkoutRes.pointsCredited : 20;
       markLocallyAttendedActivity(uid, activityId);
-      if (points > 0 && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('facom_points_updated', {
-          detail: { delta: points, source: 'checkin', activityId }
-        }));
+      if (points > 0) {
+        const attendanceEvent = buildAttendanceEvent(points);
+        if (uid && uid !== 'anon' && typeof saveLocalPointEvent === 'function') {
+          saveLocalPointEvent(uid, attendanceEvent);
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('facom_points_updated', {
+            detail: { delta: points, source: 'checkin', activityId, event: attendanceEvent }
+          }));
+        }
       }
       return { success: true, points, alreadyCheckedIn: points === 0, mode: 'double_check' };
     } catch (err) {
@@ -768,16 +787,25 @@ export async function registerActivityAttendance(activityId, sessionToken = null
       method: 'POST',
       body: JSON.stringify({ lectureId: activityId, rating })
     });
+    if (!checkinRes || typeof checkinRes !== 'object') {
+      throw new Error('Invalid checkin response');
+    }
     const points = typeof checkinRes?.pointsCredited === 'number'
       ? checkinRes.pointsCredited
       : typeof checkinRes?.points === 'number'
       ? checkinRes.points
       : 20;
     markLocallyAttendedActivity(uid, activityId);
-    if (points > 0 && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('facom_points_updated', {
-        detail: { delta: points, source: 'checkin', activityId }
-      }));
+    if (points > 0) {
+      const attendanceEvent = buildAttendanceEvent(points);
+      if (uid && uid !== 'anon' && typeof saveLocalPointEvent === 'function') {
+        saveLocalPointEvent(uid, attendanceEvent);
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('facom_points_updated', {
+          detail: { delta: points, source: 'checkin', activityId, event: attendanceEvent }
+        }));
+      }
     }
     return { success: true, points, alreadyCheckedIn: points === 0, mode: 'self_scan' };
   } catch (err) {
@@ -788,7 +816,7 @@ export async function registerActivityAttendance(activityId, sessionToken = null
     if (err.status === 403 && (err.code === 'SYMPLA_TICKET_REQUIRED' || err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')) {
       return { success: false, symplaRequired: true, message: 'Ingresso do Sympla obrigatório para confirmar presença.' };
     }
-    if (err.status && err.status >= 400 && err.status < 500 && err.status !== 404) {
+    if (err.status && err.status >= 400 && err.status < 500 && err.status !== 404 && typeof err.data !== 'string') {
       return { success: false, error: err.data?.message || err.message };
     }
 
@@ -799,9 +827,13 @@ export async function registerActivityAttendance(activityId, sessionToken = null
     }
 
     markLocallyAttendedActivity(uid, activityId);
+    const attendanceEvent = buildAttendanceEvent(20);
+    if (uid && uid !== 'anon' && typeof saveLocalPointEvent === 'function') {
+      saveLocalPointEvent(uid, attendanceEvent);
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('facom_points_updated', {
-        detail: { delta: 20, source: 'checkin', activityId }
+        detail: { delta: 20, source: 'checkin', activityId, event: attendanceEvent }
       }));
     }
     return { success: true, points: 20, alreadyCheckedIn: false, fallback: true };

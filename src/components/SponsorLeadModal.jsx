@@ -8,6 +8,7 @@ import {
   Building2, 
   GraduationCap, 
   Mail, 
+  Phone,
   Sparkles, 
   QrCode, 
   Copy, 
@@ -16,7 +17,7 @@ import {
   UserCheck,
   Pencil
 } from 'lucide-react';
-import { GitHubIcon, LinkedInIcon, formatSocialUrl } from './ParticipantCard';
+import { GitHubIcon, LinkedInIcon, InstagramIcon, formatSocialUrl } from './ParticipantCard';
 import WhatsAppButton from './WhatsAppButton';
 import { submitLead, updateLead } from '../lib/sponsorService';
 import { getSponsorSettings, getActiveOutreachMessage } from '../lib/sponsorSettingsService';
@@ -157,6 +158,7 @@ export default function SponsorLeadModal({
   const [savedLeadData, setSavedLeadData] = useState(null);
   const [emailCopied, setEmailCopied] = useState(false);
   const [updateSuccessToast, setUpdateSuccessToast] = useState(false);
+  const [avatarBroken, setAvatarBroken] = useState(false);
 
   useEffect(() => {
     if (participant) {
@@ -168,6 +170,7 @@ export default function SponsorLeadModal({
       setEmailCopied(false);
       setUpdateSuccessToast(false);
       setNotesFocused(false);
+      setAvatarBroken(false);
     }
   }, [participant, isExistingLead]);
 
@@ -273,9 +276,14 @@ export default function SponsorLeadModal({
   // Anotações em texto limpo (removendo tags com colchetes para visualização executiva)
   const cleanNotes = (notes || '').replace(/\[([^\]]+)\]/g, '').trim();
 
+  // Avatar e handle normalizados
+  const effectiveAvatar = !avatarBroken ? (participant.avatarUrl || participant.photoURL || null) : null;
+  const cleanHandle = participant.username ? `@${String(participant.username).replace(/^@/, '').trim()}` : null;
+
   // URLs de redes sociais
   const githubUrl = participant.github ? formatSocialUrl('github', participant.github) : null;
   const linkedinUrl = participant.linkedin ? formatSocialUrl('linkedin', participant.linkedin) : null;
+  const instagramUrl = participant.instagram ? formatSocialUrl('instagram', participant.instagram) : null;
 
   const handleCopyEmail = async () => {
     const targetEmail = savedLeadData?.email || participant.email;
@@ -740,8 +748,8 @@ export default function SponsorLeadModal({
                 {/* Avatar com foto ou iniciais em gradiente */}
                 <div
                   style={{
-                    width: '46px',
-                    height: '46px',
+                    width: '50px',
+                    height: '50px',
                     borderRadius: '14px',
                     background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
                     display: 'flex',
@@ -751,13 +759,15 @@ export default function SponsorLeadModal({
                     fontWeight: '800',
                     fontSize: '18px',
                     flexShrink: 0,
-                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
+                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+                    overflow: 'hidden'
                   }}
                 >
-                  {participant.avatarUrl ? (
+                  {effectiveAvatar ? (
                     <img
-                      src={participant.avatarUrl}
-                      alt=""
+                      src={effectiveAvatar}
+                      alt={participant.name || 'Participante'}
+                      onError={() => setAvatarBroken(true)}
                       style={{ width: '100%', height: '100%', borderRadius: '14px', objectFit: 'cover' }}
                     />
                   ) : (
@@ -766,7 +776,7 @@ export default function SponsorLeadModal({
                 </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '2px' }}>
                     <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#EEF1FA', margin: 0, lineHeight: 1.25 }}>
                       {participant.name || 'Participante'}
                     </h3>
@@ -789,6 +799,12 @@ export default function SponsorLeadModal({
                       </span>
                     )}
                   </div>
+
+                  {cleanHandle && (
+                    <div style={{ fontSize: '11.5px', fontWeight: '600', color: '#8FA0FF', marginBottom: '3px' }}>
+                      {cleanHandle}
+                    </div>
+                  )}
 
                   {participant.course && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', color: '#A9B1CC', lineHeight: 1.35, marginTop: '2px', flexWrap: 'wrap' }}>
@@ -981,12 +997,12 @@ export default function SponsorLeadModal({
                   </div>
                 )}
 
-                {/* Links Profissionais (GitHub & LinkedIn em Grid Equilibrado) */}
-                {(githubUrl || linkedinUrl) && (
+                {/* Links Profissionais & Redes Sociais (GitHub, LinkedIn, Instagram) */}
+                {(githubUrl || linkedinUrl || instagramUrl) && (
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: githubUrl && linkedinUrl ? '1fr 1fr' : '1fr',
+                      gridTemplateColumns: `repeat(${[githubUrl, linkedinUrl, instagramUrl].filter(Boolean).length}, minmax(0, 1fr))`,
                       gap: '8px'
                     }}
                   >
@@ -1009,12 +1025,12 @@ export default function SponsorLeadModal({
                           fontSize: '12px',
                           fontWeight: '700',
                           textDecoration: 'none',
-                          padding: '8px 12px'
+                          padding: '8px 10px'
                         }}
                       >
                         <GitHubIcon size={14} color="#8FA0FF" />
                         <span>GitHub</span>
-                        <ExternalLink size={12} />
+                        <ExternalLink size={11} />
                       </a>
                     )}
 
@@ -1037,12 +1053,40 @@ export default function SponsorLeadModal({
                           fontSize: '12px',
                           fontWeight: '700',
                           textDecoration: 'none',
-                          padding: '8px 12px'
+                          padding: '8px 10px'
                         }}
                       >
                         <LinkedInIcon size={14} color="#60A5FA" />
                         <span>LinkedIn</span>
-                        <ExternalLink size={12} />
+                        <ExternalLink size={11} />
+                      </a>
+                    )}
+
+                    {instagramUrl && (
+                      <a
+                        href={instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={participant.instagram ? `Instagram: @${participant.instagram.replace(/^@/, '').trim()}` : 'Ver Instagram'}
+                        style={{
+                          minHeight: '44px',
+                          background: '#1A2347',
+                          border: '1px solid #1C2548',
+                          borderRadius: '10px',
+                          color: '#F472B6',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          textDecoration: 'none',
+                          padding: '8px 10px'
+                        }}
+                      >
+                        <InstagramIcon size={14} color="#F472B6" />
+                        <span>Instagram</span>
+                        <ExternalLink size={11} />
                       </a>
                     )}
                   </div>
@@ -1214,83 +1258,202 @@ export default function SponsorLeadModal({
                 overscrollBehavior: 'contain'
               }}
             >
-              {/* CARD COMPACTO DO CANDIDATO */}
+              {/* CARD COMPLETO DO PARTICIPANTE ESCANEADO */}
               <div
                 style={{
                   background: '#1A2347',
                   borderRadius: '16px',
-                  padding: '12px 14px',
+                  padding: '14px',
                   border: '1px solid #1C2548',
                   marginBottom: '14px',
                   display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '12px'
+                  flexDirection: 'column',
+                  gap: '10px'
                 }}
               >
-                {/* Avatar com iniciais ou imagem */}
-                <div
-                  style={{
-                    width: '44px',
-                    height: '44px',
-                    borderRadius: '14px',
-                    background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#FFFFFF',
-                    fontWeight: '800',
-                    fontSize: '18px',
-                    flexShrink: 0,
-                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
-                  }}
-                >
-                  {participant.avatarUrl ? (
-                    <img
-                      src={participant.avatarUrl}
-                      alt=""
-                      style={{ width: '100%', height: '100%', borderRadius: '14px', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    (participant.name || 'P').charAt(0).toUpperCase()
-                  )}
-                </div>
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '2px' }}>
-                    <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#EEF1FA', margin: 0, lineHeight: 1.25 }}>
-                      {participant.name || 'Participante'}
-                    </h3>
-
-                    {affiliation && (
-                      <span
-                        style={{
-                          padding: '2px 7px',
-                          borderRadius: '7px',
-                          fontSize: '10px',
-                          fontWeight: '800',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.04em',
-                          color: affiliation.color,
-                          background: affiliation.bg,
-                          border: `1px solid ${affiliation.border}`
-                        }}
-                      >
-                        {affiliation.label}
-                      </span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  {/* Avatar com iniciais ou foto */}
+                  <div
+                    style={{
+                      width: '52px',
+                      height: '52px',
+                      borderRadius: '14px',
+                      background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#FFFFFF',
+                      fontWeight: '800',
+                      fontSize: '19px',
+                      flexShrink: 0,
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {effectiveAvatar ? (
+                      <img
+                        src={effectiveAvatar}
+                        alt={participant.name || 'Participante'}
+                        onError={() => setAvatarBroken(true)}
+                        style={{ width: '100%', height: '100%', borderRadius: '14px', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      (participant.name || 'P').charAt(0).toUpperCase()
                     )}
                   </div>
 
-                  {participant.course && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#A9B1CC', lineHeight: 1.35, marginTop: '2px', flexWrap: 'wrap' }}>
-                      <GraduationCap size={13} color="#8FA0FF" style={{ flexShrink: 0 }} />
-                      <span>
-                        {participant.course}
-                        {participant.period ? ` · ${formatPeriod(participant.period)}` : ''}
-                        {cleanInstitution ? ` · ${cleanInstitution}` : ''}
-                      </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                      <h3 style={{ fontSize: '1.08rem', fontWeight: '800', color: '#EEF1FA', margin: 0, lineHeight: 1.25 }}>
+                        {participant.name || 'Participante'}
+                      </h3>
+
+                      {affiliation && (
+                        <span
+                          style={{
+                            padding: '2px 7px',
+                            borderRadius: '7px',
+                            fontSize: '10px',
+                            fontWeight: '800',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            color: affiliation.color,
+                            background: affiliation.bg,
+                            border: `1px solid ${affiliation.border}`
+                          }}
+                        >
+                          {affiliation.label}
+                        </span>
+                      )}
                     </div>
-                  )}
+
+                    {cleanHandle && (
+                      <div style={{ fontSize: '11.5px', fontWeight: '600', color: '#8FA0FF', marginBottom: '2px' }}>
+                        {cleanHandle}
+                      </div>
+                    )}
+
+                    {participant.course && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#A9B1CC', lineHeight: 1.35, marginTop: '2px', flexWrap: 'wrap' }}>
+                        <GraduationCap size={13} color="#8FA0FF" style={{ flexShrink: 0 }} />
+                        <span>
+                          {participant.course}
+                          {participant.period ? ` · ${formatPeriod(participant.period)}` : ''}
+                          {cleanInstitution ? ` · ${cleanInstitution}` : ''}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {/* Dados de Contato e Redes Sociais do Participante */}
+                {(participant.email || participant.phone || githubUrl || linkedinUrl || instagramUrl) && (
+                  <div
+                    style={{
+                      borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                      paddingTop: '10px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}
+                  >
+                    {(participant.email || participant.phone) && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 14px', fontSize: '11.5px', color: '#A9B1CC' }}>
+                        {participant.email && (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>
+                            <Mail size={12} color="#8FA0FF" style={{ flexShrink: 0 }} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {participant.email}
+                            </span>
+                          </div>
+                        )}
+                        {participant.phone && (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+                            <Phone size={12} color="#34D399" style={{ flexShrink: 0 }} />
+                            <span>{participant.phone}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {(githubUrl || linkedinUrl || instagramUrl) && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {linkedinUrl && (
+                          <a
+                            href={linkedinUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              padding: '4px 9px',
+                              borderRadius: '8px',
+                              background: 'rgba(59, 130, 246, 0.12)',
+                              border: '1px solid rgba(59, 130, 246, 0.28)',
+                              color: '#60A5FA',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              textDecoration: 'none'
+                            }}
+                          >
+                            <LinkedInIcon size={12} color="#60A5FA" />
+                            <span>LinkedIn</span>
+                            <ExternalLink size={10} />
+                          </a>
+                        )}
+                        {githubUrl && (
+                          <a
+                            href={githubUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              padding: '4px 9px',
+                              borderRadius: '8px',
+                              background: 'rgba(143, 160, 255, 0.12)',
+                              border: '1px solid rgba(143, 160, 255, 0.28)',
+                              color: '#8FA0FF',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              textDecoration: 'none'
+                            }}
+                          >
+                            <GitHubIcon size={12} color="#8FA0FF" />
+                            <span>GitHub</span>
+                            <ExternalLink size={10} />
+                          </a>
+                        )}
+                        {instagramUrl && (
+                          <a
+                            href={instagramUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              padding: '4px 9px',
+                              borderRadius: '8px',
+                              background: 'rgba(244, 114, 182, 0.12)',
+                              border: '1px solid rgba(244, 114, 182, 0.28)',
+                              color: '#F472B6',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              textDecoration: 'none'
+                            }}
+                          >
+                            <InstagramIcon size={12} color="#F472B6" />
+                            <span>Instagram</span>
+                            <ExternalLink size={10} />
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* AVALIAÇÃO DO CANDIDATO (ESTRELAS INTERATIVAS 0 A 5) */}
@@ -1300,10 +1463,20 @@ export default function SponsorLeadModal({
                     Avaliação
                   </label>
 
-                  <span
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (rating > 0 || hoverRating > 0) {
+                        setRating(0);
+                        setHoverRating(0);
+                        triggerHaptic(20);
+                      }
+                    }}
+                    title={rating > 0 ? 'Clique para remover a avaliação' : undefined}
                     style={{
                       fontSize: '11.5px',
                       fontWeight: '700',
+                      fontFamily: 'Montserrat, sans-serif',
                       color: currentClassification.color,
                       background: currentClassification.bg,
                       border: `1px solid ${currentClassification.border}`,
@@ -1314,6 +1487,7 @@ export default function SponsorLeadModal({
                       gap: '5px',
                       whiteSpace: 'nowrap',
                       transition: 'all 0.15s ease',
+                      cursor: rating > 0 ? 'pointer' : 'default',
                       boxShadow: displayRating > 0 ? `0 0 10px ${currentClassification.bg}` : 'none'
                     }}
                   >
@@ -1321,24 +1495,37 @@ export default function SponsorLeadModal({
                     <span>
                       {displayRating > 0 ? `${displayRating} ★ — ` : ''}{currentClassification.label}
                     </span>
-                  </span>
+                    {rating > 0 && (
+                      <X size={11} color={currentClassification.color} style={{ marginLeft: '2px', opacity: 0.85 }} />
+                    )}
+                  </button>
                 </div>
 
                 {/* Estrelas interativas com touch target de 44px */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}
+                  onPointerLeave={() => setHoverRating(0)}
+                >
                   {[1, 2, 3, 4, 5].map((starValue) => {
                     const isFilled = displayRating >= starValue;
+                    const isCurrentRating = Number(rating) === starValue;
                     return (
                       <button
                         key={starValue}
                         type="button"
+                        aria-pressed={isCurrentRating}
                         onClick={() => {
-                          const nextVal = starValue === rating ? 0 : starValue;
+                          const nextVal = isCurrentRating ? 0 : starValue;
                           setRating(nextVal);
+                          setHoverRating(0);
                           triggerHaptic(30);
                         }}
-                        onMouseEnter={() => setHoverRating(starValue)}
-                        onMouseLeave={() => setHoverRating(0)}
+                        onPointerEnter={(e) => {
+                          if (e.pointerType === 'mouse') {
+                            setHoverRating(starValue);
+                          }
+                        }}
+                        onPointerLeave={() => setHoverRating(0)}
                         style={{
                           background: isFilled
                             ? 'rgba(251, 191, 36, 0.10)'
@@ -1363,7 +1550,11 @@ export default function SponsorLeadModal({
                             : 'none',
                           WebkitTapHighlightColor: 'transparent'
                         }}
-                        aria-label={`${starValue} estrelas - ${RATING_CLASSIFICATIONS[starValue].label}`}
+                        aria-label={
+                          isCurrentRating
+                            ? `Remover avaliação de ${starValue} estrelas`
+                            : `${starValue} estrelas - ${RATING_CLASSIFICATIONS[starValue].label}`
+                        }
                       >
                         <Star
                           size={24}

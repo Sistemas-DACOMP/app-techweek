@@ -29,8 +29,8 @@ export async function apiRequest(endpoint, options = {}) {
     ...(options.headers || {})
   };
 
-  // Se houver usuário autenticado no Firebase, obtém e anexa o ID Token
-  if (auth.currentUser) {
+  // Se houver usuário autenticado no Firebase, obtém e anexa o ID Token (caso não tenha sido injetado previamente em retry)
+  if (auth?.currentUser && !headers['Authorization']) {
     try {
       const token = await auth.currentUser.getIdToken();
       headers['Authorization'] = `Bearer ${token}`;
@@ -48,9 +48,37 @@ export async function apiRequest(endpoint, options = {}) {
   const data = contentType.includes('application/json') ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const errorMsg = (typeof data === 'object' && (data.error || data.message)) || `Erro HTTP ${response.status}`;
+    // KAN-127: Se receber 401 (token expirado/inválido/revogado) e houver usuário autenticado,
+    // tenta forçar a renovação do token (force refresh) e retenta a requisição uma única vez.
+    if (response.status === 401 && auth?.currentUser && !options._isRetry) {
+      let freshToken = null;
+      try {
+        freshToken = await auth.currentUser.getIdToken(true);
+      } catch (refreshErr) {
+        console.warn('[API] Falha ao obter novo token JWT após 401:', refreshErr);
+      }
+
+      if (freshToken) {
+        const retryHeaders = {
+          ...headers,
+          Authorization: `Bearer ${freshToken}`
+        };
+        return await apiRequest(endpoint, {
+          ...options,
+          _isRetry: true,
+          headers: retryHeaders
+        });
+      }
+    }
+
+    let errorMsg = (typeof data === 'object' && (data.message || data.error)) || `Erro HTTP ${response.status}`;
+    if (response.status === 401) {
+      errorMsg = 'Sua sessão expirou ou é inválida. Por favor, faça login novamente para continuar.';
+    }
+
     const error = new Error(errorMsg);
     error.status = response.status;
+    error.code = response.status === 401 ? 'SESSION_EXPIRED' : (typeof data === 'object' ? data.code || data.error : undefined);
     error.data = data;
     throw error;
   }
