@@ -213,4 +213,29 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
 // POST /api/admin/notifications/broadcast - apenas ADMIN dispara aviso global (KAN-61).
 router.post('/notifications/broadcast', requireAuth, requireRole(['ADMIN']), adminBroadcastLimiter, broadcastNotificationHandler);
 
+/**
+ * Handler do endpoint POST /api/admin/notifications/subscribe.
+ * Inscreve o token FCM Web Push do dispositivo do participante no tópico
+ * global 'todos_participantes' para recebimento de notificações em segundo plano.
+ */
+export async function subscribeNotificationTopicHandler(req: Request, res: Response): Promise<void> {
+  const { token } = req.body ?? {};
+
+  if (typeof token !== 'string' || !token.trim() || token.trim().length > 4096) {
+    res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'token FCM é obrigatório.' });
+    return;
+  }
+
+  try {
+    await admin.messaging().subscribeToTopic([token.trim()], 'todos_participantes');
+    res.status(200).json({ success: true, topic: 'todos_participantes' });
+  } catch (error: any) {
+    console.error('Erro ao inscrever token FCM no tópico todos_participantes:', error?.message || error);
+    res.status(502).json({ error: 'FCM_SUBSCRIBE_FAILED', message: 'Não foi possível registrar o token de push.' });
+  }
+}
+
+router.post('/notifications/subscribe', requireAuth, subscribeNotificationTopicHandler);
+
 export default router;
+

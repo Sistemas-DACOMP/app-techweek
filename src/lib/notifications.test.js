@@ -16,6 +16,7 @@ import {
   setNotificationEnabled,
   triggerNativeNotification,
   requestNotificationPermission,
+  syncBackgroundWatcherWithSw,
 } from './notifications';
 
 describe('Notifications System', () => {
@@ -229,4 +230,40 @@ describe('Notifications System', () => {
     expect(perm).toBe('granted');
     expect(isNotificationEnabled()).toBe(true);
   });
+
+  it('sincroniza o estado do watcher de segundo plano com o Service Worker quando o app vai para background', async () => {
+    const postMessageSpy = vi.fn();
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        serviceWorker: {
+          register: vi.fn().mockResolvedValue({
+            active: { postMessage: postMessageSpy },
+          }),
+          getRegistration: vi.fn().mockResolvedValue({
+            active: { postMessage: postMessageSpy },
+          }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const MockNotification = vi.fn();
+    MockNotification.permission = 'granted';
+    globalThis.window.Notification = MockNotification;
+    setNotificationEnabled(true);
+
+    const synced = await syncBackgroundWatcherWithSw({ startPolling: true });
+    expect(synced).toBe(true);
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'APP_BACKGROUNDED',
+        payload: expect.objectContaining({
+          enabled: true,
+          startPolling: true,
+        }),
+      })
+    );
+  });
 });
+

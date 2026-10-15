@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Clock, ChevronRight, Ticket, Smartphone, CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import { Check, Clock, ChevronRight, Ticket, Smartphone, Bell, CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import ActivityModal from '../components/ActivityModal';
 import Mascot from '../components/Mascot';
@@ -378,8 +378,10 @@ export default function Dashboard() {
         ) : pending ? (
           <PendingHome
             installed={pwa.isInstalled}
+            notificationsEnabled={pwa.notificationsEnabled}
             onLink={() => setShowSymplaModal(true)}
             onInstall={pwa.install}
+            onEnableNotifications={pwa.openNotificationStep}
             upcoming={upcoming.length ? upcoming : (hero ? [hero] : [])}
             now={now}
             onOpen={setSelectedActivity}
@@ -676,8 +678,9 @@ function UpNext({ items, now, statusOf, onOpen, onAgenda }) {
 /* ------------------------------------------------------------------ */
 /* Primeiros passos (sem ingresso) — board InicioPendente              */
 /* ------------------------------------------------------------------ */
-function PendingHome({ installed, onLink, onInstall, upcoming, now, onOpen, onAgenda }) {
-  const done = 1 + (installed ? 1 : 0); // passo 2 (ingresso) está pendente por definição nesta tela
+function PendingHome({ installed, notificationsEnabled, onLink, onInstall, onEnableNotifications, upcoming, now, onOpen, onAgenda }) {
+  const step3Done = Boolean(installed && notificationsEnabled);
+  const done = 1 + (step3Done ? 1 : 0); // passo 2 (ingresso) está pendente por definição nesta tela
   const steps = [
     { title: 'Conta criada', text: 'Bem-vindo ao app da Tech Week.', state: 'done' },
     {
@@ -690,16 +693,27 @@ function PendingHome({ installed, onLink, onInstall, upcoming, now, onOpen, onAg
         </button>
       )
     },
-    {
-      title: 'Instale o app no celular',
-      text: 'Abre em tela cheia e avisa quando sua atividade vai começar.',
-      state: installed ? 'done' : 'todo',
-      action: installed ? null : (
-        <button type="button" onClick={onInstall} className="btn btn-secondary mt-2.5 !min-h-[44px] !rounded-xl !px-4 !text-sm !font-bold">
-          <Smartphone size={18} strokeWidth={1.9} aria-hidden="true" /> Como instalar
-        </button>
-      )
-    }
+    installed && !notificationsEnabled
+      ? {
+          title: 'Ative as notificações no celular',
+          text: 'Passo 2 pós-instalação: receba avisos na tela do celular como nos outros apps.',
+          state: 'todo',
+          action: (
+            <button type="button" onClick={onEnableNotifications} className="btn btn-secondary mt-2.5 !min-h-[44px] !rounded-xl !px-4 !text-sm !font-bold">
+              <Bell size={18} strokeWidth={1.9} aria-hidden="true" /> Ativar notificações
+            </button>
+          )
+        }
+      : {
+          title: 'Instale o app no celular',
+          text: 'Abre em tela cheia e avisa quando sua atividade vai começar.',
+          state: step3Done ? 'done' : 'todo',
+          action: step3Done ? null : (
+            <button type="button" onClick={onInstall} className="btn btn-secondary mt-2.5 !min-h-[44px] !rounded-xl !px-4 !text-sm !font-bold">
+              <Smartphone size={18} strokeWidth={1.9} aria-hidden="true" /> Como instalar
+            </button>
+          )
+        }
   ];
 
   return (
