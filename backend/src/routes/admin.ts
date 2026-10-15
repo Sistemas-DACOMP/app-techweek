@@ -213,6 +213,23 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
     return;
   }
 
+  // Dispara o Web Push W3C diretamente para as inscrições salvas (garante entrega no iOS PWA fechado)
+  try {
+    await dispatchWebPushBroadcast(db, {
+      id: announcementRef.id,
+      title: trimmedTitle,
+      body: trimmedBody,
+      message: trimmedBody,
+      actionUrl: '/',
+      priority: 'HIGH',
+      urgent: true,
+      type: 'system',
+    });
+  } catch (error: any) {
+    console.error('Erro ao disparar Web Push nativo no broadcast:', error?.message || error);
+    // Não retornamos erro HTTP aqui pois o comunicado já foi salvo e enviado via FCM com sucesso.
+  }
+
   res.status(201).json({ success: true, announcementId: announcementRef.id });
 }
 
