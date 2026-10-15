@@ -201,10 +201,17 @@ service cloud.firestore {
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
-    // Regras de Pontos: cada usuário com e-mail verificado lê os próprios eventos; escrita sempre pelo backend
+    // Regras de Pontos: cada usuário autenticado lê e sincroniza os próprios eventos; Staff/Admin também têm acesso
     match /pointEvents/{eventId} {
-      allow read: if (isVerified() && resource.data.userId == request.auth.uid) || isAdmin();
-      allow write: if false; // Apenas backend via Firebase Admin SDK
+      allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isStaffOrAdmin();
+      allow create, update: if isStaffOrAdmin() || (
+        isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.points is number &&
+        request.resource.data.points >= 0 &&
+        request.resource.data.points <= 1000
+      );
+      allow delete: if isAdmin();
     }
 
     // Regras de Check-ins (double-check de presença): leitura restrita ao participante verificado ou Staff/ADMIN
@@ -265,7 +272,18 @@ service cloud.firestore {
     // Regras de Ranking / Leaderboard consolidado
     match /ranking/{docId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow create, update: if isStaffOrAdmin() || (
+        isAuthenticated() &&
+        request.auth.uid == docId &&
+        request.resource.data.uid == docId &&
+        request.resource.data.totalPoints is number &&
+        request.resource.data.totalPoints >= 0 &&
+        request.resource.data.totalPoints <= 100000 &&
+        request.resource.data.pontuacaoTotal is number &&
+        request.resource.data.pontuacaoTotal >= 0 &&
+        request.resource.data.pontuacaoTotal <= 100000
+      );
+      allow delete: if isAdmin() || (isAuthenticated() && request.auth.uid == docId);
     }
   }
 }

@@ -76,6 +76,7 @@ export default function SponsorInvite() {
   const createdHere = useRef(false);
   const verificationSent = useRef(false);
   const fileInput = useRef(null);
+  const termsRef = useRef(null);
 
   const load = useCallback(() => {
     setPhase('loading');
@@ -146,7 +147,11 @@ export default function SponsorInvite() {
     const e = validate();
     setErrors(e);
     if (Object.keys(e).length) {
-      if (Object.keys(e).some((k) => STEP1_FIELDS.includes(k))) setStep(1);
+      if (Object.keys(e).some((k) => STEP1_FIELDS.includes(k))) {
+        setStep(1);
+      } else if (e.terms) {
+        termsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
     setBusy(true);
@@ -483,7 +488,7 @@ export default function SponsorInvite() {
                   })}
                 </div>
               </fieldset>
-              <div>
+              <div ref={termsRef} className="pb-2">
                 <label className={`flex cursor-pointer items-start gap-3 rounded-[14px] bg-surface p-3.5 ${errors.terms ? 'outline outline-1 outline-err' : ''}`}>
                   <input type="checkbox" className="peer sr-only" checked={form.terms} onChange={(e) => set('terms', e.target.checked)} aria-invalid={!!errors.terms} />
                   <span aria-hidden="true" className={`mt-px flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-link ${form.terms ? 'bg-action' : 'border-[1.5px] border-field-line bg-field'}`}>
@@ -493,13 +498,18 @@ export default function SponsorInvite() {
                     {termLabel} <Link to="/termos" target="_blank" className="font-bold text-link no-underline">Ler termo</Link>
                   </span>
                 </label>
-                {errors.terms && <p className="field-error">{errors.terms}</p>}
+                {errors.terms && <p className="field-error hidden lg:block">{errors.terms}</p>}
               </div>
             </section>
           </div>
 
           {/* Ações: celular fixa no rodapé; desktop em linha */}
-          <div className="sticky bottom-0 mt-auto flex flex-col gap-1.5 bg-bg px-5 pb-5 pt-3 lg:static lg:mt-5 lg:flex-row lg:items-center lg:gap-3 lg:bg-transparent lg:p-0">
+          <div className="sticky bottom-0 z-20 mt-auto flex flex-col gap-2 bg-bg px-5 pb-5 pt-3 lg:static lg:mt-5 lg:flex-row lg:items-center lg:gap-3 lg:bg-transparent lg:p-0">
+            {!showStep1 && errors.terms && (
+              <p role="alert" className="m-0 rounded-xl border border-err/35 bg-[#1B1630] px-3.5 py-2.5 text-[13px] font-semibold text-err shadow-lg lg:hidden">
+                {errors.terms}
+              </p>
+            )}
             {showStep1 && (
               <button type="button" onClick={goNext} className={`${PRIMARY} lg:hidden`}>Continuar <ChevronRight size={18} aria-hidden="true" /></button>
             )}

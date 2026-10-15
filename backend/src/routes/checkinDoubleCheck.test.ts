@@ -328,8 +328,14 @@ describe('POST /entrance — resolução de crachá e identidade (ERR-073)', () 
     );
   });
 
-  it('retorna 400 INVALID_PAYLOAD se e-mail não for encontrado no Firestore (uid não resolvido)', async () => {
+  it('usa fallback sintético email_... quando e-mail não é encontrado no Firestore', async () => {
     setupUsersMock([]);
+    const tx = makeTx({
+      'activities/': { exists: true, data: () => ({ attendanceMode: 'DOUBLE_CHECK' }) },
+      'checkins/': { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
     const req = {
       body: { uid: 'mailto:inexistente@facom.ufms.br', activityId: 'activity-1' },
       user: { uid: 'staff-1', role: 'STAFF' }
@@ -338,15 +344,40 @@ describe('POST /entrance — resolução de crachá e identidade (ERR-073)', () 
 
     await entranceHandler(req, res);
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
-    expect(db.runTransaction).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: 'checkins/email_inexistente_facom_ufms_br_activity-1' },
+      expect.objectContaining({ uid: 'email_inexistente_facom_ufms_br', activityId: 'activity-1', status: 'CHECKED_IN' })
+    );
   });
 
-  it('retorna 400 INVALID_PAYLOAD se @username não for encontrado no Firestore', async () => {
+  it('usa fallback sintético user_... quando @username não é encontrado no Firestore', async () => {
     setupUsersMock([]);
+    const tx = makeTx({
+      'activities/': { exists: true, data: () => ({ attendanceMode: 'DOUBLE_CHECK' }) },
+      'checkins/': { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
     const req = {
       body: { uid: '@nao_existe', activityId: 'activity-1' },
+      user: { uid: 'staff-1', role: 'STAFF' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    await entranceHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: 'checkins/user_nao_existe_activity-1' },
+      expect.objectContaining({ uid: 'user_nao_existe', activityId: 'activity-1', status: 'CHECKED_IN' })
+    );
+  });
+
+  it('retorna 400 INVALID_PAYLOAD se uid contiver barra de path traversal (mesmo com @)', async () => {
+    setupUsersMock([]);
+    const req = {
+      body: { uid: '../admin@facom.ufms.br', activityId: 'activity-1' },
       user: { uid: 'staff-1', role: 'STAFF' }
     } as unknown as Request;
     const res = makeRes();
@@ -358,7 +389,8 @@ describe('POST /entrance — resolução de crachá e identidade (ERR-073)', () 
     expect(db.runTransaction).not.toHaveBeenCalled();
   });
 
-  it('trata falha de rede/exceção na consulta de resolução de usuário sem quebrar o servidor', async () => {
+  it('trata falha de rede/exceção na consulta de resolução de usuário com fallback sem quebrar o servidor', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     (db.collection as any).mockImplementation((name: string) => {
       if (name === 'users') {
         return {
@@ -372,6 +404,11 @@ describe('POST /entrance — resolução de crachá e identidade (ERR-073)', () 
       }
       return { doc: (id: string) => ({ path: `${name}/${id}` }) };
     });
+    const tx = makeTx({
+      'activities/': { exists: true, data: () => ({ attendanceMode: 'DOUBLE_CHECK' }) },
+      'checkins/': { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
 
     const req = {
       body: { uid: 'aluno@facom.ufms.br', activityId: 'activity-1' },
@@ -381,9 +418,13 @@ describe('POST /entrance — resolução de crachá e identidade (ERR-073)', () 
 
     await entranceHandler(req, res);
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_PAYLOAD' }));
-    expect(db.runTransaction).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: 'checkins/email_aluno_facom_ufms_br_activity-1' },
+      expect.objectContaining({ uid: 'email_aluno_facom_ufms_br' })
+    );
+    warnSpy.mockRestore();
   });
 });
 

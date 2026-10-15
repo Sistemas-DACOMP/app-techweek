@@ -99,12 +99,38 @@ describe('Sympla Integration Client', () => {
   it('getBadgeQrValue usa o mesmo ticketId do crachá físico quando o ingresso está vinculado (KAN-47)', () => {
     expect(getBadgeQrValue({ symplaTicket: { qrCodeData: 'SYMPLA:T999999' } })).toBe('SYMPLA:T999999');
     expect(getBadgeQrValue({ symplaTicket: { ticketNumber: 'T111' } })).toBe('T111');
+    expect(getBadgeQrValue({ ticketId: 'T222' })).toBe('T222');
+  });
+
+  it('getBadgeQrValue recupera o QR do Sympla imediatamente do cache persistente mesmo antes do perfil hidratar symplaTicket', async () => {
+    const mockResponse = {
+      status: 'success',
+      verified: true,
+      participant: {
+        id: 777,
+        ticketNumber: 'T777888',
+        qrCodeData: 'SYMPLA:T777888'
+      }
+    };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockResponse
+    });
+
+    await verifySymplaTicket({ email: 'cache@ufu.br' });
+    // Mesmo sem symplaTicket no objeto do perfil, recupera sincronamente pelo email em cache
+    expect(getBadgeQrValue({ email: 'cache@ufu.br', username: 'cacheuser' })).toBe('SYMPLA:T777888');
   });
 
   it('getBadgeQrValue cai pra um identificador local sem ingresso vinculado, sem quebrar', () => {
     const value = getBadgeQrValue({ username: '@fulano', participantType: 'Aluno', course: 'SI', period: 3 });
     const parsed = JSON.parse(value);
-    expect(parsed).toEqual({ username: 'fulano', participantType: 'Aluno', course: 'SI', period: 3 });
+    expect(parsed).toEqual({
+      username: 'fulano',
+      participantType: 'Aluno',
+      course: 'SI',
+      period: 3
+    });
     expect(() => JSON.parse(getBadgeQrValue(null))).not.toThrow();
     expect(() => JSON.parse(getBadgeQrValue(undefined))).not.toThrow();
   });

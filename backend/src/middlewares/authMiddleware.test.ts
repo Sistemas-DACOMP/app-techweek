@@ -86,6 +86,7 @@ describe('Middleware: requireAuth (ERR-060 / KAN-75 / SEC)', () => {
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({
       error: 'INVALID_TOKEN',
+      code: 'auth/invalid-token',
       message: 'Token de autenticação inválido, expirado ou revogado.'
     });
     expect(next).not.toHaveBeenCalled();

@@ -227,8 +227,11 @@ describe('POST /api/leads handler (KAN-55)', () => {
     );
   });
 
-  it('rejeita com 400 INVALID_PAYLOAD quando e-mail não é encontrado no Firestore (ERR-077)', async () => {
-    const req = makeReq({ participantUid: 'naoexiste@ufu.br' });
+  it('gera ID sintético email_* e conclui captura quando e-mail não é encontrado no Firestore mas possui participantData (ERR-077)', async () => {
+    const req = makeReq({
+      participantUid: 'naoexiste@ufu.br',
+      participantData: { name: 'Visitante Avulso', email: 'naoexiste@ufu.br' }
+    });
     const res = makeRes();
 
     (db.collection as any).mockImplementation((name: string) => {
@@ -239,21 +242,45 @@ describe('POST /api/leads handler (KAN-55)', () => {
               get: vi.fn().mockResolvedValue({ empty: true, docs: [] })
             })
           }),
-          doc: (id: string) => ({ path: `users/${id}` })
+          doc: (id: string) => ({
+            path: `users/${id}`,
+            collection: (sub: string) => ({
+              doc: (subId: string) => ({ path: `users/${id}/${sub}/${subId}` })
+            })
+          })
         };
       }
-      return { doc: (id: string) => ({ path: `${name}/${id}` }) };
+      return {
+        doc: (id: string) => ({
+          path: `${name}/${id}`,
+          collection: (sub: string) => ({
+            doc: (subId: string) => ({ path: `${name}/${id}/${sub}/${subId}` })
+          })
+        })
+      };
     });
+
+    const mockTx = {
+      get: vi.fn().mockResolvedValue({ exists: false }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
 
     await leadsHandler(req, res);
 
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: 'INVALID_PAYLOAD' })
+      expect.objectContaining({
+        success: true,
+        lead: expect.objectContaining({
+          participantUid: 'email_naoexiste_ufu_br'
+        })
+      })
     );
   });
 
-  it('trata falha de rede ao resolver e-mail logando aviso e retornando 400 sem travar (ERR-077)', async () => {
+  it('trata falha de rede ao resolver e-mail logando aviso e retornando 404 PARTICIPANT_NOT_FOUND quando não há participantData (ERR-077)', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const req = makeReq({ participantUid: 'erro@ufu.br' });
     const res = makeRes();
@@ -266,11 +293,30 @@ describe('POST /api/leads handler (KAN-55)', () => {
               get: vi.fn().mockRejectedValue(new Error('Network error'))
             })
           }),
-          doc: (id: string) => ({ path: `users/${id}` })
+          doc: (id: string) => ({
+            path: `users/${id}`,
+            collection: (sub: string) => ({
+              doc: (subId: string) => ({ path: `users/${id}/${sub}/${subId}` })
+            })
+          })
         };
       }
-      return { doc: (id: string) => ({ path: `${name}/${id}` }) };
+      return {
+        doc: (id: string) => ({
+          path: `${name}/${id}`,
+          collection: (sub: string) => ({
+            doc: (subId: string) => ({ path: `${name}/${id}/${sub}/${subId}` })
+          })
+        })
+      };
     });
+
+    const mockTx = {
+      get: vi.fn().mockResolvedValue({ exists: false }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
 
     await leadsHandler(req, res);
 
@@ -278,9 +324,11 @@ describe('POST /api/leads handler (KAN-55)', () => {
       expect.stringContaining('Erro ao resolver UID por e-mail'),
       expect.any(Error)
     );
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: 'INVALID_PAYLOAD' })
+      expect.objectContaining({
+        error: 'PARTICIPANT_NOT_FOUND'
+      })
     );
     warnSpy.mockRestore();
   });

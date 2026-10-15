@@ -144,7 +144,7 @@ export default function AdminProgramacao(p) {
       </PageHead>
 
       {/* Abas (sublinhado) */}
-      <div role="tablist" aria-label="Programação" className="mb-5 flex gap-6 border-b border-line">
+      <div role="tablist" aria-label="Programação" className="adm-noscroll mb-5 flex gap-5 overflow-x-auto whitespace-nowrap border-b border-line sm:gap-6">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -152,7 +152,7 @@ export default function AdminProgramacao(p) {
             role="tab"
             aria-selected={progTab === t.key}
             onClick={() => setProgTab(t.key)}
-            className={`-mb-px min-h-11 border-b-[3px] text-[15px] transition-colors ${progTab === t.key ? 'border-you font-extrabold text-text' : 'border-transparent font-semibold text-text-2'}`}
+            className={`-mb-px min-h-11 shrink-0 border-b-[3px] text-[15px] transition-colors ${progTab === t.key ? 'border-you font-extrabold text-text' : 'border-transparent font-semibold text-text-2'}`}
             style={progTab === t.key ? { borderImage: 'var(--title-bar) 1' } : undefined}
           >
             {t.label} · {t.n}

@@ -24,6 +24,18 @@ vi.mock('../lib/notifications', () => ({
   removeNotification: vi.fn(),
   clearAllNotifications: vi.fn(),
   syncWelcomeNotificationWithUserCreatedAt: vi.fn(),
+  getReadAnnouncementIds: vi.fn(() => []),
+  getDismissedAnnouncementIds: vi.fn(() => []),
+  hasAlreadyNotifiedId: vi.fn(() => false),
+  markIdAsNotified: vi.fn(),
+  isNativeNotificationSupported: vi.fn(() => false),
+  getNotificationPermission: vi.fn(() => 'default'),
+  isNotificationEnabled: vi.fn(() => false),
+  setNotificationEnabled: vi.fn(),
+  registerNotificationServiceWorker: vi.fn(() => Promise.resolve(null)),
+  requestNotificationPermission: vi.fn(() => Promise.resolve('default')),
+  triggerNativeNotification: vi.fn(() => Promise.resolve(false)),
+  sendTestNativeNotification: vi.fn(() => Promise.resolve(false)),
   EVENT_NAME: 'techweek_notifications_updated'
 }));
 

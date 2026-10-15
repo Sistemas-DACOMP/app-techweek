@@ -632,32 +632,51 @@ describe('userService', () => {
   });
 
   describe('subscribeToAllUsers', () => {
-    it('notifica callback com lista de usuários no snapshot', () => {
-      const mockUnsub = vi.fn();
-      let successCb;
+    it('notifica callback com lista de usuários no snapshot consolidando pontos de /ranking', () => {
+      const mockRankUnsub = vi.fn();
+      const mockUsersUnsub = vi.fn();
+      let rankSuccessCb;
+      let usersSuccessCb;
 
-      vi.mocked(onSnapshot).mockImplementationOnce((_ref, onNext) => {
-        successCb = onNext;
-        return mockUnsub;
-      });
+      vi.mocked(onSnapshot)
+        .mockImplementationOnce((_ref, onNext) => {
+          rankSuccessCb = onNext;
+          return mockRankUnsub;
+        })
+        .mockImplementationOnce((_ref, onNext) => {
+          usersSuccessCb = onNext;
+          return mockUsersUnsub;
+        });
 
       const cb = vi.fn();
       const unsub = subscribeToAllUsers(cb);
 
-      successCb({
+      usersSuccessCb({
         docs: [
-          { id: 'u1', data: () => ({ name: 'User 1', email: 'u1@ufu.br' }) },
+          { id: 'u1', data: () => ({ name: 'User 1', email: 'u1@ufu.br', totalPoints: 10 }) },
           { id: 'u2', data: () => ({ name: 'User 2', email: 'u2@ufu.br' }) }
         ]
       });
 
       expect(cb).toHaveBeenCalledWith([
-        { id: 'u1', uid: 'u1', name: 'User 1', email: 'u1@ufu.br' },
+        { id: 'u1', uid: 'u1', name: 'User 1', email: 'u1@ufu.br', totalPoints: 10 },
+        { id: 'u2', uid: 'u2', name: 'User 2', email: 'u2@ufu.br' }
+      ]);
+
+      rankSuccessCb({
+        docs: [
+          { id: 'u1', data: () => ({ uid: 'u1', totalPoints: 50 }) }
+        ]
+      });
+
+      expect(cb).toHaveBeenLastCalledWith([
+        { id: 'u1', uid: 'u1', name: 'User 1', email: 'u1@ufu.br', totalPoints: 50, pontuacaoTotal: 50 },
         { id: 'u2', uid: 'u2', name: 'User 2', email: 'u2@ufu.br' }
       ]);
 
       unsub();
-      expect(mockUnsub).toHaveBeenCalled();
+      expect(mockUsersUnsub).toHaveBeenCalled();
+      expect(mockRankUnsub).toHaveBeenCalled();
     });
 
     it('em caso de erro, recorre a perfis armazenados em localStorage', () => {
@@ -676,10 +695,12 @@ describe('userService', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       let errorCb;
-      vi.mocked(onSnapshot).mockImplementationOnce((_ref, _onNext, onError) => {
-        errorCb = onError;
-        return vi.fn();
-      });
+      vi.mocked(onSnapshot)
+        .mockImplementationOnce(() => vi.fn())
+        .mockImplementationOnce((_ref, _onNext, onError) => {
+          errorCb = onError;
+          return vi.fn();
+        });
 
       const cb = vi.fn();
       subscribeToAllUsers(cb);

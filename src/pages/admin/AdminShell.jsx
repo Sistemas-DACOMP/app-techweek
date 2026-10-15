@@ -80,37 +80,39 @@ export default function AdminShell({
   return (
     <div className="flex min-h-dvh bg-bg font-sans text-text">
       {/* Lateral (desktop) */}
-      <aside aria-label="Menu do painel" className="fixed inset-y-0 left-0 z-30 hidden h-dvh w-[236px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-nav px-3.5 py-5 lg:flex">
-        <button type="button" onClick={() => onNavigate('inicio')} className="flex items-center gap-2.5 rounded-xl px-2 pb-[18px] pt-1 text-left">
+      <aside aria-label="Menu do painel" className="adm-noscroll no-scrollbar fixed inset-y-0 left-0 z-30 hidden h-dvh w-[236px] shrink-0 flex-col overflow-y-auto border-r border-line bg-nav px-3.5 py-4 lg:flex">
+        <button type="button" onClick={() => onNavigate('inicio')} className="flex shrink-0 items-center gap-2.5 rounded-xl px-2 pb-3 pt-0.5 text-left">
           <img src={iconeTw} alt="" className="h-8 w-[30px] object-contain" />
           <span>
             <span className="block text-[15px] font-extrabold">Tech Week 2026</span>
             <span className="block text-[12px] text-text-3">Painel da organização</span>
           </span>
         </button>
-        {MENU.map(({ group, items }) => (
-          <div key={group} className="flex flex-col gap-1">
-            <div className="px-2.5 pb-1.5 pt-3.5 text-[12px] font-bold text-text-4">{group}</div>
-            {items.map(({ key, label, icon: Icon, path }) => {
-              const current = active === key || (key === 'programacao' && active === 'nova-atividade') || (key === 'missoes' && active === 'nova-missao');
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  aria-current={current ? 'page' : undefined}
-                  onClick={() => (path ? navigate(path) : onNavigate(key))}
-                  className={`flex min-h-[42px] items-center gap-3 rounded-xl px-3 py-1.5 text-left text-[14px] leading-tight transition-colors ${current ? 'bg-surface-selected font-bold text-text shadow-[inset_3px_0_0_var(--link)]' : 'font-semibold text-text-2 hover:bg-surface'}`}
-                >
-                  <Icon size={18} aria-hidden="true" color={current ? 'var(--link)' : 'currentColor'} strokeWidth={1.9} />
-                  <span className="flex-1">{label}</span>
-                  {path && <ExternalLink size={14} aria-hidden="true" className="text-text-4" />}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-        <div className="mt-auto flex flex-col gap-1 pt-[18px]">
-          <div className="flex items-center gap-2.5 rounded-[14px] bg-surface p-3">
+        <div className="adm-noscroll no-scrollbar flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+          {MENU.map(({ group, items }) => (
+            <div key={group} className="flex flex-col gap-0.5">
+              <div className="px-2.5 pb-1 pt-2.5 text-[12px] font-bold text-text-4">{group}</div>
+              {items.map(({ key, label, icon: Icon, path }) => {
+                const current = active === key || (key === 'programacao' && active === 'nova-atividade') || (key === 'missoes' && active === 'nova-missao');
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-current={current ? 'page' : undefined}
+                    onClick={() => (path ? navigate(path) : onNavigate(key))}
+                    className={`flex min-h-[38px] items-center gap-3 rounded-xl px-3 py-1.5 text-left text-[13.5px] leading-tight transition-colors ${current ? 'bg-surface-selected font-bold text-text shadow-[inset_3px_0_0_var(--link)]' : 'font-semibold text-text-2 hover:bg-surface'}`}
+                  >
+                    <Icon size={18} aria-hidden="true" color={current ? 'var(--link)' : 'currentColor'} strokeWidth={1.9} />
+                    <span className="flex-1">{label}</span>
+                    {path && <ExternalLink size={14} aria-hidden="true" className="text-text-4" />}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        <div className="mt-auto flex shrink-0 flex-col gap-1 pt-3">
+          <div className="flex items-center gap-2.5 rounded-[14px] bg-surface p-2.5">
             <AdminAvatar {...me} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-bold">{me.name}</span>
@@ -118,14 +120,14 @@ export default function AdminShell({
             </span>
           </div>
           <div className="mt-1 grid grid-cols-2 gap-1.5">
-            <button type="button" onClick={() => navigate('/profile?edit=true')} className="press flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-surface text-[12px] font-bold">
-              <Pencil size={13} aria-hidden="true" /> Perfil
+            <button type="button" onClick={() => navigate('/profile?edit=true')} className="press flex h-9 items-center justify-center gap-1 whitespace-nowrap rounded-[10px] bg-surface px-1.5 text-[11.5px] font-bold">
+              <Pencil size={12} aria-hidden="true" /> Perfil
             </button>
-            <button type="button" onClick={() => onNavigate('conta')} className="press flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-surface text-[12px] font-bold">
-              <ArrowLeftRight size={13} aria-hidden="true" /> Trocar conta
+            <button type="button" onClick={() => onNavigate('conta')} className="press flex h-9 items-center justify-center gap-1 whitespace-nowrap rounded-[10px] bg-surface px-1.5 text-[11.5px] font-bold">
+              <ArrowLeftRight size={12} aria-hidden="true" /> Trocar conta
             </button>
           </div>
-          <button type="button" onClick={onLogout} className="press mt-1.5 flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-[rgba(245,154,154,0.08)] text-[12px] font-bold text-err">
+          <button type="button" onClick={onLogout} className="press mt-1 flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-[rgba(245,154,154,0.08)] text-[12px] font-bold text-err">
             <LogOut size={14} aria-hidden="true" /> Sair da conta
           </button>
         </div>

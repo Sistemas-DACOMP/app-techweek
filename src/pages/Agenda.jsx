@@ -212,7 +212,11 @@ export default function Agenda() {
       }));
       setToastMessage({ type: 'info', message: 'Inscrição cancelada. A vaga foi liberada.' });
     } catch (err) {
-      setToastMessage({ type: 'error', message: err.data?.message || err.message || 'Erro ao cancelar inscrição.' });
+      if (err.status === 401 || err.code === 'SESSION_EXPIRED' || err.data?.error === 'INVALID_TOKEN') {
+        setToastMessage({ type: 'error', message: 'Sua sessão expirou. Por favor, faça login novamente para cancelar sua reserva.' });
+      } else {
+        setToastMessage({ type: 'error', message: err.data?.message || err.message || 'Erro ao cancelar inscrição.' });
+      }
     } finally {
       setCancellingId(null);
     }
@@ -263,6 +267,16 @@ export default function Agenda() {
         setToastMessage({ 
           type: 'warning', 
           message: 'Ingresso do Sympla obrigatório! Vincule seu ingresso no Perfil para garantir sua vaga presencial.' 
+        });
+      } else if (err.status === 403 && (err.data?.error === 'EMAIL_NOT_VERIFIED' || err.data?.code === 'EMAIL_NOT_VERIFIED')) {
+        setToastMessage({
+          type: 'warning',
+          message: 'Confirme seu e-mail antes de reservar vagas nas atividades.'
+        });
+      } else if (err.status === 401 || err.code === 'SESSION_EXPIRED' || err.data?.error === 'INVALID_TOKEN') {
+        setToastMessage({
+          type: 'error',
+          message: 'Sua sessão expirou. Por favor, faça login novamente para reservar sua vaga.'
         });
       } else {
         const errorMsg = err.data?.message || err.message;

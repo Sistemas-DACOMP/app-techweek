@@ -8,6 +8,21 @@ import { resolveAttendanceMode } from '../lib/attendanceMode';
 
 const router = Router();
 
+const DEFAULT_ACTIVITIES_FALLBACK: Record<string, { points: number; attendanceMode: string; requireRegistration?: boolean }> = {
+  act_1588971: { points: 25, attendanceMode: 'SELF_SCAN' },
+  act_1589102: { points: 30, attendanceMode: 'SELF_SCAN' },
+  act_1588972: { points: 20, attendanceMode: 'SELF_SCAN' },
+  palestra_abertura: { points: 20, attendanceMode: 'SELF_SCAN' },
+  palestra_samuel_amorim: { points: 20, attendanceMode: 'SELF_SCAN' },
+  workshop_firebase_node: { points: 35, attendanceMode: 'DOUBLE_CHECK' },
+  minicurso_agentes_ia: { points: 40, attendanceMode: 'DOUBLE_CHECK' },
+  ativacao_stands_tech: { points: 15, attendanceMode: 'SELF_SCAN' },
+  hackathon_abertura: { points: 30, attendanceMode: 'SELF_SCAN' },
+  hackathon_sprint: { points: 50, attendanceMode: 'DOUBLE_CHECK' },
+  hackathon_submissao: { points: 50, attendanceMode: 'DOUBLE_CHECK' },
+  hackathon_premiacao: { points: 30, attendanceMode: 'SELF_SCAN' }
+};
+
 // POST /api/checkin/entrance
 //
 // Staff/ADMIN registra a entrada do participante numa atividade com
@@ -18,31 +33,55 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), participa
   const { activityId } = req.body ?? {};
   const staffUid = req.user!.uid;
 
-  let uid = typeof rawUid === 'string' ? rawUid.replace(/^mailto:/i, '').trim() : '';
-  if (uid.startsWith('@')) {
-    try {
-      const cleanUsername = uid.replace(/^@/, '').toLowerCase();
-      const userSnap = await db.collection('users').where('username', '==', cleanUsername).limit(1).get();
-      if (!userSnap.empty) {
-        uid = userSnap.docs[0].id;
-      }
-    } catch (e) {
-      console.warn('Erro ao resolver UID por username em checkinDoubleCheck:', e);
-    }
-  } else if (uid.includes('@')) {
-    try {
-      const cleanEmail = uid.toLowerCase();
-      const userSnap = await db.collection('users').where('email', '==', cleanEmail).limit(1).get();
-      if (!userSnap.empty) {
-        uid = userSnap.docs[0].id;
-      } else {
-        const exactSnap = await db.collection('users').where('email', '==', uid).limit(1).get();
-        if (!exactSnap.empty) {
-          uid = exactSnap.docs[0].id;
+  let uid = typeof rawUid === 'string' ? rawUid.replace(/^mailto:/i, '').replace(/^SYMPLA:/i, 'sympla_').trim() : '';
+  if (uid && !uid.includes('/')) {
+    if (uid.includes('@') && !uid.startsWith('@')) {
+      try {
+        const cleanEmail = uid.toLowerCase();
+        const userSnap = await db.collection('users').where('email', '==', cleanEmail).limit(1).get();
+        if (!userSnap.empty) {
+          uid = userSnap.docs[0].id;
+        } else {
+          const exactSnap = await db.collection('users').where('email', '==', uid).limit(1).get();
+          if (!exactSnap.empty) {
+            uid = exactSnap.docs[0].id;
+          }
         }
+      } catch (e) {
+        console.warn('Erro ao resolver UID por e-mail em checkinDoubleCheck:', e);
       }
-    } catch (e) {
-      console.warn('Erro ao resolver UID por e-mail em checkinDoubleCheck:', e);
+      if (uid.includes('@')) {
+        uid = `email_${uid.toLowerCase().replace(/[^a-z0-9_-]/g, '_')}`;
+      }
+    } else if (uid.startsWith('@')) {
+      try {
+        const cleanUsername = uid.replace(/^@/, '').toLowerCase();
+        const userSnap = await db.collection('users').where('username', '==', cleanUsername).limit(1).get();
+        if (!userSnap.empty) {
+          uid = userSnap.docs[0].id;
+        }
+      } catch (e) {
+        console.warn('Erro ao resolver UID por username em checkinDoubleCheck:', e);
+      }
+      if (uid.startsWith('@')) {
+        uid = `user_${uid.replace(/^@/, '').replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      }
+    } else if (uid.toLowerCase().startsWith('sympla_')) {
+      try {
+        const rawTicket = uid.replace(/^sympla_/i, '').trim().toUpperCase();
+        const ticketDoc = await db.collection('symplaTickets').doc(encodeURIComponent(rawTicket)).get?.().catch?.(() => null);
+        const ticketData = ticketDoc?.data?.();
+        if (ticketDoc?.exists && ticketData?.uid) {
+          uid = ticketData.uid;
+        } else if (typeof db.collection('users').where === 'function') {
+          const ticketUserSnap = await db.collection('users').where('symplaTicketCode', '==', rawTicket).limit(1).get();
+          if (ticketUserSnap && !ticketUserSnap.empty) {
+            uid = ticketUserSnap.docs[0].id;
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao resolver UID por symplaTicket em checkinDoubleCheck:', e);
+      }
     }
   }
 
@@ -63,19 +102,31 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), participa
     const result = await db.runTransaction(async (tx) => {
       const [activitySnap, checkinSnap] = await Promise.all([tx.get(activityRef), tx.get(checkinRef)]);
 
-      if (!activitySnap.exists) {
+      const fallbackActivity = DEFAULT_ACTIVITIES_FALLBACK[activityId];
+      if (!activitySnap.exists && !fallbackActivity) {
         return {
           status: 404 as const,
           body: { error: 'ACTIVITY_NOT_FOUND', message: 'Atividade não encontrada.' }
         };
       }
 
-      const activityData = activitySnap.data() ?? {};
+      const activityData = activitySnap.exists ? (activitySnap.data() ?? {}) : fallbackActivity;
       if (resolveAttendanceMode(activityData) !== 'DOUBLE_CHECK') {
         return {
           status: 400 as const,
           body: { error: 'WRONG_ATTENDANCE_MODE', message: 'Esta atividade não usa double-check de presença.' }
         };
+      }
+
+      if (activityData.requireRegistration === true) {
+        const bookingRef = db.collection('bookings').doc(`${uid}_${activityId}`);
+        const bookingSnap = await tx.get(bookingRef);
+        if (!bookingSnap.exists || bookingSnap.data?.()?.status === 'CANCELLED') {
+          return {
+            status: 403 as const,
+            body: { error: 'NOT_REGISTERED', message: 'Não encontramos inscrição dessa pessoa nesta atividade.' }
+          };
+        }
       }
 
       // Já concluído (checkout feito) não volta pra CHECKED_IN: reabrir aqui
@@ -150,14 +201,15 @@ router.post('/checkout', requireAuth, participantActionLimiter, async (req: Requ
         tx.get(userRef)
       ]);
 
-      if (!activitySnap.exists) {
+      const fallbackActivity = DEFAULT_ACTIVITIES_FALLBACK[activityId];
+      if (!activitySnap.exists && !fallbackActivity) {
         return {
           status: 404 as const,
           body: { error: 'ACTIVITY_NOT_FOUND', message: 'Atividade não encontrada.' }
         };
       }
 
-      const activityData = activitySnap.data() ?? {};
+      const activityData = activitySnap.exists ? (activitySnap.data() ?? {}) : fallbackActivity;
       if (resolveAttendanceMode(activityData) !== 'DOUBLE_CHECK') {
         return {
           status: 400 as const,
@@ -198,6 +250,23 @@ router.post('/checkout', requireAuth, participantActionLimiter, async (req: Requ
         totalPoints: FieldValue.increment(points),
         pontuacaoTotal: FieldValue.increment(points)
       });
+
+      const userData = userSnap.data() ?? {};
+      const rankingRef = db.collection('ranking').doc(uid);
+      tx.set(rankingRef, {
+        uid,
+        username: userData.username ?? '',
+        firstName: userData.firstName ?? '',
+        lastName: userData.lastName ?? '',
+        displayName: userData.displayName ?? '',
+        avatarUrl: userData.avatarUrl ?? null,
+        course: userData.course ?? '',
+        mascot: userData.mascot ?? 'blue',
+        role: userData.role ?? 'PARTICIPANT',
+        totalPoints: FieldValue.increment(points),
+        pontuacaoTotal: FieldValue.increment(points),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
 
       return { status: 200 as const, body: { success: true, status: 'COMPLETED', pointsCredited: points } };
     });

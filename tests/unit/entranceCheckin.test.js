@@ -505,6 +505,26 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({ success: true, points: 0 });
     });
+
+    it('deve registrar check-in em atividade padrao (act_1588971) mesmo se nao existir no Firestore', async () => {
+      const tx = makeTx({
+        activitySnap: { exists: false },
+        pointEventSnap: { exists: false }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({
+        participantUid: 'SYMPLA:T12345',
+        activityId: 'act_1588971',
+        staffUid: 'staff-joao'
+      });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({ success: true, points: 25 });
+    });
   });
 
   // =========================================================================

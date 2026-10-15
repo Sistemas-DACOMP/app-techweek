@@ -32,6 +32,15 @@ export async function linkSymplaTicket(uid: string, ticket: { ticketNumber: stri
     }
 
     tx.set(newRef, { uid, linkedAt: new Date().toISOString() });
-    tx.set(userRef, { symplaTicket: ticket, hasSymplaTicket: true, updatedAt: new Date().toISOString() }, { merge: true });
+    tx.set(
+      userRef,
+      {
+        symplaTicket: ticket,
+        hasSymplaTicket: true,
+        ticketId: ticket.ticketNumber,
+        updatedAt: new Date().toISOString()
+      },
+      { merge: true }
+    );
   });
 }

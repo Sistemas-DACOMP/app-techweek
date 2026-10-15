@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
+import fs from 'fs';
+import path from 'path';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 
 vi.mock('../../src/lib/firebase', () => ({
@@ -166,6 +168,16 @@ describe('SymplaRequirementModal (KAN-112)', () => {
     const scrim = document.body.querySelector('.ds-scrim');
     fireEvent.click(scrim);
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('não abre o teclado virtual automaticamente ao montar e ajusta posição com visualViewport quando o teclado abre', () => {
+    const filePath = path.resolve(process.cwd(), 'src/components/SymplaRequirementModal.jsx');
+    const source = fs.readFileSync(filePath, 'utf-8');
+
+    expect(source).not.toContain('inputRef.current?.focus');
+    expect(source).not.toContain('autoFocus');
+    expect(source).toContain('visualViewport');
+    expect(source).toContain('scrollIntoView');
   });
 });
 

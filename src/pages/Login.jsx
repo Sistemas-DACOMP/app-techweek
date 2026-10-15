@@ -5,7 +5,8 @@ import Mascot from '../components/Mascot';
 import { Eye, EyeOff, Loader2, ArrowRight, Mail, Check } from 'lucide-react';
 import logoTw from '../assets/logo-tw.png';
 import { loginWithEmailAndPassword, sendPasswordReset } from '../lib/auth';
-import { getUserProfile } from '../lib/userService';
+import { getUserProfile, updateUserProfile } from '../lib/userService';
+import { verifySymplaTicket } from '../lib/sympla';
 import { useScrollLock } from '../hooks/useScrollLock';
 import '../styles/entrada.css';
 
@@ -70,11 +71,23 @@ export default function Login() {
       return;
     }
 
-    // Aquece o cache do perfil antes da transição de tela para eliminar qualquer atraso visual
+    // Aquece o cache do perfil e do ingresso Sympla antes da transição de tela para eliminar qualquer atraso visual no QR Code
     try {
       const uid = result.user?.uid || result.data?.user?.uid;
       if (uid) {
-        await getUserProfile(uid);
+        const prof = await getUserProfile(uid);
+        const targetEmail = (prof?.email || email || '').trim().toLowerCase();
+        if (targetEmail && !prof?.symplaTicket?.qrCodeData && !prof?.symplaTicket?.ticketNumber && !prof?.ticketId) {
+          const symplaRes = await verifySymplaTicket({ email: targetEmail }).catch(() => null);
+          const ticketData = symplaRes?.symplaTicket || symplaRes?.participant;
+          if ((symplaRes?.verified || symplaRes?.hasTicket) && ticketData) {
+            await updateUserProfile(uid, {
+              hasSymplaTicket: true,
+              symplaTicket: ticketData,
+              ticketId: ticketData.ticketNumber || null
+            }).catch(() => {});
+          }
+        }
       }
     } catch (_e) {}
 

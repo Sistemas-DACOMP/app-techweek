@@ -27,6 +27,7 @@ function sanitizeId(value: string): string {
 // Catálogo padrão de contingência e auto-seed caso o documento em /missions/{missionId} não exista no Firestore
 const DEFAULT_MISSION_CATALOG: Record<string, number> = {
   scan: 5,
+  code_scan: 5,
   network_first: 10,
   network_course: 15,
   network_type: 15,
@@ -39,9 +40,20 @@ const DEFAULT_MISSION_CATALOG: Record<string, number> = {
   sponsor_vaga: 20,
   sponsor_tecnologia: 20,
   sponsor_colecao: 50,
+  sponsor_quiz_levty: 25,
   secret_password: 30,
   secret_qr: 40,
-  instagram_story: 50
+  qr_hunt: 40,
+  instagram_story: 50,
+  social_mascot_photo: 40,
+  flash_secret_code: 100,
+  complete_profile: 30,
+  share_invite: 20,
+  early_checkin: 20,
+  feedback_3: 30,
+  all_days: 100,
+  first_lecture: 15,
+  lecture_attendance: 20
 };
 
 function resolveMissionId(eventType: string, referenceId: string): string {
@@ -102,6 +114,7 @@ router.post('/claim', requireAuth, requireVerifiedEmail, participantActionLimite
   const eventRef = db.collection('users').doc(uid).collection('point_events').doc(eventDocId);
   const userRef = db.collection('users').doc(uid);
   const missionRef = db.collection('missions').doc(missionId);
+  const rankingRef = db.collection('ranking').doc(uid);
 
   try {
     const result = await db.runTransaction(async (tx) => {
@@ -172,6 +185,26 @@ router.post('/claim', requireAuth, requireVerifiedEmail, participantActionLimite
         totalPoints: FieldValue.increment(missionPoints),
         pontuacaoTotal: FieldValue.increment(missionPoints)
       });
+
+      const userData = userSnap.data() ?? {};
+      tx.set(
+        rankingRef,
+        {
+          uid,
+          username: userData.username ?? '',
+          firstName: userData.firstName ?? '',
+          lastName: userData.lastName ?? '',
+          displayName: userData.displayName ?? '',
+          avatarUrl: userData.avatarUrl ?? null,
+          course: userData.course ?? '',
+          mascot: userData.mascot ?? 'blue',
+          role: userData.role ?? 'PARTICIPANT',
+          totalPoints: FieldValue.increment(missionPoints),
+          pontuacaoTotal: FieldValue.increment(missionPoints),
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
 
       return { status: 200 as const, body: { success: true, points: missionPoints } };
     });
