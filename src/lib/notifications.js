@@ -201,7 +201,7 @@ export async function syncBackgroundWatcherWithSw({ startPolling = false, idToke
     const resolvedProjectId =
       projectId ||
       (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_PROJECT_ID) ||
-      'facom-techweek';
+      'facom-techweek-layerx';
 
     let resolvedToken = idToken;
     if (!resolvedToken) {
@@ -236,45 +236,174 @@ export async function syncBackgroundWatcherWithSw({ startPolling = false, idToke
   }
 }
 
+export const DEFAULT_VAPID_PUBLIC_KEY =
+  'BOgJT40xkre0x9-zEttJCnDsJrLVhsPNV2F6KCkoxcfp_ayNGY8DqrUISh79LfQ0JTYEk9mq9BEjx9FIoiSmJXw';
+
+export function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  let rawData = '';
+  if (typeof window !== 'undefined' && typeof window.atob === 'function') {
+    rawData = window.atob(base64);
+  } else if (typeof globalThis.atob === 'function') {
+    rawData = globalThis.atob(base64);
+  } else if (typeof globalThis.Buffer !== 'undefined') {
+    return new Uint8Array(globalThis.Buffer.from(base64, 'base64'));
+  }
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+function buildSubscriptionId(endpoint) {
+  const str = String(endpoint || '');
+  let h1 = 0xdeadbeef ^ str.length;
+  let h2 = 0x41c6ce57 ^ str.length;
+  for (let i = 0, ch; i < str.length; i++) {
+    ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const tail = str
+    .slice(-24)
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .slice(-16);
+  return `sub_${(h2 >>> 0).toString(16).padStart(8, '0')}${(h1 >>> 0).toString(16).padStart(8, '0')}_${tail || 'wp'}`;
+}
+
 /**
- * Registra o token FCM Web Push do aparelho e inscreve no tópico 'todos_participantes'
- * para recebimento nativo em segundo plano quando suportado pelo navegador/SO.
+ * Registra a inscrição W3C Web Push (VAPID APNs no iOS 16.4+ e FCM no Android/Desktop)
+ * para acordar o Service Worker mesmo quando o PWA e o Safari estão 100% fechados.
  */
-export async function registerFcmPushSubscription() {
+export async function registerFcmPushSubscription({ force = false } = {}) {
   if (typeof window === 'undefined' || getNotificationPermission() !== 'granted') return null;
-  if (fcmRegisterAttempted) return null;
+  if (fcmRegisterAttempted && !force) return null;
   fcmRegisterAttempted = true;
 
   try {
     const reg = await registerNotificationServiceWorker();
-    if (!reg) return null;
-
-    const [{ isSupported, getMessaging, getToken }, { default: app }, { apiFetch }] = await Promise.all([
-      import('firebase/messaging'),
-      import('./firebase'),
-      import('./api'),
-    ]);
-
-    const supported = await isSupported().catch(() => false);
-    if (!supported) return null;
-
-    const messaging = getMessaging(app);
-    const vapidKey =
-      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FIREBASE_VAPID_KEY) || undefined;
-
-    const token = await getToken(messaging, {
-      serviceWorkerRegistration: reg,
-      ...(vapidKey ? { vapidKey } : {}),
-    }).catch(() => null);
-
-    if (token) {
-      await apiFetch('/api/admin/notifications/subscribe', {
-        method: 'POST',
-        body: JSON.stringify({ token }),
-      }).catch(() => {});
+    if (!reg) {
+      fcmRegisterAttempted = false;
+      return null;
     }
-    return token;
+
+    const vapidPublicKey =
+      (typeof import.meta !== 'undefined' &&
+        (import.meta.env?.VITE_VAPID_PUBLIC_KEY || import.meta.env?.VITE_FIREBASE_VAPID_KEY)) ||
+      DEFAULT_VAPID_PUBLIC_KEY;
+
+    let webPushSubJson = null;
+
+    // 1. Inscrição nativa W3C PushManager (obrigatória para iOS WebKit APNs e Android FCM com app fechado)
+    if (reg.pushManager && typeof reg.pushManager.subscribe === 'function') {
+      try {
+        let sub =
+          typeof reg.pushManager.getSubscription === 'function'
+            ? await reg.pushManager.getSubscription().catch(() => null)
+            : null;
+
+        if (!sub) {
+          const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+          sub = await reg.pushManager
+            .subscribe({
+              userVisibleOnly: true,
+              applicationServerKey,
+            })
+            .catch(() => null);
+        }
+
+        if (sub) {
+          const rawJson = typeof sub.toJSON === 'function' ? sub.toJSON() : sub;
+          if (rawJson?.endpoint && rawJson?.keys?.p256dh && rawJson?.keys?.auth) {
+            webPushSubJson = {
+              endpoint: String(rawJson.endpoint),
+              keys: {
+                p256dh: String(rawJson.keys.p256dh),
+                auth: String(rawJson.keys.auth),
+              },
+            };
+
+            // Salva direto no Firestore (/push_subscriptions/{subId}) para funcionamento imediato
+            try {
+              const [{ doc, setDoc }, { db, auth }] = await Promise.all([
+                import('firebase/firestore'),
+                import('./firebase'),
+              ]);
+              const subId = buildSubscriptionId(webPushSubJson.endpoint);
+              await Promise.race([
+                setDoc(
+                  doc(db, 'push_subscriptions', subId),
+                  {
+                    endpoint: webPushSubJson.endpoint,
+                    keys: webPushSubJson.keys,
+                    userId: auth?.currentUser?.uid || null,
+                    userAgent: typeof navigator !== 'undefined' ? String(navigator.userAgent || '').slice(0, 300) : '',
+                    updatedAt: new Date().toISOString(),
+                  },
+                  { merge: true }
+                ),
+                new Promise((resolve) => setTimeout(resolve, 600)),
+              ]).catch(() => {});
+            } catch {
+              // Se Firestore não puder gravar agora, o endpoint /api/admin/notifications/subscribe abaixo persiste via Admin SDK
+            }
+          }
+        }
+      } catch {
+        // continua para tentativa complementar
+      }
+    }
+
+    // 2. Tentativa complementar de token FCM e sincronização com backend (/api/admin/notifications/subscribe)
+    let fcmToken = null;
+    try {
+      const [{ isSupported, getMessaging, getToken }, { default: app }] = await Promise.all([
+        import('firebase/messaging'),
+        import('./firebase'),
+      ]);
+      const supported = await isSupported().catch(() => false);
+      if (supported) {
+        const messaging = getMessaging(app);
+        fcmToken = await Promise.race([
+          getToken(messaging, {
+            serviceWorkerRegistration: reg,
+            vapidKey: vapidPublicKey,
+          }),
+          new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
+        ]).catch(() => null);
+      }
+    } catch {
+      // ignore
+    }
+
+    if (webPushSubJson || fcmToken) {
+      try {
+        const { apiFetch } = await import('./api');
+        await Promise.race([
+          apiFetch('/api/admin/notifications/subscribe', {
+            method: 'POST',
+            body: JSON.stringify({
+              ...(webPushSubJson ? { subscription: webPushSubJson } : {}),
+              ...(fcmToken ? { token: fcmToken } : {}),
+              userAgent: typeof navigator !== 'undefined' ? String(navigator.userAgent || '').slice(0, 300) : '',
+            }),
+          }),
+          new Promise((resolve) => setTimeout(resolve, 600)),
+        ]).catch(() => {});
+      } catch {
+        // ignore
+      }
+    } else {
+      fcmRegisterAttempted = false;
+    }
+
+    return webPushSubJson?.endpoint || fcmToken || null;
   } catch {
+    fcmRegisterAttempted = false;
     return null;
   }
 }
@@ -391,7 +520,7 @@ export async function requestNotificationPermission({ sendWelcomeTest = true } =
     const result = await window.Notification.requestPermission();
     if (result === 'granted') {
       setNotificationEnabled(true);
-      registerFcmPushSubscription().catch(() => {});
+      await registerFcmPushSubscription({ force: true }).catch(() => {});
       syncBackgroundWatcherWithSw({ startPolling: false }).catch(() => {});
       if (sendWelcomeTest) {
         await triggerNativeNotification(

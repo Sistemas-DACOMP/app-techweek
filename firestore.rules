@@ -182,10 +182,30 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    function isAdminOrDocAdmin() {
+      return isAdmin() || (
+        isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN'
+      );
+    }
+
     // Regras de Comunicados: Leitura pública (permite entrega em background pelo Service Worker do PWA); escrita apenas para ADMIN
     match /announcements/{announcementId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdminOrDocAdmin();
+    }
+
+    // Inscrições W3C Web Push (APNs iOS / FCM Android) para entrega de notificações com o app fechado
+    match /push_subscriptions/{subId} {
+      allow read: if isAdminOrDocAdmin();
+      allow create, update: if request.resource.data.endpoint is string
+        && request.resource.data.endpoint.size() <= 2048
+        && request.resource.data.endpoint.matches('^https://.*')
+        && request.resource.data.keys is map
+        && request.resource.data.keys.p256dh is string
+        && request.resource.data.keys.auth is string;
+      allow delete: if isAuthenticated() || isAdminOrDocAdmin();
     }
 
     // Regras de Reservas: leitura e criação/remoção pelo próprio participante autenticado com e-mail verificado ou ADMIN
