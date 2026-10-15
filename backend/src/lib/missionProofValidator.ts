@@ -82,12 +82,19 @@ export async function validateMissionProof(
 
   // 3. Palavra Secreta (secret_password ou triggerMode === 'secret' ou isSecret === true)
   if (missionId === 'secret_password' || missionData.triggerMode === 'secret' || missionData.isSecret === true) {
-    const inputWord =
+    let inputWord =
       typeof metadata?.secretWord === 'string'
         ? metadata.secretWord
         : typeof metadata?.password === 'string'
           ? metadata.password
           : null;
+
+    if (!inputWord && Array.isArray(missionData.fields)) {
+      const passField = missionData.fields.find((f: any) => f?.type === 'password' && f?.id);
+      if (passField && typeof metadata?.[passField.id] === 'string') {
+        inputWord = metadata[passField.id];
+      }
+    }
 
     if (!inputWord || !inputWord.trim()) {
       return {
@@ -111,6 +118,10 @@ export async function validateMissionProof(
 
     if (!expectedSecretWord && missionData.secretConfig?.secretWord) {
       expectedSecretWord = missionData.secretConfig.secretWord;
+    }
+
+    if (!expectedSecretWord && typeof missionData.secretWord === 'string') {
+      expectedSecretWord = missionData.secretWord;
     }
 
     if (!expectedSecretWord && missionId === 'secret_password') {
