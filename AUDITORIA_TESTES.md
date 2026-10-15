@@ -962,6 +962,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O autor do teste não desacoplou o validador de pós-graduação para `src/lib/validators.js`, duplicando a lógica manualmente no arquivo de teste.
 - **Sugestão de correção:** Mover a função de validação de pós-graduação para `src/lib/validators.js` (ex: `validatePostgradProfile(data)`) e atualizar o teste para importar e testar essa função real.
+- **Status:** Corrigido
+- **Correção aplicada:** Extraída e exportada a função `validateAcademicProfile(data, { requirePeriod })` em `src/lib/validators.js`, conectada ao `validateStep1` de `src/pages/Register.jsx`, e refatorado `tests/unit/postgradOption.test.js` para importar e exercitar `validateAcademicProfile` real, removendo a função inline `validatePostgrad`.
+- **Verificação:** Executado `npx vitest run tests/unit/postgradOption.test.js`, passando 3/3 testes (5x estável).
 
 ---
 
@@ -1005,6 +1008,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O teste foi escrito como um protótipo visual durante o desenvolvimento da issue KAN-114 e nunca foi conectado ao componente real de cadastro em `src/pages/Register.jsx`.
 - **Sugestão de correção:** Extrair o componente ou subcomponente de seleção de mascote/avatar de `src/pages/Register.jsx` para um componente testável (ex: `AvatarSelector.jsx`) e refatorar `registerAvatar.test.js` para importar e testar esse componente real.
+- **Status:** Corrigido
+- **Correção aplicada:** Extraído e exportado o componente `RegisterAvatarSection` em `src/pages/Register.jsx` (utilizado no Passo 2 do cadastro real) e refatorado `tests/unit/registerAvatar.test.js` com `@testing-library/react` em ambiente `happy-dom` para importar e testar o componente real, validando que o badge da câmera (`avatar-camera-badge`) fica fora do container `overflow-hidden` (`avatar-circle-frame`) tanto sem foto quanto com preview, além dos cliques de adicionar, trocar e remover foto.
+- **Verificação:** Executado `npx vitest run tests/unit/registerAvatar.test.js`, passando 2/2 testes (5x estável).
 
 ---
 
@@ -1022,6 +1028,9 @@ Este documento registra todos os problemas encontrados durante a auditoria técn
   ```
 - **Causa provável:** O autor priorizou testar o mapeamento lógico das permissões (`rolesFor`), deixando a validação de montagem e interatividade do componente para posterior implementação.
 - **Sugestão de correção:** Importar o componente default `RoleSwitcher` e adicionar casos de teste utilizando `@testing-library/react` para validar a renderização das opções conforme o perfil retornado por `rolesFor`, a chamada da prop `onSelectRole` ao clicar em uma opção e a visibilidade do componente condicional ao número de papéis disponíveis (> 1).
+- **Status:** Corrigido
+- **Correção aplicada:** Expandido `tests/unit/roleSwitcher.test.js` com `@testing-library/react` em ambiente `happy-dom` para importar e testar o componente real `RoleSwitcher`, `ROLE_COLORS` e `ROLE_LABELS`, validando a filtragem de opções por perfil, destaque do papel atual (`aria-current="true"` e selo `"em uso"`), bloqueio de navegação no papel em uso e chamadas a `navigate(path)` nos demais papéis.
+- **Verificação:** Executado `npx vitest run tests/unit/roleSwitcher.test.js`, passando 6/6 testes (5x estável).
 
 ---
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createUserProfile } from '../../src/lib/userService';
+import { validateAcademicProfile } from '../../src/lib/validators';
 
 // Mock doc, setDoc, serverTimestamp from firebase/firestore
 vi.mock('firebase/firestore', () => {
@@ -69,87 +70,78 @@ describe('Pós-graduação Form and Service Logic', () => {
     );
   });
 
-  it('valida regras de negócio para Pós-graduação vs Aluno da UFU (incluindo novos rótulos)', () => {
-    const validatePostgrad = (data) => {
-      const errors = {};
-      const isStudent = data.participantType === 'Aluno UFU Graduação' || data.participantType === 'Aluno da UFU' || data.participantType === 'Aluno de outra instituição';
-      const isPostgrad = data.participantType === 'Aluno UFU Pós-graduação' || data.participantType === 'Pós-graduação';
-
-      if (isStudent && !data.period) {
-        errors.period = 'Selecione o período';
-      }
-
-      if (isPostgrad) {
-        if (!data.institution) {
-          errors.institution = 'Por favor, selecione sua instituição.';
-        } else if (data.institution === 'Outra' && !data.customInstitution?.trim()) {
-          errors.customInstitution = 'Por favor, digite o nome da sua instituição.';
-        }
-      }
-      return errors;
-    };
-
+  it('valida regras de negócio para Pós-graduação vs Aluno da UFU usando validateAcademicProfile real', () => {
     // Caso 1: Pós-graduação com FACOM (válido, sem período)
-    const res1 = validatePostgrad({
+    const res1 = validateAcademicProfile({
       participantType: 'Pós-graduação',
       institution: 'FACOM',
       period: null
-    });
+    }, { requirePeriod: true });
     expect(res1).toEqual({});
 
     // Caso 1b: Aluno UFU Pós-graduação com FEELT (válido, sem período)
-    const res1b = validatePostgrad({
+    const res1b = validateAcademicProfile({
       participantType: 'Aluno UFU Pós-graduação',
       institution: 'FEELT',
       period: null
-    });
+    }, { requirePeriod: true });
     expect(res1b).toEqual({});
 
     // Caso 2: Pós-graduação sem instituição (erro)
-    const res2 = validatePostgrad({
+    const res2 = validateAcademicProfile({
       participantType: 'Aluno UFU Pós-graduação',
       institution: '',
       period: null
-    });
-    expect(res2.institution).toBeDefined();
+    }, { requirePeriod: true });
+    expect(res2.institution).toBe('Por favor, selecione sua instituição.');
 
     // Caso 3: Pós-graduação com Outra mas sem preencher texto (erro)
-    const res3 = validatePostgrad({
+    const res3 = validateAcademicProfile({
       participantType: 'Aluno UFU Pós-graduação',
       institution: 'Outra',
-      customInstitution: '',
+      customInstitution: '   ',
       period: null
-    });
-    expect(res3.customInstitution).toBeDefined();
+    }, { requirePeriod: true });
+    expect(res3.customInstitution).toBe('Por favor, digite o nome da sua instituição.');
 
     // Caso 4: Pós-graduação com Outra e texto preenchido (válido)
-    const res4 = validatePostgrad({
+    const res4 = validateAcademicProfile({
       participantType: 'Aluno UFU Pós-graduação',
       institution: 'Outra',
       customInstitution: 'UNICAMP',
       period: null
-    });
+    }, { requirePeriod: true });
     expect(res4).toEqual({});
 
-    // Caso 5: Aluno da UFU exige período
-    const res5 = validatePostgrad({
+    // Caso 5: Aluno da UFU exige período quando requirePeriod=true
+    const res5 = validateAcademicProfile({
       participantType: 'Aluno da UFU',
       period: null
-    });
-    expect(res5.period).toBeDefined();
+    }, { requirePeriod: true });
+    expect(res5.period).toBe('Selecione o período');
 
-    // Caso 6: Aluno UFU Graduação exige período
-    const res6 = validatePostgrad({
+    // Caso 6: Aluno UFU Graduação exige período quando requirePeriod=true
+    const res6 = validateAcademicProfile({
       participantType: 'Aluno UFU Graduação',
       period: null
-    });
-    expect(res6.period).toBeDefined();
+    }, { requirePeriod: true });
+    expect(res6.period).toBe('Selecione o período');
 
     // Caso 7: Aluno UFU Graduação com período preenchido (válido)
-    const res7 = validatePostgrad({
+    const res7 = validateAcademicProfile({
       participantType: 'Aluno UFU Graduação',
       period: 3
-    });
+    }, { requirePeriod: true });
     expect(res7).toEqual({});
+
+    // Caso 8: Aluno UFU Graduação com curso "Outro (especificar)" sem texto exige customCourse
+    const res8 = validateAcademicProfile({
+      participantType: 'Aluno UFU Graduação',
+      course: 'Outro (especificar)',
+      customCourse: '  ',
+      period: 3
+    });
+    expect(res8.customCourse).toBe('Por favor, digite o nome do seu curso.');
   });
 });
+

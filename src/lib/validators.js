@@ -147,3 +147,33 @@ export function isValidGithub(github) {
   return /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/.test(clean);
 }
 
+// Validação de perfil acadêmico / vínculo institucional (Graduação vs Pós-graduação)
+export function validateAcademicProfile(data = {}, { requirePeriod = false } = {}) {
+  const errors = {};
+  const isStudent =
+    data.participantType === 'Aluno UFU Graduação' ||
+    data.participantType === 'Aluno da UFU' ||
+    data.participantType === 'Aluno de outra instituição';
+  const isPostgrad =
+    data.participantType === 'Aluno UFU Pós-graduação' ||
+    data.participantType === 'Pós-graduação';
+
+  if (isStudent) {
+    if (requirePeriod && !data.period) {
+      errors.period = 'Selecione o período';
+    }
+    if (data.course === 'Outro (especificar)' && !data.customCourse?.trim()) {
+      errors.customCourse = 'Por favor, digite o nome do seu curso.';
+    }
+  }
+
+  if (isPostgrad) {
+    if (!data.institution) {
+      errors.institution = 'Por favor, selecione sua instituição.';
+    } else if (data.institution === 'Outra' && !data.customInstitution?.trim()) {
+      errors.customInstitution = 'Por favor, digite o nome da sua instituição.';
+    }
+  }
+
+  return errors;
+}
