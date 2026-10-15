@@ -476,7 +476,7 @@ export async function getLeadsHandler(req: Request, res: Response): Promise<void
       myLeadsRef = myLeadsRef.limit(limit);
     }
     const myLeadsSnap = await myLeadsRef.get();
-    const myLeads: any[] = myLeadsSnap.docs ? myLeadsSnap.docs.map(d => ({ ...d.data(), id: d.id })) : [];
+    const myLeads: any[] = myLeadsSnap.docs ? myLeadsSnap.docs.map((d: any) => ({ ...d.data(), id: d.id })) : [];
 
     let companyLeads = [...myLeads];
     // Decisão do Fabio (KAN-124): leads por pessoa. Conta vinculada a sponsors/ não
@@ -492,7 +492,7 @@ export async function getLeadsHandler(req: Request, res: Response): Promise<void
       const compLeadsSnap = await compLeadsRef.get();
       if (compLeadsSnap.docs && compLeadsSnap.docs.length > 0) {
         const map = new Map<string, any>();
-        compLeadsSnap.docs.forEach(d => map.set(d.id, { ...d.data(), id: d.id }));
+        compLeadsSnap.docs.forEach((d: any) => map.set(d.id, { ...d.data(), id: d.id }));
         myLeads.forEach(l => map.set(l.participantUid || l.id, { ...map.get(l.participantUid || l.id), ...l }));
         companyLeads = Array.from(map.values());
       }
