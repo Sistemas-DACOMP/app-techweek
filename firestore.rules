@@ -182,9 +182,9 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Regras de Comunicados: Leitura pública autenticada; escrita apenas para ADMIN
+    // Regras de Comunicados: Leitura pública (permite entrega em background pelo Service Worker do PWA); escrita apenas para ADMIN
     match /announcements/{announcementId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAdmin();
     }
 

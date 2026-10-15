@@ -92,6 +92,34 @@ describe('Middleware: requireAuth (ERR-060 / KAN-75 / SEC)', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it('faz fallback para verifyIdToken(token, false) quando checkRevoked=true falha com auth/insufficient-permission', async () => {
+    req.headers = { authorization: 'Bearer valid-jwt-token' };
+
+    vi.mocked(auth.verifyIdToken)
+      .mockRejectedValueOnce({
+        code: 'auth/insufficient-permission',
+        message: 'Insufficient permission to access the requested resource.'
+      } as any)
+      .mockResolvedValueOnce({
+        uid: 'user-123',
+        email: 'user@example.com',
+        email_verified: true
+      } as any);
+
+    await requireAuth(req as Request, res as Response, next);
+
+    expect(auth.verifyIdToken).toHaveBeenNthCalledWith(1, 'valid-jwt-token', true);
+    expect(auth.verifyIdToken).toHaveBeenNthCalledWith(2, 'valid-jwt-token', false);
+    expect(req.user).toEqual({
+      uid: 'user-123',
+      email: 'user@example.com',
+      role: 'PARTICIPANT',
+      emailVerified: true
+    });
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
   it('decodifica token com sucesso e injeta req.user com papel default PARTICIPANT', async () => {
     req.headers = { authorization: 'Bearer valid-participant-token' };
     vi.mocked(auth.verifyIdToken).mockResolvedValue({
@@ -502,3 +530,4 @@ describe('Middleware: requireVerifiedEmail (KAN-116 / SEC)', () => {
     expect(res.json).not.toHaveBeenCalled();
   });
 });
+

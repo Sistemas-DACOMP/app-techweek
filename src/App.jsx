@@ -27,11 +27,15 @@ import { getAppSubdomain, isRouteAllowedOnSubdomain } from './lib/subdomain';
 import { shouldShowBottomNav } from './lib/bottomNav';
 import { getCachedUserProfile } from './lib/userService';
 import { stopAllMediaTracks } from './lib/cameraUtils';
+import { useNotifications } from './hooks/useNotifications';
+import { syncBackgroundWatcherWithSw, registerNotificationServiceWorker } from './lib/notifications';
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, loading: authLoading, isEmailVerified } = useAuth();
+  // Mantém o listener global de notificações ativo em todas as telas do app
+  useNotifications();
   // Papel vindo do token (claim do servidor); enquanto não chega, usa o perfil em cache.
   const [claimRole, setClaimRole] = useState(null);
   const isPortalPage = location.pathname === '/admin' || location.pathname === '/staff' || location.pathname === '/sponsor';
@@ -39,6 +43,28 @@ function AppContent() {
   const isAuthPage = isInvitePage || location.pathname === '/login' || location.pathname === '/cadastro' || location.pathname === '/onboarding' || location.pathname === '/termos';
 
   const [isSplashVisible, setIsSplashVisible] = useState(true);
+
+  useEffect(() => {
+    registerNotificationServiceWorker().catch(() => {});
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        syncBackgroundWatcherWithSw({ startPolling: true }).catch(() => {});
+      } else {
+        syncBackgroundWatcherWithSw({ startPolling: false }).catch(() => {});
+      }
+    };
+    const handlePageHide = () => {
+      syncBackgroundWatcherWithSw({ startPolling: true }).catch(() => {});
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

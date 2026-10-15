@@ -199,7 +199,9 @@ export function saveLocalPointEvent(userId, event) {
       try {
         const rawProfile = window.localStorage.getItem(`facom_profile_${userId}`);
         const profile = rawProfile ? JSON.parse(rawProfile) : {};
-        const resolvedTotal = Math.max(Number(profile.totalPoints || profile.pontuacaoTotal || 0), totalPoints);
+        const currentProfilePoints = Number(profile.totalPoints || profile.pontuacaoTotal || 0);
+        const incrementedPoints = !exists ? currentProfilePoints + (Number(event.points) || 0) : currentProfilePoints;
+        const resolvedTotal = Math.max(incrementedPoints, totalPoints);
         profile.totalPoints = resolvedTotal;
         profile.pontuacaoTotal = resolvedTotal;
         window.localStorage.setItem(`facom_profile_${userId}`, JSON.stringify(profile));
@@ -351,7 +353,17 @@ export async function addPointEvent({ eventType, referenceId, points, metadata =
         code: 'SYMPLA_TICKET_REQUIRED'
       };
     }
-    if (typeof err.status === 'number' && err.status >= 400 && typeof err.data !== 'string') {
+    const backendErrorCode = String(err.data?.code || err.data?.error || '');
+    const isServerIamPermissionError =
+      backendErrorCode === 'auth/insufficient-permission' ||
+      backendErrorCode.includes('insufficient-permission');
+
+    if (
+      typeof err.status === 'number' &&
+      err.status >= 400 &&
+      typeof err.data !== 'string' &&
+      !isServerIamPermissionError
+    ) {
       return {
         success: false,
         error: err.message || 'Não foi possível registrar os pontos.',

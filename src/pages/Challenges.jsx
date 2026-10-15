@@ -266,10 +266,23 @@ export default function Challenges() {
     if (!activeManualChallenge || isSubmitting) return;
 
     // Validação de palavra secreta
-    if (activeManualChallenge.triggerMode === 'secret' || activeManualChallenge.isSecret || activeManualChallenge.id === 'secret_password') {
-      const pass = manualForm['password'] || manualForm['secretWord'];
-      const expected = activeManualChallenge.secretConfig?.secretWord || 'OPORTUNIDADES';
-      if (!validateSecretWord(pass, expected)) {
+    const passwordField = activeManualChallenge.fields?.find(f => f.type === 'password');
+    const isSecretChallenge =
+      activeManualChallenge.triggerMode === 'secret' ||
+      activeManualChallenge.isSecret ||
+      activeManualChallenge.id === 'secret_password' ||
+      Boolean(passwordField);
+
+    if (isSecretChallenge) {
+      const pass =
+        manualForm['password'] ||
+        manualForm['secretWord'] ||
+        (passwordField ? manualForm[passwordField.id] : '');
+      const expected =
+        activeManualChallenge.secretConfig?.secretWord ||
+        activeManualChallenge.secretWord ||
+        (activeManualChallenge.id === 'secret_password' ? 'OPORTUNIDADES' : '');
+      if (expected && !validateSecretWord(pass, expected)) {
         setFeedback({
           type: 'warning',
           title: 'Palavra-chave Incorreta',
@@ -296,6 +309,15 @@ export default function Challenges() {
     setIsSubmitting(true);
     try {
       const finalMetadata = { ...manualForm, submitted_at: new Date().toISOString() };
+      if (isSecretChallenge) {
+        const resolvedSecret =
+          manualForm['secretWord'] ||
+          manualForm['password'] ||
+          (passwordField ? manualForm[passwordField.id] : '');
+        if (resolvedSecret) {
+          finalMetadata.secretWord = resolvedSecret;
+        }
+      }
 
       // Se a missão possuir campo de foto, faz o upload real antes de concluir
       const photoField = activeManualChallenge.fields?.find(f => f.type === 'photo');
