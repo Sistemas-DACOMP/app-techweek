@@ -1460,7 +1460,7 @@ export default function Admin() {
 
                 <div style={{ height: '1px', backgroundColor: 'var(--line-2)' }} />
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <span style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>PERÍODO OFICIAL</span>
                     <div style={{ fontSize: '0.86rem', color: 'var(--text)' }}>21 de Outubro a 27 de Outubro de 2026</div>
@@ -1500,7 +1500,7 @@ export default function Admin() {
           {view === 'conta' && (
             <AdminConta
               me={me}
-              handle={profile?.username ? `@${profile.username}` : profile?.email ? `@${profile.email.split('@')[0]}` : ''}
+              handle={profile?.username ? `@${profile.username}` : profile?.email ? `@${String(profile.email).split('@')[0]}` : ''}
               role={profile?.role || 'ADMIN'}
               onProfile={() => navigate('/profile?edit=true')}
               onLogout={handleAdminLogout}
@@ -1522,9 +1522,9 @@ export default function Admin() {
 
       {/* MODAL: CONVIDADO / PALESTRANTE */}
       {isGuestModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '520px', backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: 'var(--text)' }}>
-            <div style={{ backgroundColor: 'var(--surface-raised)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--line-2)' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px', overflowY: 'auto' }}>
+          <div style={{ width: '100%', maxWidth: '520px', maxHeight: '90vh', backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: 'var(--text)' }}>
+            <div style={{ backgroundColor: 'var(--surface-raised)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--line-2)', flexShrink: 0 }}>
               <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700 }}>
                 {editingSpeakerId ? 'Editar Palestrante' : 'Cadastrar Convidado / Palestrante'}
               </h3>
@@ -1537,8 +1537,8 @@ export default function Admin() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveGuest} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <form onSubmit={handleSaveGuest} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Nome Completo *</label>
                   <input
@@ -1562,7 +1562,7 @@ export default function Admin() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Classificação do Palestrante</label>
                   <select
@@ -1607,7 +1607,7 @@ export default function Admin() {
                   onChange={(e) => setGuestForm(prev => ({ ...prev, photo: e.target.value }))}
                   style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box', marginBottom: '6px' }}
                 />
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                   {SAMPLE_SPEAKER_PHOTOS.map((pic, idx) => (
                     <button
                       key={idx}
@@ -1813,7 +1813,7 @@ export default function Admin() {
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>
                     Duração (Minutos) *
@@ -1828,7 +1828,7 @@ export default function Admin() {
                     style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: '#FDE68A', fontWeight: 700, fontSize: '0.84rem', boxSizing: 'border-box' }}
                   />
                 </div>
-                <div>
+                <div className="sm:col-span-2">
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>
                     Fala do Mascote (Alerta em Tempo Real)
                   </label>

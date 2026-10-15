@@ -456,7 +456,9 @@ export default function Profile() {
       // Se o e-mail NÃO foi alterado no Auth (ou seja, se já era o atual), ele pode ir no updates se for igual ao currentUser.email
       // Importante: com verifyBeforeUpdateEmail, o e-mail de login ainda é o antigo até confirmação no link.
       // O Firestore rejeita updates se updates.email != request.auth.token.email.
-      if (!isTicketConfirmed && cleanEmail && cleanEmail === auth.currentUser?.email) {
+      if (!emailChangeRequested && auth.currentUser?.email) {
+        updates.email = auth.currentUser.email.trim().toLowerCase();
+      } else if (!isTicketConfirmed && cleanEmail && cleanEmail === auth.currentUser?.email) {
         updates.email = cleanEmail;
       }
 
@@ -1333,16 +1335,52 @@ function SocialField({ id, label, prefix, logo, value, onChange, placeholder }) 
 
 // Folha "Ingresso Sympla": vincular (sem ingresso) ou ver o vínculo (com ingresso). Lógica é a do Profile.
 function TicketSheet({ confirmed, profile, editForm, setEditForm, verifying, feedback, onVerify, onOpenBadge, onClose }) {
+  const [keyboardStyle, setKeyboardStyle] = useState({});
+
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    const updateViewport = () => {
+      if (!vv) return;
+      const keyboardInset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      if (keyboardInset > 40) {
+        setKeyboardStyle({
+          bottom: `${keyboardInset}px`,
+          maxHeight: `${Math.max(240, Math.round(vv.height - 12))}px`
+        });
+      } else {
+        setKeyboardStyle({});
+      }
+    };
+
+    if (vv) {
+      updateViewport();
+      vv.addEventListener('resize', updateViewport);
+      vv.addEventListener('scroll', updateViewport);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (vv) {
+        vv.removeEventListener('resize', updateViewport);
+        vv.removeEventListener('scroll', updateViewport);
+      }
+    };
   }, [onClose]);
+
+  const handleInputFocus = (e) => {
+    const target = e.currentTarget;
+    setTimeout(() => {
+      target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }, 220);
+  };
 
   return (
     <>
       <div className="ds-scrim" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-labelledby="pf-ticket-title" className="ds-sheet text-text">
+      <div role="dialog" aria-modal="true" aria-labelledby="pf-ticket-title" className="ds-sheet text-text" style={keyboardStyle}>
         <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-surface-selected text-link" aria-hidden="true">
             <Ticket size={22} />
@@ -1384,13 +1422,15 @@ function TicketSheet({ confirmed, profile, editForm, setEditForm, verifying, fee
             </ul>
             <div className="mt-4">
               <label htmlFor="pf-t-email" className="field-label">E-mail usado na compra do ingresso</label>
-              <input id="pf-t-email" type="email" autoComplete="email" className="field pf-field" value={editForm.email}
+              <input id="pf-t-email" type="email" inputMode="email" autoComplete="email" className="field pf-field" value={editForm.email}
+                onFocus={handleInputFocus}
                 onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
               <p className="mt-1.5 text-[12.5px] text-text-3">A gente procura seu ingresso no Sympla com esse e-mail.</p>
             </div>
             <div className="mt-3">
               <label htmlFor="pf-t-code" className="field-label">Código do ingresso (opcional)</label>
               <input id="pf-t-code" className="field pf-field" value={editForm.ticketNumber || ''} autoCapitalize="characters"
+                onFocus={handleInputFocus}
                 onChange={(e) => setEditForm({ ...editForm, ticketNumber: e.target.value })} />
             </div>
             {feedback && (

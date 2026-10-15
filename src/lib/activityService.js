@@ -12,6 +12,7 @@ import {
 import { db, auth } from './firebase';
 import { apiRequest } from './api';
 import { getCachedUserProfile } from './userService';
+import { saveLocalPointEvent } from './gameplay';
 
 /**
  * Atividades padrão de fallback caso a collection do Firestore ainda esteja vazia.
@@ -697,6 +698,146 @@ export async function checkoutDoubleCheck(token) {
     method: 'POST',
     body: JSON.stringify({ token })
   });
+}
+
+const ATTENDED_ACTIVITIES_PREFIX = 'facom_attended_activities_';
+
+function hasLocallyAttendedActivity(uid, activityId) {
+  if (!uid || !activityId) return false;
+  try {
+    const raw = localStorage.getItem(`${ATTENDED_ACTIVITIES_PREFIX}${uid}`);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) && list.includes(activityId);
+  } catch {
+    return false;
+  }
+}
+
+function markLocallyAttendedActivity(uid, activityId) {
+  if (!uid || !activityId) return;
+  try {
+    const key = `${ATTENDED_ACTIVITIES_PREFIX}${uid}`;
+    const raw = localStorage.getItem(key);
+    const list = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(list) && !list.includes(activityId)) {
+      list.push(activityId);
+      localStorage.setItem(key, JSON.stringify(list));
+    }
+  } catch {
+    // Ignora falha de localStorage
+  }
+}
+
+/**
+ * Registra a presença do participante em uma atividade escaneada via QR Code.
+ * Permite escanear mais de uma vez (success: true), mas só pontua na primeira leitura.
+ */
+export async function registerActivityAttendance(activityId, sessionToken = null, rating = 5) {
+  if (!activityId) {
+    return { success: false, error: 'Identificador da atividade não informado.' };
+  }
+
+  const uid = auth?.currentUser?.uid || 'anon';
+  const buildAttendanceEvent = (pointsAwarded) => ({
+    id: `local_checkin_${activityId}`,
+    userId: uid,
+    user_id: uid,
+    eventType: 'lecture_attendance',
+    event_type: 'lecture_attendance',
+    referenceId: String(activityId),
+    reference_id: String(activityId),
+    points: pointsAwarded,
+    metadata: { activityId, rating },
+    createdAt: new Date().toISOString()
+  });
+
+  // 1. Se houver sessionToken informado (QR dinâmico do telão), tenta o fluxo de checkout
+  if (sessionToken) {
+    try {
+      const checkoutRes = await checkoutDoubleCheck(sessionToken);
+      const points = typeof checkoutRes?.pointsCredited === 'number' ? checkoutRes.pointsCredited : 20;
+      markLocallyAttendedActivity(uid, activityId);
+      if (points > 0) {
+        const attendanceEvent = buildAttendanceEvent(points);
+        if (uid && uid !== 'anon' && typeof saveLocalPointEvent === 'function') {
+          saveLocalPointEvent(uid, attendanceEvent);
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('facom_points_updated', {
+            detail: { delta: points, source: 'checkin', activityId, event: attendanceEvent }
+          }));
+        }
+      }
+      return { success: true, points, alreadyCheckedIn: points === 0, mode: 'double_check' };
+    } catch (err) {
+      if (err.status === 409 || err.data?.error === 'CHECKIN_DUPLICATE') {
+        markLocallyAttendedActivity(uid, activityId);
+        return { success: true, points: 0, alreadyCheckedIn: true, message: 'Presença confirmada nesta atividade.' };
+      }
+      if (err.status === 403 && (err.code === 'SYMPLA_TICKET_REQUIRED' || err.data?.error === 'SYMPLA_TICKET_REQUIRED')) {
+        return { success: false, symplaRequired: true, message: 'Ingresso do Sympla obrigatório para confirmar presença.' };
+      }
+      // Se der 400 (WRONG_ATTENDANCE_MODE) ou 401 (token expirado), tenta o endpoint padrão de checkin abaixo
+    }
+  }
+
+  // 2. Tenta o endpoint direto de presença (/activities/:activityId/checkin)
+  try {
+    const checkinRes = await apiRequest(`/activities/${activityId}/checkin`, {
+      method: 'POST',
+      body: JSON.stringify({ lectureId: activityId, rating })
+    });
+    if (!checkinRes || typeof checkinRes !== 'object') {
+      throw new Error('Invalid checkin response');
+    }
+    const points = typeof checkinRes?.pointsCredited === 'number'
+      ? checkinRes.pointsCredited
+      : typeof checkinRes?.points === 'number'
+      ? checkinRes.points
+      : 20;
+    markLocallyAttendedActivity(uid, activityId);
+    if (points > 0) {
+      const attendanceEvent = buildAttendanceEvent(points);
+      if (uid && uid !== 'anon' && typeof saveLocalPointEvent === 'function') {
+        saveLocalPointEvent(uid, attendanceEvent);
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('facom_points_updated', {
+          detail: { delta: points, source: 'checkin', activityId, event: attendanceEvent }
+        }));
+      }
+    }
+    return { success: true, points, alreadyCheckedIn: points === 0, mode: 'self_scan' };
+  } catch (err) {
+    if (err.status === 409 || err.data?.error === 'CHECKIN_DUPLICATE') {
+      markLocallyAttendedActivity(uid, activityId);
+      return { success: true, points: 0, alreadyCheckedIn: true, message: 'Presença confirmada nesta atividade.' };
+    }
+    if (err.status === 403 && (err.code === 'SYMPLA_TICKET_REQUIRED' || err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')) {
+      return { success: false, symplaRequired: true, message: 'Ingresso do Sympla obrigatório para confirmar presença.' };
+    }
+    if (err.status && err.status >= 400 && err.status < 500 && err.status !== 404 && typeof err.data !== 'string') {
+      return { success: false, error: err.data?.message || err.message };
+    }
+
+    // Fallback resiliente para ambiente de testes, offline ou sem backend:
+    // Só pontua na primeira leitura da atividade
+    if (hasLocallyAttendedActivity(uid, activityId)) {
+      return { success: true, points: 0, alreadyCheckedIn: true, fallback: true };
+    }
+
+    markLocallyAttendedActivity(uid, activityId);
+    const attendanceEvent = buildAttendanceEvent(20);
+    if (uid && uid !== 'anon' && typeof saveLocalPointEvent === 'function') {
+      saveLocalPointEvent(uid, attendanceEvent);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('facom_points_updated', {
+        detail: { delta: 20, source: 'checkin', activityId, event: attendanceEvent }
+      }));
+    }
+    return { success: true, points: 20, alreadyCheckedIn: false, fallback: true };
+  }
 }
 
 /**

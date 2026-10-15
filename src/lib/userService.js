@@ -19,6 +19,7 @@ import { db, storage, auth } from './firebase';
 import { validateAvatarFile } from './validators';
 import { apiRequest } from './api';
 import { sendVerificationEmail, getActionCodeSettings } from './auth';
+import { getCachedSymplaTicket, setCachedSymplaTicket } from './sympla';
 
 function fileToDataUrl(file) {
   return new Promise((resolve) => {
@@ -40,6 +41,24 @@ export function isAdminEmail(email) {
   return ADMIN_EMAILS.includes(email.trim().toLowerCase());
 }
 
+function hydrateProfileWithCachedTicket(profile, uidFallback = null) {
+  if (!profile) return null;
+  const targetUid = profile.uid || profile.id || uidFallback || auth?.currentUser?.uid || null;
+  const targetEmail = profile.email || auth?.currentUser?.email || null;
+  const cachedTicket = profile.symplaTicket || profile.sympla_ticket || getCachedSymplaTicket(targetEmail, targetUid);
+  if (cachedTicket) {
+    profile.symplaTicket = cachedTicket;
+    profile.hasSymplaTicket = true;
+    profile.ticketId = profile.ticketId || cachedTicket.ticketNumber || null;
+  }
+  if (isAdminEmail(profile?.email) || isAdminEmail(auth?.currentUser?.email)) {
+    profile.role = 'ADMIN';
+    profile.participantType = profile.participantType || 'Organizador';
+    profile.participant_type = profile.participant_type || 'Organizador';
+  }
+  return profile;
+}
+
 /**
  * Lê o perfil do usuário de forma 100% síncrona do cache local (zero layout flash).
  * O papel (role) vem do perfil gravado pelo servidor; nenhum papel é inferido no cliente,
@@ -52,12 +71,7 @@ export function getCachedUserProfile(uid) {
       const cached = localStorage.getItem(`facom_profile_${targetUid}`);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (isAdminEmail(parsed?.email) || isAdminEmail(auth?.currentUser?.email)) {
-          parsed.role = 'ADMIN';
-          parsed.participantType = parsed.participantType || 'Organizador';
-          parsed.participant_type = parsed.participant_type || 'Organizador';
-        }
-        return parsed;
+        return hydrateProfileWithCachedTicket(parsed, targetUid);
       }
     }
     // Procura em qualquer chave de perfil em cache caso o uid ainda não tenha sido emitido
@@ -68,12 +82,7 @@ export function getCachedUserProfile(uid) {
           const item = localStorage.getItem(key);
           if (item) {
             const parsed = JSON.parse(item);
-            if (isAdminEmail(parsed?.email) || isAdminEmail(auth?.currentUser?.email)) {
-              parsed.role = 'ADMIN';
-              parsed.participantType = parsed.participantType || 'Organizador';
-              parsed.participant_type = parsed.participant_type || 'Organizador';
-            }
-            return parsed;
+            return hydrateProfileWithCachedTicket(parsed, targetUid);
           }
         }
       }
@@ -116,6 +125,21 @@ export async function checkUsernameAvailability(rawUsername) {
   }
 }
 
+function persistDirectoryProfile(uid, profileObj) {
+  if (!profileObj || typeof localStorage === 'undefined') return;
+  try {
+    const targetUid = uid || profileObj.uid || profileObj.id;
+    const serialized = JSON.stringify(profileObj);
+    if (targetUid) {
+      localStorage.setItem(`facom_user_dir_${targetUid}`, serialized);
+    }
+    const cleanEmail = (profileObj.email || '').trim().toLowerCase();
+    if (cleanEmail) {
+      localStorage.setItem(`facom_user_dir_email_${cleanEmail}`, serialized);
+    }
+  } catch (_e) {}
+}
+
 /**
  * Cria ou inicializa o perfil do usuário na coleção /users/{uid} do Firestore.
  */
@@ -127,13 +151,19 @@ export async function createUserProfile(uid, data) {
 
   const cleanEmail = data.email ? data.email.trim().toLowerCase() : '';
   const isTargetAdmin = isAdminEmail(cleanEmail);
+  const resolvedTicket = data.symplaTicket || getCachedSymplaTicket(cleanEmail, uid) || null;
+  const firstName = data.firstName || '';
+  const lastName = data.lastName || '';
+  const cleanUsername = data.username ? data.username.trim().toLowerCase() : '';
+  const calculatedDisplayName = data.displayName || [firstName, lastName].filter(Boolean).join(' ').trim() || cleanUsername || '';
 
   const profileData = {
     uid,
     email: cleanEmail,
-    firstName: data.firstName || '',
-    lastName: data.lastName || '',
-    username: data.username ? data.username.trim().toLowerCase() : '',
+    firstName,
+    lastName,
+    displayName: calculatedDisplayName,
+    username: cleanUsername,
     phone: data.phone || '',
     participantType: isTargetAdmin ? 'Organizador' : (data.participantType || 'Aluno da UFU'),
     participant_type: isTargetAdmin ? 'Organizador' : (data.participantType || 'Aluno da UFU'),
@@ -144,19 +174,22 @@ export async function createUserProfile(uid, data) {
     instagram: data.instagram || '',
     github: data.github || '',
     avatarUrl: data.avatarUrl || null,
-    hasSymplaTicket: isTargetAdmin ? true : Boolean(data.hasSymplaTicket || data.symplaTicket),
+    hasSymplaTicket: isTargetAdmin ? true : Boolean(data.hasSymplaTicket || resolvedTicket),
     role: isTargetAdmin ? 'ADMIN' : 'PARTICIPANT', // papel nunca vem do cliente; promoção é feita pelo backend (custom claims) exceto admins declarados
     totalPoints: 0,
     pontuacaoTotal: 0,
-    ticketId: data.ticketId || data.symplaTicket?.ticketNumber || null,
-    symplaTicket: data.symplaTicket || null,
+    ticketId: data.ticketId || resolvedTicket?.ticketNumber || null,
+    symplaTicket: resolvedTicket,
     termsAcceptedAt: now,
     createdAt: now,
     updatedAt: now
   };
 
+  if (resolvedTicket) {
+    setCachedSymplaTicket(cleanEmail, uid, resolvedTicket, profileData);
+  }
+
   // Mantém Firebase Auth sincronizado com o displayName e photoURL
-  const calculatedDisplayName = [profileData.firstName, profileData.lastName].filter(Boolean).join(' ').trim() || profileData.username || '';
   if (auth.currentUser) {
     const profileUpdates = {};
     if (calculatedDisplayName) profileUpdates.displayName = calculatedDisplayName;
@@ -173,14 +206,23 @@ export async function createUserProfile(uid, data) {
   // Salva no cache local para resiliência instantânea
   try {
     localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(profileData));
+    persistDirectoryProfile(uid, profileData);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('facom_profile_updated', { detail: profileData }));
+    }
   } catch (_e) {}
 
   // Tenta salvar no Firestore (sem lançar exceção bloqueante se as regras da nuvem ainda rejeitarem)
   try {
     // Campos de ingresso Sympla são do backend (firestore.rules os bloqueia no cliente, KAN-108):
     // ficam só no cache local, nunca no payload do Firestore.
+    // Além disso, firestore.rules exige role == 'PARTICIPANT' no allow create e avatarUrl <= 500 chars.
     // eslint-disable-next-line no-unused-vars
     const { hasSymplaTicket, symplaTicket, ticketId, ...firestoreData } = profileData;
+    firestoreData.role = 'PARTICIPANT';
+    if (typeof firestoreData.avatarUrl === 'string' && firestoreData.avatarUrl.length > 500) {
+      firestoreData.avatarUrl = null;
+    }
     await setDoc(userRef, firestoreData, { merge: true });
   } catch (err) {
     console.warn('[userService] Aviso: Gravação do perfil no Firestore rejeitada por regras, dados preservados no cache local:', err);
@@ -197,7 +239,7 @@ export async function getUserProfile(uid) {
 
   let localData = null;
   try {
-    const cached = localStorage.getItem(`facom_profile_${uid}`);
+    const cached = localStorage.getItem(`facom_profile_${uid}`) || localStorage.getItem(`facom_user_dir_${uid}`);
     if (cached) localData = JSON.parse(cached);
   } catch (_e) {}
 
@@ -207,15 +249,34 @@ export async function getUserProfile(uid) {
 
     if (snap.exists()) {
       const data = snap.data();
+      const targetEmail = data.email || localData?.email || auth?.currentUser?.email || '';
+      const resolvedTicket =
+        data.symplaTicket ||
+        localData?.symplaTicket ||
+        getCachedSymplaTicket(targetEmail, uid) ||
+        null;
 
-      // Fusão segura: nunca substitui um avatarUrl ou symplaTicket preenchido localmente por null/indefinido do Firestore
+      const remotePoints = Number(data.totalPoints ?? data.pontuacaoTotal ?? 0) || 0;
+      const localPoints = Number(localData?.totalPoints ?? localData?.pontuacaoTotal ?? 0) || 0;
+      const resolvedPoints = Math.max(remotePoints, localPoints);
+
+      // Fusão segura: nunca substitui um avatarUrl, symplaTicket ou pontos acumulados localmente por zero/nulo
       const merged = {
         ...localData,
         ...data,
+        uid: data.uid || localData?.uid || uid,
+        email: data.email || localData?.email || (auth?.currentUser?.uid === uid ? auth?.currentUser?.email : '') || '',
         avatarUrl: data.avatarUrl || data.photoURL || localData?.avatarUrl || null,
-        symplaTicket: data.symplaTicket || localData?.symplaTicket || null,
-        hasSymplaTicket: !!(data.hasSymplaTicket || data.symplaTicket || localData?.hasSymplaTicket || localData?.symplaTicket)
+        symplaTicket: resolvedTicket,
+        ticketId: data.ticketId || resolvedTicket?.ticketNumber || localData?.ticketId || null,
+        hasSymplaTicket: !!(data.hasSymplaTicket || resolvedTicket || localData?.hasSymplaTicket),
+        totalPoints: resolvedPoints,
+        pontuacaoTotal: resolvedPoints
       };
+
+      if (resolvedTicket) {
+        setCachedSymplaTicket(targetEmail, uid, resolvedTicket, merged);
+      }
 
       if (isAdminEmail(merged.email) || isAdminEmail(auth?.currentUser?.email)) {
         merged.role = 'ADMIN';
@@ -223,8 +284,13 @@ export async function getUserProfile(uid) {
         merged.participant_type = merged.participant_type || 'Organizador';
       }
 
+      if (resolvedPoints > 0 && auth?.currentUser?.uid === uid) {
+        syncUserRankingInFirestore(uid, resolvedPoints, merged).catch(() => {});
+      }
+
       try {
         localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(merged));
+        persistDirectoryProfile(uid, merged);
       } catch (_e) {}
       return merged;
     }
@@ -234,13 +300,7 @@ export async function getUserProfile(uid) {
     }
   }
 
-  if (localData && (isAdminEmail(localData.email) || isAdminEmail(auth?.currentUser?.email))) {
-    localData.role = 'ADMIN';
-    localData.participantType = localData.participantType || 'Organizador';
-    localData.participant_type = localData.participant_type || 'Organizador';
-  }
-
-  return localData;
+  return hydrateProfileWithCachedTicket(localData, uid);
 }
 
 /**
@@ -249,16 +309,24 @@ export async function getUserProfile(uid) {
 export async function updateUserProfile(uid, updates) {
   if (!uid) throw new Error('UID é obrigatório.');
   const userRef = doc(db, 'users', uid);
-  const dataToUpdate = {
-    ...updates,
-    updatedAt: serverTimestamp()
-  };
 
-  // Mantém cache local atualizado imediatamente
+  let merged = { ...(updates || {}), uid };
+  // Mantém cache local atualizado imediatamente e persiste ingresso Sympla no cache dedicado
   try {
-    const currentCached = localStorage.getItem(`facom_profile_${uid}`);
+    const currentCached = localStorage.getItem(`facom_profile_${uid}`) || localStorage.getItem(`facom_user_dir_${uid}`);
     const parsed = currentCached ? JSON.parse(currentCached) : {};
-    localStorage.setItem(`facom_profile_${uid}`, JSON.stringify({ ...parsed, ...updates }));
+    merged = { ...parsed, ...updates, uid: parsed.uid || uid };
+    const resolvedTicket = updates?.symplaTicket || merged.symplaTicket;
+    if (resolvedTicket) {
+      setCachedSymplaTicket(merged.email || auth?.currentUser?.email, uid, resolvedTicket, merged);
+      merged.ticketId = merged.ticketId || resolvedTicket.ticketNumber || null;
+      merged.hasSymplaTicket = true;
+    }
+    localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(merged));
+    persistDirectoryProfile(uid, merged);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('facom_profile_updated', { detail: merged }));
+    }
   } catch (_e) {}
 
   // Mantém Firebase Auth sincronizado (apenas photoURL HTTP/HTTPS, nunca Base64)
@@ -276,12 +344,54 @@ export async function updateUserProfile(uid, updates) {
     }
   }
 
+  // Remove campos de ingresso que são protegidos pelas firestore.rules no cliente (KAN-108)
+  // eslint-disable-next-line no-unused-vars
+  const { hasSymplaTicket, symplaTicket, ticketId, ...firestoreUpdates } = updates || {};
+  if (typeof firestoreUpdates.avatarUrl === 'string' && firestoreUpdates.avatarUrl.length > 500) {
+    delete firestoreUpdates.avatarUrl;
+  }
+  if (Object.keys(firestoreUpdates).length === 0) {
+    return true;
+  }
+
+  const dataToUpdate = {
+    ...firestoreUpdates,
+    updatedAt: serverTimestamp()
+  };
+
   try {
     await updateDoc(userRef, dataToUpdate);
   } catch (err) {
     if (err?.code === 'not-found' || err?.message?.includes('No document to update')) {
       try {
-        await setDoc(userRef, dataToUpdate, { merge: true });
+        const now = serverTimestamp();
+        const fallbackEmail = (merged.email || auth?.currentUser?.email || '').trim().toLowerCase();
+        const createPayload = {
+          uid,
+          email: fallbackEmail,
+          firstName: merged.firstName || '',
+          lastName: merged.lastName || '',
+          displayName: merged.displayName || [merged.firstName, merged.lastName].filter(Boolean).join(' ').trim() || '',
+          username: merged.username ? String(merged.username).trim().toLowerCase() : '',
+          phone: merged.phone || '',
+          participantType: merged.participantType || 'Aluno da UFU',
+          participant_type: merged.participant_type || merged.participantType || 'Aluno da UFU',
+          course: merged.course || '',
+          period: merged.period ? Number(merged.period) : null,
+          institution: merged.institution || '',
+          linkedin: merged.linkedin || '',
+          instagram: merged.instagram || '',
+          github: merged.github || '',
+          avatarUrl: typeof merged.avatarUrl === 'string' && merged.avatarUrl.length <= 500 ? merged.avatarUrl : null,
+          role: 'PARTICIPANT',
+          totalPoints: 0,
+          pontuacaoTotal: 0,
+          termsAcceptedAt: now,
+          createdAt: now,
+          updatedAt: now,
+          ...firestoreUpdates
+        };
+        await setDoc(userRef, createPayload, { merge: true });
       } catch (createErr) {
         console.warn('[userService] Aviso: Gravação direta no Firestore bloqueada por regras, dados preservados localmente:', createErr);
       }
@@ -504,6 +614,68 @@ export async function uploadUserAvatar(uid, file) {
 }
 
 /**
+ * Sincroniza o documento do usuário na coleção consolidada `/ranking/{uid}` do Firestore.
+ * Permite que todos os dispositivos vejam os pontos em tempo real na coleção `/ranking`.
+ */
+export async function syncUserRankingInFirestore(uid, points, profileData = null) {
+  if (!uid) return false;
+  const numericPoints = Math.max(0, Math.min(100000, Math.round(Number(points) || 0)));
+
+  let source = profileData || {};
+  try {
+    if (typeof localStorage !== 'undefined' && (!source.firstName && !source.first_name)) {
+      const cached = localStorage.getItem(`facom_profile_${uid}`) || localStorage.getItem(`facom_user_dir_${uid}`);
+      if (cached) {
+        source = { ...JSON.parse(cached), ...source };
+      }
+    }
+    if (typeof localStorage !== 'undefined') {
+      const cachedKey = `facom_profile_${uid}`;
+      const existingRaw = localStorage.getItem(cachedKey);
+      if (existingRaw) {
+        const existing = JSON.parse(existingRaw);
+        const maxPts = Math.max(numericPoints, Number(existing.totalPoints ?? existing.pontuacaoTotal ?? 0) || 0);
+        if (maxPts !== existing.totalPoints || maxPts !== existing.pontuacaoTotal) {
+          localStorage.setItem(cachedKey, JSON.stringify({
+            ...existing,
+            totalPoints: maxPts,
+            pontuacaoTotal: maxPts
+          }));
+        }
+      }
+    }
+  } catch (_e) {}
+
+  try {
+    if (typeof setDoc !== 'function' || typeof doc !== 'function') return false;
+    const rankingRef = doc(db, 'ranking', uid);
+    if (!rankingRef) return false;
+
+    const firstName = source.firstName || source.first_name || 'Participante';
+    const lastName = source.lastName || source.last_name || '';
+    const payload = {
+      uid,
+      username: source.username || firstName || 'user',
+      firstName,
+      lastName,
+      displayName: source.displayName || [firstName, lastName].filter(Boolean).join(' ') || 'Participante',
+      avatarUrl: source.avatarUrl || source.avatar_url || source.photoURL || null,
+      course: source.course || '',
+      mascot: source.mascot || 'blue',
+      role: source.role || 'PARTICIPANT',
+      totalPoints: numericPoints,
+      pontuacaoTotal: numericPoints,
+      updatedAt: typeof serverTimestamp === 'function' ? serverTimestamp() : new Date().toISOString()
+    };
+
+    await setDoc(rankingRef, payload, { merge: true });
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+/**
  * Obtém a lista de eventos de pontos do usuário no Firestore.
  */
 export async function getUserPointEvents(uid) {
@@ -522,19 +694,71 @@ export async function getUserPointEvents(uid) {
 
 function mapUserToLeaderboard(d, index) {
   const data = typeof d.data === 'function' ? d.data() : d;
-  const points = Number(data.pontuacaoTotal ?? data.totalPoints ?? 0);
+  const points = Number(data.pontuacaoTotal ?? data.totalPoints ?? data.points ?? 0);
   return {
     id: d.id || data.id || data.uid,
     rank: index + 1,
-    username: data.username || data.firstName || 'user',
-    first_name: data.firstName || 'Participante',
-    last_name: data.lastName || '',
-    avatar_url: data.avatarUrl || data.photoURL || null,
+    username: data.username || data.firstName || data.first_name || 'user',
+    first_name: data.firstName || data.first_name || 'Participante',
+    last_name: data.lastName || data.last_name || '',
+    avatar_url: data.avatarUrl || data.avatar_url || data.photoURL || null,
     points,
     mascot: data.mascot || 'blue',
     course: data.course || '',
-    createdAt: data.createdAt || null
+    role: data.role || 'PARTICIPANT',
+    createdAt: data.createdAt || data.updatedAt || null
   };
+}
+
+function mergeUsersAndRankingForLeaderboard(usersList = [], rankingDocs = []) {
+  const map = new Map();
+  for (const item of usersList) {
+    if (item && item.id) {
+      map.set(item.id, { ...item });
+    }
+  }
+
+  for (let i = 0; i < rankingDocs.length; i++) {
+    const rDoc = rankingDocs[i];
+    if (!rDoc) continue;
+    const rData = typeof rDoc.data === 'function' ? rDoc.data() : rDoc;
+    if (!rData) continue;
+    const uid = rDoc.id || rData.uid || rData.id;
+    if (!uid) continue;
+
+    const rRole = rData.role || 'PARTICIPANT';
+    if (rRole === 'ADMIN' || rRole === 'STAFF' || rRole === 'SPONSOR') {
+      continue;
+    }
+
+    const rPoints = Number(rData.pontuacaoTotal ?? rData.totalPoints ?? rData.points ?? 0) || 0;
+    if (map.has(uid)) {
+      const existing = map.get(uid);
+      existing.points = Math.max(Number(existing.points || 0), rPoints);
+      if ((!existing.first_name || existing.first_name === 'Participante') && (rData.firstName || rData.first_name)) {
+        existing.first_name = rData.firstName || rData.first_name;
+      }
+      if (!existing.last_name && (rData.lastName || rData.last_name)) {
+        existing.last_name = rData.lastName || rData.last_name;
+      }
+      if ((!existing.username || existing.username === 'user') && rData.username) {
+        existing.username = rData.username;
+      }
+      if (!existing.avatar_url && (rData.avatarUrl || rData.avatar_url || rData.photoURL)) {
+        existing.avatar_url = rData.avatarUrl || rData.avatar_url || rData.photoURL;
+      }
+      if (!existing.course && rData.course) {
+        existing.course = rData.course;
+      }
+      if (rData.mascot) {
+        existing.mascot = rData.mascot;
+      }
+    } else {
+      map.set(uid, mapUserToLeaderboard(rDoc, map.size));
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 function sortLeaderboardWithTiebreak(list) {
@@ -552,7 +776,8 @@ function sortLeaderboardWithTiebreak(list) {
 
 /**
  * Obtém os líderes do ranking de pontuação filtrando apenas participantes
- * e ordenando por pontuacaoTotal desc com limite configurável (padrão 50).
+ * e ordenando por pontuacaoTotal desc com limite configurável (padrão 50),
+ * consolidando dados das coleções `/users` e `/ranking`.
  */
 export async function getLeaderboardUsers(maxLimit = 50) {
   const usersRef = collection(db, 'users');
@@ -577,16 +802,33 @@ export async function getLeaderboardUsers(maxLimit = 50) {
       snap = await getDocs(fallbackQuery);
     }
 
-    const list = snap.docs.map((d, index) => mapUserToLeaderboard(d, index));
-    return sortLeaderboardWithTiebreak(list);
+    const list = (snap?.docs || []).map((d, index) => mapUserToLeaderboard(d, index));
+    let rankingDocs = [];
+    try {
+      const rankSnap = await getDocs(collection(db, 'ranking'));
+      if (rankSnap && Array.isArray(rankSnap.docs)) {
+        rankingDocs = rankSnap.docs;
+      }
+    } catch (_rankErr) {}
+
+    const merged = mergeUsersAndRankingForLeaderboard(list, rankingDocs);
+    return sortLeaderboardWithTiebreak(merged).slice(0, maxLimit);
   } catch (err) {
     console.warn('Erro ao carregar ranking com índices, tentando fallback direto sem índice composto:', err);
     try {
       const basicSnap = await getDocs(query(usersRef, limit(maxLimit)));
-      const list = basicSnap.docs
+      const list = (basicSnap?.docs || [])
         .map((d, index) => mapUserToLeaderboard(d, index))
-        .filter(u => u.role !== 'ADMIN' && u.role !== 'STAFF');
-      return sortLeaderboardWithTiebreak(list);
+        .filter(u => u.role !== 'ADMIN' && u.role !== 'STAFF' && u.role !== 'SPONSOR');
+      let rankingDocs = [];
+      try {
+        const rankSnap = await getDocs(collection(db, 'ranking'));
+        if (rankSnap && Array.isArray(rankSnap.docs)) {
+          rankingDocs = rankSnap.docs;
+        }
+      } catch (_rankErr) {}
+      const merged = mergeUsersAndRankingForLeaderboard(list, rankingDocs);
+      return sortLeaderboardWithTiebreak(merged).slice(0, maxLimit);
     } catch (_fallbackErr) {
       return [];
     }
@@ -594,10 +836,12 @@ export async function getLeaderboardUsers(maxLimit = 50) {
 }
 
 /**
- * Escuta atualizações do ranking em tempo real via onSnapshot do Firestore (KAN-55).
+ * Escuta atualizações do ranking em tempo real via onSnapshot do Firestore (KAN-55),
+ * consolidando em tempo real as coleções `/ranking` e `/users`.
  */
 export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
   const usersRef = collection(db, 'users');
+  const rankingRef = collection(db, 'ranking');
   const q = query(
     usersRef,
     where('role', '==', 'PARTICIPANT'),
@@ -605,11 +849,36 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
     limit(maxLimit)
   );
 
-  return onSnapshot(
+  let usersList = [];
+  let rankingDocs = [];
+  let hasUsersEmitted = false;
+  let activeUsersUnsub = null;
+  let rankingUnsub = null;
+
+  const emitConsolidated = () => {
+    const merged = mergeUsersAndRankingForLeaderboard(usersList, rankingDocs);
+    callback(sortLeaderboardWithTiebreak(merged).slice(0, maxLimit));
+  };
+
+  try {
+    rankingUnsub = onSnapshot(
+      rankingRef,
+      (rankSnap) => {
+        rankingDocs = rankSnap?.docs || [];
+        if (hasUsersEmitted || rankingDocs.length > 0) {
+          emitConsolidated();
+        }
+      },
+      () => {}
+    );
+  } catch (_e) {}
+
+  activeUsersUnsub = onSnapshot(
     q,
     (snap) => {
-      const list = snap.docs.map((d, index) => mapUserToLeaderboard(d, index));
-      callback(sortLeaderboardWithTiebreak(list));
+      hasUsersEmitted = true;
+      usersList = (snap?.docs || []).map((d, index) => mapUserToLeaderboard(d, index));
+      emitConsolidated();
     },
     (err) => {
       console.warn('Erro no listener em tempo real do ranking (pontuacaoTotal), tentando fallback com totalPoints:', err);
@@ -619,25 +888,31 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
         orderBy('totalPoints', 'desc'),
         limit(maxLimit)
       );
-      return onSnapshot(
+      activeUsersUnsub = onSnapshot(
         fallbackQuery,
         (fallbackSnap) => {
-          const list = fallbackSnap.docs.map((d, index) => mapUserToLeaderboard(d, index));
-          callback(sortLeaderboardWithTiebreak(list));
+          hasUsersEmitted = true;
+          usersList = (fallbackSnap?.docs || []).map((d, index) => mapUserToLeaderboard(d, index));
+          emitConsolidated();
         },
         (finalErr) => {
           console.warn('Fallback totalPoints falhou, ouvindo coleção users sem ordenação composta:', finalErr);
           try {
-            return onSnapshot(
+            activeUsersUnsub = onSnapshot(
               query(usersRef, limit(maxLimit)),
               (simpleSnap) => {
-                const list = simpleSnap.docs
+                hasUsersEmitted = true;
+                usersList = (simpleSnap?.docs || [])
                   .map((d, index) => mapUserToLeaderboard(d, index))
-                  .filter(u => u.role !== 'ADMIN' && u.role !== 'STAFF');
-                callback(sortLeaderboardWithTiebreak(list));
+                  .filter(u => u.role !== 'ADMIN' && u.role !== 'STAFF' && u.role !== 'SPONSOR');
+                emitConsolidated();
               },
               (ultraErr) => {
-                if (onError) onError(ultraErr);
+                if (rankingDocs.length > 0) {
+                  emitConsolidated();
+                } else if (onError) {
+                  onError(ultraErr);
+                }
               }
             );
           } catch (_e) {
@@ -647,6 +922,11 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
       );
     }
   );
+
+  return () => {
+    if (typeof activeUsersUnsub === 'function') activeUsersUnsub();
+    if (typeof rankingUnsub === 'function') rankingUnsub();
+  };
 }
 
 /**
@@ -663,23 +943,65 @@ export async function findUserByUsername(username) {
 }
 
 /**
- * Escuta todos os usuários para o painel administrativo.
+ * Escuta todos os usuários para o painel administrativo, consolidando pontos de `/ranking`.
  */
 export function subscribeToAllUsers(callback) {
   const usersRef = collection(db, 'users');
-  return onSnapshot(
+  const rankingRef = collection(db, 'ranking');
+  let rawUsers = [];
+  let rankingMap = new Map();
+  let hasUsersEmitted = false;
+  let rankingUnsub = null;
+
+  const emitMergedUsers = () => {
+    const merged = rawUsers.map(u => {
+      const uid = u.uid || u.id;
+      const rData = uid ? rankingMap.get(uid) : null;
+      if (!rData) return u;
+      const maxPoints = Math.max(
+        Number(u.totalPoints ?? u.pontuacaoTotal ?? 0) || 0,
+        Number(rData.totalPoints ?? rData.pontuacaoTotal ?? rData.points ?? 0) || 0
+      );
+      return {
+        ...u,
+        totalPoints: maxPoints,
+        pontuacaoTotal: maxPoints
+      };
+    });
+    callback(merged);
+  };
+
+  try {
+    rankingUnsub = onSnapshot(
+      rankingRef,
+      (rankSnap) => {
+        const nextMap = new Map();
+        (rankSnap?.docs || []).forEach(docSnap => {
+          const data = typeof docSnap.data === 'function' ? docSnap.data() : docSnap;
+          nextMap.set(docSnap.id || data?.uid, data);
+        });
+        rankingMap = nextMap;
+        if (hasUsersEmitted) {
+          emitMergedUsers();
+        }
+      },
+      () => {}
+    );
+  } catch (_e) {}
+
+  const usersUnsub = onSnapshot(
     usersRef,
     (snap) => {
-      const list = snap.docs.map(docSnap => ({
+      hasUsersEmitted = true;
+      rawUsers = (snap?.docs || []).map(docSnap => ({
         id: docSnap.id,
         uid: docSnap.id,
         ...docSnap.data()
       }));
-      callback(list);
+      emitMergedUsers();
     },
     (err) => {
       console.warn('Erro ao escutar usuários para o admin:', err);
-      // Fallback para perfis em cache
       const cachedList = [];
       if (typeof localStorage !== 'undefined') {
         for (let i = 0; i < localStorage.length; i++) {
@@ -691,9 +1013,15 @@ export function subscribeToAllUsers(callback) {
           }
         }
       }
-      callback(cachedList);
+      rawUsers = cachedList;
+      emitMergedUsers();
     }
   );
+
+  return () => {
+    if (typeof usersUnsub === 'function') usersUnsub();
+    if (typeof rankingUnsub === 'function') rankingUnsub();
+  };
 }
 
 /**

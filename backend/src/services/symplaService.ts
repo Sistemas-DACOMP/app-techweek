@@ -137,7 +137,7 @@ export class SymplaService {
   }
 
   /**
-   * Busca um participante pelo número do ingresso (ex: T123456789)
+   * Busca um participante pelo número do ingresso ou código QR (ex: T123456789, ABCD-01-2345, SYMPLA:T123)
    */
   async findParticipantByTicket(ticketNumber: string, eventId?: string): Promise<SymplaParticipant | null> {
     const targetEventId = eventId || this.getEventId();
@@ -145,23 +145,50 @@ export class SymplaService {
       throw new Error('Sympla Event ID não configurado.');
     }
 
-    const cleanTicket = encodeURIComponent(ticketNumber.trim());
+    const stripped = ticketNumber.replace(/^SYMPLA:/i, '').trim();
+    if (!stripped) return null;
+
+    const cleanTicket = encodeURIComponent(stripped);
     const response = await fetch(
       `${SYMPLA_BASE_URL}/events/${targetEventId}/participants/ticketNumber/${cleanTicket}`,
       { headers: this.getHeaders() }
     );
 
-    if (response.status === 404) {
-      return null;
-    }
-
-    if (!response.ok) {
+    if (response.ok) {
+      const json = await response.json() as { data: SymplaParticipant };
+      if (json.data) return json.data;
+    } else if (response.status !== 404) {
       const errorText = await response.text();
       throw new Error(`Erro ao buscar ingresso no Sympla (${response.status}): ${errorText}`);
     }
 
-    const json = await response.json() as { data: SymplaParticipant };
-    return json.data || null;
+    // Fallback: se o QR lido for ticket_num_qr_code ou tiver formatação com/sem traços diferente de ticket_number
+    const normTarget = stripped.replace(/[-\s]/g, '').toUpperCase();
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore && page <= 10) {
+      try {
+        const result = await this.getParticipants(page, 100, targetEventId);
+        const match = result.data.find((p) => {
+          const candidates = [p.ticket_number, p.ticket_num_qr_code, p.qr_code].filter(Boolean) as string[];
+          return candidates.some((c) => {
+            const cleanC = c.replace(/^SYMPLA:/i, '').trim();
+            return (
+              cleanC.toUpperCase() === stripped.toUpperCase() ||
+              cleanC.replace(/[-\s]/g, '').toUpperCase() === normTarget
+            );
+          });
+        });
+        if (match) return match;
+        hasMore = result.hasNext;
+        page++;
+      } catch {
+        break;
+      }
+    }
+
+    return null;
   }
 
   /**

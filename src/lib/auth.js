@@ -247,10 +247,25 @@ export function clearAuthLocalCaches() {
     const keysToRemove = [];
     for (let i = 0; i < window.localStorage.length; i++) {
       const key = window.localStorage.key(i);
-      if (
+      if (key && key.startsWith('facom_profile_')) {
+        try {
+          const raw = window.localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const uid = parsed?.uid || parsed?.id || key.replace('facom_profile_', '');
+            if (uid) {
+              window.localStorage.setItem(`facom_user_dir_${uid}`, raw);
+            }
+            const email = (parsed?.email || '').trim().toLowerCase();
+            if (email) {
+              window.localStorage.setItem(`facom_user_dir_email_${email}`, raw);
+            }
+          }
+        } catch (_e) {}
+        keysToRemove.push(key);
+      } else if (
         key &&
-        (key.startsWith('facom_profile_') ||
-         key.startsWith('facom_point_events_') ||
+        (key.startsWith('facom_point_events_') ||
          key === 'facom_logged_in' ||
          key === 'facom_test_session')
       ) {

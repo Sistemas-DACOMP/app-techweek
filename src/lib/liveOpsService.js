@@ -590,51 +590,89 @@ export function setStageDisplayMode(mode) {
 // 6. AUDITORIA ACADÊMICA UFU (REGRA 75% DE CARGA HORÁRIA)
 // -----------------------------------------------------------------------------
 
-export function calculateUfuExtensionAudit({ usersList = [], activities = [], totalEventHours = 24 }) {
-  const minRequiredHours = Number((totalEventHours * 0.75).toFixed(1)); // 18h
-  const participants = usersList.filter((u) => !u.role || u.role === 'PARTICIPANT');
+export function calculateUfuExtensionAudit(arg1 = {}, maybeActivities = [], maybeThresholdPct = 75) {
+  const isPositional = Array.isArray(arg1);
+  const rawUsersList = isPositional ? arg1 : (Array.isArray(arg1?.usersList) ? arg1.usersList : []);
+  const rawActivities = isPositional ? (Array.isArray(maybeActivities) ? maybeActivities : []) : (Array.isArray(arg1?.activities) ? arg1.activities : []);
+  const totalEventHours = isPositional
+    ? 24
+    : (Number(arg1?.totalEventHours) > 0 ? Number(arg1.totalEventHours) : 24);
+  const thresholdPct = isPositional
+    ? (Number(maybeThresholdPct) > 0 ? Number(maybeThresholdPct) : 75)
+    : (Number(arg1?.requiredPercentage) > 0 ? Number(arg1.requiredPercentage) : 75);
 
-  const auditedUsers = participants.map((user) => {
+  const minRequiredHours = Number((totalEventHours * (thresholdPct / 100)).toFixed(1)); // 18h para 24h @ 75%
+  const safeUsers = Array.isArray(rawUsersList) ? rawUsersList.filter((u) => u && typeof u === 'object') : [];
+  const participants = safeUsers.filter((u) => !u.role || u.role === 'PARTICIPANT');
+
+  const auditedUsers = participants.map((user, idx) => {
     // Estimativa de horas cumpridas baseadas nas atividades validadas ou pontos
     // Cada presença validada = ~2h de atividade acadêmica
-    const points = Number(user.totalPoints ?? user.pontuacaoTotal ?? 0);
+    const points = Number(user.totalPoints ?? user.pontuacaoTotal ?? 0) || 0;
     // Modelo proporcional baseado no engajamento real
     const estimatedHours = Math.min(totalEventHours, Math.max(4, Math.round((points / 120) * 8)));
     const attendancePct = Math.min(100, Math.round((estimatedHours / totalEventHours) * 100));
     const isEligible = estimatedHours >= minRequiredHours;
+    const uid = String(user.uid || user.id || `student-${idx}`);
+    const name = String(
+      user.fullName ||
+      user.displayName ||
+      [user.firstName, user.lastName].filter(Boolean).join(' ') ||
+      'Participante'
+    );
+    const email = String(user.email || '—');
+    const course = String(user.course || 'Ciência da Computação');
+    const period = user.period ? `${String(user.period).replace(/º.*$/, '')}º Período` : 'Graduação';
+    const attendedActivitiesCount = Math.max(1, Math.min(rawActivities.length || 12, Math.round(estimatedHours / 2)));
 
     return {
-      uid: user.uid || user.id,
-      name: user.fullName || user.displayName || [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Participante',
-      email: user.email || '—',
-      course: user.course || 'Ciência da Computação',
-      period: user.period ? `${user.period}º Período` : 'Graduação',
+      id: uid,
+      uid,
+      name,
+      email,
+      course,
+      period,
       hasSymplaTicket: !!user.hasSymplaTicket,
       points,
+      attendedActivitiesCount,
       attendedHours: estimatedHours,
+      requiredHours: minRequiredHours,
       attendancePct,
+      attendancePercentage: attendancePct,
       isEligible,
       statusLabel: isEligible ? 'APTO PARA CERTIFICADO' : 'FREQUÊNCIA INSUFICIENTE',
     };
   });
 
-  const eligibleCount = auditedUsers.filter((u) => u.isEligible).length;
-  const pendingCount = auditedUsers.length - eligibleCount;
-  const overallCompliancePct = auditedUsers.length > 0 ? Math.round((eligibleCount / auditedUsers.length) * 100) : 0;
+  const sortedUsers = auditedUsers.sort(
+    (a, b) => b.attendancePct - a.attendancePct || String(a.name).localeCompare(String(b.name))
+  );
+  const eligibleCount = sortedUsers.filter((u) => u.isEligible).length;
+  const pendingCount = sortedUsers.length - eligibleCount;
+  const overallCompliancePct = sortedUsers.length > 0 ? Math.round((eligibleCount / sortedUsers.length) * 100) : 0;
+  const avgAttendanceRate = sortedUsers.length > 0
+    ? Math.round(sortedUsers.reduce((acc, u) => acc + u.attendancePct, 0) / sortedUsers.length)
+    : 0;
 
   return {
     totalEventHours,
     minRequiredHours,
-    totalAudited: auditedUsers.length,
+    requiredHours: minRequiredHours,
+    totalAudited: sortedUsers.length,
+    totalUfuStudents: sortedUsers.length,
     eligibleCount,
     pendingCount,
+    ineligibleCount: pendingCount,
     overallCompliancePct,
-    users: auditedUsers.sort((a, b) => b.attendancePct - a.attendancePct || a.name.localeCompare(b.name)),
+    avgAttendanceRate,
+    users: sortedUsers,
+    students: sortedUsers,
   };
 }
 
-export function exportUfuAuditCsv(auditResult) {
-  if (!auditResult || !auditResult.users) return;
+export function exportUfuAuditCsv(auditResult, { download = true } = {}) {
+  const list = auditResult?.users || auditResult?.students;
+  if (!auditResult || !Array.isArray(list)) return '';
 
   const headers = [
     'Nome Completo',
@@ -647,27 +685,30 @@ export function exportUfuAuditCsv(auditResult) {
     'Regra 75% UFU',
   ];
 
-  const rows = auditResult.users.map((u) => [
-    `"${u.name.replace(/"/g, '""')}"`,
-    `"${u.email}"`,
-    `"${u.course}${u.period ? ` · ${u.period}` : ''}"`,
+  const rows = list.map((u) => [
+    `"${String(u.name || '').replace(/"/g, '""')}"`,
+    `"${String(u.email || '')}"`,
+    `"${String(u.course || '')}${u.period ? ` · ${u.period}` : ''}"`,
     u.hasSymplaTicket ? 'Sim' : 'Não',
-    `${u.attendedHours}h de ${auditResult.totalEventHours}h`,
-    `${u.attendancePct}%`,
+    `${u.attendedHours ?? 0}h de ${auditResult.totalEventHours ?? 24}h`,
+    `${u.attendancePct ?? u.attendancePercentage ?? 0}%`,
     u.isEligible ? 'HOMOLOGADO' : 'PENDENTE',
     u.isEligible ? 'CUMPRIDA' : 'INSUFICIENTE',
   ]);
 
   const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `TechWeek2026_Auditoria_Presenca_UFU_75Pct_${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  if (download && typeof document !== 'undefined' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `TechWeek2026_Auditoria_Presenca_UFU_75Pct_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  return csvContent;
 }
 
 // -----------------------------------------------------------------------------

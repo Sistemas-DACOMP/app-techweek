@@ -88,6 +88,17 @@ describe('sponsorService', () => {
       expect(participant.email).toBe('erick.raposo@ufu.br');
       expect(participant.name).toContain('Erick');
     });
+
+    it('reconhece QR Code de ingresso Sympla (SYMPLA:T123456 ou ABCD-01-2345) sem rejeitar como inválido', async () => {
+      const p1 = await resolveParticipantFromQr('SYMPLA:T123456');
+      expect(p1).not.toBeNull();
+      expect(p1.participantUid).toBe('sympla_T123456');
+      expect(p1.name).toContain('T123456');
+
+      const p2 = await resolveParticipantFromQr('ABCD-01-2345');
+      expect(p2).not.toBeNull();
+      expect(p2.participantUid).toBe('sympla_ABCD-01-2345');
+    });
   });
 
   describe('submitLead', () => {

@@ -166,10 +166,18 @@ export default function ActivityCheckoutScannerModal({
     } catch (err) {
       if (err.data?.error === 'TOKEN_EXPIRED') {
         setErrorMessage('O QR Code do telão expirou. Peça pro Staff atualizar a projeção.');
-      } else if (err.data?.error === 'ENTRANCE_NOT_FOUND' || err.status === 409 && err.message?.includes('entrada')) {
+      } else if (err.data?.error === 'ENTRANCE_NOT_FOUND' || (err.status === 409 && err.message?.includes('entrada'))) {
         setErrorMessage('Sua entrada não foi registrada pelo Staff na portaria.');
       } else if (err.data?.error === 'CHECKIN_DUPLICATE' || err.status === 409) {
-        setErrorMessage('Sua presença nesta atividade já foi concluída!');
+        const duplicateSuccess = {
+          success: true,
+          pointsCredited: 0,
+          alreadyCheckedIn: true
+        };
+        setSuccessData(duplicateSuccess);
+        if (onSuccess) {
+          onSuccess(duplicateSuccess);
+        }
       } else {
         setErrorMessage(err.data?.message || err.message || 'QR Code inválido ou falha na comunicação.');
       }

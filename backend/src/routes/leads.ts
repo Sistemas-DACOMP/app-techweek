@@ -137,21 +137,37 @@ async function resolveSponsorCompany(
  * Extraído para facilitar testes unitários isolados.
  */
 export async function leadsHandler(req: Request, res: Response): Promise<void> {
-  const { participantUid, notes, rating, validateOnly, tags } = req.body ?? {};
+  const { participantUid, notes, rating, validateOnly, tags, participantData } = req.body ?? {};
   const sponsorUid = req.user!.uid;
 
-  let resolvedUid = participantUid;
+  let resolvedUid = typeof participantUid === 'string' ? participantUid.replace(/^SYMPLA:/i, '').trim() : participantUid;
 
-  if (typeof resolvedUid === 'string' && resolvedUid.includes('@')) {
+  const candidateEmail =
+    (typeof resolvedUid === 'string' && resolvedUid.includes('@') ? resolvedUid : null) ||
+    (typeof participantData?.email === 'string' && participantData.email.includes('@') ? participantData.email : null);
+
+  if (typeof resolvedUid === 'string' && (resolvedUid.includes('@') || resolvedUid.startsWith('sympla_') || resolvedUid.startsWith('temp_'))) {
     try {
       const usersCol = db.collection('users');
-      if (typeof usersCol.where === 'function') {
-        const emailSnap = await usersCol.where('email', '==', resolvedUid.toLowerCase().trim()).limit(1).get();
+      if (candidateEmail && typeof usersCol.where === 'function') {
+        const emailSnap = await usersCol.where('email', '==', candidateEmail.toLowerCase().trim()).limit(1).get();
         if (emailSnap && !emailSnap.empty) {
           resolvedUid = emailSnap.docs[0].id;
         }
       }
+      if (resolvedUid.startsWith('sympla_')) {
+        const rawTicket = resolvedUid.replace(/^sympla_/i, '').trim().toUpperCase();
+        const ticketIndexDoc = await db.collection('symplaTickets').doc(encodeURIComponent(rawTicket)).get?.().catch?.(() => null);
+        const ticketData = ticketIndexDoc?.data?.();
+        if (ticketIndexDoc?.exists && ticketData?.uid) {
+          resolvedUid = ticketData.uid;
+        }
+      }
     } catch {}
+  }
+
+  if (typeof resolvedUid === 'string' && resolvedUid.includes('@')) {
+    resolvedUid = `email_${resolvedUid.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
   }
 
   if (typeof resolvedUid !== 'string' || !resolvedUid || !isValidFirestoreId(resolvedUid)) {
@@ -205,7 +221,12 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         tx.get(sponsorRef).catch(() => ({ exists: false, data: () => ({}) }))
       ]);
 
-      if (!userSnap.exists) {
+      const hasFallbackParticipant =
+        participantData &&
+        typeof participantData === 'object' &&
+        Boolean(participantData.name || participantData.email || participantData.ticketId);
+
+      if (!userSnap.exists && !hasFallbackParticipant) {
         return {
           status: 404 as const,
           body: {
@@ -215,21 +236,26 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         };
       }
 
-      const userData = userSnap.data() ?? {};
+      const userData = userSnap.exists ? (userSnap.data() ?? {}) : (participantData ?? {});
       const name = (
         userData.name ||
         [userData.first_name, userData.last_name].filter(Boolean).join(' ') ||
         [userData.firstName, userData.lastName].filter(Boolean).join(' ') ||
+        participantData?.name ||
         'Participante'
       ).trim();
 
-      const email = userData.email || null;
-      const phone = userData.phone || userData.telefone || null;
-      const course = userData.course || userData.curso || null;
-      const period = userData.period || userData.periodo || null;
-      const linkedin = userData.linkedin || null;
-      const instagram = userData.instagram || null;
-      const github = userData.github || null;
+      const email = userData.email || participantData?.email || null;
+      const username = userData.username || participantData?.username || null;
+      const avatarUrl = userData.avatarUrl || userData.photoURL || participantData?.avatarUrl || participantData?.photoURL || null;
+      const phone = userData.phone || userData.telefone || participantData?.phone || null;
+      const course = userData.course || userData.curso || participantData?.course || null;
+      const period = userData.period || userData.periodo || participantData?.period || null;
+      const institution = userData.institution || userData.instituicao || participantData?.institution || participantData?.instituicao || null;
+      const participantType = userData.participantType || userData.participant_type || participantData?.participantType || null;
+      const linkedin = userData.linkedin || participantData?.linkedin || null;
+      const instagram = userData.instagram || participantData?.instagram || null;
+      const github = userData.github || participantData?.github || null;
 
       const birthDateRaw =
         userData.birthDate ||
@@ -288,7 +314,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         userUpdates.pontuacaoTotal = admin.firestore.FieldValue.increment(pointsToIncrement);
       }
 
-      if (Object.keys(userUpdates).length > 0) {
+      if (userSnap.exists && Object.keys(userUpdates).length > 0) {
         userUpdates.updatedAt = now;
         tx.update(userRef, userUpdates);
       }
@@ -322,15 +348,19 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       }
 
       const leadContactData: Record<string, any> = {
-        participantUid,
+        participantUid: resolvedUid,
         sponsorUid,
         companyId: companyId || null,
         collectedByEmail: req.user?.email || null,
         name,
+        username,
+        avatarUrl,
         email,
         phone,
         course,
         period,
+        institution,
+        participantType,
         linkedin,
         instagram,
         github,
@@ -349,7 +379,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         tx.set(leadRef, leadContactData, { merge: true });
 
         if (companyId) {
-          const companyLeadRef = db.collection('company_leads').doc(companyId).collection('contacts').doc(participantUid);
+          const companyLeadRef = db.collection('company_leads').doc(companyId).collection('contacts').doc(resolvedUid);
           tx.set(companyLeadRef, leadContactData, { merge: true });
         }
       }
@@ -362,14 +392,18 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
           success: true,
           validateOnly: Boolean(validateOnly),
           lead: {
-            participantUid,
+            participantUid: resolvedUid,
             sponsorUid,
             companyId,
             name,
+            username,
+            avatarUrl,
             email,
             phone,
             course,
             period,
+            institution,
+            participantType,
             linkedin,
             instagram,
             github,
@@ -384,6 +418,22 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         }
       };
     });
+
+    const awarded = (result.body as any)?.lead?.pointsAwarded ?? 0;
+    if (awarded > 0) {
+      try {
+        const rankingRef = db.collection('ranking').doc(resolvedUid) as any;
+        await rankingRef.set?.(
+          {
+            uid: resolvedUid,
+            totalPoints: admin.firestore.FieldValue.increment(awarded),
+            pontuacaoTotal: admin.firestore.FieldValue.increment(awarded),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          },
+          { merge: true }
+        );
+      } catch {}
+    }
 
     res.status(result.status).json(result.body);
   } catch (error) {
