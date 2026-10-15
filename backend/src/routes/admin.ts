@@ -5,6 +5,12 @@ import { requireAuth, requireRole } from '../middlewares/authMiddleware';
 import { adminBroadcastLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 import { UserRole } from '../types/express';
+import {
+  getVapidKeys,
+  subscriptionIdFromEndpoint,
+  dispatchWebPushBroadcast,
+  sendWebPushToSubscription,
+} from '../services/webPushService';
 
 const router = Router();
 
@@ -229,27 +235,119 @@ router.post('/notifications/broadcast', requireAuth, requireRole(['ADMIN']), adm
 
 /**
  * Handler do endpoint POST /api/admin/notifications/subscribe.
- * Inscreve o token FCM Web Push do dispositivo do participante no tópico
- * global 'todos_participantes' para recebimento de notificações em segundo plano.
+ * Registra a inscrição W3C Web Push (iOS Safari PWA APNs / Android FCM) em
+ * /push_subscriptions e/ou inscreve o token FCM no tópico 'todos_participantes'.
  */
 export async function subscribeNotificationTopicHandler(req: Request, res: Response): Promise<void> {
-  const { token } = req.body ?? {};
+  const { token, subscription, userAgent } = req.body ?? {};
+  const hasValidSub =
+    subscription &&
+    typeof subscription.endpoint === 'string' &&
+    subscription.endpoint.startsWith('https://') &&
+    typeof subscription.keys?.p256dh === 'string' &&
+    typeof subscription.keys?.auth === 'string';
+  const hasValidToken =
+    typeof token === 'string' && token.trim().length > 0 && token.trim().length <= 4096;
 
-  if (typeof token !== 'string' || !token.trim() || token.trim().length > 4096) {
-    res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'token FCM é obrigatório.' });
+  if (!hasValidSub && !hasValidToken) {
+    res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'subscription Web Push ou token FCM é obrigatório.' });
     return;
   }
 
   try {
-    await admin.messaging().subscribeToTopic([token.trim()], 'todos_participantes');
-    res.status(200).json({ success: true, topic: 'todos_participantes' });
+    if (hasValidSub) {
+      const subId = subscriptionIdFromEndpoint(subscription.endpoint);
+      await db
+        .collection('push_subscriptions')
+        .doc(subId)
+        .set(
+          {
+            endpoint: subscription.endpoint,
+            keys: {
+              p256dh: subscription.keys.p256dh,
+              auth: subscription.keys.auth,
+            },
+            uid: req.user?.uid || null,
+            userAgent: typeof userAgent === 'string' ? userAgent.slice(0, 300) : '',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+    }
+
+    if (hasValidToken) {
+      await admin.messaging().subscribeToTopic([token.trim()], 'todos_participantes').catch(() => {});
+    }
+
+    res.status(200).json({
+      success: true,
+      topic: 'todos_participantes',
+      vapidPublicKey: getVapidKeys().publicKey,
+    });
   } catch (error: any) {
-    console.error('Erro ao inscrever token FCM no tópico todos_participantes:', error?.message || error);
+    console.error('Erro ao registrar inscrição de push:', error?.message || error);
     res.status(502).json({ error: 'FCM_SUBSCRIBE_FAILED', message: 'Não foi possível registrar o token de push.' });
   }
 }
 
 router.post('/notifications/subscribe', requireAuth, subscribeNotificationTopicHandler);
 
+export function getVapidPublicKeyHandler(_req: Request, res: Response): void {
+  res.status(200).json({ publicKey: getVapidKeys().publicKey });
+}
+
+router.get('/notifications/vapid-public-key', getVapidPublicKeyHandler);
+
+/**
+ * Handler do endpoint POST /api/admin/notifications/webpush.
+ * Dispara Web Push criptografado (RFC 8291 + VAPID RFC 8292) diretamente para os
+ * endpoints Apple APNs (web.push.apple.com) e Google FCM de todos os celulares inscritos,
+ * acordando o Service Worker mesmo quando o PWA e o Safari estão 100% fechados.
+ */
+export async function webPushBroadcastHandler(req: Request, res: Response): Promise<void> {
+  const { id, title, body, message, actionUrl, actionLabel, priority, subscriptions } = req.body ?? {};
+  const resolvedTitle = typeof title === 'string' && title.trim() ? title.trim() : 'FACOM TechWeek 2026';
+  const resolvedBody =
+    typeof body === 'string' && body.trim()
+      ? body.trim()
+      : typeof message === 'string' && message.trim()
+        ? message.trim()
+        : '';
+
+  if (!resolvedBody) {
+    res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'body ou message é obrigatório.' });
+    return;
+  }
+
+  const payload = {
+    id: id || `tw-push-${Date.now()}`,
+    title: resolvedTitle.slice(0, MAX_TITLE_LENGTH),
+    body: resolvedBody.slice(0, MAX_BODY_LENGTH),
+    message: resolvedBody.slice(0, MAX_BODY_LENGTH),
+    actionUrl: typeof actionUrl === 'string' && actionUrl.trim() ? actionUrl.trim() : '/',
+    actionLabel: typeof actionLabel === 'string' && actionLabel.trim() ? actionLabel.trim() : 'Abrir App',
+    priority: typeof priority === 'string' ? priority : 'HIGH',
+    urgent: true,
+  };
+
+  const stats = await dispatchWebPushBroadcast(db, payload);
+
+  if (Array.isArray(subscriptions) && subscriptions.length > 0) {
+    await Promise.allSettled(
+      subscriptions.map(async (sub: any) => {
+        if (sub?.endpoint && sub?.keys?.p256dh && sub?.keys?.auth) {
+          const r = await sendWebPushToSubscription(sub, payload).catch(() => ({ ok: false }));
+          if (r.ok) stats.sent += 1;
+        }
+      })
+    );
+  }
+
+  res.status(200).json({ success: true, ...stats });
+}
+
+router.post('/notifications/webpush', requireAuth, requireRole(['ADMIN']), webPushBroadcastHandler);
+
 export default router;
+
 

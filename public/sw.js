@@ -15,7 +15,7 @@ const STATE_CACHE_NAME = 'tw-notif-state-v1';
 const STATE_CACHE_KEY = '/__tw_sw_notif_state__.json';
 
 let watcherState = {
-  projectId: 'facom-techweek',
+  projectId: 'facom-techweek-layerx',
   idToken: null,
   enabled: true,
   notifiedIds: [],
@@ -260,7 +260,7 @@ async function runBackgroundWatcherLoop(loopId, maxIterations = 30, intervalMs =
   }
 }
 
-// 1. Web Push / FCM Background Push
+// 1. Web Push / APNs iOS / FCM Background Push (funciona com o PWA e o Safari 100% fechados)
 self.addEventListener('push', (event) => {
   let payload = {};
   if (event.data) {
@@ -273,20 +273,30 @@ self.addEventListener('push', (event) => {
         payload = { title: 'FACOM TechWeek 2026', body: 'Novo aviso disponível no app.' };
       }
     }
+  } else {
+    payload = { title: 'FACOM TechWeek 2026', body: 'Você recebeu um novo comunicado do evento.' };
   }
 
   const { title, options } = buildNotificationOptions(payload);
-  event.waitUntil(
-    (async () => {
+
+  // Importante para iOS Safari PWA (APNs WebKit): showNotification deve ser disparado
+  // imediatamente dentro de event.waitUntil sem bloquear em leituras prévias de cache.
+  const showPromise = self.registration.showNotification(title, options);
+
+  const statePromise = (async () => {
+    try {
       await loadStateFromCache();
       const notifId = payload.id || payload.data?.id || payload.tag;
       if (notifId && !watcherState.notifiedIds.includes(String(notifId))) {
         watcherState.notifiedIds.push(String(notifId));
         await saveStateToCache();
       }
-      await self.registration.showNotification(title, options);
-    })()
-  );
+    } catch {
+      // ignore
+    }
+  })();
+
+  event.waitUntil(Promise.all([showPromise, statePromise]));
 });
 
 // 2. Mensagens da thread principal (SHOW_NOTIFICATION, SYNC_BACKGROUND_WATCHER, APP_BACKGROUNDED)

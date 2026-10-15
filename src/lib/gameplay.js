@@ -354,15 +354,17 @@ export async function addPointEvent({ eventType, referenceId, points, metadata =
       };
     }
     const backendErrorCode = String(err.data?.code || err.data?.error || '');
-    const isServerIamPermissionError =
+    const isServerIamOrInternalError =
       backendErrorCode === 'auth/insufficient-permission' ||
-      backendErrorCode.includes('insufficient-permission');
+      backendErrorCode.includes('insufficient-permission') ||
+      backendErrorCode.includes('PERMISSION_DENIED') ||
+      err.data?.error === 'INTERNAL_ERROR';
 
     if (
       typeof err.status === 'number' &&
       err.status >= 400 &&
       typeof err.data !== 'string' &&
-      !isServerIamPermissionError
+      !isServerIamOrInternalError
     ) {
       return {
         success: false,
