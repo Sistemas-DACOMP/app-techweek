@@ -145,15 +145,9 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="sympla-sheet-title"
-        className="fixed inset-x-0 bottom-0 z-[2201] mx-auto flex w-full max-w-[430px] flex-col overflow-hidden rounded-t-[28px] border-t border-amber-500/35 bg-[#0C1024] bg-[linear-gradient(180deg,rgba(217,119,6,0.14)_0%,rgba(147,51,234,0.08)_32%,rgba(12,16,36,0)_100%)] px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 text-text shadow-[0_-12px_44px_rgba(0,0,0,0.7)] animate-[dsSheetUp_250ms_var(--ease-out)] max-h-[92dvh] overflow-y-auto overscroll-contain transition-[bottom,max-height] duration-150"
+        className="fixed inset-x-0 bottom-0 z-[2201] mx-auto flex w-full max-w-[430px] flex-col overflow-hidden rounded-t-[28px] border-t border-amber-500/25 bg-[#0C1024] bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(245,158,11,0.08),transparent_70%)] px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 text-text shadow-[0_-16px_48px_rgba(0,0,0,0.75)] animate-[dsSheetUp_250ms_var(--ease-out)] max-h-[92dvh] overflow-y-auto overscroll-contain transition-[bottom,max-height] duration-150"
         style={keyboardStyle}
       >
-        {/* Marca d'água com cadeado de bloqueio na esquerda (estética oficial dos bloqueios) */}
-        <Lock
-          className="pointer-events-none absolute -bottom-10 -left-6 size-48 text-[rgba(245,158,11,0.045)] select-none"
-          aria-hidden="true"
-          strokeWidth={1.5}
-        />
 
         {/* Alça superior nativa de bottom sheet do App */}
         <div className="mx-auto mb-3 h-1 w-10 shrink-0 rounded-full bg-white/20" aria-hidden="true" />
@@ -175,7 +169,7 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
             >
               <Check size={28} strokeWidth={3} aria-hidden="true" />
             </span>
-            <h2 id="sympla-sheet-title" className="m-0 mt-4 text-[21px] font-black text-text">
+            <h2 id="sympla-sheet-title" className="m-0 mt-4 text-[21px] font-extrabold text-text">
               Ingresso vinculado
             </h2>
             <p className="m-0 mt-1 max-w-[280px] text-sm text-text-2">
@@ -183,7 +177,7 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
             </p>
             <button
               type="button"
-              className="btn btn-primary btn-block mt-6 !min-h-[52px] text-base font-extrabold"
+              className="btn btn-primary btn-block mt-6 !min-h-[50px] !rounded-xl text-base font-extrabold"
               onClick={finish}
             >
               Continuar
@@ -191,78 +185,42 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
           </div>
         ) : (
           <>
-            <div className="flex items-start gap-3 pr-8">
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-amber-500/35 bg-[linear-gradient(135deg,rgba(217,119,6,0.24)_0%,rgba(147,51,234,0.18)_100%)] text-gold shadow-[0_0_16px_rgba(245,158,11,0.15)]">
-                <Sparkles size={22} strokeWidth={2.2} aria-hidden="true" />
+            {/* Topo com Cadeado âmbar elegante substituindo o ícone de estrela */}
+            <div className="flex items-start gap-3.5 pr-8">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/10 text-gold shadow-[0_0_16px_rgba(245,158,11,0.12)]">
+                <Lock size={20} strokeWidth={2.2} aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
-                <h2 id="sympla-sheet-title" className="m-0 text-[20px] font-black tracking-tight text-text sm:text-[22px]">
+                <h2 id="sympla-sheet-title" className="m-0 text-[19px] font-extrabold tracking-tight text-text sm:text-[21px]">
                   Passaporte Completo
                 </h2>
                 <p className="m-0 mt-0.5 text-[12.5px] leading-snug text-text-2">
-                  Vincule seu ingresso Sympla para liberar atividades exclusivas e missões.
+                  {featureName ? (
+                    <>Necessário para liberar <span className="font-semibold text-text">{featureName}</span>.</>
+                  ) : (
+                    'Vincule seu ingresso Sympla para liberar atividades exclusivas e pontuação.'
+                  )}
                 </p>
               </div>
             </div>
 
-            {featureName && (
-              <div className="mt-2.5 inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-gold">
-                <Lock size={12} strokeWidth={2.4} className="shrink-0" aria-hidden="true" />
-                <span className="truncate">Necessário para {featureName}</span>
+            {/* Shelf horizontal unificado: elegante, sem caixas aninhadas nem bordas pesadas de template */}
+            <div className="mt-3.5 grid grid-cols-3 divide-x divide-white/[0.06] rounded-xl border border-white/[0.06] bg-white/[0.02] py-2 text-center">
+              <div className="flex items-center justify-center gap-1.5 px-1">
+                <GraduationCap size={14} strokeWidth={2.2} className="shrink-0 text-[#67D4E8]" aria-hidden="true" />
+                <span className="truncate text-xs font-bold text-text">Workshops</span>
               </div>
-            )}
-
-            {/* Bloco unificado de benefícios: elegante, compacto e sem colunas truncadas */}
-            <div className="mt-3.5 rounded-2xl border border-white/[0.08] bg-surface-raised/70 p-3 backdrop-blur-sm">
-              <div className="mb-2.5 flex items-center justify-between border-b border-line/60 pb-1.5">
-                <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-text-3">
-                  Benefícios do Passaporte
-                </span>
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gold">
-                  <Lock size={11} strokeWidth={2.4} aria-hidden="true" /> Acesso Total
-                </span>
+              <div className="flex items-center justify-center gap-1.5 px-1">
+                <Sparkles size={14} strokeWidth={2.2} className="shrink-0 text-[#B9A6F5]" aria-hidden="true" />
+                <span className="truncate text-xs font-bold text-text">Missões</span>
               </div>
-
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="flex flex-col items-center gap-1 rounded-xl bg-white/[0.03] p-2 transition-colors">
-                  <span className="flex size-7 items-center justify-center rounded-lg border border-[#67D4E8]/25 bg-[#67D4E8]/10 text-[#67D4E8]">
-                    <GraduationCap size={15} strokeWidth={2.4} aria-hidden="true" />
-                  </span>
-                  <span className="text-[12px] font-extrabold leading-tight text-text">
-                    Workshops
-                  </span>
-                  <span className="text-[10px] font-medium leading-tight text-text-3">
-                    Vagas na grade
-                  </span>
-                </div>
-
-                <div className="flex flex-col items-center gap-1 rounded-xl bg-white/[0.03] p-2 transition-colors">
-                  <span className="flex size-7 items-center justify-center rounded-lg border border-[#B9A6F5]/25 bg-[#B9A6F5]/10 text-[#B9A6F5]">
-                    <Sparkles size={15} strokeWidth={2.4} aria-hidden="true" />
-                  </span>
-                  <span className="text-[12px] font-extrabold leading-tight text-text">
-                    Missões
-                  </span>
-                  <span className="text-[10px] font-medium leading-tight text-text-3">
-                    Desafios & prêmios
-                  </span>
-                </div>
-
-                <div className="flex flex-col items-center gap-1 rounded-xl bg-white/[0.03] p-2 transition-colors">
-                  <span className="flex size-7 items-center justify-center rounded-lg border border-amber-500/25 bg-amber-500/10 text-gold">
-                    <Trophy size={15} strokeWidth={2.4} aria-hidden="true" />
-                  </span>
-                  <span className="text-[12px] font-extrabold leading-tight text-text">
-                    Ranking
-                  </span>
-                  <span className="text-[10px] font-medium leading-tight text-text-3">
-                    Pontos oficiais
-                  </span>
-                </div>
+              <div className="flex items-center justify-center gap-1.5 px-1">
+                <Trophy size={14} strokeWidth={2.2} className="shrink-0 text-gold" aria-hidden="true" />
+                <span className="truncate text-xs font-bold text-text">Ranking</span>
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} noValidate className="mt-3.5">
+            <form onSubmit={handleSubmit} noValidate className="mt-4">
               <div>
                 <label htmlFor="sympla-email" className="field-label text-xs font-bold text-text-2">
                   E-mail usado na compra do ingresso
@@ -274,7 +232,7 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
                   inputMode="email"
                   autoComplete="email"
                   placeholder="seu-email@exemplo.com"
-                  className="field !min-h-[48px] !rounded-xl !bg-[#131B3A] !border-[#26305A] !px-4 text-[14px] text-text placeholder:text-text-4 focus:!border-amber-500/60 focus:!ring-2 focus:!ring-amber-500/20"
+                  className="field !min-h-[48px] !rounded-xl !bg-[#131B3A] !border-[#26305A] !px-4 text-[15px] text-text placeholder:text-text-4 focus:!border-amber-500/60 focus:!ring-2 focus:!ring-amber-500/20"
                   value={email}
                   onFocus={handleInputFocus}
                   onChange={(e) => {
@@ -285,7 +243,7 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
                   aria-describedby="sympla-email-hint"
                 />
                 {state === 'error' ? (
-                  <p id="sympla-email-hint" className="field-error m-0 mt-1.5" role="alert">
+                  <p id="sympla-email-hint" className="field-error m-0 mt-1.5 text-xs text-[#F59A9A]" role="alert">
                     {message}
                   </p>
                 ) : (
@@ -295,10 +253,10 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
                 )}
               </div>
 
-              {/* Botão híbrido TechWeek: mistura o Dourado do bloqueio/passaporte com o Roxo da identidade do app */}
+              {/* Botão de ação oficial TechWeek: consistente, imponente e sem degradê comercial chamativo */}
               <button
                 type="submit"
-                className="btn btn-block mt-3.5 !min-h-[50px] rounded-xl !bg-[linear-gradient(135deg,#D97706_0%,#9333EA_100%)] !text-white text-[15px] !font-black shadow-[0_4px_18px_rgba(217,119,6,0.25)] transition-all active:scale-[0.98] hover:brightness-110"
+                className="btn btn-primary btn-block mt-4 !min-h-[50px] !rounded-xl text-[15px] font-extrabold text-white shadow-[0_4px_16px_rgba(37,99,235,0.25)] transition-all active:scale-[0.98] hover:brightness-105 border-t border-white/20"
                 disabled={state === 'loading'}
               >
                 {state === 'loading' ? (
@@ -312,33 +270,27 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
                   </>
                 ) : (
                   <>
-                    <Ticket size={18} strokeWidth={2.4} aria-hidden="true" />
+                    <Ticket size={18} strokeWidth={2.2} aria-hidden="true" />
                     <span>Vincular ingresso</span>
                   </>
                 )}
               </button>
             </form>
 
-            <div className="mt-3.5 border-t border-line/60 pt-3">
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5 px-3 transition-colors hover:bg-white/[0.04]">
-                <div className="min-w-0 flex-1">
-                  <span className="block text-xs font-bold text-text">
-                    Ainda não tem ingresso?
-                  </span>
-                  <span className="block text-[11px] text-text-3">
-                    Garanta seu passaporte no Sympla
-                  </span>
-                </div>
+            {/* Rodapé limpo e elegante: link direto em vez de card pesado com botão empilhado */}
+            <div className="mt-4 border-t border-white/[0.06] pt-3 text-center">
+              <p className="m-0 text-xs text-text-3">
+                Ainda não tem ingresso?{' '}
                 <a
                   href={SYMPLA_EVENT_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-gold transition-all hover:bg-amber-500/20 active:scale-95 no-underline"
+                  className="inline-flex items-center gap-1 font-bold text-gold transition-colors hover:text-amber-300 hover:underline"
                 >
-                  <span>Comprar</span>
+                  <span>Garantir no Sympla</span>
                   <ExternalLink size={12} strokeWidth={2.4} aria-hidden="true" className="opacity-80" />
                 </a>
-              </div>
+              </p>
             </div>
           </>
         )}
