@@ -39,6 +39,14 @@ service firebase.storage {
       return request.resource.contentType in ['video/mp4', 'video/webm', 'video/quicktime'];
     }
 
+    function isValidResume() {
+      return request.resource.contentType in [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+    }
+
     // Avatar do participante. Path: /avatars/{userId}/{fileName}
     // KAN-73: Limite de 2MB e lista fechada de content-type seguros.
     // Decomposição create/update vs delete para evitar request.resource == null.
@@ -59,6 +67,18 @@ service firebase.storage {
       allow create, update: if isVerifiedOwner(userId)
         && request.resource.size < 5 * 1024 * 1024
         && isValidImage();
+      allow delete: if isOwner(userId) || isStaffOrAdmin();
+    }
+
+    // Currículo profissional do participante. Path: /resumes/{userId}/{fileName}
+    // Formatos permitidos: PDF, DOC, DOCX. Cota máxima: 5MB.
+    // Leitura: o próprio participante, ADMIN, STAFF e SPONSOR (empresas autorizadas).
+    // Escrita: o próprio participante.
+    match /resumes/{userId}/{fileName} {
+      allow read: if isOwner(userId) || isSponsorOrStaffOrAdmin();
+      allow create, update: if isOwner(userId)
+        && request.resource.size < 5 * 1024 * 1024
+        && isValidResume();
       allow delete: if isOwner(userId) || isStaffOrAdmin();
     }
 

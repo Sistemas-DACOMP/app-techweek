@@ -16,7 +16,7 @@ import {
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updateProfile, updateEmail, verifyBeforeUpdateEmail, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { db, storage, auth } from './firebase';
-import { validateAvatarFile } from './validators';
+import { validateAvatarFile, validateResumeFile, ALLOWED_RESUME_MIME_TYPES } from './validators';
 import { apiRequest } from './api';
 import { sendVerificationEmail, getActionCodeSettings } from './auth';
 import { getCachedSymplaTicket, setCachedSymplaTicket } from './sympla';
@@ -162,7 +162,8 @@ const USER_ALLOWED_CREATE_KEYS = new Set([
   'course', 'period', 'institution', 'linkedin', 'instagram',
   'github', 'avatarUrl', 'photoURL', 'mascot', 'role',
   'totalPoints', 'pontuacaoTotal', 'termsAcceptedAt',
-  'createdAt', 'updatedAt', 'pendingEmailChange'
+  'createdAt', 'updatedAt', 'pendingEmailChange',
+  'resumeUrl', 'resumeName', 'resumeSize', 'resumeUpdatedAt'
 ]);
 
 export const PUBLIC_PROFILE_ALLOWED_KEYS = new Set([
@@ -180,7 +181,7 @@ export function buildPublicProfilePayload(source = {}, uid) {
       payload[k] = v;
     }
   }
-  // Higienização estrita: NUNCA permitir email, phone, termos, tickets ou vínculos de empresa
+  // Higienização estrita: NUNCA permitir email, phone, termos, tickets, currículo ou vínculos de empresa
   delete payload.email;
   delete payload.phone;
   delete payload.termsAcceptedAt;
@@ -193,6 +194,10 @@ export function buildPublicProfilePayload(source = {}, uid) {
   delete payload.empresa;
   delete payload.companyName;
   delete payload.sponsorId;
+  delete payload.resumeUrl;
+  delete payload.resumeName;
+  delete payload.resumeSize;
+  delete payload.resumeUpdatedAt;
 
   if (payload.username !== undefined) {
     payload.username = sanitizeUsernameForRules(payload.username);
@@ -291,6 +296,20 @@ function sanitizeUserCreatePayload(rawPayload, uid) {
   if (typeof sanitized.photoURL === 'string' && sanitized.photoURL.length > 500) {
     sanitized.photoURL = null;
   }
+  if (typeof sanitized.resumeUrl === 'string' && (sanitized.resumeUrl.length > 1000 || !sanitized.resumeUrl.startsWith('https://'))) {
+    sanitized.resumeUrl = null;
+  }
+  if (typeof sanitized.resumeName === 'string') {
+    sanitized.resumeName = sanitized.resumeName.slice(0, 200);
+  }
+  if (sanitized.resumeSize !== undefined && sanitized.resumeSize !== null) {
+    const sizeNum = Number(sanitized.resumeSize);
+    if (!Number.isFinite(sizeNum) || sizeNum < 0 || sizeNum > 10 * 1024 * 1024) {
+      sanitized.resumeSize = null;
+    } else {
+      sanitized.resumeSize = Math.round(sizeNum);
+    }
+  }
   return sanitized;
 }
 
@@ -328,6 +347,10 @@ export async function createUserProfile(uid, data) {
     instagram: data.instagram || '',
     github: data.github || '',
     avatarUrl: data.avatarUrl || null,
+    resumeUrl: data.resumeUrl || null,
+    resumeName: data.resumeName || null,
+    resumeSize: typeof data.resumeSize === 'number' ? data.resumeSize : null,
+    resumeUpdatedAt: data.resumeUpdatedAt || null,
     hasSymplaTicket: isTargetAdmin ? true : Boolean(data.hasSymplaTicket || resolvedTicket),
     role: isTargetAdmin ? 'ADMIN' : 'PARTICIPANT', // papel nunca vem do cliente; promoção é feita pelo backend (custom claims) exceto admins declarados
     totalPoints: 0,
@@ -425,6 +448,10 @@ export async function getUserProfile(uid) {
         uid: data.uid || localData?.uid || uid,
         email: data.email || localData?.email || (auth?.currentUser?.uid === uid ? auth?.currentUser?.email : '') || '',
         avatarUrl: data.avatarUrl || data.photoURL || localData?.avatarUrl || null,
+        resumeUrl: data.resumeUrl !== undefined ? data.resumeUrl : (localData?.resumeUrl || null),
+        resumeName: data.resumeName !== undefined ? data.resumeName : (localData?.resumeName || null),
+        resumeSize: data.resumeSize !== undefined ? data.resumeSize : (localData?.resumeSize ?? null),
+        resumeUpdatedAt: data.resumeUpdatedAt !== undefined ? data.resumeUpdatedAt : (localData?.resumeUpdatedAt || null),
         symplaTicket: resolvedTicket,
         ticketId: data.ticketId || resolvedTicket?.ticketNumber || localData?.ticketId || null,
         hasSymplaTicket: !!(data.hasSymplaTicket || resolvedTicket || localData?.hasSymplaTicket),
@@ -508,6 +535,12 @@ export async function updateUserProfile(uid, updates) {
   const { hasSymplaTicket, symplaTicket, ticketId, ...firestoreUpdates } = updates || {};
   if (typeof firestoreUpdates.avatarUrl === 'string' && firestoreUpdates.avatarUrl.length > 500) {
     delete firestoreUpdates.avatarUrl;
+  }
+  if (typeof firestoreUpdates.resumeUrl === 'string' && firestoreUpdates.resumeUrl.length > 1000) {
+    delete firestoreUpdates.resumeUrl;
+  }
+  if (typeof firestoreUpdates.resumeName === 'string' && firestoreUpdates.resumeName.length > 200) {
+    firestoreUpdates.resumeName = firestoreUpdates.resumeName.slice(0, 200);
   }
   if ('period' in firestoreUpdates) {
     firestoreUpdates.period = sanitizePeriodForRules(firestoreUpdates.period);
@@ -787,6 +820,129 @@ export async function uploadUserAvatar(uid, file) {
   } catch (_e) {}
 
   return finalUrl;
+}
+
+/**
+ * Determina o Content-Type seguro para upload de currículo no Storage,
+ * garantindo compatibilidade com browsers móveis e as regras de segurança (isValidResume).
+ */
+export function resolveResumeContentType(file) {
+  if (!file) return 'application/pdf';
+  if (file.type && ALLOWED_RESUME_MIME_TYPES.includes(file.type)) {
+    return file.type;
+  }
+  const name = String(file.name || '').toLowerCase();
+  if (name.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+  if (name.endsWith('.doc')) {
+    return 'application/msword';
+  }
+  return 'application/pdf';
+}
+
+/**
+ * Sanitiza o nome de arquivo para armazenamento seguro no Storage.
+ */
+export function sanitizeResumeFileName(rawName) {
+  if (!rawName || typeof rawName !== 'string') return 'curriculo.pdf';
+  const clean = rawName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .slice(0, 100);
+  return clean || 'curriculo.pdf';
+}
+
+/**
+ * Faz upload do currículo do participante no Firebase Storage e atualiza o perfil no Firestore.
+ * Caminho no Storage: resumes/{uid}/{timestamp}_{sanitizedFilename}
+ */
+export async function uploadUserResume(uid, file) {
+  if (!uid) throw new Error('Usuário não autenticado.');
+  if (!file) throw new Error('Nenhum arquivo fornecido.');
+
+  const validation = validateResumeFile(file);
+  if (!validation.valid) {
+    throw new Error(validation.message || 'Arquivo de currículo inválido.');
+  }
+
+  const sanitizedFileName = sanitizeResumeFileName(file.name);
+  const path = `resumes/${uid}/${Date.now()}_${sanitizedFileName}`;
+  const storageRef = ref(storage, path);
+  const contentType = resolveResumeContentType(file);
+
+  const uploadTask = (async () => {
+    await uploadBytes(storageRef, file, { contentType });
+    return await getDownloadURL(storageRef);
+  })();
+
+  // Timeout de 20 segundos para conexões lentas
+  const timeoutTask = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Tempo limite excedido ao salvar currículo no Storage.')), 20000);
+  });
+
+  const downloadUrl = await Promise.race([uploadTask, timeoutTask]);
+
+  if (!downloadUrl) {
+    throw new Error('Não foi possível obter o link do currículo.');
+  }
+
+  const nowIso = new Date().toISOString();
+  const resumeUpdates = {
+    resumeUrl: downloadUrl,
+    resumeName: file.name ? file.name.slice(0, 200) : sanitizedFileName,
+    resumeSize: typeof file.size === 'number' ? file.size : null,
+    resumeUpdatedAt: nowIso
+  };
+
+  // 1. Atualiza no Firestore e cache local via updateUserProfile
+  await updateUserProfile(uid, resumeUpdates);
+
+  // 2. Garante persistência imediata no cache local
+  try {
+    const cached = localStorage.getItem(`facom_profile_${uid}`);
+    const parsed = cached ? JSON.parse(cached) : {};
+    localStorage.setItem(`facom_profile_${uid}`, JSON.stringify({ ...parsed, ...resumeUpdates }));
+  } catch (_e) {}
+
+  return {
+    ...resumeUpdates,
+    downloadUrl
+  };
+}
+
+/**
+ * Remove o currículo do participante, limpando os campos no Firestore e no cache local.
+ */
+export async function deleteUserResume(uid) {
+  if (!uid) throw new Error('Usuário não autenticado.');
+
+  const clearUpdates = {
+    resumeUrl: null,
+    resumeName: null,
+    resumeSize: null,
+    resumeUpdatedAt: null
+  };
+
+  await updateUserProfile(uid, clearUpdates);
+
+  try {
+    const cached = localStorage.getItem(`facom_profile_${uid}`);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      delete parsed.resumeUrl;
+      delete parsed.resumeName;
+      delete parsed.resumeSize;
+      delete parsed.resumeUpdatedAt;
+      localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(parsed));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('facom_profile_updated', { detail: parsed }));
+      }
+    }
+  } catch (_e) {}
+
+  return { success: true };
 }
 
 function cleanUsernameValue(val) {

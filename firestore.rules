@@ -41,7 +41,8 @@ service cloud.firestore {
         'course', 'period', 'institution', 'linkedin', 'instagram',
         'github', 'avatarUrl', 'photoURL', 'mascot', 'role',
         'totalPoints', 'pontuacaoTotal', 'termsAcceptedAt',
-        'createdAt', 'updatedAt', 'pendingEmailChange'
+        'createdAt', 'updatedAt', 'pendingEmailChange',
+        'resumeUrl', 'resumeName', 'resumeSize', 'resumeUpdatedAt'
       ];
     }
 
@@ -50,7 +51,8 @@ service cloud.firestore {
         'firstName', 'lastName', 'displayName', 'username', 'phone',
         'participantType', 'participant_type', 'course', 'period',
         'institution', 'linkedin', 'instagram', 'github', 'avatarUrl',
-        'photoURL', 'mascot', 'email', 'updatedAt', 'pendingEmailChange'
+        'photoURL', 'mascot', 'email', 'updatedAt', 'pendingEmailChange',
+        'resumeUrl', 'resumeName', 'resumeSize', 'resumeUpdatedAt'
       ];
     }
 
@@ -88,7 +90,11 @@ service cloud.firestore {
         && (!('github' in data) || data.github == null || (data.github is string && data.github.size() <= 500))
         && (!('avatarUrl' in data) || data.avatarUrl == null || (data.avatarUrl is string && data.avatarUrl.size() <= 500))
         && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 500))
-        && (!('pendingEmailChange' in data) || isValidPendingEmailChange(data.pendingEmailChange));
+        && (!('pendingEmailChange' in data) || isValidPendingEmailChange(data.pendingEmailChange))
+        && (!('resumeUrl' in data) || data.resumeUrl == null || (data.resumeUrl is string && data.resumeUrl.size() <= 1000))
+        && (!('resumeName' in data) || data.resumeName == null || (data.resumeName is string && data.resumeName.size() <= 200))
+        && (!('resumeSize' in data) || data.resumeSize == null || (data.resumeSize is number && data.resumeSize >= 0 && data.resumeSize <= 10 * 1024 * 1024))
+        && (!('resumeUpdatedAt' in data) || data.resumeUpdatedAt == null || (data.resumeUpdatedAt is string && data.resumeUpdatedAt.size() <= 100));
     }
 
     function publicProfileAllowedKeys() {

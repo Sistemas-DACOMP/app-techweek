@@ -261,6 +261,58 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
       const authDb = testEnv.authenticatedContext('user-delete-no-sponsor', { email: 'user-delete-no-sponsor@ufu.br' }).firestore();
       await assertSucceeds(deleteDoc(doc(authDb, 'users', 'user-delete-no-sponsor')));
     });
+
+    it('criação de perfil com campos válidos de currículo (resumeUrl, resumeName, resumeSize, resumeUpdatedAt)', async () => {
+      const authDb = testEnv.authenticatedContext('user-resume-create', { email: 'resume@ufu.br' }).firestore();
+      await assertSucceeds(
+        setDoc(doc(authDb, 'users', 'user-resume-create'), {
+          uid: 'user-resume-create',
+          email: 'resume@ufu.br',
+          role: 'PARTICIPANT',
+          totalPoints: 0,
+          pontuacaoTotal: 0,
+          termsAcceptedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          resumeUrl: 'https://firebasestorage.googleapis.com/v0/b/app/o/resumes%2Fuser-resume-create%2Fcurriculo.pdf',
+          resumeName: 'curriculo_2026.pdf',
+          resumeSize: 1024 * 1024,
+          resumeUpdatedAt: new Date().toISOString(),
+        })
+      );
+    });
+
+    it('atualização e remoção de currículo pelo próprio participante', async () => {
+      await seedUser('user-resume-update', {
+        resumeUrl: 'https://example.com/old.pdf',
+        resumeName: 'old.pdf',
+        resumeSize: 500000,
+        resumeUpdatedAt: new Date().toISOString(),
+      });
+      const authDb = testEnv.authenticatedContext('user-resume-update', { email: 'resume-update@ufu.br', email_verified: true }).firestore();
+      
+      // Atualizar com novo arquivo
+      await assertSucceeds(
+        updateDoc(doc(authDb, 'users', 'user-resume-update'), {
+          resumeUrl: 'https://example.com/novo.docx',
+          resumeName: 'novo.docx',
+          resumeSize: 600000,
+          resumeUpdatedAt: new Date().toISOString(),
+          updatedAt: serverTimestamp(),
+        })
+      );
+
+      // Remover currículo (definir null)
+      await assertSucceeds(
+        updateDoc(doc(authDb, 'users', 'user-resume-update'), {
+          resumeUrl: null,
+          resumeName: null,
+          resumeSize: null,
+          resumeUpdatedAt: null,
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
   });
 
   // ==========================================
@@ -798,6 +850,46 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
             requestedAt: Date.now(),
             expiresAt: Date.now() + 86400000,
           },
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it('outro participante tenta alterar dados de currículo de usuário alheio (assertFails)', async () => {
+      await seedUser('user-victim', { email: 'victim@ufu.br' });
+      const attackerDb = testEnv.authenticatedContext('attacker-user', { email: 'attacker@ufu.br', email_verified: true }).firestore();
+      await assertFails(
+        updateDoc(doc(attackerDb, 'users', 'user-victim'), {
+          resumeUrl: 'https://malicious.com/virus.pdf',
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it('participante tenta gravar resumeSize inválido (> 10MB ou negativo) (assertFails)', async () => {
+      await seedUser('user-size-test', { email: 'size@ufu.br' });
+      const authDb = testEnv.authenticatedContext('user-size-test', { email: 'size@ufu.br', email_verified: true }).firestore();
+      await assertFails(
+        updateDoc(doc(authDb, 'users', 'user-size-test'), {
+          resumeSize: 20 * 1024 * 1024, // > 10MB
+          updatedAt: serverTimestamp(),
+        })
+      );
+      await assertFails(
+        updateDoc(doc(authDb, 'users', 'user-size-test'), {
+          resumeSize: -1, // negativo
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it('participante tenta gravar resumeUrl com tamanho excessivo (> 1000 caracteres) (assertFails)', async () => {
+      await seedUser('user-url-test', { email: 'url@ufu.br' });
+      const authDb = testEnv.authenticatedContext('user-url-test', { email: 'url@ufu.br', email_verified: true }).firestore();
+      const longUrl = 'https://example.com/' + 'a'.repeat(1001);
+      await assertFails(
+        updateDoc(doc(authDb, 'users', 'user-url-test'), {
+          resumeUrl: longUrl,
           updatedAt: serverTimestamp(),
         })
       );

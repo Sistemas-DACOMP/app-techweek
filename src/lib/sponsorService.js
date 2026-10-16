@@ -617,7 +617,11 @@ function formatParticipant(uid, data = {}, fallback = null) {
     instagram: data.instagram || dp.instagram || fb.instagram || '',
     github: data.github || dp.github || fb.github || '',
     participantType: data.participantType || data.participant_type || dp.participantType || fb.participantType || 'Aluno',
-    avatarUrl: data.avatarUrl || data.photoURL || dp.avatarUrl || fb.avatarUrl || fb.photoURL || null
+    avatarUrl: data.avatarUrl || data.photoURL || dp.avatarUrl || fb.avatarUrl || fb.photoURL || null,
+    resumeUrl: data.resumeUrl || dp.resumeUrl || fb.resumeUrl || null,
+    resumeName: data.resumeName || dp.resumeName || fb.resumeName || null,
+    resumeSize: data.resumeSize ?? dp.resumeSize ?? fb.resumeSize ?? null,
+    resumeUpdatedAt: data.resumeUpdatedAt || dp.resumeUpdatedAt || fb.resumeUpdatedAt || null
   };
 }
 
@@ -648,6 +652,10 @@ export const SEED_BIPADO_LEAD = {
   rating: 5,
   tags: ['Frontend', 'React', 'Estágio', 'Destaque'],
   notes: '[Frontend] [React] [Estágio] [Destaque] Excelente domínio de React, Tailwind e APIs REST. Participou de projeto de iniciação científica e busca estágio para 2027.',
+  resumeUrl: 'https://firebasestorage.googleapis.com/v0/b/demo/o/resumes%2Fmariana_souza_cv.pdf?alt=media',
+  resumeName: 'curriculo_mariana_souza.pdf',
+  resumeSize: 1245000,
+  resumeUpdatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
   companyId: 'kanastra',
   companyName: 'Kanastra',
   sponsorUid: 'sponsor_current',
@@ -764,7 +772,11 @@ export async function submitLead({ participantUid, notes, rating, companyId, val
     institution: participantData?.institution || participantData?.instituicao || 'UFU',
     github: participantData?.github || '',
     linkedin: participantData?.linkedin || '',
-    instagram: participantData?.instagram || ''
+    instagram: participantData?.instagram || '',
+    resumeUrl: participantData?.resumeUrl || null,
+    resumeName: participantData?.resumeName || null,
+    resumeSize: participantData?.resumeSize ?? null,
+    resumeUpdatedAt: participantData?.resumeUpdatedAt || null
   };
 
   const token = auth?.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
@@ -967,6 +979,7 @@ export function exportLeadsToCsv(leads = [], companyName = 'patrocinador', scope
     'Classificação / Status',
     'Tags / Habilidades',
     'Observações / Notas',
+    'Currículo',
     'GitHub',
     'LinkedIn',
     'Instagram',
@@ -1008,6 +1021,7 @@ export function exportLeadsToCsv(leads = [], companyName = 'patrocinador', scope
       escapeCsv(getStatusLabel(ratingNum)),
       escapeCsv(formattedTags),
       escapeCsv(lead.notes || ''),
+      escapeCsv(lead.resumeUrl || ''),
       escapeCsv(lead.github || ''),
       escapeCsv(lead.linkedin || ''),
       escapeCsv(lead.instagram || ''),

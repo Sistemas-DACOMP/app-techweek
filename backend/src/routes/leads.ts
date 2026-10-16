@@ -259,6 +259,12 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       const linkedin = userData.linkedin || participantData?.linkedin || null;
       const instagram = userData.instagram || participantData?.instagram || null;
       const github = userData.github || participantData?.github || null;
+      const resumeUrl = userData.resumeUrl || participantData?.resumeUrl || null;
+      const resumeName = userData.resumeName || participantData?.resumeName || null;
+      const resumeSize = typeof (userData.resumeSize ?? participantData?.resumeSize) === 'number'
+        ? (userData.resumeSize ?? participantData?.resumeSize)
+        : null;
+      const resumeUpdatedAt = userData.resumeUpdatedAt || participantData?.resumeUpdatedAt || null;
 
       const birthDateRaw =
         userData.birthDate ||
@@ -367,6 +373,10 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         linkedin,
         instagram,
         github,
+        resumeUrl,
+        resumeName,
+        resumeSize,
+        resumeUpdatedAt,
         faixaEtaria,
         tags: sanitizedTags,
         notes: typeof notes === 'string' ? notes.trim() : '',
@@ -410,6 +420,10 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
             linkedin,
             instagram,
             github,
+            resumeUrl,
+            resumeName,
+            resumeSize,
+            resumeUpdatedAt,
             faixaEtaria,
             tags: leadContactData.tags,
             notes: leadContactData.notes,

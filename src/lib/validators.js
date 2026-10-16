@@ -46,6 +46,51 @@ export function validateMissionPhoto(file, { maxBytes = MAX_MISSION_PHOTO_BYTES,
   return { valid: true, reason: null };
 }
 
+// REG-RESUME: Currículo profissional (máximo 5MB e formatos PDF, DOC, DOCX)
+export const MAX_RESUME_BYTES = 5 * 1024 * 1024;
+export const ALLOWED_RESUME_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+];
+export const ALLOWED_RESUME_EXTENSIONS = ['.pdf', '.doc', '.docx'];
+
+export function formatFileSize(bytes) {
+  if (typeof bytes !== 'number' || isNaN(bytes) || bytes < 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function validateResumeFile(file, { maxBytes = MAX_RESUME_BYTES } = {}) {
+  if (!file) {
+    return { valid: false, reason: 'missing', message: 'Nenhum arquivo selecionado.' };
+  }
+
+  const name = typeof file.name === 'string' ? file.name.toLowerCase() : '';
+  const hasValidExtension = ALLOWED_RESUME_EXTENSIONS.some((ext) => name.endsWith(ext));
+  const hasValidMime = file.type ? ALLOWED_RESUME_MIME_TYPES.includes(file.type) : false;
+
+  // Alguns browsers/sistemas móveis podem deixar file.type vazio ou emitir application/octet-stream
+  if (!hasValidExtension && !hasValidMime) {
+    return {
+      valid: false,
+      reason: 'invalid_type',
+      message: 'Formato inválido. Apenas arquivos PDF, DOC e DOCX são aceitos.'
+    };
+  }
+
+  if (file.size > maxBytes) {
+    return {
+      valid: false,
+      reason: 'too_large',
+      message: `O arquivo excede o limite máximo de ${formatFileSize(maxBytes)}.`
+    };
+  }
+
+  return { valid: true, reason: null, message: null };
+}
+
 // Validação e normalização de e-mail (suporta domínios institucionais com múltiplos níveis como @ufu.br, @ufu.edu.br)
 export function normalizeEmail(email) {
   if (typeof email !== 'string') return '';
