@@ -59,10 +59,10 @@ describe('SymplaRequirementModal (KAN-112)', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeDefined();
-    expect(screen.getByText('Vincule seu ingresso')).toBeDefined();
-    expect(screen.getByText('Reservar vagas')).toBeDefined();
-    expect(screen.getByText('QR do crachá')).toBeDefined();
-    expect(screen.getByText('Pontos e ranking')).toBeDefined();
+    expect(screen.getByText('Passaporte Completo')).toBeDefined();
+    expect(screen.getByText('Workshops')).toBeDefined();
+    expect(screen.getByText('Missões')).toBeDefined();
+    expect(screen.getByText('Ranking')).toBeDefined();
 
     const emailInput = screen.getByLabelText(/e-mail usado na compra do ingresso/i);
     expect(emailInput.value).toBe('aluno@ufu.br');
@@ -153,9 +153,9 @@ describe('SymplaRequirementModal (KAN-112)', () => {
     );
   });
 
-  it('fecha o modal ao pressionar Escape ou clicar no backdrop (.ds-scrim)', () => {
+  it('fecha o modal ao pressionar Escape, clicar no backdrop (.ds-scrim) ou no botão Fechar', () => {
     const onClose = vi.fn();
-    render(
+    const { rerender } = render(
       React.createElement(SymplaRequirementModal, {
         isOpen: true,
         onClose,
@@ -168,6 +168,10 @@ describe('SymplaRequirementModal (KAN-112)', () => {
     const scrim = document.body.querySelector('.ds-scrim');
     fireEvent.click(scrim);
     expect(onClose).toHaveBeenCalledTimes(2);
+
+    const closeBtn = screen.getByRole('button', { name: /fechar/i });
+    fireEvent.click(closeBtn);
+    expect(onClose).toHaveBeenCalledTimes(3);
   });
 
   it('não abre o teclado virtual automaticamente ao montar e ajusta posição com visualViewport quando o teclado abre', () => {
