@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Clock, ChevronRight, Ticket, Smartphone, Bell, CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import { Check, Clock, ChevronRight, Ticket, Smartphone, Bell, CheckCircle2, AlertCircle, AlertTriangle, Info, Lock } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import ActivityModal from '../components/ActivityModal';
 import Mascot from '../components/Mascot';
@@ -288,14 +288,17 @@ export default function Dashboard() {
       return;
     }
 
-    if (!hasSymplaTicket) {
+    const targetActivity = activities.find((a) => a.id === activityId);
+    const isOpen = Boolean(targetActivity?.isOpenEvent);
+
+    if (!hasSymplaTicket && !isOpen) {
       setShowSymplaModal(true);
       return;
     }
 
     setReservingId(activityId);
     try {
-      const res = await reserveActivity(activityId);
+      const res = await reserveActivity(activityId, targetActivity);
       if (res && (res.status === 'CONFIRMED' || res.status === 'WAITING_LIST' || res.success || res.alreadyBooked)) {
         setBookings((prev) => {
           const exists = prev.some((b) => (b.activityId || b.id) === activityId || b.id === `${currentUser.uid}_${activityId}`);
@@ -394,6 +397,7 @@ export default function Dashboard() {
                 item={hero}
                 status={statusOf(hero.a)}
                 now={now}
+                hasTicket={hasSymplaTicket}
                 reserving={reservingId === hero.a.id}
                 onValidate={() => navigate('/scanner?tab=scan', { state: { tab: 'scan' } })}
                 onReserve={() => handleReserve(hero.a.id)}
@@ -425,7 +429,7 @@ export default function Dashboard() {
             )}
 
             {upcoming.length > 0 && (
-              <UpNext items={upcoming} now={now} statusOf={statusOf} onOpen={setSelectedActivity} onAgenda={() => navigate('/agenda')} />
+              <UpNext items={upcoming} now={now} statusOf={statusOf} hasTicket={hasSymplaTicket} onOpen={setSelectedActivity} onAgenda={() => navigate('/agenda')} />
             )}
 
             {/* Sua jornada */}
@@ -480,6 +484,7 @@ export default function Dashboard() {
           status={calculateActivityStatus(selectedActivity.id, bookings, checkins, pointEvents)}
           isReserving={reservingId === selectedActivity.id}
           isCancelling={cancellingId === selectedActivity.id}
+          hasTicket={hasSymplaTicket}
           onReserve={handleReserve}
           onCancelReserve={handleCancelReserve}
           onClose={() => setSelectedActivity(null)}
@@ -500,15 +505,22 @@ export default function Dashboard() {
 /* ------------------------------------------------------------------ */
 /* Hero "Acontecendo agora" — único gradiente da tela (DESIGN.md §2.2) */
 /* ------------------------------------------------------------------ */
-function HeroNow({ item, status, now, reserving, onValidate, onReserve, onDetails }) {
+function HeroNow({ item, status, now, hasTicket = true, reserving, onValidate, onReserve, onDetails }) {
   const { a, w, live } = item;
   const cat = categoryOf(a.type);
-  const meta = [cat.label, a.location, STATUS_TEXT[status]].filter(Boolean).join(' · ');
   const enrolled = status === 'BOOKED' || status === 'CHECKED_IN';
+  const isLocked = !hasTicket && !a.isOpenEvent && !enrolled;
+  const accessBadge = a.isOpenEvent ? 'Entrada Livre' : 'Passaporte Completo';
+  const meta = [cat.label, accessBadge, a.location, STATUS_TEXT[status]].filter(Boolean).join(' · ');
 
-  let primary = { label: 'Ver detalhes', onClick: onDetails };
-  if (live && enrolled) primary = { label: 'Validar presença', onClick: onValidate };
-  else if (status === 'NONE') primary = { label: reserving ? 'Reservando' : 'Reservar vaga', onClick: onReserve };
+  let primary = { label: 'Ver detalhes', onClick: onDetails, isGold: false };
+  if (live && enrolled) {
+    primary = { label: 'Validar presença', onClick: onValidate, isGold: false };
+  } else if (isLocked) {
+    primary = { label: 'Desbloquear com Passaporte', onClick: onReserve, isGold: true };
+  } else if (status === 'NONE') {
+    primary = { label: reserving ? 'Reservando' : 'Reservar vaga', onClick: onReserve, isGold: false };
+  }
   const showDetailsLink = primary.onClick !== onDetails;
 
   return (
@@ -530,8 +542,13 @@ function HeroNow({ item, status, now, reserving, onValidate, onReserve, onDetail
           type="button"
           onClick={primary.onClick}
           disabled={reserving}
-          className="btn btn-on-gradient !min-h-[46px] flex-1 !rounded-xl !font-bold"
+          className={`btn flex-1 !min-h-[46px] !rounded-xl !font-bold ${
+            primary.isGold
+              ? 'bg-[linear-gradient(135deg,#D97706,#B45309)] text-white shadow-lg'
+              : 'btn-on-gradient'
+          }`}
         >
+          {primary.isGold && <Lock size={16} aria-hidden="true" className="mr-1.5 inline" />}
           {reserving && (
             <span className="size-4 rounded-full border-2 border-[#3730A3]/30 border-t-[#3730A3]" style={{ animation: 'dsSpin 800ms linear infinite' }} aria-hidden="true" />
           )}
@@ -556,7 +573,7 @@ function HeroNow({ item, status, now, reserving, onValidate, onReserve, onDetail
 /* ------------------------------------------------------------------ */
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function UpNext({ items, now, statusOf, onOpen, onAgenda }) {
+function UpNext({ items, now, statusOf, hasTicket = true, onOpen, onAgenda }) {
   const stripRef = useRef(null);
   const [page, setPage] = useState(0);
 
@@ -629,17 +646,29 @@ function UpNext({ items, now, statusOf, onOpen, onAgenda }) {
         {items.map(({ a, w }) => {
           const cat = categoryOf(a.type);
           const st = statusOf(a);
+          const isEnrolled = st === 'BOOKED' || st === 'CHECKED_IN' || st === 'COMPLETED';
+          const isLocked = !hasTicket && !a.isOpenEvent && !isEnrolled;
           return (
             <li key={a.id} className="w-[236px]">
               <button
                 type="button"
                 onClick={() => onOpen(a)}
-                className="press flex h-full w-full flex-col justify-start cursor-pointer rounded-[18px] border border-solid border-line p-3.5 text-left font-sans text-text"
+                className={`press relative overflow-hidden flex h-full w-full flex-col justify-start cursor-pointer rounded-[18px] border border-solid border-line p-3.5 text-left font-sans text-text transition-all duration-150 ${
+                  isLocked ? 'opacity-75 hover:opacity-95' : ''
+                }`}
                 style={{ background: `linear-gradient(160deg, color-mix(in srgb, ${cat.color} 15%, transparent), var(--surface) 55%)` }}
               >
+                {isLocked && (
+                  <Lock
+                    size={72}
+                    strokeWidth={1.5}
+                    className="pointer-events-none absolute -bottom-3 -left-3 text-[rgba(245,158,11,0.07)]"
+                    aria-hidden="true"
+                  />
+                )}
                 <span className="flex items-center justify-between">
                   <span className="text-[22px] font-extrabold leading-none">{hhmm(w.start)}</span>
-                  {(st === 'BOOKED' || st === 'CHECKED_IN' || st === 'COMPLETED') && (
+                  {isEnrolled && (
                     <span className="flex size-[22px] items-center justify-center rounded-full bg-[rgba(143,160,255,0.18)]" title="Reservado">
                       <Check size={13} strokeWidth={2.8} className="text-[#B4C0FF]" aria-hidden="true" />
                       <span className="sr-only">Reservado</span>
@@ -649,6 +678,12 @@ function UpNext({ items, now, statusOf, onOpen, onAgenda }) {
                     <span className="flex size-[22px] items-center justify-center rounded-full bg-[rgba(242,196,106,0.18)]" title="Lista de espera">
                       <Clock size={13} strokeWidth={2.4} className="text-warn" aria-hidden="true" />
                       <span className="sr-only">Lista de espera</span>
+                    </span>
+                  )}
+                  {isLocked && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-gold/30 bg-gold/15 px-2 py-0.5 text-[10px] font-extrabold text-gold">
+                      <Lock size={10} aria-hidden="true" />
+                      Passaporte
                     </span>
                   )}
                 </span>
@@ -684,8 +719,8 @@ function PendingHome({ installed, notificationsEnabled, onLink, onInstall, onEna
   const steps = [
     { title: 'Conta criada', text: 'Bem-vindo ao app da Tech Week.', state: 'done' },
     {
-      title: 'Vincule seu ingresso Sympla',
-      text: 'Libera reservas de vagas, o QR do seu crachá e os pontos.',
+      title: 'Desbloqueie o Passaporte Completo',
+      text: 'Libera todas as palestras fechadas, pontos no ranking e prêmios.',
       state: 'current',
       action: (
         <button type="button" onClick={onLink} className="btn btn-action mt-2.5 !min-h-[44px] !rounded-xl !px-4 !text-sm">
@@ -742,7 +777,7 @@ function PendingHome({ installed, notificationsEnabled, onLink, onInstall, onEna
         </div>
         <p className="m-0 text-xs font-extrabold text-link">Primeiros passos · {done} de 3</p>
         <h2 id="ativ-t" className="m-0 mr-20 mt-1.5 text-[21px] font-black leading-[1.2]">
-          Falta pouco para o seu <span className="inicio-text-gradient">crachá</span>
+          Falta pouco para o seu <span className="inicio-text-gradient">Passaporte Completo</span>
         </h2>
         <div className="mb-1.5 mt-3 h-1.5 overflow-hidden rounded-[3px] bg-white/10" role="progressbar" aria-valuenow={done} aria-valuemin={0} aria-valuemax={3} aria-label="Primeiros passos concluídos">
           <div className="h-1.5 rounded-[3px] bg-[image:var(--progress-fill)]" style={{ width: `${Math.round((done / 3) * 100)}%` }} />
@@ -776,20 +811,40 @@ function PendingHome({ installed, notificationsEnabled, onLink, onInstall, onEna
 
       {upcoming.length > 0 && (
         <section aria-labelledby="prog-t" className="mt-[26px]">
-          <h2 id="prog-t" className="m-0 px-5 text-[17px] font-extrabold">Enquanto isso, veja a programação</h2>
-          <p className="m-0 mx-5 mt-1 text-[13px] text-text-3">Para reservar vaga, vincule seu ingresso primeiro.</p>
+          <h2 id="prog-t" className="m-0 px-5 text-[17px] font-extrabold">Programação do evento</h2>
+          <p className="m-0 mx-5 mt-1 text-[13px] text-text-3">Eventos de Entrada Livre liberados. Desbloqueie o Passaporte para o restante.</p>
           <ul className="inicio-strip m-0 mt-3 list-none">
             {upcoming.map(({ a, w }) => {
               const cat = categoryOf(a.type);
+              const isLocked = !a.isOpenEvent;
               return (
                 <li key={a.id} className="w-[150px]">
                   <button
                     type="button"
                     onClick={() => onOpen(a)}
-                    className="press flex h-full w-full flex-col justify-start cursor-pointer rounded-2xl border-0 border-t-[3px] border-solid bg-surface p-3 text-left font-sans text-text"
+                    className={`press relative overflow-hidden flex h-full w-full flex-col justify-start cursor-pointer rounded-2xl border-0 border-t-[3px] border-solid bg-surface p-3 text-left font-sans text-text transition-all duration-150 ${
+                      isLocked ? 'opacity-75 hover:opacity-95' : ''
+                    }`}
                     style={{ borderTopColor: cat.color }}
                   >
-                    <span className="block text-xs font-bold" style={{ color: cat.color }}>{cat.label}</span>
+                    {isLocked && (
+                      <Lock
+                        size={64}
+                        strokeWidth={1.5}
+                        className="pointer-events-none absolute -bottom-2 -left-2 text-[rgba(245,158,11,0.07)]"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <div className="flex items-center justify-between w-full">
+                      <span className="block text-xs font-bold" style={{ color: cat.color }}>{cat.label}</span>
+                      {isLocked ? (
+                        <span className="text-gold" title="Passaporte Completo">
+                          <Lock size={12} aria-hidden="true" />
+                        </span>
+                      ) : (
+                        <span className="rounded bg-ok/15 px-1 py-0.5 text-[9px] font-bold text-ok">Livre</span>
+                      )}
+                    </div>
                     <span className="mt-2 block text-[19px] font-extrabold leading-none">{hhmm(w.start)}</span>
                     <span className="mt-0.5 block truncate text-xs text-text-2">
                       {dayLabel(w.start, now)}{a.location ? ` · ${a.location}` : ''}

@@ -545,7 +545,7 @@ export function subscribeToUserPointEvents(userId, onUpdate, onError) {
  * Reserva de vaga numa atividade com garantia total de persistência
  * (API serverless -> Firestore -> Cache Local resiliente).
  */
-export async function reserveActivity(activityId) {
+export async function reserveActivity(activityId, activityMeta = null) {
   if (!activityId) {
     throw new Error('activityId é obrigatório para realizar reserva.');
   }
@@ -563,7 +563,16 @@ export async function reserveActivity(activityId) {
     cachedProfile?.role === 'ADMIN'
   );
 
-  if (!hasTicket) {
+  let isOpen = Boolean(activityMeta?.isOpenEvent);
+  if (!isOpen) {
+    const localActs = getLocalCustomActivities();
+    const found = localActs.find(a => a.id === activityId) || DEFAULT_ACTIVITIES.find(a => a.id === activityId);
+    if (found?.isOpenEvent) {
+      isOpen = true;
+    }
+  }
+
+  if (!hasTicket && !isOpen) {
     const err = new Error('É necessário possuir um ingresso oficial do Sympla vinculado para reservar vagas.');
     err.status = 403;
     err.code = 'SYMPLA_TICKET_REQUIRED';

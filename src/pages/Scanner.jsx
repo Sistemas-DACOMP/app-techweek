@@ -109,7 +109,7 @@ const cardClass =
   'mt-4 rounded-[26px] border border-[#2A3460] bg-[linear-gradient(180deg,#151D3E_0%,#0F1530_100%)] px-[18px] pt-3.5';
 
 // Meu QR (board Cracha)
-function MyBadge({ badge, points, onZoom }) {
+function MyBadge({ badge, points, onZoom, hasTicket = true, onLink }) {
   const id = badge.symplaTicket?.ticketNumber || badge.ticketId || badge.uid.slice(0, 8).toUpperCase();
   return (
     <>
@@ -136,11 +136,45 @@ function MyBadge({ badge, points, onZoom }) {
           </button>
         </div>
         <div className="mt-3 flex justify-center">
-          <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] bg-[rgba(111,216,166,0.14)] px-3 text-xs font-extrabold text-ok">
-            <Check size={14} strokeWidth={2.6} aria-hidden="true" />
-            Ingresso Sympla vinculado
-          </span>
+          {hasTicket ? (
+            <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] bg-[rgba(111,216,166,0.14)] px-3 text-xs font-black text-ok">
+              <Check size={14} strokeWidth={2.6} aria-hidden="true" />
+              Passaporte Completo Ativo
+            </span>
+          ) : (
+            <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] border border-line-2 bg-surface px-3 text-xs font-extrabold text-text-2">
+              Acesso Entrada Livre
+            </span>
+          )}
         </div>
+
+        {!hasTicket && (
+          <div className="mt-3.5 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-purple-500/10 to-transparent p-3.5 text-left shadow-[0_4px_16px_rgba(217,119,6,0.1)]">
+            <div className="flex items-start gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-gold">
+                <Lock size={16} aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="m-0 text-[13px] font-black text-text leading-snug">
+                  Acesse workshops fechados e pontue no ranking oficial!
+                </p>
+                <p className="mt-1 mb-0 text-[12px] text-text-2 leading-relaxed">
+                  Desbloqueie o seu Passaporte Completo para liberar todas as atividades exclusivas, missões e concorrer aos prêmios.
+                </p>
+                <button
+                  type="button"
+                  onClick={onLink}
+                  className="press mt-2.5 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border-none px-3.5 text-xs font-black text-black shadow-[0_4px_12px_rgba(217,119,6,0.3)] transition hover:opacity-95"
+                  style={{ background: 'linear-gradient(135deg, #D97706, #B45309)' }}
+                >
+                  <Lock size={13} aria-hidden="true" />
+                  Desbloquear com Passaporte
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mt-3.5 flex items-center justify-between border-t border-dashed border-[#2A3460] pt-3 text-xs text-text-3">
           {id ? <span>ID #{id}</span> : <span />}
           <span>
@@ -188,7 +222,7 @@ function LockedBadge({ badge, onLink }) {
 }
 
 // Offline (board EstOfflineCracha): o QR é gerado no aparelho a partir do perfil em cache.
-function OfflineBadge({ badge }) {
+function OfflineBadge({ badge, hasTicket = true }) {
   return (
     <section aria-label="Seu crachá" className="mt-4 rounded-[22px] bg-surface">
       <div className="flex items-center justify-between rounded-t-[22px] px-[18px] pt-3.5 pb-10" style={{ background: 'var(--brand-gradient)' }}>
@@ -208,9 +242,17 @@ function OfflineBadge({ badge }) {
         <div className="mt-3.5 rounded-2xl bg-[#F4F5FA] p-2.5 leading-[0]">
           <QRCodeSVG value={getBadgeQrValue(badge)} size={168} bgColor="#F4F5FA" fgColor="#0A0F24" level="M" title="QR Code do seu crachá" />
         </div>
-        <div className="mt-3 flex items-center gap-1.5 text-[13px] font-bold text-ok">
-          <Check size={15} strokeWidth={2.6} aria-hidden="true" />
-          Salvo neste celular · funciona offline
+        <div className="mt-3 flex items-center gap-1.5 text-[13px] font-bold">
+          {hasTicket ? (
+            <span className="flex items-center gap-1.5 text-ok font-extrabold">
+              <Check size={15} strokeWidth={2.6} aria-hidden="true" />
+              Passaporte Completo · offline
+            </span>
+          ) : (
+            <span className="text-text-2 font-semibold">
+              Entrada Livre · offline
+            </span>
+          )}
         </div>
       </div>
     </section>
@@ -751,10 +793,8 @@ export default function Scanner() {
             <p className="mt-6 text-center text-[13px] text-text-2">
               Abra o crachá uma vez com internet para salvá-lo neste celular.
             </p>
-          ) : hasSymplaTicket ? (
-            <OfflineBadge badge={badge} />
           ) : (
-            <LockedBadge badge={badge} onLink={() => setShowLinkTicket(true)} />
+            <OfflineBadge badge={badge} hasTicket={hasSymplaTicket} />
           )}
         </>
       ) : (
@@ -865,10 +905,14 @@ export default function Scanner() {
             <div role="tabpanel" id="cracha-panel-qr" aria-labelledby="cracha-tab-qr">
               {!badge || (ticketLoading && !hasResolvedSymplaQr) ? (
                 <div className="skeleton mt-4 h-[540px] rounded-[26px]" aria-label="Carregando crachá" />
-              ) : hasSymplaTicket ? (
-                <MyBadge badge={badge} points={points} onZoom={() => setQrZoom(true)} />
               ) : (
-                <LockedBadge badge={badge} onLink={() => setShowLinkTicket(true)} />
+                <MyBadge
+                  badge={badge}
+                  points={points}
+                  hasTicket={hasSymplaTicket}
+                  onLink={() => setShowLinkTicket(true)}
+                  onZoom={() => setQrZoom(true)}
+                />
               )}
             </div>
           )}

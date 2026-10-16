@@ -12,6 +12,7 @@ import {
   DEFAULT_ACTIVITIES
 } from './activityService';
 import { apiRequest } from './api';
+import { getCachedUserProfile } from './userService';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 vi.mock('./firebase', () => ({
@@ -156,6 +157,28 @@ describe('activityService (KAN-50)', () => {
 
     it('deve rejeitar se activityId não for fornecido', async () => {
       await expect(reserveActivity('')).rejects.toThrow('activityId é obrigatório');
+    });
+
+    it('deve bloquear reserva de atividade exclusiva se o participante não tiver ingresso Sympla', async () => {
+      vi.mocked(getCachedUserProfile).mockReturnValueOnce({ hasSymplaTicket: false, role: 'PARTICIPANT' });
+      await expect(reserveActivity('act_fechada', { isOpenEvent: false })).rejects.toMatchObject({
+        status: 403,
+        code: 'SYMPLA_TICKET_REQUIRED'
+      });
+    });
+
+    it('deve permitir reserva de atividade aberta mesmo se o participante não tiver ingresso Sympla', async () => {
+      vi.mocked(getCachedUserProfile).mockReturnValueOnce({ hasSymplaTicket: false, role: 'PARTICIPANT' });
+      vi.mocked(apiRequest).mockResolvedValueOnce({
+        status: 'CONFIRMED',
+        position: null
+      });
+
+      const res = await reserveActivity('act_aberta', { isOpenEvent: true });
+      expect(res.status).toBe('CONFIRMED');
+      expect(apiRequest).toHaveBeenCalledWith('/activities/act_aberta/reserve', {
+        method: 'POST'
+      });
     });
   });
 
