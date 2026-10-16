@@ -17,6 +17,9 @@ import {
   isValidPhone,
   normalizeGithub,
   isValidGithub,
+  formatFileSize,
+  validateResumeFile,
+  MAX_RESUME_BYTES,
 } from './validators';
 
 // REG-C1 (comportamento observado no codigo, sem card Jira dedicado):
@@ -324,3 +327,107 @@ describe('normalizeGithub e isValidGithub (KAN-96)', () => {
     expect(isValidGithub('a'.repeat(40))).toBe(false);
   });
 });
+
+describe('formatFileSize', () => {
+  it('formata bytes, KB e MB corretamente', () => {
+    expect(formatFileSize(0)).toBe('0 B');
+    expect(formatFileSize(500)).toBe('500 B');
+    expect(formatFileSize(1024)).toBe('1.0 KB');
+    expect(formatFileSize(1536)).toBe('1.5 KB');
+    expect(formatFileSize(1024 * 1024)).toBe('1.0 MB');
+    expect(formatFileSize(2.5 * 1024 * 1024)).toBe('2.5 MB');
+  });
+
+  it('retorna 0 B para valores inválidos ou negativos', () => {
+    expect(formatFileSize(-1)).toBe('0 B');
+    expect(formatFileSize(null)).toBe('0 B');
+    expect(formatFileSize(undefined)).toBe('0 B');
+    expect(formatFileSize(NaN)).toBe('0 B');
+  });
+});
+
+describe('validateResumeFile', () => {
+  it('rejeita arquivo ausente', () => {
+    expect(validateResumeFile(null)).toEqual({
+      valid: false,
+      reason: 'missing',
+      message: 'Nenhum arquivo selecionado.'
+    });
+  });
+
+  it('aceita arquivos PDF válidos', () => {
+    const file = {
+      name: 'curriculo.pdf',
+      type: 'application/pdf',
+      size: 1.5 * 1024 * 1024
+    };
+    expect(validateResumeFile(file)).toEqual({
+      valid: true,
+      reason: null,
+      message: null
+    });
+  });
+
+  it('aceita arquivos DOC e DOCX válidos', () => {
+    const docFile = {
+      name: 'meu_curriculo.doc',
+      type: 'application/msword',
+      size: 500 * 1024
+    };
+    expect(validateResumeFile(docFile).valid).toBe(true);
+
+    const docxFile = {
+      name: 'meu_curriculo.docx',
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      size: 800 * 1024
+    };
+    expect(validateResumeFile(docxFile).valid).toBe(true);
+  });
+
+  it('aceita arquivo DOCX mesmo com MIME type genérico ou vazio se extensão for válida (compatibilidade mobile/Windows)', () => {
+    const docxGeneric = {
+      name: 'curriculo.docx',
+      type: 'application/octet-stream',
+      size: 500 * 1024
+    };
+    expect(validateResumeFile(docxGeneric).valid).toBe(true);
+
+    const docxEmptyMime = {
+      name: 'curriculo.docx',
+      type: '',
+      size: 500 * 1024
+    };
+    expect(validateResumeFile(docxEmptyMime).valid).toBe(true);
+  });
+
+  it('rejeita formatos não suportados (.exe, .png, .txt)', () => {
+    const exeFile = {
+      name: 'programa.exe',
+      type: 'application/x-msdownload',
+      size: 1024
+    };
+    const res = validateResumeFile(exeFile);
+    expect(res.valid).toBe(false);
+    expect(res.reason).toBe('invalid_type');
+
+    const imageFile = {
+      name: 'foto.png',
+      type: 'image/png',
+      size: 1024
+    };
+    expect(validateResumeFile(imageFile).valid).toBe(false);
+  });
+
+  it('rejeita arquivos que excedem o limite de 5MB', () => {
+    const heavyFile = {
+      name: 'curriculo_pesado.pdf',
+      type: 'application/pdf',
+      size: 6 * 1024 * 1024 // 6MB
+    };
+    const res = validateResumeFile(heavyFile);
+    expect(res.valid).toBe(false);
+    expect(res.reason).toBe('too_large');
+    expect(res.message).toContain('limite máximo de 5.0 MB');
+  });
+});
+

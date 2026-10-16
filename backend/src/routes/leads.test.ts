@@ -393,6 +393,66 @@ describe('POST /api/leads handler (KAN-55)', () => {
     );
   });
 
+  it('grava e retorna metadados de currículo quando o participante possui currículo anexado', async () => {
+    const req = makeReq({
+      participantUid: 'part-resume-1',
+      notes: 'Candidato com currículo em anexo',
+      rating: 5
+    });
+    const res = makeRes();
+
+    const mockTx = {
+      get: vi.fn((ref: { path: string }) => {
+        if (ref.path === 'users/part-resume-1') {
+          return Promise.resolve({
+            exists: true,
+            data: () => ({
+              name: 'Carla Dias',
+              email: 'carla@ufu.br',
+              phone: '34991119999',
+              course: 'Ciência da Computação',
+              period: 8,
+              resumeUrl: 'https://firebasestorage.googleapis.com/.../curriculo_carla.pdf',
+              resumeName: 'curriculo_carla.pdf',
+              resumeSize: 1048576,
+              resumeUpdatedAt: '2026-10-16T12:00:00.000Z'
+            })
+          });
+        }
+        return Promise.resolve({ exists: false });
+      }),
+      set: vi.fn(),
+      update: vi.fn()
+    };
+
+    (db.runTransaction as any).mockImplementation(async (cb: any) => cb(mockTx));
+
+    await leadsHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(mockTx.set).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        resumeUrl: 'https://firebasestorage.googleapis.com/.../curriculo_carla.pdf',
+        resumeName: 'curriculo_carla.pdf',
+        resumeSize: 1048576,
+        resumeUpdatedAt: '2026-10-16T12:00:00.000Z'
+      }),
+      { merge: true }
+    );
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        lead: expect.objectContaining({
+          resumeUrl: 'https://firebasestorage.googleapis.com/.../curriculo_carla.pdf',
+          resumeName: 'curriculo_carla.pdf',
+          resumeSize: 1048576,
+          resumeUpdatedAt: '2026-10-16T12:00:00.000Z'
+        })
+      })
+    );
+  });
+
   it('atualiza anotações do lead mas não duplica pontos em visita repetida (HTTP 200, pointsAwarded: 0)', async () => {
     const req = makeReq({
       participantUid: 'part-1',

@@ -32,4 +32,19 @@ describe('firestore.rules users (KAN-124 A1)', () => {
   it('sponsors e sponsorInvites sem escrita de client', () => {
     expect(rules).toMatch(/match\s+\/sponsorInvites\/\{inviteId\}\s*\{\s*allow\s+read:\s*if\s+isAdmin\(\);\s*allow\s+write:\s*if\s+false;/);
   });
+
+  it('KAN-137: leitura de /users restrita ao dono, staff ou admin (sem allow read aberto)', () => {
+    expect(usersBlock).toMatch(/allow\s+read:\s*if\s+isOwner\(userId\)\s*\|\|\s*isStaffOrAdmin\(\);/);
+    expect(usersBlock).not.toMatch(/allow\s+read:\s*if\s+isAuthenticated\(\);/);
+  });
+
+  it('KAN-137: coleção /public_profiles aberta para leitura autenticada e bloqueia dados sensíveis', () => {
+    const pubMatch = rules.match(/match\s+\/public_profiles\/\{userId\}\s*\{([\s\S]*?)\n\s*match\s+\//);
+    const pubBlock = pubMatch ? pubMatch[1] : '';
+    expect(pubBlock).toMatch(/allow\s+read:\s*if\s+isAuthenticated\(\);/);
+    expect(pubBlock).toMatch(/allow\s+create,\s*update:\s*if\s+\(isOwner\(userId\)\s*\|\|\s*isStaffOrAdmin\(\)\)/);
+    for (const forbidden of ['email', 'phone', 'termsAcceptedAt', 'pendingEmailChange', 'symplaTicket']) {
+      expect(pubBlock).toMatch(new RegExp(`!\\(\\s*['"]${forbidden}['"]\\s+in\\s+request\\.resource\\.data\\s*\\)`));
+    }
+  });
 });

@@ -41,7 +41,8 @@ service cloud.firestore {
         'course', 'period', 'institution', 'linkedin', 'instagram',
         'github', 'avatarUrl', 'photoURL', 'mascot', 'role',
         'totalPoints', 'pontuacaoTotal', 'termsAcceptedAt',
-        'createdAt', 'updatedAt', 'pendingEmailChange'
+        'createdAt', 'updatedAt', 'pendingEmailChange',
+        'resumeUrl', 'resumeName', 'resumeSize', 'resumeUpdatedAt'
       ];
     }
 
@@ -50,7 +51,8 @@ service cloud.firestore {
         'firstName', 'lastName', 'displayName', 'username', 'phone',
         'participantType', 'participant_type', 'course', 'period',
         'institution', 'linkedin', 'instagram', 'github', 'avatarUrl',
-        'photoURL', 'mascot', 'email', 'updatedAt', 'pendingEmailChange'
+        'photoURL', 'mascot', 'email', 'updatedAt', 'pendingEmailChange',
+        'resumeUrl', 'resumeName', 'resumeSize', 'resumeUpdatedAt'
       ];
     }
 
@@ -88,12 +90,46 @@ service cloud.firestore {
         && (!('github' in data) || data.github == null || (data.github is string && data.github.size() <= 500))
         && (!('avatarUrl' in data) || data.avatarUrl == null || (data.avatarUrl is string && data.avatarUrl.size() <= 500))
         && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 500))
-        && (!('pendingEmailChange' in data) || isValidPendingEmailChange(data.pendingEmailChange));
+        && (!('pendingEmailChange' in data) || isValidPendingEmailChange(data.pendingEmailChange))
+        && (!('resumeUrl' in data) || data.resumeUrl == null || (data.resumeUrl is string && data.resumeUrl.size() <= 1000))
+        && (!('resumeName' in data) || data.resumeName == null || (data.resumeName is string && data.resumeName.size() <= 200))
+        && (!('resumeSize' in data) || data.resumeSize == null || (data.resumeSize is number && data.resumeSize >= 0 && data.resumeSize <= 10 * 1024 * 1024))
+        && (!('resumeUpdatedAt' in data) || data.resumeUpdatedAt == null || (data.resumeUpdatedAt is string && data.resumeUpdatedAt.size() <= 100));
     }
 
-    // Regras de Usuários: Todos autenticados leem; só o próprio dono cria/atualiza dados pessoais com whitelist estrita
+    function publicProfileAllowedKeys() {
+      return [
+        'uid', 'displayName', 'firstName', 'lastName', 'username',
+        'course', 'period', 'institution', 'participantType', 'participant_type',
+        'avatarUrl', 'photoURL', 'mascot', 'role', 'totalPoints', 'pontuacaoTotal',
+        'linkedin', 'instagram', 'github', 'createdAt', 'updatedAt'
+      ];
+    }
+
+    function isValidPublicProfileFields(data) {
+      return (!('username' in data) || (data.username is string && (data.username == '' || (data.username.size() >= 3 && data.username.size() <= 30 && data.username.matches('^[a-zA-Z0-9._]+$')))))
+        && (!('period' in data) || data.period == null || (data.period is int && data.period >= 1 && data.period <= 20))
+        && (!('participantType' in data) || isValidParticipantType(data.participantType))
+        && (!('participant_type' in data) || isValidParticipantType(data.participant_type))
+        && (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 100))
+        && (!('lastName' in data) || (data.lastName is string && data.lastName.size() <= 100))
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100))
+        && (!('course' in data) || (data.course is string && data.course.size() <= 100))
+        && (!('institution' in data) || (data.institution is string && data.institution.size() <= 100))
+        && (!('mascot' in data) || (data.mascot is string && data.mascot.size() <= 50))
+        && (!('linkedin' in data) || data.linkedin == null || (data.linkedin is string && data.linkedin.size() <= 500))
+        && (!('instagram' in data) || data.instagram == null || (data.instagram is string && data.instagram.size() <= 500))
+        && (!('github' in data) || data.github == null || (data.github is string && data.github.size() <= 500))
+        && (!('avatarUrl' in data) || data.avatarUrl == null || (data.avatarUrl is string && data.avatarUrl.size() <= 500))
+        && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 500))
+        && (!('totalPoints' in data) || (data.totalPoints is number && data.totalPoints >= 0 && data.totalPoints <= 100000))
+        && (!('pontuacaoTotal' in data) || (data.pontuacaoTotal is number && data.pontuacaoTotal >= 0 && data.pontuacaoTotal <= 100000));
+    }
+
+    // Regras de Usuários (KAN-137): Leitura estritamente restrita ao dono, staff e admin.
+    // Participantes comuns e patrocinadores não têm acesso direto a e-mails e telefones de terceiros.
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if isOwner(userId) || isStaffOrAdmin();
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasAll(['uid', 'email', 'role', 'totalPoints', 'pontuacaoTotal', 'termsAcceptedAt', 'createdAt', 'updatedAt'])
         && request.resource.data.keys().hasOnly(userAllowedCreateKeys())
@@ -137,6 +173,29 @@ service cloud.firestore {
         allow read: if isVerifiedOwner(userId) || isAdmin();
         allow write: if false; // Apenas backend via Firebase Admin SDK
       }
+    }
+
+    // Perfis Públicos (KAN-137): Coleção com visibilidade pública entre participantes autenticados
+    // para ranking, scanner e networking, contendo apenas dados públicos sem e-mail ou telefone.
+    match /public_profiles/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if (isOwner(userId) || isStaffOrAdmin())
+        && request.resource.data.keys().hasOnly(publicProfileAllowedKeys())
+        && request.resource.data.uid == userId
+        && !('email' in request.resource.data)
+        && !('phone' in request.resource.data)
+        && !('termsAcceptedAt' in request.resource.data)
+        && !('pendingEmailChange' in request.resource.data)
+        && !('symplaTicket' in request.resource.data)
+        && !('hasSymplaTicket' in request.resource.data)
+        && !('ticketId' in request.resource.data)
+        && !('sponsorId' in request.resource.data)
+        && !('companyId' in request.resource.data)
+        && !('company' in request.resource.data)
+        && !('empresa' in request.resource.data)
+        && !('companyName' in request.resource.data)
+        && isValidPublicProfileFields(request.resource.data);
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
     // Índice de unicidade de ingresso Sympla (KAN-108): só o backend (Admin SDK) escreve/lê.

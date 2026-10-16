@@ -180,5 +180,90 @@ describe('Regras de Segurança do Firebase Storage — storage.rules', () => {
       await assertSucceeds(publicFileRef.getDownloadURL());
     });
   });
+
+  describe('Coleção /resumes/{userId}/{fileName}', () => {
+    const smallPdf = new Uint8Array(1024);
+    const heavyPdf = new Uint8Array(6 * 1024 * 1024); // 6MB (> 5MB)
+    const docxData = new Uint8Array(2048);
+    const exeData = new Uint8Array(512);
+
+    it('participante envia PDF < 5MB em seu próprio UID (assertSucceeds)', async () => {
+      const storage = testEnv.authenticatedContext('user-1').storage();
+      const fileRef = storage.ref('resumes/user-1/curriculo.pdf');
+
+      await assertSucceeds(fileRef.put(smallPdf, { contentType: 'application/pdf' }));
+    });
+
+    it('participante envia DOCX < 5MB em seu próprio UID (assertSucceeds)', async () => {
+      const storage = testEnv.authenticatedContext('user-1').storage();
+      const fileRef = storage.ref('resumes/user-1/curriculo.docx');
+
+      await assertSucceeds(fileRef.put(docxData, {
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      }));
+    });
+
+    it('participante tenta enviar currículo > 5MB (assertFails)', async () => {
+      const storage = testEnv.authenticatedContext('user-1').storage();
+      const fileRef = storage.ref('resumes/user-1/pesado.pdf');
+
+      await assertFails(fileRef.put(heavyPdf, { contentType: 'application/pdf' }));
+    });
+
+    it('participante tenta enviar formato proibido (assertFails)', async () => {
+      const storage = testEnv.authenticatedContext('user-1').storage();
+      const fileRef = storage.ref('resumes/user-1/script.exe');
+
+      await assertFails(fileRef.put(exeData, { contentType: 'application/x-msdownload' }));
+    });
+
+    it('participante tenta gravar currículo na pasta de outro usuário (assertFails)', async () => {
+      const storage = testEnv.authenticatedContext('user-1').storage();
+      const fileRef = storage.ref('resumes/user-2/curriculo.pdf');
+
+      await assertFails(fileRef.put(smallPdf, { contentType: 'application/pdf' }));
+    });
+
+    it('dono lê seu próprio currículo (assertSucceeds)', async () => {
+      const storage = testEnv.authenticatedContext('user-1').storage();
+      const fileRef = storage.ref('resumes/user-1/curriculo.pdf');
+      await fileRef.put(smallPdf, { contentType: 'application/pdf' });
+
+      await assertSucceeds(fileRef.getDownloadURL());
+    });
+
+    it('patrocinador (SPONSOR) lê currículo do participante (assertSucceeds)', async () => {
+      const ownerStorage = testEnv.authenticatedContext('user-1').storage();
+      const fileRef = ownerStorage.ref('resumes/user-1/curriculo.pdf');
+      await fileRef.put(smallPdf, { contentType: 'application/pdf' });
+
+      const sponsorStorage = testEnv.authenticatedContext('sponsor-1', { role: 'SPONSOR' }).storage();
+      const sponsorFileRef = sponsorStorage.ref('resumes/user-1/curriculo.pdf');
+
+      await assertSucceeds(sponsorFileRef.getDownloadURL());
+    });
+
+    it('outro participante comum tenta ler currículo alheio (assertFails)', async () => {
+      const ownerStorage = testEnv.authenticatedContext('user-1').storage();
+      const fileRef = ownerStorage.ref('resumes/user-1/curriculo.pdf');
+      await fileRef.put(smallPdf, { contentType: 'application/pdf' });
+
+      const otherStorage = testEnv.authenticatedContext('user-2').storage();
+      const otherFileRef = otherStorage.ref('resumes/user-1/curriculo.pdf');
+
+      await assertFails(otherFileRef.getDownloadURL());
+    });
+
+    it('usuário não autenticado tenta ler currículo (assertFails)', async () => {
+      const ownerStorage = testEnv.authenticatedContext('user-1').storage();
+      const fileRef = ownerStorage.ref('resumes/user-1/curriculo.pdf');
+      await fileRef.put(smallPdf, { contentType: 'application/pdf' });
+
+      const unauthStorage = testEnv.unauthenticatedContext().storage();
+      const unauthFileRef = unauthStorage.ref('resumes/user-1/curriculo.pdf');
+
+      await assertFails(unauthFileRef.getDownloadURL());
+    });
+  });
 });
 

@@ -16,15 +16,28 @@ import sponsorsAdminRouter from './routes/sponsorsAdmin';
 import sponsorInvitesRouter from './routes/sponsorInvites';
 
 import { corsOptions } from './config/cors';
+import { debugClientIp } from './middlewares/rateLimiter';
 
 const app = express();
 
+/**
+ * Retorna o número de proxies reversos confiáveis configurados à frente do Express.
+ * - 1 hop: acesso direto à Cloud Function (*.cloudfunctions.net - 1 hop Google Cloud Run / GFE).
+ * - 2 hops: acesso via Firebase Hosting rewrite (/api/** -> function api - Hosting CDN + Google Cloud Run).
+ * Fallback seguro se omitido ou inválido: 1 hop.
+ */
+export function getTrustProxyHops(): number {
+  const rawHops = process.env.TRUST_PROXY_HOPS;
+  const parsedHops = rawHops ? parseInt(rawHops, 10) : NaN;
+  return !Number.isNaN(parsedHops) && parsedHops >= 1 ? parsedHops : 1;
+}
+
 // Rate limit por IP das rotas públicas de convite (KAN-124) precisa do IP real do
-// cliente. O valor 1 supõe Cloud Function direto (1 hop do Google); se houver
-// Vercel/Hosting na frente a topologia muda e o número de hops também. NÃO
-// confirmado: validar em homolog com DEBUG_CLIENT_IP=1 (loga req.ip e
-// x-forwarded-for uma vez, ver middlewares/rateLimiter.ts) antes de produção.
-app.set('trust proxy', 1);
+// cliente. O número de hops varia conforme a topologia da rede:
+// - Cloud Function direto: 1 hop (Google GFE / Cloud Run).
+// - Firebase Hosting rewrite: 2 hops (Hosting CDN + Cloud Run).
+const trustProxyHops = getTrustProxyHops();
+app.set('trust proxy', trustProxyHops);
 
 // Middlewares padrão
 app.use(cors(corsOptions));
@@ -33,15 +46,28 @@ app.use(express.json());
 // Rotas de cadastro/autenticação (finalização de perfil pós Firebase Auth)
 app.use(['/api/auth', '/auth'], authRouter);
 
-// Rota de Health Check
-app.get(['/api/health', '/health'], (_req: Request, res: Response) => {
+// Handler de Health Check (exportado para testes)
+export function healthCheckHandler(req: Request, res: Response): void {
+  const isDebug = process.env.DEBUG_CLIENT_IP === '1';
+  const hops = getTrustProxyHops();
   res.status(200).json({
     status: 'ok',
     environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString(),
-    service: 'facom-techweek-api'
+    service: 'facom-techweek-api',
+    ...(isDebug && {
+      debug: {
+        clientIp: req.ip,
+        ips: req.ips,
+        xForwardedFor: req.headers['x-forwarded-for'] || null,
+        trustProxyHops: hops
+      }
+    })
   });
-});
+}
+
+// Rota de Health Check (com debugClientIp para diagnóstico temporário de rede em homolog)
+app.get(['/api/health', '/health'], debugClientIp, healthCheckHandler);
 
 // Rota protegida: Retorna os dados do usuário autenticado a partir do token JWT
 app.get(['/api/me', '/me'], requireAuth, (req: Request, res: Response) => {

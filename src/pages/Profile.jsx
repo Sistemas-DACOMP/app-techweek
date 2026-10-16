@@ -3,18 +3,19 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { updateProfile } from 'firebase/auth';
 import {
   ChevronLeft, ChevronRight, Camera, Loader2, Ticket, Link as LinkIcon, ShieldCheck, Lock, Check, Trash2, LogOut,
-  ExternalLink, CalendarCheck, QrCode, Trophy, Mail, BellRing
+  ExternalLink, CalendarCheck, QrCode, Trophy, Mail, BellRing, Download, UploadCloud, FileText, FileCheck
 } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
 import { useNotifications } from '../hooks/useNotifications';
 import { getMyProfile, uploadAvatar } from '../lib/gameplay';
 import { logoutUser, onAuthChange, deleteCurrentUserAccount } from '../lib/auth';
 import { auth } from '../lib/firebase';
-import { validateAvatarFile, isValidEmail } from '../lib/validators';
+import { validateAvatarFile, isValidEmail, formatFileSize, validateResumeFile } from '../lib/validators';
 import { SYMPLA_EVENT_URL, verifySymplaTicket } from '../lib/sympla';
 import {
   getUserProfile, uploadUserAvatar, updateUserEmail, updateUserProfile, getCachedUserProfile,
-  getLeaderboardUsers, checkUsernameAvailability, cancelPendingEmailChange, syncUserEmailWithAuth
+  getLeaderboardUsers, checkUsernameAvailability, cancelPendingEmailChange, syncUserEmailWithAuth,
+  uploadUserResume, deleteUserResume
 } from '../lib/userService';
 import AvatarCropperModal from '../components/AvatarCropperModal';
 import ConfirmModal from '../components/ConfirmModal';
@@ -104,6 +105,10 @@ export default function Profile() {
       linkedin: cached?.linkedin || '',
       instagram: cached?.instagram || '',
       github: cached?.github || '',
+      resumeUrl: cached?.resumeUrl || '',
+      resumeName: cached?.resumeName || '',
+      resumeSize: cached?.resumeSize || null,
+      resumeUpdatedAt: cached?.resumeUpdatedAt || null,
       pendingEmailChange: cached?.pendingEmailChange || null
     };
   });
@@ -111,6 +116,9 @@ export default function Profile() {
   const [avatarError, setAvatarError] = useState('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [rawImageForCrop, setRawImageForCrop] = useState(null);
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [resumeError, setResumeError] = useState('');
+  const resumeFileInputRef = useRef(null);
 
   // Editar perfil é uma sub-view do Perfil (?edit=true), não modal (DESIGN.md §6, tela 1.34).
   const params = new URLSearchParams(location.search);
@@ -190,6 +198,10 @@ export default function Profile() {
           linkedin: data?.linkedin || prev.linkedin,
           instagram: data?.instagram || prev.instagram,
           github: data?.github || prev.github,
+          resumeUrl: data?.resumeUrl || prev.resumeUrl || '',
+          resumeName: data?.resumeName || prev.resumeName || '',
+          resumeSize: data?.resumeSize !== undefined ? data.resumeSize : prev.resumeSize,
+          resumeUpdatedAt: data?.resumeUpdatedAt || prev.resumeUpdatedAt || null,
           pendingEmailChange: data?.pendingEmailChange !== undefined ? data.pendingEmailChange : prev.pendingEmailChange
         }));
 
@@ -720,6 +732,78 @@ export default function Profile() {
     }
   };
 
+  const handlePickResume = () => {
+    setResumeError('');
+    resumeFileInputRef.current?.click();
+  };
+
+  const handleResumeFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const validation = validateResumeFile(file);
+    if (!validation.valid) {
+      setResumeError(validation.message || 'Arquivo de currículo inválido.');
+      return;
+    }
+
+    setResumeError('');
+    setUploadingResume(true);
+    try {
+      const uid = profile.id || auth.currentUser?.uid;
+      const res = await uploadUserResume(uid, file);
+      setProfile(prev => ({
+        ...prev,
+        resumeUrl: res.resumeUrl,
+        resumeName: res.resumeName,
+        resumeSize: res.resumeSize,
+        resumeUpdatedAt: res.resumeUpdatedAt
+      }));
+      setEditFeedback({ type: 'success', text: 'Currículo enviado com sucesso!' });
+    } catch (err) {
+      console.error('Erro ao enviar currículo:', err);
+      setResumeError(err.message || 'Erro ao enviar currículo. Tente novamente.');
+    } finally {
+      setUploadingResume(false);
+    }
+  };
+
+  const handlePromptDeleteResume = () => {
+    setConfirmModal({
+      title: 'Remover currículo?',
+      message: 'Seu currículo deixará de ser visível para os recrutadores e patrocinadores do evento. Você poderá adicionar outro arquivo a qualquer momento.',
+      confirmLabel: 'Remover currículo',
+      cancelLabel: 'Cancelar',
+      variant: 'danger',
+      Icon: Trash2,
+      onConfirm: async () => {
+        setIsActionLoading(true);
+        try {
+          const uid = profile.id || auth.currentUser?.uid;
+          if (uid) {
+            await deleteUserResume(uid);
+            setProfile(prev => ({
+              ...prev,
+              resumeUrl: '',
+              resumeName: '',
+              resumeSize: null,
+              resumeUpdatedAt: null
+            }));
+          }
+          setConfirmModal(null);
+          setEditFeedback({ type: 'success', text: 'Currículo removido com sucesso.' });
+        } catch (err) {
+          console.error('Erro ao remover currículo:', err);
+          setConfirmModal(null);
+          setResumeError(err.message || 'Erro ao remover currículo.');
+        } finally {
+          setIsActionLoading(false);
+        }
+      }
+    });
+  };
+
   const handleCancelPendingEmail = async () => {
     const uid = profile.id || auth.currentUser?.uid;
     if (!uid) return;
@@ -1029,6 +1113,110 @@ export default function Profile() {
               value={editForm.github} onChange={(v) => setEditForm({ ...editForm, github: v })} placeholder="seu-usuario" />
           </div>
 
+          {/* Currículo profissional */}
+          <h2 id="perfil-curriculo" className="mx-5 mt-7 scroll-mt-4 text-[16px] font-extrabold">Currículo profissional</h2>
+          <p className="mx-5 mt-1 text-[13px] text-text-3">Visível para empresas e patrocinadores oficiais da Tech Week.</p>
+
+          <input
+            ref={resumeFileInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            onChange={handleResumeFileChange}
+            className="sr-only"
+            aria-describedby="resume-hint-edit"
+          />
+
+          {!profile.resumeUrl ? (
+            <div className="mx-5 mt-3">
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--line-2,#2A3460)] bg-surface p-5 text-center">
+                <div className="flex size-12 items-center justify-center rounded-2xl bg-link/15 text-link">
+                  <FileText size={24} aria-hidden="true" />
+                </div>
+                <p className="mt-3 text-sm font-bold text-text">Nenhum currículo anexado</p>
+                <p id="resume-hint-edit" className="mt-1 text-xs text-text-3 max-w-[280px]">
+                  Adicione seu currículo em PDF, DOC ou DOCX (até 5 MB) para concorrer a vagas e estágios.
+                </p>
+                <button
+                  type="button"
+                  onClick={handlePickResume}
+                  disabled={uploadingResume}
+                  className="press min-h-11 mt-4 flex items-center gap-2 rounded-xl border border-link/40 bg-link/15 px-4 text-xs font-bold text-link hover:bg-link/25 transition-colors disabled:opacity-50"
+                >
+                  {uploadingResume ? (
+                    <><Loader2 size={16} className="animate-spin" aria-hidden="true" /> Enviando...</>
+                  ) : (
+                    <><UploadCloud size={16} aria-hidden="true" /> + Adicionar currículo</>
+                  )}
+                </button>
+              </div>
+              {resumeError && (
+                <p role="alert" className="mt-2 text-xs font-semibold text-err">
+                  {resumeError}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="mx-5 mt-3">
+              <div className="rounded-2xl border border-[var(--line,#202A4A)] bg-surface p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-ok/15 text-ok">
+                    <FileCheck size={20} aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-text" title={profile.resumeName || 'Currículo'}>
+                      {profile.resumeName || 'Currículo anexado'}
+                    </p>
+                    <p className="mt-0.5 text-xs text-text-3">
+                      {profile.resumeSize ? `${formatFileSize(profile.resumeSize)} · ` : ''}
+                      {profile.resumeUpdatedAt ? `Atualizado em ${new Date(profile.resumeUpdatedAt).toLocaleDateString('pt-BR')}` : 'Pronto para visualização'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--line,#202A4A)]/60 pt-3">
+                  {profile.resumeUrl && (
+                    <a
+                      href={profile.resumeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="press flex min-h-11 items-center gap-1.5 rounded-xl border border-[var(--line,#202A4A)] bg-surface-raised px-3 text-xs font-bold text-text hover:bg-surface transition-colors"
+                      aria-label="Visualizar ou baixar currículo"
+                    >
+                      <Download size={15} aria-hidden="true" /> Baixar
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handlePickResume}
+                    disabled={uploadingResume}
+                    className="press flex min-h-11 items-center gap-1.5 rounded-xl border border-[var(--line,#202A4A)] bg-surface-raised px-3 text-xs font-bold text-text hover:bg-surface transition-colors disabled:opacity-50"
+                    aria-label="Substituir currículo atual"
+                  >
+                    {uploadingResume ? (
+                      <><Loader2 size={15} className="animate-spin" aria-hidden="true" /> Enviando...</>
+                    ) : (
+                      <><UploadCloud size={15} aria-hidden="true" /> Substituir</>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePromptDeleteResume}
+                    disabled={uploadingResume}
+                    className="press ml-auto flex min-h-11 items-center gap-1.5 rounded-xl border border-transparent px-3 text-xs font-bold text-err hover:bg-err/10 transition-colors disabled:opacity-50"
+                    aria-label="Remover currículo"
+                  >
+                    <Trash2 size={15} aria-hidden="true" /> Remover
+                  </button>
+                </div>
+              </div>
+              {resumeError && (
+                <p role="alert" className="mt-2 text-xs font-semibold text-err">
+                  {resumeError}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Privacidade */}
           <h2 id="perfil-privacidade" className="mx-5 mt-7 scroll-mt-4 text-[16px] font-extrabold">Privacidade</h2>
           <div className="mx-5 mt-3 rounded-2xl bg-surface px-3.5">
@@ -1250,6 +1438,28 @@ export default function Profile() {
               notif.toggleEnabled();
             }
           }}
+        />
+        <AccountRow
+          color="#A855F7"
+          icon={FileText}
+          title="Currículo profissional"
+          desc={
+            profile.resumeName
+              ? `${profile.resumeName}${profile.resumeSize ? ` · ${formatFileSize(profile.resumeSize)}` : ''}`
+              : 'Compartilhe seu currículo com empresas da Tech Week'
+          }
+          badge={
+            profile.resumeUrl ? (
+              <span className="rounded-[9px] bg-ok/15 px-[9px] py-[3px] text-[12px] font-extrabold text-ok">
+                Anexado
+              </span>
+            ) : (
+              <span className="rounded-[9px] bg-[rgba(168,85,247,0.15)] px-[9px] py-[3px] text-[12px] font-extrabold text-[#C084FC]">
+                Adicionar
+              </span>
+            )
+          }
+          onClick={() => openEdit('curriculo')}
         />
         <AccountRow color="#8FA0FF" icon={LinkIcon} title="Redes sociais" desc={socialsText} onClick={() => openEdit('redes')} />
         <AccountRow color="#6FD8A6" icon={ShieldCheck} title="Privacidade e dados" desc="O que os outros veem de você" onClick={() => openEdit('privacidade')} last />

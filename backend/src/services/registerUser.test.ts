@@ -7,7 +7,6 @@ import { registerUser } from './registerUser';
  */
 function makeFakeDb(userAlreadyExists: boolean, existingData?: any) {
   const setSpy = vi.fn();
-  const userRef = { path: 'users/fake-uid' };
 
   const tx = {
     get: vi.fn().mockResolvedValue({
@@ -18,9 +17,11 @@ function makeFakeDb(userAlreadyExists: boolean, existingData?: any) {
   };
 
   const db = {
-    collection: vi.fn().mockReturnValue({
-      doc: vi.fn().mockReturnValue(userRef)
-    }),
+    collection: vi.fn().mockImplementation((collName: string) => ({
+      doc: vi.fn().mockImplementation((docId: string) => ({
+        path: `${collName}/${docId}`
+      }))
+    })),
     runTransaction: vi.fn(async (fn: (tx: typeof tx) => Promise<boolean>) => fn(tx))
   };
 
@@ -37,7 +38,7 @@ describe('registerUser (REG-LGPD-001 / KAN-72)', () => {
       status: 'created',
       user: { uid: 'uid-1', email: 'participante@example.com', role: 'PARTICIPANT' }
     });
-    expect(setSpy).toHaveBeenCalledTimes(1);
+    expect(setSpy).toHaveBeenCalledTimes(2);
   });
 
   it('grava role PARTICIPANT e preenche termsAcceptedAt/createdAt no documento', async () => {
@@ -129,7 +130,7 @@ describe('registerUser (REG-LGPD-001 / KAN-72)', () => {
       }
     });
 
-    expect(setSpy).toHaveBeenCalledTimes(1);
+    expect(setSpy).toHaveBeenCalledTimes(2);
     const [, data, options] = setSpy.mock.calls[0];
     expect(options).toEqual({ merge: true });
     expect(data).toMatchObject({
@@ -165,10 +166,41 @@ describe('registerUser (REG-LGPD-001 / KAN-72)', () => {
         }
       });
 
-      expect(setSpy).toHaveBeenCalledTimes(1);
+      expect(setSpy).toHaveBeenCalledTimes(2);
       const [, data] = setSpy.mock.calls[0];
       expect(data.role).toBe(specialRole);
     }
+  });
+
+  it('grava em /public_profiles/{uid} sem expor email, phone nem termsAcceptedAt (KAN-137)', async () => {
+    const { db, setSpy } = makeFakeDb(false);
+
+    const profile = {
+      firstName: 'Marcos',
+      lastName: 'Oliveira',
+      username: 'marcos_o',
+      phone: '34999998888',
+      course: 'Sistemas de Informação'
+    };
+
+    await registerUser(db as any, 'uid-priv-1', 'marcos@example.com', profile);
+
+    expect(setSpy).toHaveBeenCalledTimes(2);
+
+    const [userRef, userData] = setSpy.mock.calls[0];
+    expect(userRef.path).toBe('users/uid-priv-1');
+    expect(userData.email).toBe('marcos@example.com');
+    expect(userData.phone).toBe('34999998888');
+    expect(userData.termsAcceptedAt).toBeDefined();
+
+    const [publicRef, publicData] = setSpy.mock.calls[1];
+    expect(publicRef.path).toBe('public_profiles/uid-priv-1');
+    expect(publicData.email).toBeUndefined();
+    expect(publicData.phone).toBeUndefined();
+    expect(publicData.termsAcceptedAt).toBeUndefined();
+    expect(publicData.username).toBe('marcos_o');
+    expect(publicData.firstName).toBe('Marcos');
+    expect(publicData.course).toBe('Sistemas de Informação');
   });
 
   it('rejeita UIDs inválidos defensivamente antes de consultar ou gravar no Firestore (ERR-063)', async () => {

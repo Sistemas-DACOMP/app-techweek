@@ -67,8 +67,8 @@ describe('userService', () => {
   });
 
   describe('createUserProfile', () => {
-    it('cria o documento do usuário com username e dados normalizados', async () => {
-      vi.mocked(setDoc).mockResolvedValueOnce(undefined);
+    it('cria o documento do usuário com username e dados normalizados e sincroniza public_profiles', async () => {
+      vi.mocked(setDoc).mockResolvedValue(undefined);
 
       const result = await createUserProfile('user-123', {
         email: 'TEST@example.com',
@@ -78,14 +78,20 @@ describe('userService', () => {
         participantType: 'Aluno da UFU'
       });
 
-      expect(setDoc).toHaveBeenCalledTimes(1);
+      expect(setDoc).toHaveBeenCalledTimes(2);
+      // Validar que public_profiles foi gravado sem email e sem phone (KAN-137)
+      const publicDocCall = vi.mocked(setDoc).mock.calls[1];
+      expect(publicDocCall[1].email).toBeUndefined();
+      expect(publicDocCall[1].phone).toBeUndefined();
+      expect(publicDocCall[1].username).toBe('sam03amorim');
+
       expect(result.email).toBe('test@example.com');
       expect(result.username).toBe('sam03amorim');
       expect(result.firstName).toBe('Samuel');
     });
 
     it('nunca grava papel elevado vindo do cliente nem infere papel por e-mail', async () => {
-      vi.mocked(setDoc).mockResolvedValueOnce(undefined);
+      vi.mocked(setDoc).mockResolvedValue(undefined);
       const result = await createUserProfile('user-123', { email: 'conta.qualquer@exemplo.com', role: 'ADMIN' });
       expect(result.role).toBe('PARTICIPANT');
     });
@@ -97,11 +103,11 @@ describe('userService', () => {
 
   describe('createUserProfile e os campos de ingresso Sympla (KAN-108)', () => {
     it('não manda symplaTicket, hasSymplaTicket nem ticketId pro Firestore (as regras bloqueiam), mas mantém no cache local', async () => {
-      vi.mocked(setDoc).mockResolvedValueOnce(undefined);
+      vi.mocked(setDoc).mockResolvedValue(undefined);
       const ticket = { ticketNumber: 'ABC-123' };
       const result = await createUserProfile('user-9', { email: 'a@b.com', symplaTicket: ticket, hasSymplaTicket: true });
 
-      const payload = vi.mocked(setDoc).mock.calls.at(-1)[1];
+      const payload = vi.mocked(setDoc).mock.calls[0][1];
       expect(payload).not.toHaveProperty('symplaTicket');
       expect(payload).not.toHaveProperty('hasSymplaTicket');
       expect(payload).not.toHaveProperty('ticketId');
