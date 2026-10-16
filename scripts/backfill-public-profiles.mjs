@@ -12,24 +12,31 @@
  *   node scripts/backfill-public-profiles.mjs
  */
 
-import { createRequire } from 'node:module';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+async function getDb() {
+  const { createRequire } = await import('node:module');
+  const path = (await import('node:path')).default;
+  const { fileURLToPath } = await import('node:url');
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const requireFromBackend = createRequire(path.join(__dirname, '..', 'backend', 'package.json'));
-const admin = requireFromBackend('firebase-admin');
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const requireFromBackend = createRequire(path.join(__dirname, '..', 'backend', 'package.json'));
+  let admin;
+  try {
+    admin = requireFromBackend('firebase-admin');
+  } catch {
+    admin = (await import('firebase-admin')).default;
+  }
 
-if (!admin.apps.length) {
-  const projectId =
-    process.env.GCLOUD_PROJECT ||
-    process.env.GOOGLE_CLOUD_PROJECT ||
-    process.env.VITE_FIREBASE_PROJECT_ID ||
-    'techweek-ufu-2026';
-  admin.initializeApp({ projectId });
+  if (!admin.apps.length) {
+    const projectId =
+      process.env.GCLOUD_PROJECT ||
+      process.env.GOOGLE_CLOUD_PROJECT ||
+      process.env.VITE_FIREBASE_PROJECT_ID ||
+      'techweek-ufu-2026';
+    admin.initializeApp({ projectId });
+  }
+
+  return admin.firestore();
 }
-
-const db = admin.firestore();
 
 const PUBLIC_PROFILE_ALLOWED_KEYS = new Set([
   'uid',
@@ -98,6 +105,7 @@ export function buildPublicProfileDoc(userData, uid) {
 async function runBackfill() {
   console.log('[backfill-public-profiles] Iniciando backfill de /users -> /public_profiles...');
   const startTime = Date.now();
+  const db = await getDb();
 
   const usersSnap = await db.collection('users').get();
   console.log(`[backfill-public-profiles] ${usersSnap.docs.length} documentos encontrados em /users.`);
