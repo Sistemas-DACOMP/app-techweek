@@ -14,7 +14,8 @@ import {
   findUserByUsername,
   getUserPointEvents,
   subscribeToAllUsers,
-  getCachedUserProfile
+  getCachedUserProfile,
+  syncUserRankingInFirestore
 } from './userService';
 import { apiRequest } from './api';
 import { doc, setDoc, getDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot, deleteField } from 'firebase/firestore';
@@ -632,16 +633,22 @@ describe('userService', () => {
   });
 
   describe('subscribeToAllUsers', () => {
-    it('notifica callback com lista de usuários no snapshot consolidando pontos de /ranking', () => {
+    it('notifica callback com lista de usuários no snapshot consolidando pontos de /ranking e /pointEvents', () => {
       const mockRankUnsub = vi.fn();
+      const mockEventsUnsub = vi.fn();
       const mockUsersUnsub = vi.fn();
       let rankSuccessCb;
+      let eventsSuccessCb;
       let usersSuccessCb;
 
       vi.mocked(onSnapshot)
         .mockImplementationOnce((_ref, onNext) => {
           rankSuccessCb = onNext;
           return mockRankUnsub;
+        })
+        .mockImplementationOnce((_ref, onNext) => {
+          eventsSuccessCb = onNext;
+          return mockEventsUnsub;
         })
         .mockImplementationOnce((_ref, onNext) => {
           usersSuccessCb = onNext;
@@ -674,9 +681,21 @@ describe('userService', () => {
         { id: 'u2', uid: 'u2', name: 'User 2', email: 'u2@ufu.br' }
       ]);
 
+      eventsSuccessCb({
+        docs: [
+          { id: 'u2_evt1', data: () => ({ userId: 'u2', referenceId: 'm1', points: 30 }) }
+        ]
+      });
+
+      expect(cb).toHaveBeenLastCalledWith([
+        { id: 'u1', uid: 'u1', name: 'User 1', email: 'u1@ufu.br', totalPoints: 50, pontuacaoTotal: 50 },
+        { id: 'u2', uid: 'u2', name: 'User 2', email: 'u2@ufu.br', totalPoints: 30, pontuacaoTotal: 30 }
+      ]);
+
       unsub();
       expect(mockUsersUnsub).toHaveBeenCalled();
       expect(mockRankUnsub).toHaveBeenCalled();
+      expect(mockEventsUnsub).toHaveBeenCalled();
     });
 
     it('em caso de erro, recorre a perfis armazenados em localStorage', () => {
@@ -696,6 +715,7 @@ describe('userService', () => {
 
       let errorCb;
       vi.mocked(onSnapshot)
+        .mockImplementationOnce(() => vi.fn())
         .mockImplementationOnce(() => vi.fn())
         .mockImplementationOnce((_ref, _onNext, onError) => {
           errorCb = onError;
@@ -783,4 +803,102 @@ describe('userService', () => {
       expect(profile).toBeNull();
     });
   });
+
+  describe('syncUserRankingInFirestore e fusão inclusiva do Ranking', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('sincroniza participante mesmo com 0 pontos e nunca reduz pontuação já maior no cache local', async () => {
+      const store = {
+        'facom_profile_user-50': JSON.stringify({
+          uid: 'user-50',
+          firstName: 'Mariana',
+          username: 'mariana',
+          role: 'PARTICIPANT',
+          totalPoints: 120,
+          pontuacaoTotal: 120
+        })
+      };
+      vi.stubGlobal('localStorage', {
+        getItem: vi.fn((k) => store[k] || null),
+        setItem: vi.fn((k, v) => { store[k] = v; })
+      });
+
+      const ok = await syncUserRankingInFirestore('user-50', 10);
+      expect(ok).toBe(true);
+      expect(setDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          uid: 'user-50',
+          firstName: 'Mariana',
+          username: 'mariana',
+          totalPoints: 120,
+          pontuacaoTotal: 120
+        }),
+        { merge: true }
+      );
+    });
+
+    it('ignora sincronização no /ranking para perfis ADMIN, STAFF ou SPONSOR', async () => {
+      const ok = await syncUserRankingInFirestore('staff-1', 100, {
+        uid: 'staff-1',
+        role: 'STAFF',
+        firstName: 'Fiscal'
+      });
+      expect(ok).toBe(false);
+      expect(setDoc).not.toHaveBeenCalled();
+    });
+
+    it('getLeaderboardUsers consolida participantes de /users (inclusive sem pontuacaoTotal ou com 0 pts), /ranking e /pointEvents', async () => {
+      vi.mocked(getDocs)
+        // 1ª chamada: query indexada por pontuacaoTotal
+        .mockResolvedValueOnce({
+          docs: [
+            {
+              id: 'u-1',
+              data: () => ({ role: 'PARTICIPANT', username: 'alice', firstName: 'Alice', pontuacaoTotal: 80 })
+            }
+          ]
+        })
+        // 2ª chamada: collection(db, 'ranking')
+        .mockResolvedValueOnce({
+          docs: [
+            {
+              id: 'u-2',
+              data: () => ({ role: 'PARTICIPANT', username: 'bruno', firstName: 'Bruno', pontuacaoTotal: 120 })
+            }
+          ]
+        })
+        // 3ª chamada: varredura inclusiva de /users (participantes sem pontuacaoTotal ou com 0 pontos)
+        .mockResolvedValueOnce({
+          docs: [
+            {
+              id: 'u-3',
+              data: () => ({ role: 'PARTICIPANT', username: 'clara', firstName: 'Clara', totalPoints: 0 })
+            },
+            {
+              id: 'admin-99',
+              data: () => ({ role: 'ADMIN', username: 'admin', firstName: 'Admin', pontuacaoTotal: 999 })
+            }
+          ]
+        })
+        // 4ª chamada: collection(db, 'pointEvents')
+        .mockResolvedValueOnce({
+          docs: [
+            {
+              id: 'u-3_challenge_complete_profile',
+              data: () => ({ userId: 'u-3', referenceId: 'complete_profile', points: 30 })
+            }
+          ]
+        });
+
+      const list = await getLeaderboardUsers(50);
+      expect(list.map((u) => u.id)).toEqual(['u-2', 'u-1', 'u-3']);
+      expect(list[0]).toMatchObject({ id: 'u-2', points: 120, rank: 1 });
+      expect(list[1]).toMatchObject({ id: 'u-1', points: 80, rank: 2 });
+      expect(list[2]).toMatchObject({ id: 'u-3', points: 30, rank: 3 });
+    });
+  });
 });
+
