@@ -143,7 +143,9 @@ export default function Agenda() {
   const groupedByDay = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const visible = (isMyTab ? myListActivities : activities).filter((act) => {
-      if (selectedType !== 'all') {
+      if (selectedType === 'open_event') {
+        if (!act.isOpenEvent) return false;
+      } else if (selectedType !== 'all') {
         const actType = String(act.type || 'palestra').toLowerCase().trim();
         if (actType !== selectedType) return false;
       }
@@ -416,7 +418,7 @@ export default function Agenda() {
                     onClick={() => setSelectedType(type.id)}
                     className={`press inline-flex h-[34px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] ${selected ? 'bg-text font-bold text-bg' : 'border border-field-line font-semibold text-text'}`}
                   >
-                    {type.id !== 'all' && !selected && (
+                    {type.id !== 'all' && type.id !== 'open_event' && !selected && (
                       <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full" style={{ background: categoryOf(type).accent }} />
                     )}
                     {type.label}
@@ -551,6 +553,7 @@ export function dayOrder(id) {
 
 export const TYPE_FILTERS = [
   { id: 'all', type: 'palestra', label: 'Todos' },
+  { id: 'open_event', label: 'Entrada Livre 🟢' },
   { id: 'palestra', type: 'palestra', label: 'Palestra' },
   { id: 'workshop', type: 'workshop', label: 'Workshop' },
   { id: 'minicurso', type: 'minicurso', label: 'Minicurso' },
@@ -607,13 +610,8 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
     left = <span className="text-text-3">Encerrada</span>;
   } else if (isCurrent) {
     left = <span className="flex items-center gap-1.5 text-ok"><NowDot />Acontecendo agora</span>;
-  } else if (!hasTicket && !act.isOpenEvent) {
-    left = (
-      <span className="inline-flex items-center gap-1 font-extrabold text-gold">
-        <Lock size={12} aria-hidden="true" />
-        Desbloquear com Passaporte
-      </span>
-    );
+  } else if (isLockedForUser) {
+    left = <SeatsLight activity={act} />;
   } else if (soldOut) {
     left = <span className="text-warn">Entrar na lista de espera</span>;
   } else {
@@ -622,7 +620,13 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
 
   return (
     <div
-      className={`relative rounded-2xl border border-l-4 transition-all duration-150 has-[>button:active]:scale-[0.98] pb-3 pl-4 pr-3.5 pt-3.5 ${isCurrent ? 'border-[#3D4BB0] bg-[#161F45]' : 'border-line bg-surface'} ${isPast ? 'opacity-60' : isLockedForUser ? 'opacity-75 hover:opacity-95' : ''}`}
+      className={`relative rounded-2xl border border-l-4 transition-all duration-150 has-[>button:active]:scale-[0.98] pb-3 pl-4 pr-3.5 pt-3.5 ${
+        isCurrent
+          ? 'border-[#3D4BB0] bg-[#161F45]'
+          : isLockedForUser
+            ? 'border-amber-500/25 bg-[radial-gradient(120%_90%_at_100%_0%,rgba(217,119,6,0.06)_0%,var(--surface)_65%)]'
+            : 'border-line bg-surface'
+      } ${isPast ? 'opacity-60' : isLockedForUser ? 'opacity-90 hover:opacity-100' : ''}`}
       style={{ borderLeftColor: category.accent }}
     >
       {/* O cartão inteiro abre o painel; o botão cobre o cartão e o texto fica por cima sem capturar o toque */}
@@ -668,6 +672,11 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
             >
               <span className="flex h-[30px] items-center rounded-[9px] bg-action px-3 text-xs font-extrabold text-white">Validar presença</span>
             </button>
+          ) : isLockedForUser ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/15 px-2.5 py-0.5 text-[11px] font-extrabold text-gold shadow-[0_1px_4px_rgba(217,119,6,0.2)]">
+              <Lock size={11} aria-hidden="true" />
+              Desbloquear
+            </span>
           ) : showLight ? (
             <span className="flex items-center gap-1.5">
               <SeatsLight activity={act} />

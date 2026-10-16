@@ -20,12 +20,12 @@ const BENEFITS = [
  * recarregar o perfil depois do vínculo. Sem `onLinked`, "Continuar" recarrega a página.
  * Vínculo usa o mesmo caminho do Perfil (verifySymplaTicket por e-mail → updateUserProfile).
  */
-export default function SymplaRequirementModal({ isOpen, onClose, onLinked }) {
+export default function SymplaRequirementModal({ isOpen, onClose, onLinked, featureName }) {
   if (!isOpen || typeof document === 'undefined') return null;
-  return createPortal(<LinkTicketSheet onClose={onClose} onLinked={onLinked} />, document.body);
+  return createPortal(<LinkTicketSheet onClose={onClose} onLinked={onLinked} featureName={featureName} />, document.body);
 }
 
-function LinkTicketSheet({ onClose, onLinked }) {
+function LinkTicketSheet({ onClose, onLinked, featureName }) {
   const [email, setEmail] = useState(() => auth?.currentUser?.email || '');
   const [state, setState] = useState('idle'); // idle | loading | error | done
   const [message, setMessage] = useState('');
@@ -143,16 +143,22 @@ function LinkTicketSheet({ onClose, onLinked }) {
         ) : (
           <>
             <div className="mt-0.5 flex items-center gap-3">
-              <span className="flex size-12 shrink-0 items-center justify-center rounded-[14px] bg-[rgba(61,80,230,0.2)] text-link">
-                <Ticket size={26} strokeWidth={1.9} aria-hidden="true" />
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-[14px] bg-amber-500/20 text-gold">
+                <Ticket size={26} strokeWidth={2} aria-hidden="true" />
               </span>
               <div>
-                <h2 id="sympla-sheet-title" className="m-0 text-[21px] font-black text-text">Vincule seu ingresso</h2>
-                <p className="m-0 mt-0.5 text-[13px] text-text-2">Leva menos de 1 minuto.</p>
+                <h2 id="sympla-sheet-title" className="m-0 text-[20px] font-black text-text">Vincule seu ingresso</h2>
+                <p className="m-0 mt-0.5 text-[13px] text-text-2">Desbloqueie o Passaporte Completo Tech Week.</p>
               </div>
             </div>
 
-            <ul className="m-0 mt-4 grid list-none grid-cols-3 gap-2 p-0">
+            {featureName && (
+              <p className="m-0 mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-warn/30 bg-warn/10 px-2.5 py-1 text-xs font-bold text-warn">
+                Necessário para {featureName}
+              </p>
+            )}
+
+            <ul className="m-0 mt-3.5 grid list-none grid-cols-3 gap-2 p-0">
               {BENEFITS.map(({ label, Icon, color }) => (
                 <li key={label} className="flex flex-col items-center gap-2 rounded-[14px] bg-surface-raised px-1.5 py-3 text-center">
                   <Icon size={22} strokeWidth={1.9} className={color} aria-hidden="true" />
@@ -161,8 +167,28 @@ function LinkTicketSheet({ onClose, onLinked }) {
               ))}
             </ul>
 
+            {/* CTA Hero: para quem ainda não comprou no Sympla */}
+            <a
+              href={SYMPLA_EVENT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-block mt-4 flex !min-h-[50px] items-center justify-center gap-2 rounded-2xl !bg-[linear-gradient(135deg,#F59E0B,#D97706)] !text-[#1F1603] text-[15px] !font-extrabold no-underline shadow-[0_4px_16px_rgba(217,119,6,0.3)] transition-transform active:scale-[0.98]"
+            >
+              <Ticket size={19} strokeWidth={2.2} aria-hidden="true" />
+              Garantir Passaporte no Sympla
+              <ExternalLink size={15} strokeWidth={2.2} aria-hidden="true" className="opacity-75" />
+            </a>
+
+            {/* Divisor elegante */}
+            <div className="relative my-4 flex items-center justify-center">
+              <div className="w-full border-t border-line" />
+              <span className="absolute bg-surface px-2.5 text-[11px] font-bold uppercase tracking-wider text-text-3">
+                Já comprou? Vincule aqui
+              </span>
+            </div>
+
             <form onSubmit={handleSubmit} noValidate>
-              <div className="mt-[18px]">
+              <div>
                 <label htmlFor="sympla-email" className="field-label">E-mail usado na compra do ingresso</label>
                 <input
                   ref={inputRef}
@@ -170,7 +196,7 @@ function LinkTicketSheet({ onClose, onLinked }) {
                   type="email"
                   inputMode="email"
                   autoComplete="email"
-                  className="field !min-h-[54px] !rounded-2xl !px-4"
+                  className="field !min-h-[50px] !rounded-2xl !px-4"
                   value={email}
                   onFocus={handleInputFocus}
                   onChange={(e) => { setEmail(e.target.value); if (state === 'error') setState('idle'); }}
@@ -184,7 +210,7 @@ function LinkTicketSheet({ onClose, onLinked }) {
                 )}
               </div>
 
-              <button type="submit" className="btn btn-primary btn-block mt-[18px] !min-h-[54px] text-base" disabled={state === 'loading'}>
+              <button type="submit" className="btn btn-secondary btn-block mt-3.5 !min-h-[48px] text-[15px]" disabled={state === 'loading'}>
                 {state === 'loading' ? (
                   <>
                     <span className="size-[18px] rounded-full border-2 border-white/40 border-t-white" style={{ animation: 'dsSpin 800ms linear infinite' }} aria-hidden="true" />
@@ -192,22 +218,12 @@ function LinkTicketSheet({ onClose, onLinked }) {
                   </>
                 ) : (
                   <>
-                    <Ticket size={20} strokeWidth={1.9} aria-hidden="true" />
+                    <Ticket size={18} strokeWidth={1.9} aria-hidden="true" />
                     Vincular ingresso
                   </>
                 )}
               </button>
             </form>
-
-            <a
-              href={SYMPLA_EVENT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 flex min-h-11 items-center justify-center gap-1.5 text-center text-sm font-bold text-link no-underline"
-            >
-              Ainda não tem ingresso? Garantir no Sympla
-              <ExternalLink size={15} strokeWidth={1.9} aria-hidden="true" />
-            </a>
           </>
         )}
       </div>
