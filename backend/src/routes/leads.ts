@@ -422,19 +422,26 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       };
     });
 
-    const awarded = (result.body as any)?.lead?.pointsAwarded ?? 0;
+    const leadData = (result.body as any)?.lead;
+    const awarded = leadData?.pointsAwarded ?? 0;
     if (awarded > 0) {
       try {
         const rankingRef = db.collection('ranking').doc(resolvedUid) as any;
-        await rankingRef.set?.(
-          {
-            uid: resolvedUid,
-            totalPoints: admin.firestore.FieldValue.increment(awarded),
-            pontuacaoTotal: admin.firestore.FieldValue.increment(awarded),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          },
-          { merge: true }
-        );
+        const rankingPayload: Record<string, any> = {
+          uid: resolvedUid,
+          role: 'PARTICIPANT',
+          totalPoints: admin.firestore.FieldValue.increment(awarded),
+          pontuacaoTotal: admin.firestore.FieldValue.increment(awarded),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+        if (leadData?.name) {
+          rankingPayload.displayName = leadData.name;
+          rankingPayload.firstName = String(leadData.name).trim().split(' ')[0];
+        }
+        if (leadData?.username) rankingPayload.username = leadData.username;
+        if (leadData?.avatarUrl) rankingPayload.avatarUrl = leadData.avatarUrl;
+        if (leadData?.course) rankingPayload.course = leadData.course;
+        await rankingRef.set?.(rankingPayload, { merge: true });
       } catch {}
     }
 

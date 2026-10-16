@@ -12,10 +12,10 @@ import {
   isAdminEmail
 } from './userService';
 
-function safeSyncUserRanking(userId, totalPoints) {
+function safeSyncUserRanking(userId, totalPoints, profileData = null) {
   try {
-    if (typeof userService.syncUserRankingInFirestore === 'function' && totalPoints > 0) {
-      userService.syncUserRankingInFirestore(userId, totalPoints).catch(() => {});
+    if (typeof userService.syncUserRankingInFirestore === 'function' && totalPoints >= 0) {
+      userService.syncUserRankingInFirestore(userId, totalPoints, profileData).catch(() => {});
     }
   } catch (_e) {
     // Ignora caso o mock do teste não defina syncUserRankingInFirestore
@@ -52,17 +52,25 @@ export async function getMyProfile() {
         mascot: fsProfile.mascot || 'blue'
       };
     }
-    return {
+    const fallbackProfile = {
       id: firebaseUser.uid,
+      uid: firebaseUser.uid,
+      firstName: defaultName,
       first_name: defaultName,
+      lastName: '',
       last_name: '',
       username: firebaseUser.email?.split('@')[0] || '',
+      avatarUrl: firebaseUser.photoURL || null,
       avatar_url: firebaseUser.photoURL || null,
       mascot: 'blue',
       role: isUserAdmin ? 'ADMIN' : 'PARTICIPANT',
       participantType: isUserAdmin ? 'Organizador' : 'Aluno da UFU',
       email: firebaseUser.email
     };
+    if (!isUserAdmin) {
+      safeSyncUserRanking(firebaseUser.uid, 0, fallbackProfile);
+    }
+    return fallbackProfile;
   } catch (e) {
     console.warn('[gameplay] Erro ao buscar perfil no Firestore:', e);
     return {
@@ -241,22 +249,27 @@ export async function getMyPointEvents() {
     }
   } catch (_e) {}
 
+  // Une os eventos do Firestore e do localStorage sem duplicar por reference_id
+  const rootPointEventRefs = new Set();
   try {
     const { collection, getDocs, query, where } = await import('firebase/firestore');
     const q = query(collection(db, 'pointEvents'), where('userId', '==', user.uid));
     const snapshot = await getDocs(q);
-    firestoreEvents.push(...snapshot.docs.map(d => ({
-      id: d.id,
-      event_type: d.data().eventType || d.data().event_type,
-      reference_id: d.data().referenceId || d.data().reference_id,
-      points: d.data().points || 0,
-      metadata: d.data().metadata || null,
-      ...d.data(),
-    })));
+    for (const d of snapshot.docs) {
+      const data = d.data() || {};
+      const refId = data.referenceId || data.reference_id || d.id;
+      if (refId) rootPointEventRefs.add(refId);
+      firestoreEvents.push({
+        id: d.id,
+        event_type: data.eventType || data.event_type,
+        reference_id: data.referenceId || data.reference_id,
+        points: data.points || 0,
+        metadata: data.metadata || null,
+        ...data,
+      });
+    }
   } catch (_e) {}
 
-  // Une os eventos do Firestore e do localStorage sem duplicar por reference_id
-  const firestoreRefs = new Set(firestoreEvents.map(e => e.reference_id || e.referenceId).filter(Boolean));
   const merged = [];
   const seenRefs = new Set();
 
@@ -268,37 +281,39 @@ export async function getMyPointEvents() {
     }
   }
 
-  const unsyncedLocalEvents = [];
   for (const le of localEvents) {
     const refId = le.reference_id || le.referenceId;
     if (!seenRefs.has(refId)) {
       merged.push(le);
       if (refId) seenRefs.add(refId);
     }
-    if (refId && !firestoreRefs.has(refId)) {
-      unsyncedLocalEvents.push(le);
-    }
   }
 
-  // Sincroniza pontuação consolidada na coleção /ranking/{uid} e eventos locais pendentes no Firestore
+  const eventsMissingInRoot = merged.filter((ev) => {
+    const refId = ev.reference_id || ev.referenceId || ev.id;
+    return refId && !rootPointEventRefs.has(refId);
+  });
+
+  // Sincroniza pontuação consolidada na coleção /ranking/{uid} e eventos pendentes em /pointEvents no Firestore
   const totalPoints = merged.reduce((sum, e) => sum + (Number(e.points) || 0), 0);
   if (totalPoints > 0) {
+    let resolvedTotal = totalPoints;
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         window.localStorage.setItem(`facom_point_events_${user.uid}`, JSON.stringify(merged));
         const rawProfile = window.localStorage.getItem(`facom_profile_${user.uid}`);
         const profile = rawProfile ? JSON.parse(rawProfile) : {};
-        const resolvedTotal = Math.max(Number(profile.totalPoints || profile.pontuacaoTotal || 0), totalPoints);
+        resolvedTotal = Math.max(Number(profile.totalPoints || profile.pontuacaoTotal || 0), totalPoints);
         profile.totalPoints = resolvedTotal;
         profile.pontuacaoTotal = resolvedTotal;
         window.localStorage.setItem(`facom_profile_${user.uid}`, JSON.stringify(profile));
       } catch (_e) {}
     }
 
-    safeSyncUserRanking(user.uid, totalPoints);
+    safeSyncUserRanking(user.uid, resolvedTotal);
 
-    for (const ule of unsyncedLocalEvents) {
-      persistPointEventToFirestore(user.uid, ule, totalPoints).catch(() => {});
+    for (const ule of eventsMissingInRoot) {
+      persistPointEventToFirestore(user.uid, ule, resolvedTotal).catch(() => {});
     }
   }
 

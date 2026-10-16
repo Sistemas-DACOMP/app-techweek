@@ -41,7 +41,7 @@ service cloud.firestore {
         'course', 'period', 'institution', 'linkedin', 'instagram',
         'github', 'avatarUrl', 'photoURL', 'mascot', 'role',
         'totalPoints', 'pontuacaoTotal', 'termsAcceptedAt',
-        'createdAt', 'updatedAt'
+        'createdAt', 'updatedAt', 'pendingEmailChange'
       ];
     }
 
@@ -221,9 +221,9 @@ service cloud.firestore {
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
-    // Regras de Pontos: cada usuário autenticado lê e sincroniza os próprios eventos; Staff/Admin também têm acesso
+    // Regras de Pontos: usuários autenticados leem eventos para reconciliação do Ranking e sincronizam os próprios eventos; Staff/Admin também têm acesso
     match /pointEvents/{eventId} {
-      allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isStaffOrAdmin();
+      allow read: if isAuthenticated();
       allow create, update: if isStaffOrAdmin() || (
         isAuthenticated() &&
         request.resource.data.userId == request.auth.uid &&
