@@ -45,7 +45,7 @@ describe('Validação de Unicidade de Username', () => {
 
     const res = await checkUsernameAvailability('  @Dev_User.01  ');
 
-    expect(collection).toHaveBeenCalledWith({ __mockDb: true }, 'users');
+    expect(collection).toHaveBeenCalledWith({ __mockDb: true }, 'public_profiles');
     expect(where).toHaveBeenCalledWith('username', '==', 'dev_user.01');
     expect(limit).toHaveBeenCalledWith(1);
     expect(getDocs).toHaveBeenCalledTimes(1);

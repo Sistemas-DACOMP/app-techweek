@@ -92,7 +92,7 @@ export function getCachedUserProfile(uid) {
 }
 
 /**
- * Verifica disponibilidade de um username na coleção /users.
+ * Verifica disponibilidade de um username na coleção /public_profiles (e fallback em /users).
  * Retorna { available: boolean, existingUser: object | null }
  */
 export async function checkUsernameAvailability(rawUsername) {
@@ -105,10 +105,10 @@ export async function checkUsernameAvailability(rawUsername) {
   }
 
   try {
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('username', '==', clean), limit(1));
+    const publicRef = collection(db, 'public_profiles');
+    const q = query(publicRef, where('username', '==', clean), limit(1));
     const snap = await getDocs(q);
-    if (!snap.empty) {
+    if (snap && !snap.empty) {
       const docData = snap.docs[0].data();
       return {
         available: false,
@@ -120,7 +120,23 @@ export async function checkUsernameAvailability(rawUsername) {
     }
     return { available: true, existingUser: null };
   } catch (_e) {
-    // Se offline ou teste com mock
+    // Fallback secundário para users (caso erro na leitura de public_profiles)
+    try {
+      const usersRef = collection(db, 'users');
+      const qUsers = query(usersRef, where('username', '==', clean), limit(1));
+      const snapUsers = await getDocs(qUsers);
+      if (snapUsers && !snapUsers.empty) {
+        const docData = snapUsers.docs[0].data();
+        return {
+          available: false,
+          existingUser: {
+            name: docData.displayName || [docData.firstName, docData.lastName].filter(Boolean).join(' ') || clean,
+            avatarUrl: docData.avatarUrl || docData.photoURL || null
+          }
+        };
+      }
+    } catch (_fallbackErr) {}
+
     return { available: true, existingUser: null };
   }
 }
@@ -148,6 +164,82 @@ const USER_ALLOWED_CREATE_KEYS = new Set([
   'totalPoints', 'pontuacaoTotal', 'termsAcceptedAt',
   'createdAt', 'updatedAt', 'pendingEmailChange'
 ]);
+
+export const PUBLIC_PROFILE_ALLOWED_KEYS = new Set([
+  'uid', 'displayName', 'firstName', 'lastName', 'username',
+  'course', 'period', 'institution', 'participantType', 'participant_type',
+  'avatarUrl', 'photoURL', 'mascot', 'role', 'totalPoints', 'pontuacaoTotal',
+  'linkedin', 'instagram', 'github', 'createdAt', 'updatedAt'
+]);
+
+export function buildPublicProfilePayload(source = {}, uid) {
+  const targetUid = uid || source.uid || source.id;
+  const payload = { uid: targetUid };
+  for (const [k, v] of Object.entries(source)) {
+    if (PUBLIC_PROFILE_ALLOWED_KEYS.has(k) && v !== undefined && k !== 'uid') {
+      payload[k] = v;
+    }
+  }
+  // Higienização estrita: NUNCA permitir email, phone, termos, tickets ou vínculos de empresa
+  delete payload.email;
+  delete payload.phone;
+  delete payload.termsAcceptedAt;
+  delete payload.pendingEmailChange;
+  delete payload.symplaTicket;
+  delete payload.hasSymplaTicket;
+  delete payload.ticketId;
+  delete payload.companyId;
+  delete payload.company;
+  delete payload.empresa;
+  delete payload.companyName;
+  delete payload.sponsorId;
+
+  if (payload.username !== undefined) {
+    payload.username = sanitizeUsernameForRules(payload.username);
+  }
+  if (payload.period !== undefined) {
+    payload.period = sanitizePeriodForRules(payload.period);
+  }
+  if (payload.participantType !== undefined) {
+    payload.participantType = sanitizeParticipantTypeForRules(payload.participantType);
+  }
+  if (payload.participant_type !== undefined) {
+    payload.participant_type = sanitizeParticipantTypeForRules(payload.participant_type);
+  }
+  if (typeof payload.avatarUrl === 'string' && payload.avatarUrl.length > 500) {
+    payload.avatarUrl = null;
+  }
+  if (typeof payload.photoURL === 'string' && payload.photoURL.length > 500) {
+    payload.photoURL = null;
+  }
+  if (payload.totalPoints !== undefined) {
+    payload.totalPoints = Math.max(0, Math.min(100000, Number(payload.totalPoints) || 0));
+  }
+  if (payload.pontuacaoTotal !== undefined) {
+    payload.pontuacaoTotal = Math.max(0, Math.min(100000, Number(payload.pontuacaoTotal) || 0));
+  }
+  return payload;
+}
+
+/**
+ * Busca o perfil público de um participante em /public_profiles/{uid} (KAN-137).
+ * Não expõe e-mail nem telefone.
+ */
+export async function getPublicProfile(uid) {
+  if (!uid) return null;
+  try {
+    const publicRef = doc(db, 'public_profiles', uid);
+    const snap = await getDoc(publicRef);
+    if (snap && snap.exists()) {
+      return { id: snap.id, uid: snap.id, ...snap.data() };
+    }
+  } catch (err) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('[userService] Aviso: Falha ao buscar perfil público no Firestore:', err);
+    }
+  }
+  return null;
+}
 
 const VALID_PARTICIPANT_TYPES = new Set([
   'Aluno UFU Graduação', 'Aluno UFU Pós-graduação', 'Aluno de outra instituição',
@@ -283,6 +375,15 @@ export async function createUserProfile(uid, data) {
     await setDoc(userRef, firestoreData, { merge: true });
   } catch (err) {
     console.warn('[userService] Aviso: Gravação do perfil no Firestore rejeitada por regras, dados preservados no cache local:', err);
+  }
+
+  // Sincroniza documento público em /public_profiles/{uid} (KAN-137)
+  try {
+    const publicProfileRef = doc(db, 'public_profiles', uid);
+    const publicPayload = buildPublicProfilePayload(profileData, uid);
+    await setDoc(publicProfileRef, publicPayload, { merge: true });
+  } catch (publicErr) {
+    console.warn('[userService] Aviso: Falha ao sincronizar public_profiles no Firestore:', publicErr);
   }
 
   return profileData;
@@ -461,6 +562,19 @@ export async function updateUserProfile(uid, updates) {
       console.warn('[userService] Aviso: Erro ao atualizar Firestore, dados preservados localmente:', err);
     }
   }
+
+  // Sincroniza em /public_profiles/{uid} se houver campos públicos atualizados (KAN-137)
+  try {
+    const publicUpdates = buildPublicProfilePayload({
+      ...dataToUpdate,
+      ...merged
+    }, uid);
+    if (Object.keys(publicUpdates).length > 1) {
+      const publicRef = doc(db, 'public_profiles', uid);
+      await setDoc(publicRef, publicUpdates, { merge: true });
+    }
+  } catch (_pubErr) {}
+
   return true;
 }
 
@@ -802,6 +916,17 @@ export async function syncUserRankingInFirestore(uid, points, profileData = null
     }
 
     await setDoc(rankingRef, payload, { merge: true });
+
+    // Sincroniza também em /public_profiles/{uid} (KAN-137)
+    try {
+      const publicProfileRef = doc(db, 'public_profiles', uid);
+      const publicPayload = buildPublicProfilePayload({
+        ...source,
+        ...payload
+      }, uid);
+      await setDoc(publicProfileRef, publicPayload, { merge: true });
+    } catch (_pubErr) {}
+
     return true;
   } catch (_err) {
     return false;
@@ -1005,27 +1130,48 @@ function sortLeaderboardWithTiebreak(list) {
  * com 0 pontos ou sem campo pontuacaoTotal indexado).
  */
 export async function getLeaderboardUsers(maxLimit = 50) {
+  const publicProfilesRef = collection(db, 'public_profiles');
   const usersRef = collection(db, 'users');
   const broadLimit = Math.max(maxLimit * 4, 200);
   try {
     let snap;
     try {
       const q = query(
-        usersRef,
+        publicProfilesRef,
         where('role', '==', 'PARTICIPANT'),
         orderBy('pontuacaoTotal', 'desc'),
         limit(maxLimit)
       );
       snap = await getDocs(q);
     } catch (primaryErr) {
-      console.warn('Query com pontuacaoTotal falhou, tentando fallback com totalPoints:', primaryErr);
-      const fallbackQuery = query(
-        usersRef,
-        where('role', '==', 'PARTICIPANT'),
-        orderBy('totalPoints', 'desc'),
-        limit(maxLimit)
-      );
-      snap = await getDocs(fallbackQuery);
+      try {
+        const fallbackQuery = query(
+          publicProfilesRef,
+          where('role', '==', 'PARTICIPANT'),
+          orderBy('totalPoints', 'desc'),
+          limit(maxLimit)
+        );
+        snap = await getDocs(fallbackQuery);
+      } catch (_secErr) {
+        // Fallback para users (se public_profiles falhar ou executado por staff/admin)
+        try {
+          const userQuery = query(
+            usersRef,
+            where('role', '==', 'PARTICIPANT'),
+            orderBy('pontuacaoTotal', 'desc'),
+            limit(maxLimit)
+          );
+          snap = await getDocs(userQuery);
+        } catch (_uErr) {
+          const userQuery2 = query(
+            usersRef,
+            where('role', '==', 'PARTICIPANT'),
+            orderBy('totalPoints', 'desc'),
+            limit(maxLimit)
+          );
+          snap = await getDocs(userQuery2);
+        }
+      }
     }
 
     const list = (snap?.docs || []).map((d, index) => mapUserToLeaderboard(d, index));
@@ -1038,16 +1184,25 @@ export async function getLeaderboardUsers(maxLimit = 50) {
       }
     } catch (_rankErr) {}
 
-    // Busca complementar sem orderBy composto para incluir todos os participantes de /users
+    // Busca complementar sem orderBy composto para incluir todos os participantes
     // mesmo que não possuam pontuacaoTotal indexado ou tenham 0 pontos.
     try {
-      const broadSnap = await getDocs(query(usersRef, limit(broadLimit)));
+      const broadSnap = await getDocs(query(publicProfilesRef, limit(broadLimit)));
       if (broadSnap && Array.isArray(broadSnap.docs)) {
         for (let i = 0; i < broadSnap.docs.length; i++) {
           list.push(mapUserToLeaderboard(broadSnap.docs[i], list.length));
         }
       }
-    } catch (_broadErr) {}
+    } catch (_broadErr) {
+      try {
+        const broadUserSnap = await getDocs(query(usersRef, limit(broadLimit)));
+        if (broadUserSnap && Array.isArray(broadUserSnap.docs)) {
+          for (let i = 0; i < broadUserSnap.docs.length; i++) {
+            list.push(mapUserToLeaderboard(broadUserSnap.docs[i], list.length));
+          }
+        }
+      } catch (_buErr) {}
+    }
 
     try {
       const eventsSnap = await getDocs(collection(db, 'pointEvents'));
@@ -1061,7 +1216,12 @@ export async function getLeaderboardUsers(maxLimit = 50) {
   } catch (err) {
     console.warn('Erro ao carregar ranking com índices, tentando fallback direto sem índice composto:', err);
     try {
-      const basicSnap = await getDocs(query(usersRef, limit(broadLimit)));
+      let basicSnap;
+      try {
+        basicSnap = await getDocs(query(publicProfilesRef, limit(broadLimit)));
+      } catch (_pErr) {
+        basicSnap = await getDocs(query(usersRef, limit(broadLimit)));
+      }
       const list = (basicSnap?.docs || [])
         .map((d, index) => mapUserToLeaderboard(d, index));
       let rankingDocs = [];
@@ -1087,17 +1247,18 @@ export async function getLeaderboardUsers(maxLimit = 50) {
 }
 
 /**
- * Escuta atualizações do ranking em tempo real via onSnapshot do Firestore (KAN-55),
- * consolidando em tempo real as coleções `/ranking`, `/pointEvents` e `/users` (tanto via query
- * indexada quanto via varredura inclusiva de `/users`).
+ * Escuta atualizações do ranking em tempo real via onSnapshot do Firestore (KAN-55 / KAN-137),
+ * consolidando em tempo real as coleções `/ranking`, `/pointEvents` e `/public_profiles` (com fallback
+ * para `/users`).
  */
 export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
+  const publicProfilesRef = collection(db, 'public_profiles');
   const usersRef = collection(db, 'users');
   const rankingRef = collection(db, 'ranking');
   const pointEventsRef = collection(db, 'pointEvents');
   const broadLimit = Math.max(maxLimit * 4, 200);
   const q = query(
-    usersRef,
+    publicProfilesRef,
     where('role', '==', 'PARTICIPANT'),
     orderBy('pontuacaoTotal', 'desc'),
     limit(maxLimit)
@@ -1147,14 +1308,26 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
 
   try {
     broadUsersUnsub = onSnapshot(
-      query(usersRef, limit(broadLimit)),
+      query(publicProfilesRef, limit(broadLimit)),
       (broadSnap) => {
         hasUsersEmitted = true;
         broadUsersList = (broadSnap?.docs || [])
           .map((d, index) => mapUserToLeaderboard(d, index));
         emitConsolidated();
       },
-      () => {}
+      () => {
+        try {
+          broadUsersUnsub = onSnapshot(
+            query(usersRef, limit(broadLimit)),
+            (uSnap) => {
+              hasUsersEmitted = true;
+              broadUsersList = (uSnap?.docs || []).map((d, index) => mapUserToLeaderboard(d, index));
+              emitConsolidated();
+            },
+            () => {}
+          );
+        } catch (_eu) {}
+      }
     );
   } catch (_e) {}
 
@@ -1168,7 +1341,7 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
     (err) => {
       console.warn('Erro no listener em tempo real do ranking (pontuacaoTotal), tentando fallback com totalPoints:', err);
       const fallbackQuery = query(
-        usersRef,
+        publicProfilesRef,
         where('role', '==', 'PARTICIPANT'),
         orderBy('totalPoints', 'desc'),
         limit(maxLimit)
@@ -1181,10 +1354,10 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
           emitConsolidated();
         },
         (finalErr) => {
-          console.warn('Fallback totalPoints falhou, ouvindo coleção users sem ordenação composta:', finalErr);
+          console.warn('Fallback totalPoints falhou, ouvindo coleção public_profiles sem ordenação composta:', finalErr);
           try {
             activeUsersUnsub = onSnapshot(
-              query(usersRef, limit(broadLimit)),
+              query(publicProfilesRef, limit(broadLimit)),
               (simpleSnap) => {
                 hasUsersEmitted = true;
                 indexedUsersList = (simpleSnap?.docs || [])
@@ -1216,16 +1389,43 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
 }
 
 /**
- * Busca usuário por username.
+ * Busca usuário por username (KAN-137).
+ * Consulta primeiro /public_profiles/{uid} para preservar privacidade de e-mail e telefone.
  */
 export async function findUserByUsername(username) {
   if (!username) return null;
   const cleanUsername = username.trim().toLowerCase();
-  const usersRef = collection(db, 'users');
-  const q = query(usersRef, where('username', '==', cleanUsername), limit(1));
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  return { id: snap.docs[0].id, ...snap.docs[0].data() };
+
+  // Consulta primeiro public_profiles
+  try {
+    const publicRef = collection(db, 'public_profiles');
+    const qPub = query(publicRef, where('username', '==', cleanUsername), limit(1));
+    const snapPub = await getDocs(qPub);
+    if (snapPub && !snapPub.empty) {
+      return { id: snapPub.docs[0].id, ...snapPub.docs[0].data() };
+    }
+    return null;
+  } catch (err) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('[userService] Aviso: Falha ao buscar username em public_profiles, tentando fallback:', err);
+    }
+  }
+
+  // Fallback para users (para staff/admin ou transição)
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('username', '==', cleanUsername), limit(1));
+    const snap = await getDocs(q);
+    if (snap && !snap.empty) {
+      return { id: snap.docs[0].id, ...snap.docs[0].data() };
+    }
+  } catch (err) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('[userService] Aviso: Falha ao buscar username em users:', err);
+    }
+  }
+
+  return null;
 }
 
 /**

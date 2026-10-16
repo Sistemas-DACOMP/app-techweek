@@ -54,10 +54,55 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
   // CASOS PERMITIDOS (assertSucceeds)
   // ==========================================
   describe('Permissões Válidas (assertSucceeds)', () => {
-    it('leitura por participante autenticado deve ser permitida', async () => {
+    it('leitura do próprio perfil pelo dono em /users deve ser permitida (KAN-137)', async () => {
       await seedUser('user-1', { firstName: 'Carlos' });
-      const authDb = testEnv.authenticatedContext('user-2', { email: 'user2@ufu.br' }).firestore();
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
       await assertSucceeds(getDoc(doc(authDb, 'users', 'user-1')));
+    });
+
+    it('leitura de /users/{userId} por ADMIN deve ser permitida (KAN-137)', async () => {
+      await seedUser('user-1', { firstName: 'Carlos' });
+      const adminDb = testEnv.authenticatedContext('admin-1', { email: 'admin@ufu.br', role: 'ADMIN' }).firestore();
+      await assertSucceeds(getDoc(doc(adminDb, 'users', 'user-1')));
+    });
+
+    it('leitura de /users/{userId} por STAFF deve ser permitida (KAN-137)', async () => {
+      await seedUser('user-1', { firstName: 'Carlos' });
+      const staffDb = testEnv.authenticatedContext('staff-1', { email: 'staff@ufu.br', role: 'STAFF' }).firestore();
+      await assertSucceeds(getDoc(doc(staffDb, 'users', 'user-1')));
+    });
+
+    it('leitura de /public_profiles/{userId} por outro participante autenticado deve ser permitida (KAN-137)', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(doc(db, 'public_profiles', 'user-1'), {
+          uid: 'user-1',
+          displayName: 'Carlos Silva',
+          firstName: 'Carlos',
+          username: 'carlos_silva',
+          course: 'Ciência da Computação',
+          totalPoints: 100,
+        });
+      });
+      const authDb = testEnv.authenticatedContext('user-2', { email: 'user2@ufu.br' }).firestore();
+      await assertSucceeds(getDoc(doc(authDb, 'public_profiles', 'user-1')));
+    });
+
+    it('criação de /public_profiles pelo próprio participante com campos públicos permitidos (KAN-137)', async () => {
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      await assertSucceeds(
+        setDoc(doc(authDb, 'public_profiles', 'user-1'), {
+          uid: 'user-1',
+          displayName: 'Carlos Silva',
+          firstName: 'Carlos',
+          lastName: 'Silva',
+          username: 'carlos_silva',
+          course: 'Ciência da Computação',
+          period: 5,
+          totalPoints: 0,
+          pontuacaoTotal: 0,
+        })
+      );
     });
 
     it('criação de perfil legítimo com campos válidos pelo próprio participante', async () => {
@@ -226,6 +271,52 @@ describe('Regras de Segurança do Firestore — Coleção /users', () => {
       await seedUser('user-1', {});
       const unauthDb = testEnv.unauthenticatedContext().firestore();
       await assertFails(getDoc(doc(unauthDb, 'users', 'user-1')));
+    });
+
+    it('leitura de /users/{userId} por outro participante deve ser negada (KAN-137)', async () => {
+      await seedUser('user-1', { firstName: 'Carlos', email: 'carlos@ufu.br', phone: '34999999999' });
+      const authDb = testEnv.authenticatedContext('user-2', { email: 'user2@ufu.br' }).firestore();
+      await assertFails(getDoc(doc(authDb, 'users', 'user-1')));
+    });
+
+    it('leitura de /public_profiles/{userId} por usuário anônimo deve ser negada (KAN-137)', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(doc(db, 'public_profiles', 'user-1'), {
+          uid: 'user-1',
+          displayName: 'Carlos Silva',
+        });
+      });
+      const unauthDb = testEnv.unauthenticatedContext().firestore();
+      await assertFails(getDoc(doc(unauthDb, 'public_profiles', 'user-1')));
+    });
+
+    it('criação de /public_profiles contendo email ou phone deve falhar (KAN-137)', async () => {
+      const authDb = testEnv.authenticatedContext('user-1', { email: 'user1@ufu.br' }).firestore();
+      await assertFails(
+        setDoc(doc(authDb, 'public_profiles', 'user-1'), {
+          uid: 'user-1',
+          displayName: 'Carlos Silva',
+          email: 'user1@ufu.br',
+        })
+      );
+      await assertFails(
+        setDoc(doc(authDb, 'public_profiles', 'user-1'), {
+          uid: 'user-1',
+          displayName: 'Carlos Silva',
+          phone: '34999999999',
+        })
+      );
+    });
+
+    it('criação de /public_profiles de outro usuário por participante comum deve falhar (KAN-137)', async () => {
+      const authDb = testEnv.authenticatedContext('user-2', { email: 'user2@ufu.br' }).firestore();
+      await assertFails(
+        setDoc(doc(authDb, 'public_profiles', 'user-1'), {
+          uid: 'user-1',
+          displayName: 'Carlos Invasor',
+        })
+      );
     });
 
     it('criação de perfil com companyId (vulnerabilidade de patrocinador)', async () => {

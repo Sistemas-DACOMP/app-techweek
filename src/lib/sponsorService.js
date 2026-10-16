@@ -85,6 +85,12 @@ export async function resolveParticipantFromQr(rawData) {
     const targetUid = parsedJson.uid || parsedJson.participantUid;
     const localDir = lookupLocalDirectoryProfile(targetUid, parsedJson?.email);
     try {
+      const publicDoc = await getDoc(doc(db, 'public_profiles', targetUid));
+      if (publicDoc?.exists()) {
+        return formatParticipant(publicDoc.id, { ...(localDir || {}), ...publicDoc.data() }, parsedJson);
+      }
+    } catch {}
+    try {
       const userDoc = await getDoc(doc(db, 'users', targetUid));
       if (userDoc?.exists()) {
         return formatParticipant(userDoc.id, { ...(localDir || {}), ...userDoc.data() }, parsedJson);
@@ -114,8 +120,17 @@ export async function resolveParticipantFromQr(rawData) {
 
   // Se contiver username no JSON
   if (parsedJson?.username) {
+    const username = String(parsedJson.username).replace(/^@/, '').toLowerCase().trim();
     try {
-      const username = String(parsedJson.username).replace(/^@/, '').toLowerCase().trim();
+      const q = query(collection(db, 'public_profiles'), where('username', '==', username), limit(1));
+      const snap = await getDocs(q);
+      if (snap && !snap.empty) {
+        const docSnap = snap.docs[0];
+        const localDir = lookupLocalDirectoryProfile(docSnap.id, docSnap.data()?.email);
+        return formatParticipant(docSnap.id, { ...(localDir || {}), ...docSnap.data() }, parsedJson);
+      }
+    } catch {}
+    try {
       const q = query(collection(db, 'users'), where('username', '==', username), limit(1));
       const snap = await getDocs(q);
       if (snap && !snap.empty) {
@@ -174,6 +189,12 @@ export async function resolveParticipantFromQr(rawData) {
   if (!parsedJson && /^[a-zA-Z0-9_-]{15,40}$/.test(trimmed)) {
     const localDir = lookupLocalDirectoryProfile(trimmed, null);
     try {
+      const publicDoc = await getDoc(doc(db, 'public_profiles', trimmed));
+      if (publicDoc?.exists()) {
+        return formatParticipant(publicDoc.id, { ...(localDir || {}), ...publicDoc.data() });
+      }
+    } catch {}
+    try {
       const directDoc = await getDoc(doc(db, 'users', trimmed));
       if (directDoc?.exists()) {
         return formatParticipant(directDoc.id, { ...(localDir || {}), ...directDoc.data() });
@@ -186,8 +207,17 @@ export async function resolveParticipantFromQr(rawData) {
 
   // 4. Se for username direto (ex: @erickraposo ou erickraposo)
   if (!parsedJson && /^@?[a-zA-Z0-9_.-]{3,30}$/.test(trimmed) && !trimmed.includes(' ')) {
+    const cleanUsername = trimmed.replace(/^@/, '').toLowerCase();
     try {
-      const cleanUsername = trimmed.replace(/^@/, '').toLowerCase();
+      const q = query(collection(db, 'public_profiles'), where('username', '==', cleanUsername), limit(1));
+      const snap = await getDocs(q);
+      if (snap && !snap.empty) {
+        const docSnap = snap.docs[0];
+        const localDir = lookupLocalDirectoryProfile(docSnap.id, docSnap.data()?.email);
+        return formatParticipant(docSnap.id, { ...(localDir || {}), ...docSnap.data() });
+      }
+    } catch {}
+    try {
       const q = query(collection(db, 'users'), where('username', '==', cleanUsername), limit(1));
       const snap = await getDocs(q);
       if (snap && !snap.empty) {
@@ -237,14 +267,22 @@ export async function resolveParticipantFromQr(rawData) {
           if (ticketData?.uid) {
             const localDir = lookupLocalDirectoryProfile(ticketData.uid, ticketData.email);
             mergePartial(ticketData.uid, localDir);
-            const linkedUserDoc = await getDoc(doc(db, 'users', ticketData.uid));
-            if (linkedUserDoc?.exists()) {
-              mergePartial(linkedUserDoc.id, linkedUserDoc.data());
-              const localDir2 = lookupLocalDirectoryProfile(linkedUserDoc.id, linkedUserDoc.data()?.email);
-              mergePartial(linkedUserDoc.id, localDir2);
-              if (hasRealParticipantName(partialData)) {
-                return formatParticipant(linkedUserDoc.id, partialData, parsedJson);
+            try {
+              const linkedPublicDoc = await getDoc(doc(db, 'public_profiles', ticketData.uid));
+              if (linkedPublicDoc?.exists()) {
+                mergePartial(linkedPublicDoc.id, linkedPublicDoc.data());
               }
+            } catch {}
+            try {
+              const linkedUserDoc = await getDoc(doc(db, 'users', ticketData.uid));
+              if (linkedUserDoc?.exists()) {
+                mergePartial(linkedUserDoc.id, linkedUserDoc.data());
+                const localDir2 = lookupLocalDirectoryProfile(linkedUserDoc.id, linkedUserDoc.data()?.email);
+                mergePartial(linkedUserDoc.id, localDir2);
+              }
+            } catch {}
+            if (hasRealParticipantName(partialData)) {
+              return formatParticipant(ticketData.uid, partialData, parsedJson);
             }
           }
           if (ticketData?.email) {
@@ -313,6 +351,14 @@ export async function resolveParticipantFromQr(rawData) {
       mergePartial(cachedUid, lookupLocalDirectoryProfile(cachedUid, cachedEmail));
 
       if (cachedUid) {
+        try {
+          const pDoc = await getDoc(doc(db, 'public_profiles', cachedUid));
+          if (pDoc?.exists()) {
+            const pData = pDoc.data();
+            mergePartial(pDoc.id, lookupLocalDirectoryProfile(pDoc.id, pData?.email || cachedEmail));
+            mergePartial(pDoc.id, pData);
+          }
+        } catch {}
         try {
           const uDoc = await getDoc(doc(db, 'users', cachedUid));
           if (uDoc?.exists()) {
