@@ -20,7 +20,7 @@ export default function SymplaStickyBanner() {
         type="button"
         onClick={() => setShowModal(true)}
         aria-label="Desbloqueie o Passaporte Completo"
-        className="sticky top-0 z-[900] flex w-full cursor-pointer items-center gap-3 border-0 border-b border-solid border-amber-500/30 bg-[linear-gradient(90deg,#2E2105,#1A1405)] px-4 py-2.5 text-left font-sans text-text transition-colors hover:bg-[linear-gradient(90deg,#3B2B07,#241B07)]"
+        className="sticky top-0 z-[900] flex w-full cursor-pointer items-center gap-3 border-0 border-b border-solid border-amber-500/30 bg-[#0C1024]/95 bg-[linear-gradient(135deg,rgba(217,119,6,0.22)_0%,rgba(147,51,234,0.18)_100%)] px-4 py-2.5 text-left font-sans text-text backdrop-blur-md transition-colors hover:bg-[linear-gradient(135deg,rgba(217,119,6,0.28)_0%,rgba(147,51,234,0.24)_100%)]"
       >
         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-gold">
           <Lock size={17} strokeWidth={2.2} aria-hidden="true" />

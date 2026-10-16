@@ -425,7 +425,7 @@ export default function Challenges() {
                 <button
                   type="button"
                   onClick={() => setShowSymplaModal(true)}
-                  className="press mt-2.5 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[linear-gradient(135deg,#D97706,#B45309)] px-3.5 text-xs font-extrabold text-white shadow transition hover:opacity-95"
+                  className="press mt-2.5 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[linear-gradient(135deg,#F59E0B,#D97706)] px-4 text-xs font-black text-[#1F1603] shadow-[0_2px_10px_rgba(217,119,6,0.3)] transition hover:opacity-95"
                 >
                   <Lock size={13} aria-hidden="true" />
                   Desbloquear Passaporte Completo
@@ -981,12 +981,6 @@ function MissionCard({ mission, getIcon, onStart, done = false, hasTicket = true
           >
             +{mission.points} pts
           </span>
-          {!done && !hasTicket && (
-            <span className="inline-flex items-center gap-1 rounded-lg border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-2 py-0.5 text-xs font-extrabold text-gold">
-              <Lock size={11} aria-hidden="true" />
-              Exclusivo Passaporte
-            </span>
-          )}
           {!done && secret && hint && (
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/[.06] px-2 py-0.5 text-xs font-bold text-[#C4B5FD]">
               Dica:<span className="tracking-[2px] text-white blur-[3.5px]">{hint}</span>
@@ -1011,13 +1005,12 @@ function MissionCard({ mission, getIcon, onStart, done = false, hasTicket = true
         ) : !hasTicket ? (
           <button
             type="button"
-            className="btn btn-action btn-sm press shrink-0 gap-1.5 !font-extrabold shadow-md"
-            style={{ background: 'linear-gradient(135deg, #D97706, #B45309)' }}
+            className="press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[10px] border border-amber-500/40 bg-[linear-gradient(135deg,rgba(217,119,6,0.20)_0%,rgba(147,51,234,0.18)_100%)] px-3 text-xs font-extrabold text-gold shadow-sm transition hover:border-gold hover:bg-[linear-gradient(135deg,rgba(217,119,6,0.30)_0%,rgba(147,51,234,0.26)_100%)] hover:text-white"
             onClick={onRequireSympla || onStart}
             aria-label={`Desbloquear missão ${mission.title || mission.name} com Passaporte Completo`}
           >
-            <Lock size={13} aria-hidden="true" />
-            Desbloquear Missão
+            <Lock size={12} aria-hidden="true" />
+            Desbloquear
           </button>
         ) : (
           <button
