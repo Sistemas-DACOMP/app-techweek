@@ -1,24 +1,33 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { 
   createUserProfile, 
   getUserProfile, 
   updateUserProfile, 
   uploadUserAvatar,
   updateUserEmail,
+  cancelPendingEmailChange,
+  syncUserEmailWithAuth,
   getLeaderboardUsers,
   subscribeToLeaderboardUsers,
-  updateUserRoleInFirestore
+  updateUserRoleInFirestore,
+  checkUsernameAvailability,
+  findUserByUsername,
+  getUserPointEvents,
+  subscribeToAllUsers,
+  getCachedUserProfile,
+  syncUserRankingInFirestore
 } from './userService';
 import { apiRequest } from './api';
-import { doc, setDoc, getDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot, deleteField } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile, updateEmail, reauthenticateWithCredential } from 'firebase/auth';
+import { updateProfile, updateEmail, verifyBeforeUpdateEmail, reauthenticateWithCredential } from 'firebase/auth';
 
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(() => ({ id: 'mockDocRef' })),
   setDoc: vi.fn(),
   getDoc: vi.fn(),
   updateDoc: vi.fn(),
+  deleteField: vi.fn(() => 'MOCK_DELETE_FIELD'),
   collection: vi.fn(),
   getDocs: vi.fn(),
   query: vi.fn(),
@@ -39,6 +48,7 @@ vi.mock('firebase/storage', () => ({
 vi.mock('firebase/auth', () => ({
   updateProfile: vi.fn(),
   updateEmail: vi.fn(() => Promise.resolve()),
+  verifyBeforeUpdateEmail: vi.fn(() => Promise.resolve()),
   reauthenticateWithCredential: vi.fn(() => Promise.resolve()),
   EmailAuthProvider: { credential: vi.fn((email, pass) => ({ email, pass })) }
 }));
@@ -48,7 +58,7 @@ vi.mock('./api', () => ({ apiRequest: vi.fn() }));
 vi.mock('./firebase', () => ({
   db: {},
   storage: {},
-  auth: { currentUser: { uid: 'user-123', email: 'atual@exemplo.com' } }
+  auth: { currentUser: { uid: 'user-123', email: 'atual@exemplo.com', getIdToken: vi.fn().mockResolvedValue('mock-token') } }
 }));
 
 describe('userService', () => {
@@ -152,42 +162,148 @@ describe('userService', () => {
     });
   });
 
-  describe('updateUserEmail', () => {
+  describe('updateUserEmail (KAN-116)', () => {
     it('lança erro se uid ou email não forem fornecidos', async () => {
       await expect(updateUserEmail('', 'teste@ufu.br')).rejects.toThrow('UID e novo e-mail são obrigatórios.');
       await expect(updateUserEmail('123', '')).rejects.toThrow('UID e novo e-mail são obrigatórios.');
     });
 
-    it('troca no Auth primeiro e só então grava no Firestore', async () => {
+    it('envia verifyBeforeUpdateEmail e grava pendingEmailChange no Firestore sem alterar o email principal', async () => {
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined);
       const result = await updateUserEmail('user-123', 'Novo.Email@ufu.br ');
 
-      expect(result).toBe(true);
-      expect(updateEmail).toHaveBeenCalledWith(expect.anything(), 'novo.email@ufu.br');
-      expect(updateDoc).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ email: 'novo.email@ufu.br' }));
-      expect(vi.mocked(updateEmail).mock.invocationCallOrder[0])
-        .toBeLessThan(vi.mocked(updateDoc).mock.invocationCallOrder[0]);
+      expect(result).toEqual({ success: true, verificationEmailSent: true });
+      expect(verifyBeforeUpdateEmail).toHaveBeenCalledWith(expect.anything(), 'novo.email@ufu.br');
+      
+      // O campo email principal NÃO deve ser atualizado agora!
+      expect(updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          pendingEmailChange: expect.objectContaining({
+            newEmail: 'novo.email@ufu.br',
+            requestedAt: expect.any(Number),
+            expiresAt: expect.any(Number)
+          })
+        })
+      );
+      const callArg = vi.mocked(updateDoc).mock.calls[0][1];
+      expect(callArg).not.toHaveProperty('email');
     });
 
-    it('se o Auth recusar (login recente), propaga o erro e NÃO grava no Firestore (KAN-117)', async () => {
+    it('se o Auth recusar (ex: requer login recente), propaga o erro e NÃO grava no Firestore', async () => {
       const err = Object.assign(new Error('recent'), { code: 'auth/requires-recent-login' });
-      vi.mocked(updateEmail).mockRejectedValueOnce(err);
+      vi.mocked(verifyBeforeUpdateEmail).mockRejectedValueOnce(err);
 
       await expect(updateUserEmail('user-123', 'novo@ufu.br')).rejects.toMatchObject({ code: 'auth/requires-recent-login' });
       expect(updateDoc).not.toHaveBeenCalled();
     });
 
-    it('com a senha informada, re-autentica antes de trocar o e-mail', async () => {
+    it('com a senha informada, re-autentica antes de chamar verifyBeforeUpdateEmail', async () => {
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined);
       await updateUserEmail('user-123', 'novo@ufu.br', 'senha-atual');
 
       expect(reauthenticateWithCredential).toHaveBeenCalledTimes(1);
       expect(vi.mocked(reauthenticateWithCredential).mock.invocationCallOrder[0])
-        .toBeLessThan(vi.mocked(updateEmail).mock.invocationCallOrder[0]);
+        .toBeLessThan(vi.mocked(verifyBeforeUpdateEmail).mock.invocationCallOrder[0]);
     });
 
     it('recusa se a sessão do Auth não for do uid informado', async () => {
       await expect(updateUserEmail('outro-uid', 'novo@ufu.br')).rejects.toThrow('Sessão inválida');
-      expect(updateEmail).not.toHaveBeenCalled();
+      expect(verifyBeforeUpdateEmail).not.toHaveBeenCalled();
       expect(updateDoc).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelPendingEmailChange (KAN-116)', () => {
+    it('remove pendingEmailChange do Firestore via deleteField', async () => {
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined);
+      const result = await cancelPendingEmailChange('user-123');
+
+      expect(result).toEqual({ success: true });
+      expect(updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          pendingEmailChange: 'MOCK_DELETE_FIELD',
+          updatedAt: 'MOCK_TIMESTAMP'
+        })
+      );
+    });
+
+    it('lança erro se uid não for fornecido', async () => {
+      await expect(cancelPendingEmailChange('')).rejects.toThrow('UID é obrigatório');
+    });
+  });
+
+  describe('syncUserEmailWithAuth (KAN-116)', () => {
+    it('sincroniza novo e-mail no Firestore quando auth.currentUser.email mudou e limpa pendingEmailChange', async () => {
+      const reloadMock = vi.fn().mockResolvedValue(undefined);
+      const getIdTokenMock = vi.fn().mockResolvedValue('new-token');
+      const mockUser = {
+        uid: 'user-123',
+        email: 'novo.confirmado@ufu.br',
+        reload: reloadMock,
+        getIdToken: getIdTokenMock
+      };
+
+      vi.mocked(getDoc).mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({
+          email: 'antigo@ufu.br',
+          pendingEmailChange: {
+            newEmail: 'novo.confirmado@ufu.br',
+            expiresAt: Date.now() + 60000
+          }
+        })
+      });
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined);
+
+      const result = await syncUserEmailWithAuth('user-123', mockUser);
+
+      expect(reloadMock).toHaveBeenCalled();
+      expect(getIdTokenMock).toHaveBeenCalledWith(true);
+      expect(result).toEqual({ synced: true, newEmail: 'novo.confirmado@ufu.br' });
+      expect(updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          email: 'novo.confirmado@ufu.br',
+          pendingEmailChange: 'MOCK_DELETE_FIELD',
+          updatedAt: 'MOCK_TIMESTAMP'
+        })
+      );
+    });
+
+    it('limpa pendingEmailChange se a solicitação expirou', async () => {
+      const reloadMock = vi.fn().mockResolvedValue(undefined);
+      const getIdTokenMock = vi.fn().mockResolvedValue('token');
+      const mockUser = {
+        uid: 'user-123',
+        email: 'antigo@ufu.br',
+        reload: reloadMock,
+        getIdToken: getIdTokenMock
+      };
+
+      vi.mocked(getDoc).mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({
+          email: 'antigo@ufu.br',
+          pendingEmailChange: {
+            newEmail: 'novo@ufu.br',
+            expiresAt: Date.now() - 5000
+          }
+        })
+      });
+      vi.mocked(updateDoc).mockResolvedValueOnce(undefined);
+
+      const result = await syncUserEmailWithAuth('user-123', mockUser);
+
+      expect(result).toEqual({ synced: false, expired: true });
+      expect(updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          pendingEmailChange: 'MOCK_DELETE_FIELD',
+          updatedAt: 'MOCK_TIMESTAMP'
+        })
+      );
     });
   });
 
@@ -370,4 +486,419 @@ describe('userService', () => {
       expect(res).toEqual({ success: false, error: 'Sem permissão.' });
     });
   });
+
+  describe('checkUsernameAvailability', () => {
+    it('retorna indisponível para usernames vazios, não-strings ou inválidos', async () => {
+      expect(await checkUsernameAvailability(null)).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability(undefined)).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability('')).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability(123)).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability('ab')).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability('a'.repeat(21))).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability('user name com espaco')).toEqual({ available: false, existingUser: null });
+      expect(await checkUsernameAvailability('user#symbol!')).toEqual({ available: false, existingUser: null });
+    });
+
+    it('remove arroba inicial e normaliza antes de verificar', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({ empty: true, docs: [] });
+
+      const res = await checkUsernameAvailability('@Dev_User.123');
+      expect(where).toHaveBeenCalledWith('username', '==', 'dev_user.123');
+      expect(res).toEqual({ available: true, existingUser: null });
+    });
+
+    it('retorna available: false e dados do existingUser quando encontrado', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              displayName: 'Erick Dev',
+              avatarUrl: 'https://cdn.example.com/erick.png'
+            })
+          }
+        ]
+      });
+
+      const res = await checkUsernameAvailability('erick_dev');
+      expect(res.available).toBe(false);
+      expect(res.existingUser).toEqual({
+        name: 'Erick Dev',
+        avatarUrl: 'https://cdn.example.com/erick.png'
+      });
+    });
+
+    it('formata existingUser usando firstName/lastName e photoURL como fallback', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              firstName: 'Carlos',
+              lastName: 'Silva',
+              photoURL: 'https://cdn.example.com/photo.png'
+            })
+          }
+        ]
+      });
+
+      const res = await checkUsernameAvailability('carlos.silva');
+      expect(res.available).toBe(false);
+      expect(res.existingUser).toEqual({
+        name: 'Carlos Silva',
+        avatarUrl: 'https://cdn.example.com/photo.png'
+      });
+    });
+
+    it('retorna available: true quando o username não existe no Firestore', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({ empty: true, docs: [] });
+      const res = await checkUsernameAvailability('novo_usuario');
+      expect(res).toEqual({ available: true, existingUser: null });
+    });
+
+    it('retorna available: true em caso de exceção no Firestore', async () => {
+      vi.mocked(getDocs).mockRejectedValueOnce(new Error('Network error'));
+      const res = await checkUsernameAvailability('usuario_offline');
+      expect(res).toEqual({ available: true, existingUser: null });
+    });
+  });
+
+  describe('findUserByUsername', () => {
+    it('retorna null se username não for informado', async () => {
+      expect(await findUserByUsername(null)).toBeNull();
+      expect(await findUserByUsername('')).toBeNull();
+      expect(await findUserByUsername(undefined)).toBeNull();
+    });
+
+    it('retorna null se usuário não for encontrado', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({ empty: true, docs: [] });
+      const res = await findUserByUsername('desconhecido');
+      expect(res).toBeNull();
+    });
+
+    it('retorna dados do usuário quando encontrado', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        empty: false,
+        docs: [{ id: 'user-77', data: () => ({ username: 'lucas', email: 'lucas@exemplo.com' }) }]
+      });
+
+      const res = await findUserByUsername('Lucas ');
+      expect(where).toHaveBeenCalledWith('username', '==', 'lucas');
+      expect(res).toEqual({ id: 'user-77', username: 'lucas', email: 'lucas@exemplo.com' });
+    });
+  });
+
+  describe('getUserPointEvents', () => {
+    it('retorna array vazio quando uid não for informado', async () => {
+      expect(await getUserPointEvents(null)).toEqual([]);
+      expect(await getUserPointEvents('')).toEqual([]);
+    });
+
+    it('retorna lista de eventos de pontuação quando encontrados', async () => {
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        docs: [
+          { id: 'evt-1', data: () => ({ type: 'PRESENCE', points: 10 }) },
+          { id: 'evt-2', data: () => ({ type: 'BONUS', points: 5 }) }
+        ]
+      });
+
+      const res = await getUserPointEvents('user-123');
+      expect(res).toEqual([
+        { id: 'evt-1', type: 'PRESENCE', points: 10 },
+        { id: 'evt-2', type: 'BONUS', points: 5 }
+      ]);
+    });
+
+    it('retorna array vazio silenciosamente em caso de permission-denied', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const permErr = new Error('Permission denied');
+      permErr.code = 'permission-denied';
+      vi.mocked(getDocs).mockRejectedValueOnce(permErr);
+
+      const res = await getUserPointEvents('user-123');
+      expect(res).toEqual([]);
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('retorna array vazio e loga aviso em caso de outros erros', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.mocked(getDocs).mockRejectedValueOnce(new Error('Internal Firestore Error'));
+
+      const res = await getUserPointEvents('user-123');
+      expect(res).toEqual([]);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('subscribeToAllUsers', () => {
+    it('notifica callback com lista de usuários no snapshot consolidando pontos de /ranking e /pointEvents', () => {
+      const mockRankUnsub = vi.fn();
+      const mockEventsUnsub = vi.fn();
+      const mockUsersUnsub = vi.fn();
+      let rankSuccessCb;
+      let eventsSuccessCb;
+      let usersSuccessCb;
+
+      vi.mocked(onSnapshot)
+        .mockImplementationOnce((_ref, onNext) => {
+          rankSuccessCb = onNext;
+          return mockRankUnsub;
+        })
+        .mockImplementationOnce((_ref, onNext) => {
+          eventsSuccessCb = onNext;
+          return mockEventsUnsub;
+        })
+        .mockImplementationOnce((_ref, onNext) => {
+          usersSuccessCb = onNext;
+          return mockUsersUnsub;
+        });
+
+      const cb = vi.fn();
+      const unsub = subscribeToAllUsers(cb);
+
+      usersSuccessCb({
+        docs: [
+          { id: 'u1', data: () => ({ name: 'User 1', email: 'u1@ufu.br', totalPoints: 10 }) },
+          { id: 'u2', data: () => ({ name: 'User 2', email: 'u2@ufu.br' }) }
+        ]
+      });
+
+      expect(cb).toHaveBeenCalledWith([
+        { id: 'u1', uid: 'u1', name: 'User 1', email: 'u1@ufu.br', totalPoints: 10 },
+        { id: 'u2', uid: 'u2', name: 'User 2', email: 'u2@ufu.br' }
+      ]);
+
+      rankSuccessCb({
+        docs: [
+          { id: 'u1', data: () => ({ uid: 'u1', totalPoints: 50 }) }
+        ]
+      });
+
+      expect(cb).toHaveBeenLastCalledWith([
+        { id: 'u1', uid: 'u1', name: 'User 1', email: 'u1@ufu.br', totalPoints: 50, pontuacaoTotal: 50 },
+        { id: 'u2', uid: 'u2', name: 'User 2', email: 'u2@ufu.br' }
+      ]);
+
+      eventsSuccessCb({
+        docs: [
+          { id: 'u2_evt1', data: () => ({ userId: 'u2', referenceId: 'm1', points: 30 }) }
+        ]
+      });
+
+      expect(cb).toHaveBeenLastCalledWith([
+        { id: 'u1', uid: 'u1', name: 'User 1', email: 'u1@ufu.br', totalPoints: 50, pontuacaoTotal: 50 },
+        { id: 'u2', uid: 'u2', name: 'User 2', email: 'u2@ufu.br', totalPoints: 30, pontuacaoTotal: 30 }
+      ]);
+
+      unsub();
+      expect(mockUsersUnsub).toHaveBeenCalled();
+      expect(mockRankUnsub).toHaveBeenCalled();
+      expect(mockEventsUnsub).toHaveBeenCalled();
+    });
+
+    it('em caso de erro, recorre a perfis armazenados em localStorage', () => {
+      const mockStorage = {
+        'facom_profile_u1': JSON.stringify({ id: 'u1', name: 'User Cache' }),
+        'other_key': 'not_profile'
+      };
+      const storageKeys = Object.keys(mockStorage);
+      const fakeLocalStorage = {
+        length: storageKeys.length,
+        key: (idx) => storageKeys[idx] || null,
+        getItem: (k) => mockStorage[k] || null
+      };
+
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      let errorCb;
+      vi.mocked(onSnapshot)
+        .mockImplementationOnce(() => vi.fn())
+        .mockImplementationOnce(() => vi.fn())
+        .mockImplementationOnce((_ref, _onNext, onError) => {
+          errorCb = onError;
+          return vi.fn();
+        });
+
+      const cb = vi.fn();
+      subscribeToAllUsers(cb);
+
+      errorCb(new Error('Network disconnected'));
+
+      expect(cb).toHaveBeenCalledWith([
+        { id: 'u1', name: 'User Cache' }
+      ]);
+
+      warnSpy.mockRestore();
+      vi.unstubAllGlobals();
+    });
+  });
+
+  describe('getCachedUserProfile', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('retorna perfil do localStorage para o UID fornecido', () => {
+      const fakeLocalStorage = {
+        getItem: vi.fn((k) => k === 'facom_profile_user-99' ? JSON.stringify({ uid: 'user-99', name: 'Lucas', email: 'lucas@exemplo.com' }) : null)
+      };
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+
+      const profile = getCachedUserProfile('user-99');
+      expect(profile).toEqual({ uid: 'user-99', name: 'Lucas', email: 'lucas@exemplo.com' });
+      expect(fakeLocalStorage.getItem).toHaveBeenCalledWith('facom_profile_user-99');
+    });
+
+    it('eleva perfil para ADMIN quando o email pertence a ADMIN_EMAILS', () => {
+      const fakeLocalStorage = {
+        getItem: vi.fn((k) => k === 'facom_profile_admin-1' ? JSON.stringify({ uid: 'admin-1', email: 'sam03amorim@gmail.com', role: 'PARTICIPANT' }) : null)
+      };
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+
+      const profile = getCachedUserProfile('admin-1');
+      expect(profile.role).toBe('ADMIN');
+      expect(profile.participantType).toBe('Organizador');
+    });
+
+    it('usa auth.currentUser.uid quando uid não for informado', () => {
+      const fakeLocalStorage = {
+        getItem: vi.fn((k) => k === 'facom_profile_user-123' ? JSON.stringify({ uid: 'user-123', name: 'Atual' }) : null)
+      };
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+
+      const profile = getCachedUserProfile();
+      expect(profile).toEqual({ uid: 'user-123', name: 'Atual' });
+      expect(fakeLocalStorage.getItem).toHaveBeenCalledWith('facom_profile_user-123');
+    });
+
+    it('faz fallback procurando qualquer chave facom_profile_* quando o uid específico não existir', () => {
+      const mockStorage = {
+        'other_key': 'abc',
+        'facom_profile_fallback': JSON.stringify({ uid: 'fallback', name: 'Fallback User', email: 'fb@ufu.br' })
+      };
+      const keys = Object.keys(mockStorage);
+      const fakeLocalStorage = {
+        length: keys.length,
+        key: (idx) => keys[idx] || null,
+        getItem: (k) => mockStorage[k] || null
+      };
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+
+      const profile = getCachedUserProfile('uid_inexistente');
+      expect(profile).toMatchObject({ uid: 'fallback', name: 'Fallback User' });
+    });
+
+    it('retorna null se nada for encontrado ou se o json for inválido', () => {
+      const fakeLocalStorage = {
+        length: 1,
+        key: () => 'facom_profile_broken',
+        getItem: () => 'invalid-json{'
+      };
+      vi.stubGlobal('localStorage', fakeLocalStorage);
+
+      const profile = getCachedUserProfile('uid_inexistente');
+      expect(profile).toBeNull();
+    });
+  });
+
+  describe('syncUserRankingInFirestore e fusão inclusiva do Ranking', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('sincroniza participante mesmo com 0 pontos e nunca reduz pontuação já maior no cache local', async () => {
+      const store = {
+        'facom_profile_user-50': JSON.stringify({
+          uid: 'user-50',
+          firstName: 'Mariana',
+          username: 'mariana',
+          role: 'PARTICIPANT',
+          totalPoints: 120,
+          pontuacaoTotal: 120
+        })
+      };
+      vi.stubGlobal('localStorage', {
+        getItem: vi.fn((k) => store[k] || null),
+        setItem: vi.fn((k, v) => { store[k] = v; })
+      });
+
+      const ok = await syncUserRankingInFirestore('user-50', 10);
+      expect(ok).toBe(true);
+      expect(setDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          uid: 'user-50',
+          firstName: 'Mariana',
+          username: 'mariana',
+          totalPoints: 120,
+          pontuacaoTotal: 120
+        }),
+        { merge: true }
+      );
+    });
+
+    it('ignora sincronização no /ranking para perfis ADMIN, STAFF ou SPONSOR', async () => {
+      const ok = await syncUserRankingInFirestore('staff-1', 100, {
+        uid: 'staff-1',
+        role: 'STAFF',
+        firstName: 'Fiscal'
+      });
+      expect(ok).toBe(false);
+      expect(setDoc).not.toHaveBeenCalled();
+    });
+
+    it('getLeaderboardUsers consolida participantes de /users (inclusive sem pontuacaoTotal ou com 0 pts), /ranking e /pointEvents', async () => {
+      vi.mocked(getDocs)
+        // 1ª chamada: query indexada por pontuacaoTotal
+        .mockResolvedValueOnce({
+          docs: [
+            {
+              id: 'u-1',
+              data: () => ({ role: 'PARTICIPANT', username: 'alice', firstName: 'Alice', pontuacaoTotal: 80 })
+            }
+          ]
+        })
+        // 2ª chamada: collection(db, 'ranking')
+        .mockResolvedValueOnce({
+          docs: [
+            {
+              id: 'u-2',
+              data: () => ({ role: 'PARTICIPANT', username: 'bruno', firstName: 'Bruno', pontuacaoTotal: 120 })
+            }
+          ]
+        })
+        // 3ª chamada: varredura inclusiva de /users (participantes sem pontuacaoTotal ou com 0 pontos)
+        .mockResolvedValueOnce({
+          docs: [
+            {
+              id: 'u-3',
+              data: () => ({ role: 'PARTICIPANT', username: 'clara', firstName: 'Clara', totalPoints: 0 })
+            },
+            {
+              id: 'admin-99',
+              data: () => ({ role: 'ADMIN', username: 'admin', firstName: 'Admin', pontuacaoTotal: 999 })
+            }
+          ]
+        })
+        // 4ª chamada: collection(db, 'pointEvents')
+        .mockResolvedValueOnce({
+          docs: [
+            {
+              id: 'u-3_challenge_complete_profile',
+              data: () => ({ userId: 'u-3', referenceId: 'complete_profile', points: 30 })
+            }
+          ]
+        });
+
+      const list = await getLeaderboardUsers(50);
+      expect(list.map((u) => u.id)).toEqual(['u-2', 'u-1', 'u-3']);
+      expect(list[0]).toMatchObject({ id: 'u-2', points: 120, rank: 1 });
+      expect(list[1]).toMatchObject({ id: 'u-1', points: 80, rank: 2 });
+      expect(list[2]).toMatchObject({ id: 'u-3', points: 30, rank: 3 });
+    });
+  });
 });
+

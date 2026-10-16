@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { requireAuth, requireRole } from '../../backend/src/middlewares/authMiddleware';
+import { requireAuth, requireRole, requireVerifiedEmail } from '../../backend/src/middlewares/authMiddleware';
 import { auth } from '../../backend/src/config/firebaseAdmin';
 
 // Mock do Firebase Auth
@@ -97,6 +97,50 @@ describe('Middleware: requireAuth', () => {
     expect(req.user.role).toBe('PARTICIPANT');
     expect(next).toHaveBeenCalled();
   });
+
+  it('sam03amorim@gmail.com sem custom claim no token é tratado como PARTICIPANT (sem auto-promoção por e-mail)', async () => {
+    req.headers.authorization = 'Bearer token-sam';
+    auth.verifyIdToken.mockResolvedValue({
+      uid: 'uid-sam',
+      email: 'sam03amorim@gmail.com',
+      email_verified: true
+    });
+
+    await requireAuth(req, res, next);
+
+    expect(req.user.role).toBe('PARTICIPANT');
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('token com custom claim role: "ADMIN" recebe role "ADMIN"', async () => {
+    req.headers.authorization = 'Bearer token-admin';
+    auth.verifyIdToken.mockResolvedValue({
+      uid: 'uid-admin-1',
+      email: 'outro@admin.com',
+      role: 'ADMIN',
+      email_verified: true
+    });
+
+    await requireAuth(req, res, next);
+
+    expect(req.user.role).toBe('ADMIN');
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('token com custom claim admin: true recebe role "ADMIN"', async () => {
+    req.headers.authorization = 'Bearer token-admin-bool';
+    auth.verifyIdToken.mockResolvedValue({
+      uid: 'uid-admin-2',
+      email: 'outro2@admin.com',
+      admin: true,
+      email_verified: true
+    });
+
+    await requireAuth(req, res, next);
+
+    expect(req.user.role).toBe('ADMIN');
+    expect(next).toHaveBeenCalled();
+  });
 });
 
 describe('Middleware: requireRole', () => {
@@ -150,3 +194,69 @@ describe('Middleware: requireRole', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 });
+
+describe('Middleware: requireVerifiedEmail (KAN-116 / SEC)', () => {
+  let req;
+  let res;
+  let next;
+
+  beforeEach(() => {
+    req = {};
+    res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn().mockReturnThis()
+    };
+    next = vi.fn();
+    vi.clearAllMocks();
+  });
+
+  it('retorna 401 se req.user não existir', () => {
+    req.user = undefined;
+    requireVerifiedEmail(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'UNAUTHORIZED' }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('retorna 403 EMAIL_NOT_VERIFIED se emailVerified for false', () => {
+    req.user = { uid: 'u1', role: 'PARTICIPANT', emailVerified: false };
+    requireVerifiedEmail(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'EMAIL_NOT_VERIFIED',
+      message: 'É necessário confirmar seu endereço de e-mail antes de realizar esta ação.'
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('retorna 403 EMAIL_NOT_VERIFIED se emailVerified for undefined', () => {
+    req.user = { uid: 'u1', role: 'PARTICIPANT' };
+    requireVerifiedEmail(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'EMAIL_NOT_VERIFIED',
+      message: 'É necessário confirmar seu endereço de e-mail antes de realizar esta ação.'
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('chama next() se emailVerified for true', () => {
+    req.user = { uid: 'u1', role: 'PARTICIPANT', emailVerified: true };
+    requireVerifiedEmail(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('chama next() para ADMIN mesmo se emailVerified for false', () => {
+    req.user = { uid: 'u-admin', role: 'ADMIN', emailVerified: false };
+    requireVerifiedEmail(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+});
+

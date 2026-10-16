@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   getRoomIncidents,
   createRoomIncident,
@@ -16,6 +16,7 @@ import {
   getStageDisplayMode,
   setStageDisplayMode,
   calculateUfuExtensionAudit,
+  exportUfuAuditCsv,
   resetLiveOpsStorage,
   sendActivityBroadcast,
   getActivityBroadcasts,
@@ -195,6 +196,145 @@ describe('liveOpsService - Live Operations & Event Steering Engine', () => {
 
       expect(bruno.isEligible).toBe(false);
       expect(bruno.statusLabel).toBe('FREQUÊNCIA INSUFICIENTE');
+    });
+
+    it('suporta assinatura posicional (AdminPessoas) e documentos incompletos sem quebrar', () => {
+      const mockUsers = [
+        { uid: 'u1', fullName: 'Ana Silva', email: 'ana@ufu.br', totalPoints: 500, hasSymplaTicket: true, course: 'BCC', period: 6 },
+        { id: 'u2', firstName: 'Bruno', totalPoints: 40 },
+        null,
+        undefined,
+        {},
+      ];
+      const mockActivities = [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }];
+
+      const audit = calculateUfuExtensionAudit(mockUsers, mockActivities, 75);
+
+      expect(Array.isArray(audit.students)).toBe(true);
+      expect(audit.students.length).toBe(3);
+      expect(audit.totalUfuStudents).toBe(3);
+      expect(audit.requiredHours).toBe(18);
+      expect(audit.eligibleCount).toBe(1);
+      expect(audit.ineligibleCount).toBe(2);
+      expect(typeof audit.avgAttendanceRate).toBe('number');
+      expect(audit.students[0].id).toBe('u1');
+      expect(audit.students[0].attendancePercentage).toBeGreaterThanOrEqual(75);
+      expect(audit.students[0].attendedActivitiesCount).toBeGreaterThanOrEqual(1);
+
+      const csv = exportUfuAuditCsv(audit, { download: false });
+      expect(csv).toContain('Nome Completo;E-mail;Curso / Vínculo');
+      expect(csv).toContain('Ana Silva');
+    });
+
+    describe('exportUfuAuditCsv', () => {
+      const originalDocument = globalThis.document;
+      const originalCreateObjectURL = URL.createObjectURL;
+      const originalRevokeObjectURL = URL.revokeObjectURL;
+
+      afterEach(() => {
+        if (originalDocument === undefined) {
+          delete globalThis.document;
+        } else {
+          globalThis.document = originalDocument;
+        }
+        URL.createObjectURL = originalCreateObjectURL;
+        URL.revokeObjectURL = originalRevokeObjectURL;
+      });
+
+      it('retorna silenciosamente quando auditResult ou auditResult.users não são fornecidos', () => {
+        const createUrlSpy = vi.fn();
+        URL.createObjectURL = createUrlSpy;
+
+        exportUfuAuditCsv(null);
+        exportUfuAuditCsv(undefined);
+        exportUfuAuditCsv({});
+
+        expect(createUrlSpy).not.toHaveBeenCalled();
+      });
+
+      it('gera CSV com BOM UTF-8, cabeçalhos, escape de aspas e dispara download via elemento <a>', async () => {
+        let capturedBlob = null;
+        URL.createObjectURL = vi.fn((blob) => {
+          capturedBlob = blob;
+          return 'blob:https://techweek.ufu.br/ufu-audit-123';
+        });
+        URL.revokeObjectURL = vi.fn();
+
+        const mockAnchor = {
+          href: '',
+          download: '',
+          click: vi.fn(),
+        };
+        const appendChildSpy = vi.fn();
+        const removeChildSpy = vi.fn();
+
+        globalThis.document = {
+          createElement: vi.fn((tag) => {
+            expect(tag).toBe('a');
+            return mockAnchor;
+          }),
+          body: {
+            appendChild: appendChildSpy,
+            removeChild: removeChildSpy,
+          },
+        };
+
+        const auditResult = {
+          totalEventHours: 24,
+          users: [
+            {
+              uid: 'u1',
+              name: 'Ana "Dev" Silva',
+              email: 'ana@ufu.br',
+              course: 'Ciência da Computação',
+              period: '5º Período',
+              hasSymplaTicket: true,
+              attendedHours: 20,
+              attendancePct: 83,
+              isEligible: true,
+            },
+            {
+              uid: 'u2',
+              name: 'Bruno Costa',
+              email: 'bruno@ufu.br',
+              course: 'Sistemas de Informação',
+              period: '',
+              hasSymplaTicket: false,
+              attendedHours: 8,
+              attendancePct: 33,
+              isEligible: false,
+            },
+          ],
+        };
+
+        exportUfuAuditCsv(auditResult);
+
+        expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+        expect(capturedBlob).toBeInstanceOf(Blob);
+        expect(capturedBlob.type).toBe('text/csv;charset=utf-8;');
+
+        const csvText = await capturedBlob.text();
+        const lines = csvText.split('\r\n');
+
+        // Nota: Blob.text() em UTF-8 decodifica ou preserva o BOM no início
+        const headerLine = lines[0].replace(/^\uFEFF/, '');
+        expect(headerLine).toBe(
+          'Nome Completo;E-mail;Curso / Vínculo;Ingresso Sympla;Horas Computadas;Frequência (%);Status Homologação;Regra 75% UFU'
+        );
+        expect(lines[1]).toBe(
+          '"Ana ""Dev"" Silva";"ana@ufu.br";"Ciência da Computação · 5º Período";Sim;20h de 24h;83%;HOMOLOGADO;CUMPRIDA'
+        );
+        expect(lines[2]).toBe(
+          '"Bruno Costa";"bruno@ufu.br";"Sistemas de Informação";Não;8h de 24h;33%;PENDENTE;INSUFICIENTE'
+        );
+
+        expect(mockAnchor.href).toBe('blob:https://techweek.ufu.br/ufu-audit-123');
+        expect(mockAnchor.download).toMatch(/^TechWeek2026_Auditoria_Presenca_UFU_75Pct_\d{4}-\d{2}-\d{2}\.csv$/);
+        expect(appendChildSpy).toHaveBeenCalledWith(mockAnchor);
+        expect(mockAnchor.click).toHaveBeenCalledTimes(1);
+        expect(removeChildSpy).toHaveBeenCalledWith(mockAnchor);
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:https://techweek.ufu.br/ufu-audit-123');
+      });
     });
   });
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   passwordsMatch,
   isPasswordLongEnough,
+  getPasswordStrength,
   validateAvatarFile,
   MAX_AVATAR_BYTES,
   validateMissionPhoto,
@@ -50,6 +51,90 @@ describe('isPasswordLongEnough (KAN-27)', () => {
     expect(isPasswordLongEnough('umaSenhaBemLonga')).toBe(true);
   });
 });
+
+describe('getPasswordStrength', () => {
+  it('retorna score 0 com estado inválido para valores vazios ou não string', () => {
+    expect(getPasswordStrength('')).toEqual({
+      score: 0,
+      label: 'Muito fraca',
+      color: '#6b7280',
+      percent: 0,
+      valid: false
+    });
+    expect(getPasswordStrength(null)).toEqual({
+      score: 0,
+      label: 'Muito fraca',
+      color: '#6b7280',
+      percent: 0,
+      valid: false
+    });
+    expect(getPasswordStrength(undefined)).toEqual({
+      score: 0,
+      label: 'Muito fraca',
+      color: '#6b7280',
+      percent: 0,
+      valid: false
+    });
+  });
+
+  it('avalia senha curta e simples com score 0 (Muito fraca)', () => {
+    expect(getPasswordStrength('123')).toEqual({
+      score: 0,
+      label: 'Muito fraca',
+      color: '#ef4444',
+      percent: 10,
+      valid: false
+    });
+  });
+
+  it('avalia senha com 6 caracteres simples com score 1 (Fraca, válida para Auth)', () => {
+    expect(getPasswordStrength('123456')).toEqual({
+      score: 1,
+      label: 'Fraca',
+      color: '#f97316',
+      percent: 25,
+      valid: true
+    });
+  });
+
+  it('avalia senha com 8 caracteres simples com score 2 (Média)', () => {
+    expect(getPasswordStrength('12345678')).toEqual({
+      score: 2,
+      label: 'Média',
+      color: '#eab308',
+      percent: 50,
+      valid: true
+    });
+  });
+
+  it('avalia senha de 8 caracteres misturando letras e números com score 3 (Boa)', () => {
+    expect(getPasswordStrength('senha123')).toEqual({
+      score: 3,
+      label: 'Boa',
+      color: '#3b82f6',
+      percent: 75,
+      valid: true
+    });
+  });
+
+  it('avalia senha forte com score 4 ao incluir maiúsculas ou caracteres especiais (Forte)', () => {
+    expect(getPasswordStrength('Senha123')).toEqual({
+      score: 4,
+      label: 'Forte',
+      color: '#10b981',
+      percent: 100,
+      valid: true
+    });
+    expect(getPasswordStrength('senha123!')).toEqual({
+      score: 4,
+      label: 'Forte',
+      color: '#10b981',
+      percent: 100,
+      valid: true
+    });
+  });
+});
+
 
 // REG-A3 (Profile.jsx, ja implementada no front): avatar precisa ser
 // imagem e ter ate 2MB.

@@ -65,3 +65,5 @@ Regra pra evitar isso se repetir: todo teste novo que documentar uma regra de ne
 | [REG-SPONSOR-003](REG-SPONSOR-003-cota-de-equipe-atomica.md) | Cota de equipe (teamLimit) atômica | INFERIDA | backend pronto — KAN-124 |
 | [REG-SPONSOR-004](REG-SPONSOR-004-termo-lgpd-proprio-patrocinador.md) | Termo de LGPD próprio do patrocinador | INFERIDA | texto jurídico pendente — KAN-124 |
 | [REG-SPONSOR-005](REG-SPONSOR-005-sem-sympla-sem-reserva-leads-por-pessoa.md) | Sem Sympla sem reserva/pontos; leads por pessoa | CONFIRMADA + INFERIDA | backend pronto — KAN-124 |
+| [REG-AUTH-004](REG-AUTH-004-confirmacao-email-obrigatoria.md) | Confirmação de e-mail obrigatória (profile update, booking, claim, leads, likes) | CONFIRMADA | implementado — KAN-116 |
+| [REG-AUTH-005](REG-AUTH-005-troca-email-verificacao-previa.md) | Troca segura de e-mail com verifyBeforeUpdateEmail e pendingEmailChange | CONFIRMADA | implementado — KAN-116 |

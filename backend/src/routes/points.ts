@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db, FieldValue } from '../config/firebaseAdmin';
-import { requireAuth, requireSymplaTicket } from '../middlewares/authMiddleware';
+import { requireAuth, requireSymplaTicket, requireVerifiedEmail } from '../middlewares/authMiddleware';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 import { validateMissionProof } from '../lib/missionProofValidator';
@@ -27,6 +27,7 @@ function sanitizeId(value: string): string {
 // Catálogo padrão de contingência e auto-seed caso o documento em /missions/{missionId} não exista no Firestore
 const DEFAULT_MISSION_CATALOG: Record<string, number> = {
   scan: 5,
+  code_scan: 5,
   network_first: 10,
   network_course: 15,
   network_type: 15,
@@ -39,9 +40,20 @@ const DEFAULT_MISSION_CATALOG: Record<string, number> = {
   sponsor_vaga: 20,
   sponsor_tecnologia: 20,
   sponsor_colecao: 50,
+  sponsor_quiz_levty: 25,
   secret_password: 30,
   secret_qr: 40,
-  instagram_story: 50
+  qr_hunt: 40,
+  instagram_story: 50,
+  social_mascot_photo: 40,
+  flash_secret_code: 100,
+  complete_profile: 30,
+  share_invite: 20,
+  early_checkin: 20,
+  feedback_3: 30,
+  all_days: 100,
+  first_lecture: 15,
+  lecture_attendance: 20
 };
 
 function resolveMissionId(eventType: string, referenceId: string): string {
@@ -67,7 +79,8 @@ function resolveMissionId(eventType: string, referenceId: string): string {
 // `points` alto numa chamada direta à API.
 //
 // KAN-84: Exige ingresso validado do Sympla para participar e creditar pontos.
-router.post('/claim', requireAuth, participantActionLimiter, requireSymplaTicket, async (req: Request, res: Response) => {
+// KAN-116: Exige confirmação de e-mail antes de resgatar pontos.
+router.post('/claim', requireAuth, requireVerifiedEmail, participantActionLimiter, requireSymplaTicket, async (req: Request, res: Response) => {
   const { eventType, referenceId, metadata } = req.body ?? {};
   const uid = req.user!.uid;
 
@@ -101,6 +114,7 @@ router.post('/claim', requireAuth, participantActionLimiter, requireSymplaTicket
   const eventRef = db.collection('users').doc(uid).collection('point_events').doc(eventDocId);
   const userRef = db.collection('users').doc(uid);
   const missionRef = db.collection('missions').doc(missionId);
+  const rankingRef = db.collection('ranking').doc(uid);
 
   try {
     const result = await db.runTransaction(async (tx) => {
@@ -122,12 +136,21 @@ router.post('/claim', requireAuth, participantActionLimiter, requireSymplaTicket
       }
 
       let missionPoints: number | undefined;
+      let shouldSeedMission = false;
       if (missionSnap.exists) {
-        missionPoints = missionSnap.data()?.points;
+        const rawPoints = missionSnap.data()?.points;
+        if (typeof rawPoints === 'number') {
+          missionPoints = rawPoints;
+        } else if (typeof rawPoints === 'string' && rawPoints.trim() !== '' && Number.isFinite(Number(rawPoints))) {
+          missionPoints = Number(rawPoints);
+        } else if (rawPoints === undefined && DEFAULT_MISSION_CATALOG[missionId] !== undefined) {
+          missionPoints = DEFAULT_MISSION_CATALOG[missionId];
+        } else {
+          missionPoints = rawPoints as any;
+        }
       } else if (DEFAULT_MISSION_CATALOG[missionId] !== undefined) {
         missionPoints = DEFAULT_MISSION_CATALOG[missionId];
-        // Auto-seed no Firestore para consistência futura
-        tx.set(missionRef, { points: missionPoints, createdAt: FieldValue.serverTimestamp() });
+        shouldSeedMission = true;
       } else {
         return {
           status: 404 as const,
@@ -142,6 +165,7 @@ router.post('/claim', requireAuth, participantActionLimiter, requireSymplaTicket
       }
 
       // Validação de comprovação de cumprimento da missão (KAN-80)
+      // IMPORTANTE: deve ocorrer ANTES de qualquer tx.set/tx.update na transação!
       const proofResult = await validateMissionProof(tx, {
         uid,
         missionId,
@@ -159,11 +183,19 @@ router.post('/claim', requireAuth, participantActionLimiter, requireSymplaTicket
         };
       }
 
+      if (shouldSeedMission) {
+        // Auto-seed no Firestore para consistência futura (após todas as leituras da transação)
+        tx.set(missionRef, { points: missionPoints, createdAt: FieldValue.serverTimestamp() });
+      }
+
+      const sanitizedMetadata =
+        metadata && typeof metadata === 'object' ? JSON.parse(JSON.stringify(metadata)) : null;
+
       tx.set(eventRef, {
         eventType,
         referenceId,
         points: missionPoints,
-        metadata: metadata ?? null,
+        metadata: sanitizedMetadata,
         createdAt: FieldValue.serverTimestamp()
       });
 
@@ -171,6 +203,26 @@ router.post('/claim', requireAuth, participantActionLimiter, requireSymplaTicket
         totalPoints: FieldValue.increment(missionPoints),
         pontuacaoTotal: FieldValue.increment(missionPoints)
       });
+
+      const userData = userSnap.data() ?? {};
+      tx.set(
+        rankingRef,
+        {
+          uid,
+          username: userData.username ?? '',
+          firstName: userData.firstName ?? '',
+          lastName: userData.lastName ?? '',
+          displayName: userData.displayName ?? '',
+          avatarUrl: userData.avatarUrl ?? null,
+          course: userData.course ?? '',
+          mascot: userData.mascot ?? 'blue',
+          role: userData.role ?? 'PARTICIPANT',
+          totalPoints: FieldValue.increment(missionPoints),
+          pontuacaoTotal: FieldValue.increment(missionPoints),
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
 
       return { status: 200 as const, body: { success: true, points: missionPoints } };
     });

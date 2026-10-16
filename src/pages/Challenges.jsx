@@ -226,7 +226,15 @@ export default function Challenges() {
     }
 
     if (challenge.type === 'auto' || challenge.triggerMode === 'auto') {
-      setSelectedAutoChallenge(challenge);
+      if (challenge.autoConfig?.eventType === 'lecture_checkin' || challenge.id?.includes('lecture')) {
+        setSelectedAutoChallenge(challenge);
+        return;
+      }
+      if (isPassportMission(challenge)) {
+        navigate('/challenges?tab=passport', { replace: true });
+        return;
+      }
+      navigate('/scanner?tab=scan', { state: { tab: 'scan', missionId: challenge.id } });
       return;
     }
 
@@ -258,10 +266,23 @@ export default function Challenges() {
     if (!activeManualChallenge || isSubmitting) return;
 
     // Validação de palavra secreta
-    if (activeManualChallenge.triggerMode === 'secret' || activeManualChallenge.isSecret || activeManualChallenge.id === 'secret_password') {
-      const pass = manualForm['password'] || manualForm['secretWord'];
-      const expected = activeManualChallenge.secretConfig?.secretWord || 'OPORTUNIDADES';
-      if (!validateSecretWord(pass, expected)) {
+    const passwordField = activeManualChallenge.fields?.find(f => f.type === 'password');
+    const isSecretChallenge =
+      activeManualChallenge.triggerMode === 'secret' ||
+      activeManualChallenge.isSecret ||
+      activeManualChallenge.id === 'secret_password' ||
+      Boolean(passwordField);
+
+    if (isSecretChallenge) {
+      const pass =
+        manualForm['password'] ||
+        manualForm['secretWord'] ||
+        (passwordField ? manualForm[passwordField.id] : '');
+      const expected =
+        activeManualChallenge.secretConfig?.secretWord ||
+        activeManualChallenge.secretWord ||
+        (activeManualChallenge.id === 'secret_password' ? 'OPORTUNIDADES' : '');
+      if (expected && !validateSecretWord(pass, expected)) {
         setFeedback({
           type: 'warning',
           title: 'Palavra-chave Incorreta',
@@ -288,6 +309,15 @@ export default function Challenges() {
     setIsSubmitting(true);
     try {
       const finalMetadata = { ...manualForm, submitted_at: new Date().toISOString() };
+      if (isSecretChallenge) {
+        const resolvedSecret =
+          manualForm['secretWord'] ||
+          manualForm['password'] ||
+          (passwordField ? manualForm[passwordField.id] : '');
+        if (resolvedSecret) {
+          finalMetadata.secretWord = resolvedSecret;
+        }
+      }
 
       // Se a missão possuir campo de foto, faz o upload real antes de concluir
       const photoField = activeManualChallenge.fields?.find(f => f.type === 'photo');
@@ -379,6 +409,32 @@ export default function Challenges() {
       <div className="px-5">
         <ConquistasTabs active={activeTab === 'passport' ? 'passport' : 'missions'} />
 
+        {!hasSymplaTicket && (
+          <div className="mt-3.5 rounded-2xl border border-[rgba(245,158,11,0.35)] bg-[linear-gradient(135deg,rgba(217,119,6,0.18)_0%,rgba(147,51,234,0.14)_100%)] p-4 text-left shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/20 text-gold">
+                <Sparkles size={20} aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-sm font-extrabold text-text leading-tight">
+                  Gamificação Oficial Tech Week
+                </h3>
+                <p className="mt-1 mb-0 text-xs text-text-2 leading-relaxed">
+                  As missões, pontos no ranking e prêmios são exclusivos do <strong className="text-gold font-bold">Passaporte Completo</strong>. Ative seu ingresso para começar a jogar!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowSymplaModal(true)}
+                  className="press mt-2.5 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[linear-gradient(135deg,#F59E0B,#D97706)] px-4 text-xs font-black text-[#1F1603] shadow-[0_2px_10px_rgba(217,119,6,0.3)] transition hover:opacity-95"
+                >
+                  <Lock size={13} aria-hidden="true" />
+                  Desbloquear Passaporte Completo
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'passport' ? (
           <PassportTab userProfile={profile} />
         ) : loadingMissions ? (
@@ -404,6 +460,8 @@ export default function Challenges() {
                 mission={flashInBanner}
                 countdown={activeFlashCountdown}
                 fraction={flashFraction}
+                hasTicket={hasSymplaTicket}
+                onRequireSympla={() => setShowSymplaModal(true)}
                 onJoin={() => handleSimulateChallenge(flashInBanner)}
               />
             )}
@@ -418,7 +476,14 @@ export default function Challenges() {
                 </div>
                 <div className="flex flex-col gap-2.5">
                   {availableMissions.map((m) => (
-                    <MissionCard key={m.id} mission={m} getIcon={getMissionIcon} onStart={() => handleSimulateChallenge(m)} />
+                    <MissionCard
+                      key={m.id}
+                      mission={m}
+                      getIcon={getMissionIcon}
+                      hasTicket={hasSymplaTicket}
+                      onRequireSympla={() => setShowSymplaModal(true)}
+                      onStart={() => handleSimulateChallenge(m)}
+                    />
                   ))}
                 </div>
               </section>
@@ -498,10 +563,13 @@ export default function Challenges() {
                     type="text"
                     value={manualForm['secretWord'] || ''}
                     onChange={(e) => setManualForm(prev => ({ ...prev, secretWord: e.target.value }))}
+                    onFocus={(e) => {
+                      const target = e.currentTarget;
+                      setTimeout(() => target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' }), 220);
+                    }}
                     className="field"
                     required
                     placeholder="Digite a palavra que você encontrou"
-                    autoFocus
                   />
                 </div>
               )}
@@ -698,8 +766,9 @@ export default function Challenges() {
                   type="button"
                   className="btn btn-primary btn-block"
                   onClick={() => {
+                    const missionId = selectedAutoChallenge?.id;
                     setSelectedAutoChallenge(null);
-                    navigate('/scanner');
+                    navigate('/scanner?tab=scan', { state: { tab: 'scan', missionId } });
                   }}
                 >
                   <Camera size={18} aria-hidden="true" />
@@ -767,7 +836,7 @@ function SummaryRing({ done, total, earned, open }) {
   );
 }
 
-function FlashBanner({ mission, countdown, fraction, onJoin }) {
+function FlashBanner({ mission, countdown, fraction, onJoin, hasTicket = true, onRequireSympla }) {
   return (
     <div className="relative mt-3 overflow-hidden rounded-[18px] border border-[rgba(245,158,11,0.28)] bg-surface px-4 py-3.5">
       <div className="flex items-center gap-3">
@@ -785,8 +854,14 @@ function FlashBanner({ mission, countdown, fraction, onJoin }) {
             {mission.title || mission.name} <span className="text-you-text">+{mission.points}</span>
           </span>
         </span>
-        <button type="button" className="btn btn-action btn-sm press shrink-0" onClick={onJoin}>
-          Participar
+        <button
+          type="button"
+          className="btn btn-action btn-sm press shrink-0 gap-1.5 !font-extrabold"
+          style={!hasTicket ? { background: 'linear-gradient(135deg, #D97706, #B45309)' } : undefined}
+          onClick={!hasTicket ? onRequireSympla : onJoin}
+        >
+          {!hasTicket && <Lock size={13} aria-hidden="true" />}
+          {!hasTicket ? 'Desbloquear' : 'Participar'}
         </button>
       </div>
       <div className="relative mt-3 h-1 overflow-hidden rounded-sm bg-surface-raised" aria-hidden="true">
@@ -851,7 +926,7 @@ function MissionIcon({ style, mission, sponsor, done, getIcon }) {
   }
 }
 
-function MissionCard({ mission, getIcon, onStart, done = false }) {
+function MissionCard({ mission, getIcon, onStart, done = false, hasTicket = true, onRequireSympla }) {
   const style = missionStyle(mission);
   const sponsor = style === 'patrocinador' ? missionSponsor(mission) : null;
   const tier = sponsor ? TIER_STYLE[sponsor.tier] : null;
@@ -866,9 +941,18 @@ function MissionCard({ mission, getIcon, onStart, done = false }) {
   else if (secret) cardStyle = { background: 'linear-gradient(135deg, #1D1347, #0E0B26)', borderColor: 'rgba(167,139,250,0.45)', boxShadow: '0 10px 26px -14px rgba(124,58,237,0.8)' };
   else if (tier?.tint) cardStyle = { background: `linear-gradient(160deg, ${tier.tint}, var(--surface) 45%)`, borderColor: tier.cardLine };
   else if (style === 'relampago') cardStyle = { borderColor: 'rgba(245,158,11,0.28)' };
+  else if (!hasTicket) cardStyle = { borderColor: 'rgba(245,158,11,0.25)' };
 
   return (
     <article className="relative overflow-hidden rounded-[18px] border border-line bg-surface p-3.5" style={cardStyle}>
+      {!done && !hasTicket && (
+        <Lock
+          size={96}
+          strokeWidth={1.5}
+          className="pointer-events-none absolute -bottom-4 -left-3 text-[rgba(245,158,11,0.07)]"
+          aria-hidden="true"
+        />
+      )}
       {secret && (
         <>
           <span className="conq-dots absolute inset-0" aria-hidden="true" />
@@ -918,6 +1002,16 @@ function MissionCard({ mission, getIcon, onStart, done = false }) {
             <Check size={15} strokeWidth={2.6} aria-hidden="true" />
             Feita
           </span>
+        ) : !hasTicket ? (
+          <button
+            type="button"
+            className="press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[10px] border border-amber-500/40 bg-[linear-gradient(135deg,rgba(217,119,6,0.20)_0%,rgba(147,51,234,0.18)_100%)] px-3 text-xs font-extrabold text-gold shadow-sm transition hover:border-gold hover:bg-[linear-gradient(135deg,rgba(217,119,6,0.30)_0%,rgba(147,51,234,0.26)_100%)] hover:text-white"
+            onClick={onRequireSympla || onStart}
+            aria-label={`Desbloquear missão ${mission.title || mission.name} com Passaporte Completo`}
+          >
+            <Lock size={12} aria-hidden="true" />
+            Desbloquear
+          </button>
         ) : (
           <button
             type="button"

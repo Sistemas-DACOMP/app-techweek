@@ -331,6 +331,7 @@ export async function createFeedPost(postData) {
   const mediaType = postData.mediaType || (postData.videoUrl ? 'video' : (postData.imageUrl ? 'image' : ''));
   const nowIso = new Date().toISOString();
 
+  const currentUid = postData.authorId || auth?.currentUser?.uid || undefined;
   const formattedPost = {
     // As regras do Firestore exigem authorUid == uid de quem escreve; é também o que
     // permite o autor apagar o próprio post.
@@ -339,6 +340,7 @@ export async function createFeedPost(postData) {
     authorRole: String(postData.authorRole || 'ORGANIZATION'),
     authorAvatar: String(postData.authorAvatar || ''),
     authorHandle: postData.authorHandle ? String(postData.authorHandle) : undefined,
+    authorId: currentUid ? String(currentUid) : undefined,
     content: String(postData.content || '').trim(),
     imageUrl: String(postData.imageUrl || (mediaType === 'image' ? (postData.mediaUrl || '') : '')),
     videoUrl: String(postData.videoUrl || (mediaType === 'video' ? (postData.mediaUrl || '') : '')),
@@ -418,22 +420,142 @@ export async function togglePinFeedPost(postId, currentPinned) {
   }
 }
 
+async function dispatchWebPushSubscribers({ id, title, message, priority = 'HIGH', actionUrl = '/' }) {
+  const payload = {
+    id: String(id || `tw_push_${Date.now()}`),
+    title: String(title || 'FACOM TechWeek 2026'),
+    message: String(message || ''),
+    body: String(message || ''),
+    type: priority === 'URGENT' ? 'urgent' : 'announcement',
+    urgent: priority === 'URGENT',
+    actionUrl: String(actionUrl || '/'),
+    url: String(actionUrl || '/'),
+  };
+
+  let backendDispatched = false;
+  try {
+    const { apiFetch } = await import('./api');
+    const res = await apiFetch('/api/admin/notifications/webpush', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (res?.ok && Number(res?.sent) > 0) {
+      backendDispatched = true;
+    }
+  } catch {
+    // fallback para relay local ou trigger Firestore
+  }
+
+  if (!backendDispatched && typeof fetch === 'function') {
+    try {
+      const snap = await getDocs(collection(db, 'push_subscriptions'));
+      const subscriptions = [];
+      snap.forEach((docSnap) => {
+        const d = docSnap.data();
+        if (d?.endpoint && d?.keys?.p256dh && d?.keys?.auth) {
+          subscriptions.push({
+            endpoint: d.endpoint,
+            keys: { p256dh: d.keys.p256dh, auth: d.keys.auth },
+          });
+        }
+      });
+      if (subscriptions.length > 0) {
+        await fetch('/__webpush_broadcast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscriptions, payload }),
+        }).catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
+  }
+}
+
 /**
- * Dispara um comunicado / aviso em tempo real para todos os participantes (Sino de Notificações).
+ * Dispara um comunicado / aviso em tempo real para todos os participantes (Sino + Push Nativo no Celular).
  */
 export async function broadcastAnnouncement({ title, message, priority = 'HIGH', actionUrl = null, actionLabel = null }) {
+  const cleanTitle = String(title || '').trim();
+  const cleanMessage = String(message || '').trim();
+
+  // 1. Tenta disparar pelo endpoint backend (que grava em /announcements e envia Web Push FCM para 'todos_participantes')
+  try {
+    const { apiFetch } = await import('./api');
+    const apiRes = await apiFetch('/api/admin/notifications/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({ title: cleanTitle, body: cleanMessage }),
+    });
+    const announcementId = apiRes?.announcementId;
+    if (announcementId) {
+      try {
+        await updateDoc(doc(db, 'announcements', announcementId), {
+          message: cleanMessage,
+          body: cleanMessage,
+          priority,
+          actionUrl,
+          actionLabel,
+        });
+      } catch {
+        // ignore update error
+      }
+      dispatchWebPushSubscribers({
+        id: announcementId,
+        title: cleanTitle,
+        message: cleanMessage,
+        priority,
+        actionUrl,
+      }).catch(() => {});
+      return { success: true, id: announcementId };
+    }
+  } catch (apiErr) {
+    // Se retornou 502 (BROADCAST_PARTIALLY_SENT), o doc já foi criado no Firestore pelo backend!
+    const partialId = apiErr?.data?.announcementId;
+    if (partialId) {
+      try {
+        await updateDoc(doc(db, 'announcements', partialId), {
+          message: cleanMessage,
+          body: cleanMessage,
+          priority,
+          actionUrl,
+          actionLabel,
+        });
+      } catch {
+        // ignore
+      }
+      dispatchWebPushSubscribers({
+        id: partialId,
+        title: cleanTitle,
+        message: cleanMessage,
+        priority,
+        actionUrl,
+      }).catch(() => {});
+      return { success: true, id: partialId };
+    }
+  }
+
+  // 2. Fallback direto no Firestore (dispara em tempo real para o listener global e para o Background Watcher do Service Worker)
   try {
     const docRef = await addDoc(collection(db, 'announcements'), {
-      title,
-      message,
+      title: cleanTitle,
+      message: cleanMessage,
+      body: cleanMessage,
       priority,
       actionUrl,
       actionLabel,
       createdAt: serverTimestamp()
     });
+    dispatchWebPushSubscribers({
+      id: docRef.id,
+      title: cleanTitle,
+      message: cleanMessage,
+      priority,
+      actionUrl,
+    }).catch(() => {});
     return { success: true, id: docRef.id };
   } catch (err) {
     console.warn('Aviso: Erro ao enviar comunicado no Firestore:', err);
     throw err;
   }
 }
+

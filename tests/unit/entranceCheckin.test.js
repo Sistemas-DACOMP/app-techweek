@@ -91,7 +91,8 @@ function makeTx(snaps = {}) {
   const {
     activitySnap = { exists: true, data: () => ({ entrancePoints: 30, requireRegistration: false }) },
     pointEventSnap = { exists: false },
-    bookingSnap = { exists: true }
+    bookingSnap = { exists: true },
+    userSnap = { exists: true, data: () => ({ hasSymplaTicket: true }) }
   } = snaps;
 
   return {
@@ -99,6 +100,7 @@ function makeTx(snaps = {}) {
       if (ref.path.startsWith('activities/')) return Promise.resolve(activitySnap);
       if (ref.path.startsWith('pointEvents/')) return Promise.resolve(pointEventSnap);
       if (ref.path.startsWith('bookings/')) return Promise.resolve(bookingSnap);
+      if (ref.path.startsWith('users/')) return Promise.resolve(userSnap);
       throw new Error(`Ref inesperada no mock tx.get: ${ref.path}`);
     }),
     set: vi.fn(),
@@ -208,7 +210,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
         error: 'INVALID_PAYLOAD',
-        message: 'participantUid e activityId so obrigatrios.'
+        message: 'participantUid e activityId são obrigatórios.'
       });
       expect(db.runTransaction).not.toHaveBeenCalled();
     });
@@ -287,7 +289,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({
         error: 'ACTIVITY_NOT_FOUND',
-        message: 'Palestra no encontrada.'
+        message: 'Palestra não encontrada.'
       });
       expect(tx.set).not.toHaveBeenCalled();
     });
@@ -316,7 +318,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
         error: 'NOT_REGISTERED',
-        message: 'Aluno no inscrito previamente.'
+        message: 'Aluno não inscrito previamente.'
       });
       expect(tx.set).not.toHaveBeenCalled();
     });
@@ -387,7 +389,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(409);
       expect(res.json).toHaveBeenCalledWith({
         error: 'CHECKIN_DUPLICATE',
-        message: 'Entrada duplicada (j havia feito check-in de entrada).'
+        message: 'Entrada duplicada (já havia feito check-in de entrada).'
       });
       expect(tx.set).not.toHaveBeenCalled();
     });
@@ -505,10 +507,179 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({ success: true, points: 0 });
     });
+
+    it('deve registrar check-in em atividade padrao (act_1588971) mesmo se nao existir no Firestore', async () => {
+      const tx = makeTx({
+        activitySnap: { exists: false },
+        pointEventSnap: { exists: false }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({
+        participantUid: 'SYMPLA:T12345',
+        activityId: 'act_1588971',
+        staffUid: 'staff-joao'
+      });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({ success: true, points: 25 });
+    });
   });
 
   // =========================================================================
-  // 7. Resiliencia e Tratamento de Erros Internos (500)
+  // 7. Resolucao de Identidade por E-mail, mailto:, @username e req.body.uid
+  // =========================================================================
+  describe('Resolucao de Identidade de Participante (E-mail, mailto:, @username, uid)', () => {
+    it('aceita req.body.uid como alternativa a req.body.participantUid', async () => {
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 15, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = {
+        body: { uid: 'uid-via-campo-alternativo', activityId: 'palestra-1' },
+        user: { uid: 'staff-1', role: 'STAFF' }
+      };
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/uid-via-campo-alternativo_entrance_palestra-1' },
+        expect.objectContaining({ userId: 'uid-via-campo-alternativo', points: 15 })
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('resolve UID buscando usuario por e-mail normalizado (incluindo prefixo mailto:)', async () => {
+      const mockWhere = vi.fn().mockReturnValue({
+        limit: vi.fn().mockReturnValue({
+          get: vi.fn().mockResolvedValue({
+            empty: false,
+            docs: [{ id: 'uid-resolvido-email' }]
+          })
+        })
+      });
+
+      db.collection.mockImplementation((name) => ({
+        doc: (id) => ({ path: `${name}/${id}` }),
+        where: mockWhere
+      }));
+
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 20, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({
+        participantUid: 'mailto:  Participante.Teste@UFU.BR ',
+        activityId: 'palestra-email'
+      });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(mockWhere).toHaveBeenCalledWith('email', '==', 'participante.teste@ufu.br');
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/uid-resolvido-email_entrance_palestra-email' },
+        expect.objectContaining({ userId: 'uid-resolvido-email', points: 20 })
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('faz fallback para busca case-sensitive por e-mail quando busca lowercase retorna vazia', async () => {
+      const mockGet = vi.fn()
+        .mockResolvedValueOnce({ empty: true, docs: [] })
+        .mockResolvedValueOnce({ empty: false, docs: [{ id: 'uid-exact-email' }] });
+
+      const mockWhere = vi.fn().mockReturnValue({
+        limit: vi.fn().mockReturnValue({ get: mockGet })
+      });
+
+      db.collection.mockImplementation((name) => ({
+        doc: (id) => ({ path: `${name}/${id}` }),
+        where: mockWhere
+      }));
+
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 10, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({
+        participantUid: 'Aluno.Exact@ufu.br',
+        activityId: 'palestra-exact'
+      });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(mockWhere).toHaveBeenNthCalledWith(1, 'email', '==', 'aluno.exact@ufu.br');
+      expect(mockWhere).toHaveBeenNthCalledWith(2, 'email', '==', 'Aluno.Exact@ufu.br');
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/uid-exact-email_entrance_palestra-exact' },
+        expect.objectContaining({ userId: 'uid-exact-email' })
+      );
+    });
+
+    it('resolve UID buscando usuario por @username normalizado', async () => {
+      const mockWhere = vi.fn().mockReturnValue({
+        limit: vi.fn().mockReturnValue({
+          get: vi.fn().mockResolvedValue({
+            empty: false,
+            docs: [{ id: 'uid-resolvido-username' }]
+          })
+        })
+      });
+
+      db.collection.mockImplementation((name) => ({
+        doc: (id) => ({ path: `${name}/${id}` }),
+        where: mockWhere
+      }));
+
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 35, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({
+        participantUid: '@Erick_Facom',
+        activityId: 'palestra-handle'
+      });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(mockWhere).toHaveBeenCalledWith('username', '==', 'erick_facom');
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/uid-resolvido-username_entrance_palestra-handle' },
+        expect.objectContaining({ userId: 'uid-resolvido-username', points: 35 })
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+  });
+
+  // =========================================================================
+  // 8. Resiliencia e Tratamento de Erros Internos (500)
   // =========================================================================
   describe('Tratamento de Erros Inesperados (500)', () => {
     it('deve retornar 500 INTERNAL_ERROR caso a transacao do Firestore falhe', async () => {
@@ -522,8 +693,106 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
         error: 'INTERNAL_ERROR',
-        message: 'No foi possvel registrar a entrada.'
+        message: 'Não foi possível registrar a entrada.'
       });
+    });
+  });
+
+  // =========================================================================
+  // 9. Suporte a Evento Aberto e Crachá Geral (Conversão & Portaria)
+  // =========================================================================
+  describe('Suporte a Evento Aberto e Crachá Geral (Conversão & Portaria)', () => {
+    it('aceita QR Code em formato JSON serializado (crachá geral sem Sympla)', async () => {
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 20, isOpenEvent: true, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false },
+        userSnap: { exists: true, data: () => ({ hasSymplaTicket: false }) }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const qrJson = JSON.stringify({
+        uid: 'user-sem-sympla-1',
+        username: 'sem_sympla',
+        name: 'Aluno Livre'
+      });
+
+      const req = makeReq({ participantUid: qrJson, activityId: 'palestra-aberta-1' });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({ success: true, points: 0 });
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/user-sem-sympla-1_entrance_palestra-aberta-1' },
+        expect.objectContaining({
+          userId: 'user-sem-sympla-1',
+          points: 0,
+          metadata: expect.objectContaining({ isOpenEvent: true, hasSymplaTicket: false })
+        })
+      );
+      // Nao deve incrementar pontuacao no doc de usuario nem no ranking
+      expect(tx.set).not.toHaveBeenCalledWith(
+        { path: 'users/user-sem-sympla-1' },
+        expect.anything(),
+        expect.anything()
+      );
+      expect(tx.set).not.toHaveBeenCalledWith(
+        { path: 'ranking/user-sem-sympla-1' },
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
+    it('bloqueia entrada em evento fechado com 403 SYMPLA_TICKET_REQUIRED para participante sem Sympla', async () => {
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 30, isOpenEvent: false, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false },
+        userSnap: { exists: true, data: () => ({ hasSymplaTicket: false }) }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({ participantUid: 'user-sem-sympla-2', activityId: 'workshop-fechado' });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        error: 'SYMPLA_TICKET_REQUIRED'
+      }));
+      expect(tx.set).not.toHaveBeenCalled();
+    });
+
+    it('concede pontos normalmente em evento aberto para participante que possui Sympla vinculado', async () => {
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 25, isOpenEvent: true, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false },
+        userSnap: { exists: true, data: () => ({ hasSymplaTicket: true }) }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({ participantUid: 'user-com-sympla-1', activityId: 'palestra-aberta-1' });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({ success: true, points: 25 });
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'users/user-com-sympla-1' },
+        expect.objectContaining({ totalPoints: expect.anything() }),
+        { merge: true }
+      );
     });
   });
 });

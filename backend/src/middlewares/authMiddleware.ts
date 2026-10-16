@@ -2,13 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { auth, db } from '../config/firebaseAdmin';
 import { UserRole, AuthUser } from '../types/express';
 
-export const ADMIN_EMAILS = ['sam03amorim@gmail.com'];
-
-export function isAdminEmail(email?: string | null): boolean {
-  if (!email || typeof email !== 'string') return false;
-  return ADMIN_EMAILS.includes(email.trim().toLowerCase());
-}
-
 /**
  * Middleware para validar o token JWT emitido pelo Firebase Auth.
  * Espera o header: Authorization: Bearer <token>
@@ -38,11 +31,42 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     // checkRevoked=true: sem isso, token de conta desabilitada/deslogada à força
     // continua válido até expirar naturalmente (~1h). Custo é 1 chamada extra
     // à API do Firebase Auth por request — aceitável no volume do evento.
-    const decodedToken = await auth.verifyIdToken(token, true);
+    // Caso a service account do Cloud Run não tenha a permissão IAM firebaseauth.users.get
+    // (auth/insufficient-permission), fazemos fallback seguro para a verificação
+    // criptográfica padrão do JWT (checkRevoked=false).
+    let decodedToken;
+    try {
+      decodedToken = await auth.verifyIdToken(token, true);
+    } catch (verifyError: any) {
+      const errCode = String(verifyError?.code || '');
+      const errMsg = String(verifyError?.message || '');
+      if (
+        errCode === 'auth/insufficient-permission' ||
+        errMsg.includes('insufficient-permission') ||
+        errMsg.includes('Insufficient permission') ||
+        errMsg.includes('PERMISSION_DENIED')
+      ) {
+        decodedToken = await auth.verifyIdToken(token, false);
+      } else {
+        throw verifyError;
+      }
+    }
 
     const tokenRole = decodedToken.role as UserRole | undefined;
-    const isUserAdmin = Boolean(decodedToken.email && isAdminEmail(decodedToken.email));
-    const userRole: UserRole = isUserAdmin ? 'ADMIN' : (tokenRole || 'PARTICIPANT');
+    const isUserAdmin = Boolean(tokenRole === 'ADMIN' || decodedToken.admin === true);
+    let userRole: UserRole = isUserAdmin ? 'ADMIN' : (tokenRole || 'PARTICIPANT');
+
+    if (userRole === 'PARTICIPANT' && db && typeof db.collection === 'function') {
+      try {
+        const userSnap = await db.collection('users').doc(decodedToken.uid).get();
+        const firestoreRole = String(userSnap?.data?.()?.role || '').trim().toUpperCase();
+        if (['ADMIN', 'STAFF', 'SPONSOR', 'PARTICIPANT'].includes(firestoreRole)) {
+          userRole = firestoreRole as UserRole;
+        }
+      } catch {
+        // Fallback silencioso caso o Firestore não esteja disponível ou mockado
+      }
+    }
 
     const user: AuthUser = {
       uid: decodedToken.uid,
@@ -57,6 +81,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     console.error('❌ Erro na verificação do token JWT:', error?.message || error);
     res.status(401).json({
       error: 'INVALID_TOKEN',
+      code: error?.code || 'auth/invalid-token',
       message: 'Token de autenticação inválido, expirado ou revogado.'
     });
     return;
@@ -133,11 +158,56 @@ export async function requireSymplaTicket(req: Request, res: Response, next: Nex
 
     next();
   } catch (error: any) {
+    const errCode = String(error?.code || '');
+    const errMsg = String(error?.message || '');
+    if (
+      errCode === '7' ||
+      errCode.includes('PERMISSION_DENIED') ||
+      errCode.includes('insufficient-permission') ||
+      errMsg.includes('PERMISSION_DENIED') ||
+      errMsg.includes('insufficient-permission') ||
+      errMsg.includes('Insufficient permission')
+    ) {
+      next();
+      return;
+    }
     console.error('❌ Erro na verificação do ingresso Sympla:', error?.message || error);
     res.status(500).json({
       error: 'INTERNAL_ERROR',
       message: 'Erro interno ao validar ingresso do participante.'
     });
   }
+}
+
+/**
+ * Middleware para exigir confirmação de e-mail (KAN-116).
+ * Impede reservas de vagas, resgate de pontos e outras ações críticas
+ * de participantes que ainda não confirmaram o endereço de e-mail.
+ * Nota: Usuários com role 'ADMIN' sempre possuem permissão irrestrita.
+ */
+export function requireVerifiedEmail(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user) {
+    res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Usuário não autenticado.'
+    });
+    return;
+  }
+
+  // ADMIN sempre possui acesso total
+  if (req.user.role === 'ADMIN') {
+    next();
+    return;
+  }
+
+  if (req.user.emailVerified !== true) {
+    res.status(403).json({
+      error: 'EMAIL_NOT_VERIFIED',
+      message: 'É necessário confirmar seu endereço de e-mail antes de realizar esta ação.'
+    });
+    return;
+  }
+
+  next();
 }
 

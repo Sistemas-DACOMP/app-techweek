@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
-import { requireAuth, requireSymplaTicket } from '../middlewares/authMiddleware';
+import { requireAuth, requireVerifiedEmail } from '../middlewares/authMiddleware';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 
@@ -21,6 +21,7 @@ export const DEFAULT_ACTIVITIES_CATALOG: Record<string, {
   total_espera: number;
   points: number;
   attendanceMode: string;
+  isOpenEvent?: boolean;
 }> = {
   palestra_abertura: {
     title: 'Palestra de Abertura: O Futuro da Computação e IA',
@@ -107,10 +108,12 @@ export const DEFAULT_ACTIVITIES_CATALOG: Record<string, {
 // POST /api/activities/:activityId/reserve
 //
 // Reserva atômica de vaga (ou entrada na lista de espera) numa atividade.
-// Exige autenticação e ingresso oficial validado do Sympla (KAN-84).
+// Exige autenticação e e-mail confirmado (KAN-116).
+// Para atividades exclusivas (isOpenEvent !== true), exige ingresso oficial do Sympla vinculado (KAN-84).
+// Atividades com isOpenEvent === true são abertas para qualquer participante cadastrado.
 // bookingId determinístico ({uid}_{activityId}, mesmo padrão de checkin.ts) permite
 // checar duplicidade dentro da própria transação, sem query extra.
-router.post('/:activityId/reserve', requireAuth, participantActionLimiter, requireSymplaTicket, async (req: Request, res: Response) => {
+router.post('/:activityId/reserve', requireAuth, requireVerifiedEmail, participantActionLimiter, async (req: Request, res: Response) => {
   const { activityId } = req.params;
   const uid = req.user!.uid;
 
@@ -121,6 +124,7 @@ router.post('/:activityId/reserve', requireAuth, participantActionLimiter, requi
 
   const activityRef = db.collection('activities').doc(activityId);
   const bookingRef = db.collection('bookings').doc(`${uid}_${activityId}`);
+  const userRef = db.collection('users').doc(uid);
 
   try {
     // maxAttempts: 25 (default do SDK é 5). Achado no teste de carga do
@@ -134,9 +138,10 @@ router.post('/:activityId/reserve', requireAuth, participantActionLimiter, requi
       // Idempotência checada antes de tudo: se o booking já existe, a
       // atividade pode até ter mudado de estado depois — não importa,
       // devolvemos o status já gravado em vez de reprocessar a reserva.
-      const [bookingSnap, activitySnap] = await Promise.all([
+      const [bookingSnap, activitySnap, userSnap] = await Promise.all([
         tx.get(bookingRef),
-        tx.get(activityRef)
+        tx.get(activityRef),
+        tx.get(userRef)
       ]);
 
       if (bookingSnap.exists) {
@@ -151,17 +156,40 @@ router.post('/:activityId/reserve', requireAuth, participantActionLimiter, requi
         };
       }
 
-      if (!activitySnap.exists) {
-        const defaultActivity = DEFAULT_ACTIVITIES_CATALOG[activityId];
-        if (!defaultActivity) {
+      const defaultActivity = DEFAULT_ACTIVITIES_CATALOG[activityId];
+      if (!activitySnap.exists && !defaultActivity) {
+        return {
+          status: 404 as const,
+          body: { error: 'ACTIVITY_NOT_FOUND', message: 'Atividade não encontrada.' }
+        };
+      }
+
+      const activityData = activitySnap.exists ? (activitySnap.data() ?? {}) : defaultActivity;
+      const isOpenEvent = Boolean(activityData.isOpenEvent);
+
+      // Se não for evento aberto e o usuário não for ADMIN, exige ingresso Sympla (KAN-84)
+      if (!isOpenEvent && req.user?.role !== 'ADMIN') {
+        const userData = userSnap.exists ? userSnap.data() : null;
+        const hasTicket = Boolean(
+          userData?.hasSymplaTicket ||
+          userData?.symplaTicket ||
+          userData?.sympla_ticket
+        );
+
+        if (!userSnap.exists || !hasTicket) {
           return {
-            status: 404 as const,
-            body: { error: 'ACTIVITY_NOT_FOUND', message: 'Atividade não encontrada.' }
+            status: 403 as const,
+            body: {
+              error: 'SYMPLA_TICKET_REQUIRED',
+              message: 'É necessário possuir um ingresso oficial do Sympla vinculado à conta para realizar esta ação.'
+            }
           };
         }
+      }
 
-        const availableSeats = defaultActivity.vagas_disponiveis;
-        const totalInscritos = defaultActivity.total_inscritos;
+      if (!activitySnap.exists) {
+        const availableSeats = defaultActivity!.vagas_disponiveis;
+        const totalInscritos = defaultActivity!.total_inscritos;
         const createdAt = new Date();
 
         if (availableSeats > 0) {
@@ -200,7 +228,6 @@ router.post('/:activityId/reserve', requireAuth, participantActionLimiter, requi
         }
       }
 
-      const activityData = activitySnap.data() ?? {};
       // typeof em todo campo numérico do Firestore, não só `??`: um valor
       // não-numérico (dado corrompido/migração malfeita) cairia em soma de
       // string em vez de número (ex: "4" + 1 = "41") em vez de virar 0.
@@ -283,23 +310,50 @@ const cancelBookingHandler = async (req: Request, res: Response) => {
 
       const bookingData = bookingSnap.data() ?? {};
       const wasConfirmed = bookingData.status === 'CONFIRMED';
+      const actData = activitySnap.exists ? (activitySnap.data() ?? {}) : {};
+      const totalEspera = typeof actData.total_espera === 'number' ? actData.total_espera : 0;
+
+      // KAN-110 / ERR-070: se havia fila de espera e a vaga cancelada estava
+      // confirmada, lê o próximo da fila antes de qualquer escrita (regra de
+      // transação do Firestore: all reads must precede all writes).
+      let promotedBookingDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+      if (activitySnap.exists && wasConfirmed && totalEspera > 0) {
+        const waitingQuery = db.collection('bookings')
+          .where('activityId', '==', activityId)
+          .where('status', '==', 'WAITING_LIST')
+          .orderBy('position', 'asc')
+          .limit(1);
+        const waitingSnap = await tx.get(waitingQuery);
+        if (!waitingSnap.empty) {
+          promotedBookingDoc = waitingSnap.docs[0];
+        }
+      }
 
       tx.delete(bookingRef);
 
       if (activitySnap.exists && bookingData.status === 'WAITING_LIST') {
-        const actData = activitySnap.data() ?? {};
         const espera = typeof actData.total_espera === 'number' ? actData.total_espera : 1;
         tx.update(activityRef, { total_espera: Math.max(0, espera - 1) });
       }
 
       if (activitySnap.exists && wasConfirmed) {
-        const actData = activitySnap.data() ?? {};
-        const available = typeof actData.vagas_disponiveis === 'number' ? actData.vagas_disponiveis : 0;
-        const totalInscritos = typeof actData.total_inscritos === 'number' ? actData.total_inscritos : 1;
-        tx.update(activityRef, {
-          vagas_disponiveis: available + 1,
-          total_inscritos: Math.max(0, totalInscritos - 1)
-        });
+        if (promotedBookingDoc) {
+          tx.update(promotedBookingDoc.ref, {
+            status: 'CONFIRMED',
+            position: null,
+            promotedAt: new Date()
+          });
+          tx.update(activityRef, {
+            total_espera: Math.max(0, totalEspera - 1)
+          });
+        } else {
+          const available = typeof actData.vagas_disponiveis === 'number' ? actData.vagas_disponiveis : 0;
+          const totalInscritos = typeof actData.total_inscritos === 'number' ? actData.total_inscritos : 1;
+          tx.update(activityRef, {
+            vagas_disponiveis: available + 1,
+            total_inscritos: Math.max(0, totalInscritos - 1)
+          });
+        }
       }
 
       return {
@@ -318,8 +372,8 @@ const cancelBookingHandler = async (req: Request, res: Response) => {
   }
 };
 
-router.delete('/:activityId/reserve', requireAuth, participantActionLimiter, cancelBookingHandler);
-router.post('/:activityId/cancel', requireAuth, participantActionLimiter, cancelBookingHandler);
+router.delete('/:activityId/reserve', requireAuth, requireVerifiedEmail, participantActionLimiter, cancelBookingHandler);
+router.post('/:activityId/cancel', requireAuth, requireVerifiedEmail, participantActionLimiter, cancelBookingHandler);
 
 export default router;
 

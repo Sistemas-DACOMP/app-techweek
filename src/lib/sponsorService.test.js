@@ -88,6 +88,17 @@ describe('sponsorService', () => {
       expect(participant.email).toBe('erick.raposo@ufu.br');
       expect(participant.name).toContain('Erick');
     });
+
+    it('reconhece QR Code de ingresso Sympla (SYMPLA:T123456 ou ABCD-01-2345) sem rejeitar como inválido', async () => {
+      const p1 = await resolveParticipantFromQr('SYMPLA:T123456');
+      expect(p1).not.toBeNull();
+      expect(p1.participantUid).toBe('sympla_T123456');
+      expect(p1.name).toContain('T123456');
+
+      const p2 = await resolveParticipantFromQr('ABCD-01-2345');
+      expect(p2).not.toBeNull();
+      expect(p2.participantUid).toBe('sympla_ABCD-01-2345');
+    });
   });
 
   describe('submitLead', () => {
@@ -268,35 +279,54 @@ describe('sponsorService', () => {
         }
       ];
 
-      const createObjectURLMock = vi.fn().mockReturnValue('blob:http://localhost/test-uuid');
-      const revokeObjectURLMock = vi.fn();
-      global.URL.createObjectURL = createObjectURLMock;
-      global.URL.revokeObjectURL = revokeObjectURLMock;
-
-      const clickMock = vi.fn();
-      const mockAnchor = {
-        click: clickMock,
-        href: '',
-        download: ''
-      };
-
+      const originalCreateObjectURL = global.URL?.createObjectURL;
+      const originalRevokeObjectURL = global.URL?.revokeObjectURL;
       const originalDocument = global.document;
-      global.document = {
-        createElement: vi.fn().mockReturnValue(mockAnchor),
-        body: {
-          appendChild: vi.fn(),
-          removeChild: vi.fn()
+
+      try {
+        const createObjectURLMock = vi.fn().mockReturnValue('blob:http://localhost/test-uuid');
+        const revokeObjectURLMock = vi.fn();
+        global.URL.createObjectURL = createObjectURLMock;
+        global.URL.revokeObjectURL = revokeObjectURLMock;
+
+        const clickMock = vi.fn();
+        const mockAnchor = {
+          click: clickMock,
+          href: '',
+          download: ''
+        };
+
+        global.document = {
+          createElement: vi.fn().mockReturnValue(mockAnchor),
+          body: {
+            appendChild: vi.fn(),
+            removeChild: vi.fn()
+          }
+        };
+
+        const success = exportLeadsToCsv(leads, 'Empresa Teste');
+        expect(success).toBe(true);
+        expect(createObjectURLMock).toHaveBeenCalled();
+        expect(clickMock).toHaveBeenCalled();
+        expect(mockAnchor.download).toContain('leads_empresa_teste_techweek_');
+        expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:http://localhost/test-uuid');
+      } finally {
+        if (originalDocument === undefined) {
+          delete global.document;
+        } else {
+          global.document = originalDocument;
         }
-      };
-
-      const success = exportLeadsToCsv(leads, 'Empresa Teste');
-      expect(success).toBe(true);
-      expect(createObjectURLMock).toHaveBeenCalled();
-      expect(clickMock).toHaveBeenCalled();
-      expect(mockAnchor.download).toContain('leads_empresa_teste_techweek_');
-      expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:http://localhost/test-uuid');
-
-      global.document = originalDocument;
+        if (originalCreateObjectURL === undefined) {
+          delete global.URL.createObjectURL;
+        } else {
+          global.URL.createObjectURL = originalCreateObjectURL;
+        }
+        if (originalRevokeObjectURL === undefined) {
+          delete global.URL.revokeObjectURL;
+        } else {
+          global.URL.revokeObjectURL = originalRevokeObjectURL;
+        }
+      }
     });
   });
 });

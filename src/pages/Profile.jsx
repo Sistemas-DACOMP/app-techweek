@@ -3,9 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { updateProfile } from 'firebase/auth';
 import {
   ChevronLeft, ChevronRight, Camera, Loader2, Ticket, Link as LinkIcon, ShieldCheck, Lock, Check, Trash2, LogOut,
-  ExternalLink, CalendarCheck, QrCode, Trophy
+  ExternalLink, CalendarCheck, QrCode, Trophy, Mail, BellRing
 } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
+import { useNotifications } from '../hooks/useNotifications';
 import { getMyProfile, uploadAvatar } from '../lib/gameplay';
 import { logoutUser, onAuthChange, deleteCurrentUserAccount } from '../lib/auth';
 import { auth } from '../lib/firebase';
@@ -13,7 +14,7 @@ import { validateAvatarFile, isValidEmail } from '../lib/validators';
 import { SYMPLA_EVENT_URL, verifySymplaTicket } from '../lib/sympla';
 import {
   getUserProfile, uploadUserAvatar, updateUserEmail, updateUserProfile, getCachedUserProfile,
-  getLeaderboardUsers, checkUsernameAvailability
+  getLeaderboardUsers, checkUsernameAvailability, cancelPendingEmailChange, syncUserEmailWithAuth
 } from '../lib/userService';
 import AvatarCropperModal from '../components/AvatarCropperModal';
 import ConfirmModal from '../components/ConfirmModal';
@@ -68,6 +69,7 @@ const initialsOf = (first, last) =>
 
 export default function Profile() {
   const { points, userLevel, role, profile: userProfile } = useUser();
+  const notif = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef(null);
@@ -101,7 +103,8 @@ export default function Profile() {
       hasSymplaTicket: !!(cached?.hasSymplaTicket || ticket),
       linkedin: cached?.linkedin || '',
       instagram: cached?.instagram || '',
-      github: cached?.github || ''
+      github: cached?.github || '',
+      pendingEmailChange: cached?.pendingEmailChange || null
     };
   });
   const isTicketConfirmed = !!(profile.hasSymplaTicket || profile.symplaTicket?.ticketName);
@@ -186,7 +189,8 @@ export default function Profile() {
           hasSymplaTicket: !!(data?.hasSymplaTicket || data?.symplaTicket || data?.sympla_ticket || prev.hasSymplaTicket),
           linkedin: data?.linkedin || prev.linkedin,
           instagram: data?.instagram || prev.instagram,
-          github: data?.github || prev.github
+          github: data?.github || prev.github,
+          pendingEmailChange: data?.pendingEmailChange !== undefined ? data.pendingEmailChange : prev.pendingEmailChange
         }));
 
         // Se o ingresso do Sympla ainda não estiver vinculado, tenta auto-sincronizar em background
@@ -236,15 +240,44 @@ export default function Profile() {
           ...prev,
           ...cached,
           avatarUrl: cached.avatarUrl || cached.avatar_url || cached.photoURL || prev.avatarUrl,
-          hasSymplaTicket: !!(cached.hasSymplaTicket || cached.symplaTicket || prev.hasSymplaTicket)
+          hasSymplaTicket: !!(cached.hasSymplaTicket || cached.symplaTicket || prev.hasSymplaTicket),
+          pendingEmailChange: cached.pendingEmailChange !== undefined ? cached.pendingEmailChange : prev.pendingEmailChange
         }));
       }
     };
     window.addEventListener('facom_profile_updated', handleProfileUpdate);
 
+    // Auto-sincronização idempotente ao retornar à aba/janela após confirmar o link no e-mail (KAN-116)
+    const handleSyncOnFocus = async () => {
+      const currentUid = auth.currentUser?.uid;
+      if (!currentUid || document.visibilityState === 'hidden') return;
+      try {
+        const res = await syncUserEmailWithAuth(currentUid);
+        if (res?.synced) {
+          setProfile(prev => ({
+            ...prev,
+            email: res.newEmail,
+            pendingEmailChange: null
+          }));
+        } else if (res?.expired) {
+          setProfile(prev => ({
+            ...prev,
+            pendingEmailChange: null
+          }));
+        }
+      } catch (syncErr) {
+        console.warn('[Profile] Falha silenciosa no sync on focus:', syncErr);
+      }
+    };
+
+    window.addEventListener('focus', handleSyncOnFocus);
+    document.addEventListener('visibilitychange', handleSyncOnFocus);
+
     return () => {
       unsubscribe();
       window.removeEventListener('facom_profile_updated', handleProfileUpdate);
+      window.removeEventListener('focus', handleSyncOnFocus);
+      document.removeEventListener('visibilitychange', handleSyncOnFocus);
     };
   }, []);
 
@@ -398,9 +431,11 @@ export default function Profile() {
 
       // Troca de e-mail: Auth primeiro. Se falhar, nada é gravado (nem o resto do perfil),
       // pra o e-mail do perfil nunca divergir do e-mail de login.
+      let emailChangeRequested = false;
       if (!isTicketConfirmed && cleanEmail && auth.currentUser && auth.currentUser.email !== cleanEmail) {
         try {
           await updateUserEmail(uid, cleanEmail, reauthPassword || undefined);
+          emailChangeRequested = true;
           setNeedsPassword(false);
           setReauthPassword('');
         } catch (authErr) {
@@ -420,13 +455,25 @@ export default function Profile() {
         }
       }
 
-      // Se o ingresso ainda NÃO estava confirmado, o e-mail (já aceito pelo Auth) vai junto
-      if (!isTicketConfirmed && cleanEmail) {
+      // Se o e-mail NÃO foi alterado no Auth (ou seja, se já era o atual), ele pode ir no updates se for igual ao currentUser.email
+      // Importante: com verifyBeforeUpdateEmail, o e-mail de login ainda é o antigo até confirmação no link.
+      // O Firestore rejeita updates se updates.email != request.auth.token.email.
+      if (!emailChangeRequested && auth.currentUser?.email) {
+        updates.email = auth.currentUser.email.trim().toLowerCase();
+      } else if (!isTicketConfirmed && cleanEmail && cleanEmail === auth.currentUser?.email) {
         updates.email = cleanEmail;
       }
 
       // 1. Atualiza documento no Firestore
       await updateUserProfile(uid, updates);
+
+      // Se uma troca de e-mail foi disparada, atualiza o estado local com pendingEmailChange
+      if (emailChangeRequested) {
+        updates.pendingEmailChange = {
+          newEmail: cleanEmail,
+          requestedAt: new Date().toISOString()
+        };
+      }
 
       // 3. Logística Sympla: apenas se o ingresso AINDA NÃO foi confirmado
       let symplaMessage = '';
@@ -468,15 +515,19 @@ export default function Profile() {
         ...updates
       }));
 
+      const successNotice = emailChangeRequested
+        ? `Perfil salvo! Enviamos um link de confirmação para ${cleanEmail}. Confirme seu e-mail para validar o novo endereço.${symplaMessage}`
+        : `Perfil atualizado com sucesso!${symplaMessage}`;
+
       setEditFeedback({
         type: 'success',
-        text: `Perfil atualizado com sucesso!${symplaMessage}`
+        text: successNotice
       });
 
-      // Volta pro Perfil após 1.2s se sucesso
+      // Volta pro Perfil após 1.5s se sucesso
       setTimeout(() => {
         closeEdit();
-      }, 1200);
+      }, emailChangeRequested ? 2000 : 1200);
 
     } catch (err) {
       console.error('Erro ao salvar perfil:', err);
@@ -598,6 +649,8 @@ export default function Profile() {
   };
 
   const handleDeleteAccount = () => {
+    const hasPasswordProvider = auth.currentUser?.providerData?.some(p => p.providerId === 'password') || !auth.currentUser?.providerData?.length;
+
     setConfirmModal({
       title: 'Apagar conta permanentemente',
       message: 'Esta ação não pode ser desfeita. Todos os seus pontos acumulados, carimbos do passaporte e dados cadastrais serão removidos do evento.',
@@ -607,10 +660,13 @@ export default function Profile() {
       Icon: Trash2,
       requireConfirmationText: 'EXCLUIR',
       confirmationPrompt: 'Para confirmar a exclusão definitiva da sua conta, digite EXCLUIR abaixo:',
-      onConfirm: async () => {
+      requirePassword: hasPasswordProvider,
+      passwordLabel: 'Digite sua senha atual para autorizar:',
+      passwordPlaceholder: 'Sua senha atual',
+      onConfirm: async ({ password } = {}) => {
         setIsActionLoading(true);
         try {
-          const res = await deleteCurrentUserAccount();
+          const res = await deleteCurrentUserAccount(password);
           setConfirmModal(null);
           if (res.success) {
             setFeedbackModal({
@@ -661,6 +717,79 @@ export default function Profile() {
       setAvatarError('Não foi possível remover a foto. Tente novamente.');
     } finally {
       setUploadingAvatar(false);
+    }
+  };
+
+  const handleCancelPendingEmail = async () => {
+    const uid = profile.id || auth.currentUser?.uid;
+    if (!uid) return;
+    setIsActionLoading(true);
+    try {
+      await cancelPendingEmailChange(uid);
+      setProfile(prev => ({
+        ...prev,
+        pendingEmailChange: null
+      }));
+      setFeedbackModal({
+        type: 'success',
+        title: 'Solicitação cancelada',
+        message: 'A solicitação de troca de e-mail foi cancelada com sucesso.'
+      });
+    } catch (err) {
+      console.error('[Profile] Erro ao cancelar troca de e-mail:', err);
+      setFeedbackModal({
+        type: 'error',
+        title: 'Erro ao cancelar',
+        message: 'Não foi possível cancelar a solicitação de troca no momento. Tente novamente.'
+      });
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleCheckEmailVerification = async () => {
+    const uid = profile.id || auth.currentUser?.uid;
+    if (!uid) return;
+    setIsActionLoading(true);
+    try {
+      const res = await syncUserEmailWithAuth(uid);
+      if (res?.synced) {
+        setProfile(prev => ({
+          ...prev,
+          email: res.newEmail,
+          pendingEmailChange: null
+        }));
+        setFeedbackModal({
+          type: 'success',
+          title: 'E-mail confirmado!',
+          message: `Seu e-mail foi atualizado com sucesso para ${res.newEmail}.`
+        });
+      } else if (res?.expired) {
+        setProfile(prev => ({
+          ...prev,
+          pendingEmailChange: null
+        }));
+        setFeedbackModal({
+          type: 'warning',
+          title: 'Solicitação expirada',
+          message: 'A solicitação de alteração expirou (mais de 24h). Por favor, solicite a troca novamente se desejar.'
+        });
+      } else {
+        setFeedbackModal({
+          type: 'info',
+          title: 'Aguardando confirmação',
+          message: 'O link de confirmação ainda não foi acessado. Verifique sua caixa de entrada e spam no novo endereço de e-mail.'
+        });
+      }
+    } catch (err) {
+      console.error('[Profile] Erro ao verificar troca de e-mail:', err);
+      setFeedbackModal({
+        type: 'error',
+        title: 'Erro ao verificar',
+        message: 'Não foi possível verificar o status da troca no momento.'
+      });
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -724,6 +853,9 @@ export default function Profile() {
           Icon={confirmModal.Icon}
           requireConfirmationText={confirmModal.requireConfirmationText}
           confirmationPrompt={confirmModal.confirmationPrompt}
+          requirePassword={confirmModal.requirePassword}
+          passwordLabel={confirmModal.passwordLabel}
+          passwordPlaceholder={confirmModal.passwordPlaceholder}
           isLoading={isActionLoading}
           onConfirm={confirmModal.onConfirm}
           onCancel={() => !isActionLoading && setConfirmModal(null)}
@@ -900,6 +1032,40 @@ export default function Profile() {
           {/* Privacidade */}
           <h2 id="perfil-privacidade" className="mx-5 mt-7 scroll-mt-4 text-[16px] font-extrabold">Privacidade</h2>
           <div className="mx-5 mt-3 rounded-2xl bg-surface px-3.5">
+            {profile.pendingEmailChange?.newEmail && (
+              <div className="border-b border-line py-3.5">
+                <div className="flex items-start gap-3 rounded-xl border border-warn/30 bg-warn/10 p-3.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warn/20 text-warn">
+                    <Mail size={16} strokeWidth={2.2} aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-bold text-text">Confirmação de e-mail pendente</p>
+                    <p className="mt-0.5 text-[12px] leading-snug text-text-2">
+                      Link enviado para <strong className="break-all text-text">{profile.pendingEmailChange.newEmail}</strong>.
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCheckEmailVerification}
+                        disabled={isActionLoading}
+                        className="press flex h-7 items-center gap-1.5 rounded-md bg-surface px-2.5 text-[11px] font-bold text-text shadow-xs disabled:opacity-50"
+                      >
+                        {isActionLoading ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} strokeWidth={2.5} className="text-ok" />}
+                        Já confirmei
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelPendingEmail}
+                        disabled={isActionLoading}
+                        className="press flex h-7 items-center rounded-md border border-line px-2.5 text-[11px] font-semibold text-text-3 disabled:opacity-50"
+                      >
+                        Cancelar solicitação
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {isTicketConfirmed ? (
               <div className="flex min-h-16 items-center gap-3 border-b border-line">
                 <span className="min-w-0 flex-1">
@@ -1015,6 +1181,41 @@ export default function Profile() {
         )}
       </section>
 
+      {profile.pendingEmailChange?.newEmail && (
+        <section aria-label="Troca de e-mail pendente" className="mx-5 mt-5 rounded-2xl border border-warn/30 bg-warn/10 p-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-warn/20 text-warn">
+              <Mail size={18} strokeWidth={2.2} aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[14px] font-bold text-text">Confirmação de e-mail pendente</h2>
+              <p className="mt-1 text-[13px] leading-snug text-text-2">
+                Enviamos um link para <strong className="break-all text-text">{profile.pendingEmailChange.newEmail}</strong>. Confirme para atualizar seu acesso.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleCheckEmailVerification}
+                  disabled={isActionLoading}
+                  className="press flex h-8 items-center gap-1.5 rounded-lg bg-surface px-3 text-[12px] font-bold text-text shadow-sm disabled:opacity-50"
+                >
+                  {isActionLoading ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} strokeWidth={2.5} className="text-ok" />}
+                  Já confirmei
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelPendingEmail}
+                  disabled={isActionLoading}
+                  className="press flex h-8 items-center rounded-lg border border-line px-3 text-[12px] font-semibold text-text-3 disabled:opacity-50"
+                >
+                  Cancelar solicitação
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section aria-label="Conta" className="mx-5 mt-5 rounded-2xl bg-surface px-3.5">
         <AccountRow
           color="#FBBF24"
@@ -1025,6 +1226,30 @@ export default function Profile() {
             ? <span className="rounded-[9px] bg-[rgba(111,216,166,0.14)] px-[9px] py-[3px] text-[12px] font-extrabold text-ok">Ativo</span>
             : <span className="rounded-[9px] bg-[rgba(242,196,106,0.16)] px-[9px] py-[3px] text-[12px] font-extrabold text-warn">Vincular</span>}
           onClick={openTicketSheet}
+        />
+        <AccountRow
+          color="#38BDF8"
+          icon={BellRing}
+          title="Notificações e alertas"
+          desc={
+            notif.permission === 'granted' && notif.enabled
+              ? 'Ativas neste aparelho (funciona mesmo sem instalar o app)'
+              : notif.permission === 'denied'
+                ? 'Bloqueadas nas permissões do navegador'
+                : 'Toque para ativar avisos no navegador ou no celular'
+          }
+          badge={
+            notif.permission === 'granted' && notif.enabled
+              ? <span className="rounded-[9px] bg-[rgba(111,216,166,0.14)] px-[9px] py-[3px] text-[12px] font-extrabold text-ok">Ativo</span>
+              : <span className="rounded-[9px] bg-[rgba(143,160,255,0.16)] px-[9px] py-[3px] text-[12px] font-extrabold text-link">Ativar</span>
+          }
+          onClick={() => {
+            if (notif.permission !== 'granted') {
+              notif.requestPermission();
+            } else {
+              notif.toggleEnabled();
+            }
+          }}
         />
         <AccountRow color="#8FA0FF" icon={LinkIcon} title="Redes sociais" desc={socialsText} onClick={() => openEdit('redes')} />
         <AccountRow color="#6FD8A6" icon={ShieldCheck} title="Privacidade e dados" desc="O que os outros veem de você" onClick={() => openEdit('privacidade')} last />
@@ -1136,16 +1361,52 @@ function SocialField({ id, label, prefix, logo, value, onChange, placeholder }) 
 
 // Folha "Ingresso Sympla": vincular (sem ingresso) ou ver o vínculo (com ingresso). Lógica é a do Profile.
 function TicketSheet({ confirmed, profile, editForm, setEditForm, verifying, feedback, onVerify, onOpenBadge, onClose }) {
+  const [keyboardStyle, setKeyboardStyle] = useState({});
+
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    const updateViewport = () => {
+      if (!vv) return;
+      const keyboardInset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      if (keyboardInset > 40) {
+        setKeyboardStyle({
+          bottom: `${keyboardInset}px`,
+          maxHeight: `${Math.max(240, Math.round(vv.height - 12))}px`
+        });
+      } else {
+        setKeyboardStyle({});
+      }
+    };
+
+    if (vv) {
+      updateViewport();
+      vv.addEventListener('resize', updateViewport);
+      vv.addEventListener('scroll', updateViewport);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (vv) {
+        vv.removeEventListener('resize', updateViewport);
+        vv.removeEventListener('scroll', updateViewport);
+      }
+    };
   }, [onClose]);
+
+  const handleInputFocus = (e) => {
+    const target = e.currentTarget;
+    setTimeout(() => {
+      target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }, 220);
+  };
 
   return (
     <>
       <div className="ds-scrim" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-labelledby="pf-ticket-title" className="ds-sheet text-text">
+      <div role="dialog" aria-modal="true" aria-labelledby="pf-ticket-title" className="ds-sheet text-text" style={keyboardStyle}>
         <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-surface-selected text-link" aria-hidden="true">
             <Ticket size={22} />
@@ -1187,13 +1448,15 @@ function TicketSheet({ confirmed, profile, editForm, setEditForm, verifying, fee
             </ul>
             <div className="mt-4">
               <label htmlFor="pf-t-email" className="field-label">E-mail usado na compra do ingresso</label>
-              <input id="pf-t-email" type="email" autoComplete="email" className="field pf-field" value={editForm.email}
+              <input id="pf-t-email" type="email" inputMode="email" autoComplete="email" className="field pf-field" value={editForm.email}
+                onFocus={handleInputFocus}
                 onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
               <p className="mt-1.5 text-[12.5px] text-text-3">A gente procura seu ingresso no Sympla com esse e-mail.</p>
             </div>
             <div className="mt-3">
               <label htmlFor="pf-t-code" className="field-label">Código do ingresso (opcional)</label>
               <input id="pf-t-code" className="field pf-field" value={editForm.ticketNumber || ''} autoCapitalize="characters"
+                onFocus={handleInputFocus}
                 onChange={(e) => setEditForm({ ...editForm, ticketNumber: e.target.value })} />
             </div>
             {feedback && (

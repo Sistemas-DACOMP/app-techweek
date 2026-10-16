@@ -2,252 +2,532 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 
 vi.mock('../config/firebaseAdmin', () => ({
-  auth: { verifyIdToken: vi.fn() },
+  auth: {
+    verifyIdToken: vi.fn()
+  },
   db: {
     collection: vi.fn()
   }
 }));
 
-import { requireAuth, requireRole, requireSymplaTicket } from './authMiddleware';
 import { auth, db } from '../config/firebaseAdmin';
-import type { AuthUser } from '../types/express';
+import {
+  requireAuth,
+  requireRole,
+  requireSymplaTicket,
+  requireVerifiedEmail
+} from './authMiddleware';
 
-function makeRes() {
-  const res: Partial<Response> = {};
-  res.status = vi.fn().mockReturnValue(res);
-  res.json = vi.fn().mockReturnValue(res);
-  return res as Response;
-}
+describe('Middleware: requireAuth (ERR-060 / KAN-75 / SEC)', () => {
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+  let next: NextFunction;
 
-describe('requireAuth (KAN-72 — /api/auth/register precisa de token válido)', () => {
   beforeEach(() => {
+    req = { headers: {} };
+    res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn().mockReturnThis()
+    };
+    next = vi.fn();
     vi.clearAllMocks();
   });
 
-  it('retorna 401 quando não há header Authorization', async () => {
-    const req = { headers: {} } as unknown as Request;
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
+  it('retorna 401 UNAUTHORIZED se o header Authorization estiver ausente', async () => {
+    req.headers = {};
 
-    await requireAuth(req, res, next);
+    await requireAuth(req as Request, res as Response, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'UNAUTHORIZED' }));
-    expect(next).not.toHaveBeenCalled();
-    expect(auth.verifyIdToken).not.toHaveBeenCalled();
-  });
-
-  it('retorna 401 quando o header não usa o formato "Bearer <token>"', async () => {
-    const req = { headers: { authorization: 'Token abc123' } } as unknown as Request;
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
-
-    await requireAuth(req, res, next);
-
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'UNAUTHORIZED',
+        message: expect.stringContaining('Bearer <token>')
+      })
+    );
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('retorna 401 INVALID_TOKEN quando o token é inválido/expirado', async () => {
-    (auth.verifyIdToken as any).mockRejectedValue(new Error('token expirado'));
-    const req = { headers: { authorization: 'Bearer token-invalido' } } as unknown as Request;
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
+  it('retorna 401 UNAUTHORIZED se o header Authorization não iniciar com "Bearer "', async () => {
+    req.headers = { authorization: 'Basic token-123' };
 
-    await requireAuth(req, res, next);
+    await requireAuth(req as Request, res as Response, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INVALID_TOKEN' }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'UNAUTHORIZED',
+        message: expect.stringContaining('Bearer <token>')
+      })
+    );
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('popula req.user e chama next() quando o token é válido', async () => {
-    (auth.verifyIdToken as any).mockResolvedValue({
-      uid: 'uid-1',
-      email: 'a@b.com',
-      email_verified: true
+  it('retorna 401 UNAUTHORIZED se o token após "Bearer " for vazio ou composto só por espaços', async () => {
+    req.headers = { authorization: 'Bearer    ' };
+
+    await requireAuth(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'UNAUTHORIZED',
+      message: 'Token de autenticação não fornecido.'
     });
-    const req = { headers: { authorization: 'Bearer token-valido' } } as unknown as Request;
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
+    expect(next).not.toHaveBeenCalled();
+  });
 
-    await requireAuth(req, res, next);
+  it('retorna 401 INVALID_TOKEN se a verificação do token falhar (expirado, revogado ou inválido)', async () => {
+    req.headers = { authorization: 'Bearer invalid-token' };
+    vi.mocked(auth.verifyIdToken).mockRejectedValue(new Error('Firebase ID token has expired.'));
 
-    expect(next).toHaveBeenCalledTimes(1);
+    await requireAuth(req as Request, res as Response, next);
+
+    expect(auth.verifyIdToken).toHaveBeenCalledWith('invalid-token', true);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'INVALID_TOKEN',
+      code: 'auth/invalid-token',
+      message: 'Token de autenticação inválido, expirado ou revogado.'
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('faz fallback para verifyIdToken(token, false) quando checkRevoked=true falha com auth/insufficient-permission', async () => {
+    req.headers = { authorization: 'Bearer valid-jwt-token' };
+
+    vi.mocked(auth.verifyIdToken)
+      .mockRejectedValueOnce({
+        code: 'auth/insufficient-permission',
+        message: 'Insufficient permission to access the requested resource.'
+      } as any)
+      .mockResolvedValueOnce({
+        uid: 'user-123',
+        email: 'user@example.com',
+        email_verified: true
+      } as any);
+
+    await requireAuth(req as Request, res as Response, next);
+
+    expect(auth.verifyIdToken).toHaveBeenNthCalledWith(1, 'valid-jwt-token', true);
+    expect(auth.verifyIdToken).toHaveBeenNthCalledWith(2, 'valid-jwt-token', false);
     expect(req.user).toEqual({
-      uid: 'uid-1',
-      email: 'a@b.com',
+      uid: 'user-123',
+      email: 'user@example.com',
       role: 'PARTICIPANT',
       emailVerified: true
     });
-  });
-
-  it('passa checkRevoked=true pro Admin SDK (KAN-67 — token de conta desabilitada/deslogada não pode colar)', async () => {
-    (auth.verifyIdToken as any).mockResolvedValue({ uid: 'uid-1', email_verified: true });
-    const req = { headers: { authorization: 'Bearer token-valido' } } as unknown as Request;
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
-
-    await requireAuth(req, res, next);
-
-    expect(auth.verifyIdToken).toHaveBeenCalledWith('token-valido', true);
-  });
-});
-
-describe('requireRole (KAN-67 — RBAC reaproveitado por toda rota de negócio nova)', () => {
-  function makeReq(user?: AuthUser): Request {
-    return { user } as unknown as Request;
-  }
-
-  it('retorna 401 quando não há req.user (rota mal montada sem requireAuth antes)', () => {
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
-
-    requireRole(['STAFF'])(makeReq(undefined), res, next);
-
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'UNAUTHORIZED' }));
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('retorna 403 quando a role do usuário não está em allowedRoles', () => {
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
-
-    requireRole(['STAFF', 'ADMIN'])(makeReq({ uid: 'u1', role: 'PARTICIPANT' }), res, next);
-
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'FORBIDDEN' }));
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('chama next() quando a role do usuário está em allowedRoles', () => {
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
-
-    requireRole(['STAFF', 'ADMIN'])(makeReq({ uid: 'u1', role: 'STAFF' }), res, next);
-
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it('ADMIN sempre passa, mesmo fora de allowedRoles (bypass documentado)', () => {
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
+  it('decodifica token com sucesso e injeta req.user com papel default PARTICIPANT', async () => {
+    req.headers = { authorization: 'Bearer valid-participant-token' };
+    vi.mocked(auth.verifyIdToken).mockResolvedValue({
+      uid: 'user-p1',
+      email: 'part@ufu.br',
+      email_verified: true
+    } as any);
 
-    requireRole(['SPONSOR'])(makeReq({ uid: 'u1', role: 'ADMIN' }), res, next);
+    await requireAuth(req as Request, res as Response, next);
 
+    expect(auth.verifyIdToken).toHaveBeenCalledWith('valid-participant-token', true);
+    expect(req.user).toEqual({
+      uid: 'user-p1',
+      email: 'part@ufu.br',
+      role: 'PARTICIPANT',
+      emailVerified: true
+    });
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
   });
+
+  it('reconhece papel ADMIN via role: "ADMIN"', async () => {
+    req.headers = { authorization: 'Bearer valid-admin-token' };
+    vi.mocked(auth.verifyIdToken).mockResolvedValue({
+      uid: 'admin-u1',
+      email: 'admin@ufu.br',
+      role: 'ADMIN',
+      email_verified: true
+    } as any);
+
+    await requireAuth(req as Request, res as Response, next);
+
+    expect(req.user?.role).toBe('ADMIN');
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('reconhece papel ADMIN via custom claim admin: true', async () => {
+    req.headers = { authorization: 'Bearer valid-claim-admin-token' };
+    vi.mocked(auth.verifyIdToken).mockResolvedValue({
+      uid: 'admin-u2',
+      email: 'admin2@ufu.br',
+      admin: true,
+      email_verified: true
+    } as any);
+
+    await requireAuth(req as Request, res as Response, next);
+
+    expect(req.user?.role).toBe('ADMIN');
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserva roles especiais como STAFF ou SPONSOR', async () => {
+    req.headers = { authorization: 'Bearer valid-staff-token' };
+    vi.mocked(auth.verifyIdToken).mockResolvedValue({
+      uid: 'staff-u1',
+      email: 'staff@ufu.br',
+      role: 'STAFF',
+      email_verified: true
+    } as any);
+
+    await requireAuth(req as Request, res as Response, next);
+
+    expect(req.user?.role).toBe('STAFF');
+    expect(next).toHaveBeenCalledTimes(1);
+  });
 });
 
-describe('requireSymplaTicket (KAN-84 — bloqueio de ações para usuários sem ingresso)', () => {
-  function makeReq(user?: AuthUser): Request {
-    return { user } as unknown as Request;
-  }
+describe('Middleware: requireRole (ERR-060 / RBAC / SEC)', () => {
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+  let next: NextFunction;
 
   beforeEach(() => {
+    req = {};
+    res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn().mockReturnThis()
+    };
+    next = vi.fn();
     vi.clearAllMocks();
   });
 
-  it('retorna 401 quando req.user não está definido', async () => {
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
+  it('retorna 401 UNAUTHORIZED se req.user não existir', () => {
+    req.user = undefined;
 
-    await requireSymplaTicket(makeReq(undefined), res, next);
+    requireRole(['STAFF'])(req as Request, res as Response, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'UNAUTHORIZED' }));
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'UNAUTHORIZED',
+      message: 'Usuário não autenticado.'
+    });
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('ADMIN sempre passa direto sem consultar Firestore (bypass de administração)', async () => {
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
+  it('chama next() se o usuário tiver role ADMIN (acesso irrestrito a qualquer papel)', () => {
+    req.user = {
+      uid: 'admin-1',
+      email: 'admin@ufu.br',
+      role: 'ADMIN',
+      emailVerified: true
+    };
 
-    await requireSymplaTicket(makeReq({ uid: 'admin-1', role: 'ADMIN' }), res, next);
+    requireRole(['STAFF', 'SPONSOR'])(req as Request, res as Response, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('chama next() se o usuário tiver exatamente o papel permitido', () => {
+    req.user = {
+      uid: 'staff-1',
+      email: 'staff@ufu.br',
+      role: 'STAFF',
+      emailVerified: true
+    };
+
+    requireRole(['STAFF'])(req as Request, res as Response, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('retorna 403 FORBIDDEN se o usuário possuir papel insuficiente', () => {
+    req.user = {
+      uid: 'part-1',
+      email: 'part@ufu.br',
+      role: 'PARTICIPANT',
+      emailVerified: true
+    };
+
+    requireRole(['STAFF', 'SPONSOR'])(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'Acesso restrito. Esta ação requer permissão de: STAFF, SPONSOR.'
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('Middleware: requireSymplaTicket (ERR-060 / KAN-84 / SEC)', () => {
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+  let next: NextFunction;
+
+  beforeEach(() => {
+    req = {};
+    res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn().mockReturnThis()
+    };
+    next = vi.fn();
+    vi.clearAllMocks();
+  });
+
+  it('retorna 401 UNAUTHORIZED se req.user não existir', async () => {
+    req.user = undefined;
+
+    await requireSymplaTicket(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'UNAUTHORIZED',
+      message: 'Usuário não autenticado.'
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('concede bypass imediato e chama next() se req.user for ADMIN (sem consultar Firestore)', async () => {
+    req.user = {
+      uid: 'admin-1',
+      email: 'admin@ufu.br',
+      role: 'ADMIN',
+      emailVerified: true
+    };
+
+    await requireSymplaTicket(req as Request, res as Response, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
     expect(db.collection).not.toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
   });
 
-  it('retorna 403 SYMPLA_TICKET_REQUIRED quando documento do usuário não existe', async () => {
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
+  it('chama next() se o participante possuir hasSymplaTicket: true no documento', async () => {
+    req.user = {
+      uid: 'user-ticket-1',
+      email: 'ticket1@ufu.br',
+      role: 'PARTICIPANT',
+      emailVerified: true
+    };
 
-    (db.collection as any).mockReturnValue({
-      doc: vi.fn().mockReturnValue({
-        get: vi.fn().mockResolvedValue({ exists: false, data: () => null })
-      })
+    const mockGet = vi.fn().mockResolvedValue({
+      exists: true,
+      data: () => ({ hasSymplaTicket: true })
     });
+    const mockDoc = vi.fn().mockReturnValue({ get: mockGet });
+    vi.mocked(db.collection).mockReturnValue({ doc: mockDoc } as any);
 
-    await requireSymplaTicket(makeReq({ uid: 'user-no-doc', role: 'PARTICIPANT' }), res, next);
+    await requireSymplaTicket(req as Request, res as Response, next);
 
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'SYMPLA_TICKET_REQUIRED' }));
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('retorna 403 SYMPLA_TICKET_REQUIRED quando usuário não possui hasSymplaTicket: true', async () => {
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
-
-    (db.collection as any).mockReturnValue({
-      doc: vi.fn().mockReturnValue({
-        get: vi.fn().mockResolvedValue({
-          exists: true,
-          data: () => ({ email: 'test@example.com', hasSymplaTicket: false })
-        })
-      })
-    });
-
-    await requireSymplaTicket(makeReq({ uid: 'user-no-ticket', role: 'PARTICIPANT' }), res, next);
-
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'SYMPLA_TICKET_REQUIRED' }));
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('chama next() quando o usuário possui hasSymplaTicket: true', async () => {
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
-
-    (db.collection as any).mockReturnValue({
-      doc: vi.fn().mockReturnValue({
-        get: vi.fn().mockResolvedValue({
-          exists: true,
-          data: () => ({
-            email: 'valid@example.com',
-            hasSymplaTicket: true,
-            symplaTicket: { ticketNumber: '123' }
-          })
-        })
-      })
-    });
-
-    await requireSymplaTicket(makeReq({ uid: 'user-valid', role: 'PARTICIPANT' }), res, next);
-
+    expect(db.collection).toHaveBeenCalledWith('users');
+    expect(mockDoc).toHaveBeenCalledWith('user-ticket-1');
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it('retorna 500 INTERNAL_ERROR caso ocorra erro inesperado no banco', async () => {
-    const res = makeRes();
-    const next = vi.fn() as NextFunction;
+  it('chama next() se o participante possuir symplaTicket: true ou sympla_ticket: true', async () => {
+    req.user = {
+      uid: 'user-ticket-2',
+      email: 'ticket2@ufu.br',
+      role: 'PARTICIPANT',
+      emailVerified: true
+    };
 
-    (db.collection as any).mockReturnValue({
-      doc: vi.fn().mockReturnValue({
-        get: vi.fn().mockRejectedValue(new Error('Firestore indisponível'))
-      })
+    const mockGet = vi.fn().mockResolvedValue({
+      exists: true,
+      data: () => ({ sympla_ticket: true })
     });
+    const mockDoc = vi.fn().mockReturnValue({ get: mockGet });
+    vi.mocked(db.collection).mockReturnValue({ doc: mockDoc } as any);
 
-    await requireSymplaTicket(makeReq({ uid: 'user-err', role: 'PARTICIPANT' }), res, next);
+    await requireSymplaTicket(req as Request, res as Response, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('retorna 403 SYMPLA_TICKET_REQUIRED se o documento do usuário não existir no Firestore', async () => {
+    req.user = {
+      uid: 'user-ghost',
+      email: 'ghost@ufu.br',
+      role: 'PARTICIPANT',
+      emailVerified: true
+    };
+
+    const mockGet = vi.fn().mockResolvedValue({
+      exists: false,
+      data: () => undefined
+    });
+    const mockDoc = vi.fn().mockReturnValue({ get: mockGet });
+    vi.mocked(db.collection).mockReturnValue({ doc: mockDoc } as any);
+
+    await requireSymplaTicket(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'SYMPLA_TICKET_REQUIRED',
+      message: 'É necessário possuir um ingresso oficial do Sympla vinculado à conta para realizar esta ação.'
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('retorna 403 SYMPLA_TICKET_REQUIRED se o participante não tiver nenhuma flag de ingresso', async () => {
+    req.user = {
+      uid: 'user-noticket',
+      email: 'noticket@ufu.br',
+      role: 'PARTICIPANT',
+      emailVerified: true
+    };
+
+    const mockGet = vi.fn().mockResolvedValue({
+      exists: true,
+      data: () => ({ name: 'Participante Sem Ingresso' })
+    });
+    const mockDoc = vi.fn().mockReturnValue({ get: mockGet });
+    vi.mocked(db.collection).mockReturnValue({ doc: mockDoc } as any);
+
+    await requireSymplaTicket(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'SYMPLA_TICKET_REQUIRED' })
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('retorna 500 INTERNAL_ERROR caso ocorra erro ao consultar o Firestore', async () => {
+    req.user = {
+      uid: 'user-err',
+      email: 'err@ufu.br',
+      role: 'PARTICIPANT',
+      emailVerified: true
+    };
+
+    const mockDoc = vi.fn().mockReturnValue({
+      get: vi.fn().mockRejectedValue(new Error('Firestore read failure'))
+    });
+    vi.mocked(db.collection).mockReturnValue({ doc: mockDoc } as any);
+
+    await requireSymplaTicket(req as Request, res as Response, next);
 
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'INTERNAL_ERROR' }));
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'INTERNAL_ERROR',
+      message: 'Erro interno ao validar ingresso do participante.'
+    });
     expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('Middleware: requireVerifiedEmail (KAN-116 / SEC)', () => {
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+  let next: NextFunction;
+
+  beforeEach(() => {
+    req = {};
+    res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn().mockReturnThis()
+    };
+    next = vi.fn();
+    vi.clearAllMocks();
+  });
+
+  it('retorna 401 se req.user não existir', () => {
+    req.user = undefined;
+
+    requireVerifiedEmail(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'UNAUTHORIZED',
+      message: 'Usuário não autenticado.'
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('retorna 403 EMAIL_NOT_VERIFIED se emailVerified for false', () => {
+    req.user = {
+      uid: 'user-123',
+      email: 'user@example.com',
+      role: 'PARTICIPANT',
+      emailVerified: false
+    };
+
+    requireVerifiedEmail(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'EMAIL_NOT_VERIFIED',
+      message: 'É necessário confirmar seu endereço de e-mail antes de realizar esta ação.'
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('retorna 403 EMAIL_NOT_VERIFIED se emailVerified for undefined', () => {
+    req.user = {
+      uid: 'user-123',
+      email: 'user@example.com',
+      role: 'PARTICIPANT',
+      emailVerified: undefined
+    };
+
+    requireVerifiedEmail(req as Request, res as Response, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'EMAIL_NOT_VERIFIED',
+      message: 'É necessário confirmar seu endereço de e-mail antes de realizar esta ação.'
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('chama next() se o usuário possuir emailVerified: true', () => {
+    req.user = {
+      uid: 'user-123',
+      email: 'user@example.com',
+      role: 'PARTICIPANT',
+      emailVerified: true
+    };
+
+    requireVerifiedEmail(req as Request, res as Response, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+  });
+
+  it('chama next() para usuário com role ADMIN mesmo se emailVerified for false', () => {
+    req.user = {
+      uid: 'admin-123',
+      email: 'admin@example.com',
+      role: 'ADMIN',
+      emailVerified: false
+    };
+
+    requireVerifiedEmail(req as Request, res as Response, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+  });
+
+  it('chama next() para usuário com role ADMIN se emailVerified for undefined', () => {
+    req.user = {
+      uid: 'admin-123',
+      email: 'admin@example.com',
+      role: 'ADMIN',
+      emailVerified: undefined
+    };
+
+    requireVerifiedEmail(req as Request, res as Response, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
   });
 });
 

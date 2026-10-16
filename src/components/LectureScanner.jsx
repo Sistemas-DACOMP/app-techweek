@@ -20,6 +20,7 @@ export default function LectureScanner({
   const [cameraStatus, setCameraStatus] = useState('starting'); // 'starting' | 'ready' | 'searching' | 'error'
   const [feedbackState, setFeedbackState] = useState(null); // null | 'invalid' | 'already_registered' | 'ticket_required' | 'submitting' | 'success'
   const [isConfirmed, setIsConfirmed] = useState(false);
+  const [earnedPoints, setEarnedPoints] = useState(0);
 
   const scannerRef = useRef(null);
   const scannerStartedRef = useRef(false);
@@ -66,11 +67,14 @@ export default function LectureScanner({
         );
       }
 
+      setEarnedPoints(points);
       setFeedbackState('success');
       setIsConfirmed(true);
     } catch (err) {
       if (err.status === 409) {
-        setFeedbackState('already_registered');
+        setEarnedPoints(0);
+        setFeedbackState('success');
+        setIsConfirmed(true);
       } else if (
         err.status === 403 &&
         (err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')
@@ -85,6 +89,7 @@ export default function LectureScanner({
             })
           );
         }
+        setEarnedPoints(points);
         setFeedbackState('success');
         setIsConfirmed(true);
       }
@@ -147,7 +152,7 @@ export default function LectureScanner({
       <PresenceConfirmedSheet
         title={lectureTitle}
         location={lectureLocation}
-        points={points}
+        points={earnedPoints}
         kicker="QR lido"
         onClose={onClose}
       />,

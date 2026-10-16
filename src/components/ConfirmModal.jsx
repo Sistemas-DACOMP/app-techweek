@@ -27,13 +27,18 @@ export default function ConfirmModal({
   onCancel,
   isLoading = false,
   requireConfirmationText = '',
-  confirmationPrompt = ''
+  confirmationPrompt = '',
+  requirePassword = false,
+  passwordLabel = 'Digite sua senha atual:',
+  passwordPlaceholder = 'Sua senha'
 }) {
   const [typedConfirmation, setTypedConfirmation] = useState('');
+  const [typedPassword, setTypedPassword] = useState('');
   const titleId = useId();
 
   useEffect(() => {
     setTypedConfirmation('');
+    setTypedPassword('');
   }, [isOpen]);
 
   useEffect(() => {
@@ -51,7 +56,16 @@ export default function ConfirmModal({
 
   const isConfirmationValid = !requireConfirmationText ||
     typedConfirmation.trim().toUpperCase() === requireConfirmationText.trim().toUpperCase();
-  const isConfirmDisabled = isLoading || !isConfirmationValid;
+  const isPasswordValid = !requirePassword || typedPassword.trim().length > 0;
+  const isConfirmDisabled = isLoading || !isConfirmationValid || !isPasswordValid;
+
+  const handleConfirmClick = () => {
+    if (isConfirmDisabled) return;
+    onConfirm?.({
+      typedConfirmation,
+      password: typedPassword
+    });
+  };
 
   const content = (
     <div className="modal-overlay-fixed ds-dialog-scrim p-5" onClick={!isLoading ? onCancel : undefined}>
@@ -82,7 +96,26 @@ export default function ConfirmModal({
 
         <h2 id={titleId} className="text-[19px] font-extrabold leading-tight">{title}</h2>
 
-        <p className={`mt-2 text-[14px] leading-relaxed text-text-2 ${requireConfirmationText ? 'mb-4' : 'mb-6'}`}>{message}</p>
+        <p className={`mt-2 text-[14px] leading-relaxed text-text-2 ${requireConfirmationText || requirePassword ? 'mb-4' : 'mb-6'}`}>{message}</p>
+
+        {requirePassword && (
+          <div className="mb-4 w-full text-left">
+            <label htmlFor="confirm-input-password" className="field-label leading-snug">
+              {passwordLabel}
+            </label>
+            <input
+              id="confirm-input-password"
+              type="password"
+              className="field font-medium"
+              value={typedPassword}
+              onChange={(e) => setTypedPassword(e.target.value)}
+              placeholder={passwordPlaceholder}
+              disabled={isLoading}
+              autoComplete="current-password"
+              autoFocus={!requireConfirmationText}
+            />
+          </div>
+        )}
 
         {requireConfirmationText && (
           <div className="mb-5 w-full text-left">
@@ -100,13 +133,13 @@ export default function ConfirmModal({
               placeholder={`Digite "${requireConfirmationText}"`}
               disabled={isLoading}
               autoComplete="off"
-              autoFocus
+              autoFocus={requireConfirmationText && !requirePassword}
             />
           </div>
         )}
 
         <div className="flex w-full flex-col gap-2">
-          <button onClick={onConfirm} type="button" disabled={isConfirmDisabled} className={`btn btn-block ${current.confirm}`}>
+          <button onClick={handleConfirmClick} type="button" disabled={isConfirmDisabled} className={`btn btn-block ${current.confirm}`}>
             {isLoading ? (
               <>
                 <Loader2 size={18} className="animate-spin" aria-hidden="true" />

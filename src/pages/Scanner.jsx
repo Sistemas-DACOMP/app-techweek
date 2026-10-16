@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
 import { findUserByUsername, getLeaderboardUsers } from '../lib/userService';
-import { DEFAULT_ACTIVITIES } from '../lib/activityService';
+import { DEFAULT_ACTIVITIES, registerActivityAttendance } from '../lib/activityService';
 import { DEFAULT_MISSIONS } from '../lib/missionService';
 import { resolveParticipantFromQr } from '../lib/sponsorService';
 import { getBadgeQrValue } from '../lib/sympla';
@@ -48,16 +48,23 @@ function badgeFromProfile(profile) {
   const first = profile.firstName || profile.first_name || '';
   const last = profile.lastName || profile.last_name || '';
   const username = (profile.username || '').replace(/^@/, '');
+  const symplaTicket = profile.symplaTicket || profile.sympla_ticket || null;
   return {
     name: profile.displayName || [first, last].filter(Boolean).join(' ') || username || 'Participante',
     username,
     course: profile.course || '',
     period: profile.period || null,
+    institution: profile.institution || '',
     participantType: profile.participantType || profile.participant_type || 'Participante',
     avatarUrl: profile.avatarUrl || profile.avatar_url || profile.photoURL || null,
-    symplaTicket: profile.symplaTicket || profile.sympla_ticket || null,
+    symplaTicket,
+    ticketId: profile.ticketId || symplaTicket?.ticketNumber || null,
     uid: profile.uid || profile.id || '',
-    email: profile.email || ''
+    email: profile.email || '',
+    phone: profile.phone || '',
+    linkedin: profile.linkedin || '',
+    instagram: profile.instagram || '',
+    github: profile.github || ''
   };
 }
 
@@ -102,8 +109,8 @@ const cardClass =
   'mt-4 rounded-[26px] border border-[#2A3460] bg-[linear-gradient(180deg,#151D3E_0%,#0F1530_100%)] px-[18px] pt-3.5';
 
 // Meu QR (board Cracha)
-function MyBadge({ badge, points, onZoom }) {
-  const id = badge.symplaTicket?.ticketNumber || badge.uid.slice(0, 8).toUpperCase();
+function MyBadge({ badge, points, onZoom, hasTicket = true, onLink }) {
+  const id = badge.symplaTicket?.ticketNumber || badge.ticketId || badge.uid.slice(0, 8).toUpperCase();
   return (
     <>
       <section aria-label="Meu crachá digital" className={`${cardClass} pb-4 shadow-[0_18px_44px_rgba(0,0,0,0.45)]`}>
@@ -129,11 +136,45 @@ function MyBadge({ badge, points, onZoom }) {
           </button>
         </div>
         <div className="mt-3 flex justify-center">
-          <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] bg-[rgba(111,216,166,0.14)] px-3 text-xs font-extrabold text-ok">
-            <Check size={14} strokeWidth={2.6} aria-hidden="true" />
-            Ingresso Sympla vinculado
-          </span>
+          {hasTicket ? (
+            <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] bg-[rgba(111,216,166,0.14)] px-3 text-xs font-black text-ok">
+              <Check size={14} strokeWidth={2.6} aria-hidden="true" />
+              Passaporte Completo Ativo
+            </span>
+          ) : (
+            <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] border border-line-2 bg-surface px-3 text-xs font-extrabold text-text-2">
+              Acesso Entrada Livre
+            </span>
+          )}
         </div>
+
+        {!hasTicket && (
+          <div className="mt-3.5 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-purple-500/10 to-transparent p-3.5 text-left shadow-[0_4px_16px_rgba(217,119,6,0.1)]">
+            <div className="flex items-start gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-gold">
+                <Lock size={16} aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="m-0 text-[13px] font-black text-text leading-snug">
+                  Acesse workshops fechados e pontue no ranking oficial!
+                </p>
+                <p className="mt-1 mb-0 text-[12px] text-text-2 leading-relaxed">
+                  Desbloqueie o seu Passaporte Completo para liberar todas as atividades exclusivas, missões e concorrer aos prêmios.
+                </p>
+                <button
+                  type="button"
+                  onClick={onLink}
+                  className="press mt-2.5 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border-none px-3.5 text-xs font-black text-black shadow-[0_4px_12px_rgba(217,119,6,0.3)] transition hover:opacity-95"
+                  style={{ background: 'linear-gradient(135deg, #D97706, #B45309)' }}
+                >
+                  <Lock size={13} aria-hidden="true" />
+                  Desbloquear com Passaporte
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mt-3.5 flex items-center justify-between border-t border-dashed border-[#2A3460] pt-3 text-xs text-text-3">
           {id ? <span>ID #{id}</span> : <span />}
           <span>
@@ -181,7 +222,7 @@ function LockedBadge({ badge, onLink }) {
 }
 
 // Offline (board EstOfflineCracha): o QR é gerado no aparelho a partir do perfil em cache.
-function OfflineBadge({ badge }) {
+function OfflineBadge({ badge, hasTicket = true }) {
   return (
     <section aria-label="Seu crachá" className="mt-4 rounded-[22px] bg-surface">
       <div className="flex items-center justify-between rounded-t-[22px] px-[18px] pt-3.5 pb-10" style={{ background: 'var(--brand-gradient)' }}>
@@ -201,9 +242,17 @@ function OfflineBadge({ badge }) {
         <div className="mt-3.5 rounded-2xl bg-[#F4F5FA] p-2.5 leading-[0]">
           <QRCodeSVG value={getBadgeQrValue(badge)} size={168} bgColor="#F4F5FA" fgColor="#0A0F24" level="M" title="QR Code do seu crachá" />
         </div>
-        <div className="mt-3 flex items-center gap-1.5 text-[13px] font-bold text-ok">
-          <Check size={15} strokeWidth={2.6} aria-hidden="true" />
-          Salvo neste celular · funciona offline
+        <div className="mt-3 flex items-center gap-1.5 text-[13px] font-bold">
+          {hasTicket ? (
+            <span className="flex items-center gap-1.5 text-ok font-extrabold">
+              <Check size={15} strokeWidth={2.6} aria-hidden="true" />
+              Passaporte Completo · offline
+            </span>
+          ) : (
+            <span className="text-text-2 font-semibold">
+              Entrada Livre · offline
+            </span>
+          )}
         </div>
       </div>
     </section>
@@ -229,25 +278,58 @@ export function CameraFrame({ live }) {
   );
 }
 
+function resolveRequestedTab(location) {
+  const params = new URLSearchParams(location?.search || '');
+  const queryTab = (params.get('tab') || params.get('mode') || '').toLowerCase();
+  if (queryTab === 'qr' || queryTab === 'badge' || queryTab === 'cracha') {
+    return 'qr';
+  }
+  if (queryTab === 'scan' || queryTab === 'escanear' || queryTab === 'reader' || params.get('scan') === '1' || params.get('scan') === 'true') {
+    return 'scan';
+  }
+  const stateTab = String(location?.state?.tab || location?.state?.mode || '').toLowerCase();
+  if (stateTab === 'qr' || stateTab === 'badge' || stateTab === 'cracha') {
+    return 'qr';
+  }
+  if (stateTab === 'scan' || stateTab === 'escanear') {
+    return 'scan';
+  }
+  return null;
+}
+
 export default function Scanner() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [scanResult, setScanResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [tab, setTab] = useState('qr'); // o botão central da barra abre em Meu QR (DESIGN.md §5)
+  const [tab, setTab] = useState(() => resolveRequestedTab(location) || 'scan'); // O fluxo padrão abre no leitor/scan; a aba 'Meu QR' fica disponível na alternância
   const [cameraAttempt, setCameraAttempt] = useState(0);
+
+  useEffect(() => {
+    const requested = resolveRequestedTab(location);
+    if (requested) {
+      isProcessingRef.current = false;
+      setScanResult(null);
+      setTab(requested);
+    }
+  }, [location.search, location.state]);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   const [showLinkTicket, setShowLinkTicket] = useState(false);
   const [qrZoom, setQrZoom] = useState(false);
-  const { registerCodeScan, profile, points, hasSymplaTicket } = useUser();
+  const { registerCodeScan, profile, points, hasSymplaTicket, ticketLoading } = useUser();
   const badge = badgeFromProfile(profile);
+  const hasResolvedSymplaQr = Boolean(
+    badge?.symplaTicket?.qrCodeData || badge?.symplaTicket?.ticketNumber || badge?.ticketId
+  );
 
   const scannerRef = useRef(null);
   const isStartingRef = useRef(false);
   const isMountedRef = useRef(true);
+  const isProcessingRef = useRef(false);
 
   // O botão demo só existe no build de desenvolvimento; parâmetro de URL não libera nada em produção.
   const isDevMode = import.meta.env.DEV;
@@ -325,7 +407,8 @@ export default function Scanner() {
             aspectRatio: 1
           },
           (decodedText) => {
-            if (!isMountedRef.current) return;
+            if (!isMountedRef.current || isProcessingRef.current) return;
+            isProcessingRef.current = true;
             // Desliga o hardware da câmera imediatamente ao capturar o código
             stopScannerCamera();
             handleScan(decodedText);
@@ -390,6 +473,7 @@ export default function Scanner() {
     if (!scanResult && !qrZoom) return;
     const onKey = (e) => {
       if (e.key === 'Escape') {
+        isProcessingRef.current = false;
         setScanResult(null);
         setQrZoom(false);
       }
@@ -399,58 +483,121 @@ export default function Scanner() {
   }, [scanResult, qrZoom]);
 
   const handleScan = async (data) => {
+    if (!data) {
+      isProcessingRef.current = false;
+      return;
+    }
+
     setIsLoading(true);
 
     let isUserQr = false;
     let isActivityQr = false;
     let activityData = null;
+    let sessionToken = null;
     let usernameToValidate = null;
     let participantData = null;
+    let parsedPayload = null;
 
     // 1. Tenta identificar payload JSON (Participante ou Atividade)
     try {
       const decoded = decodeURIComponent(data);
       if (decoded.startsWith('{') && decoded.endsWith('}')) {
-        const parsed = JSON.parse(decoded);
-        if (parsed.username || parsed.participantUid || (parsed.uid && !parsed.lectureId)) {
-          isUserQr = true;
-          usernameToValidate = parsed.username || null;
-          participantData = parsed;
-        } else if (parsed.lectureId || parsed.activityId) {
-          isActivityQr = true;
-          const actId = parsed.lectureId || parsed.activityId;
-          activityData = DEFAULT_ACTIVITIES.find(a => a.id === actId) || { id: actId, title: 'Atividade TechWeek' };
-        }
+        parsedPayload = JSON.parse(decoded);
       }
     } catch {
       try {
-        if (data.startsWith('{') && data.endsWith('}')) {
-          const parsed = JSON.parse(data);
-          if (parsed.username || parsed.participantUid || (parsed.uid && !parsed.lectureId)) {
-            isUserQr = true;
-            usernameToValidate = parsed.username || null;
-            participantData = parsed;
-          } else if (parsed.lectureId || parsed.activityId) {
-            isActivityQr = true;
-            const actId = parsed.lectureId || parsed.activityId;
-            activityData = DEFAULT_ACTIVITIES.find(a => a.id === actId) || { id: actId, title: 'Atividade TechWeek' };
-          }
+        if (typeof data === 'string' && data.startsWith('{') && data.endsWith('}')) {
+          parsedPayload = JSON.parse(data);
         }
       } catch {}
     }
 
-    // Se não for atividade e ainda não tiver identificado participante, tenta resolver pelo helper do crachá/sympla
-    if (!isActivityQr && !isUserQr) {
+    if (parsedPayload) {
+      if (
+        parsedPayload.username ||
+        parsedPayload.participantUid ||
+        parsedPayload.email ||
+        parsedPayload.ticketNumber ||
+        (parsedPayload.uid && !parsedPayload.lectureId && !parsedPayload.activityId)
+      ) {
+        isUserQr = true;
+        usernameToValidate = parsedPayload.username || null;
+        participantData = parsedPayload;
+      } else if (parsedPayload.lectureId || parsedPayload.activityId) {
+        isActivityQr = true;
+        const actId = parsedPayload.lectureId || parsedPayload.activityId;
+        sessionToken = parsedPayload.token || parsedPayload.sessionToken || null;
+        activityData = DEFAULT_ACTIVITIES.find(a => a.id === actId || a.number === actId) || { id: actId, title: 'Atividade TechWeek' };
+      }
+    }
+
+    // Se não for JSON de atividade nem usuário, verifica se a string pura é o ID de uma atividade cadastrada
+    if (!isActivityQr && !isUserQr && typeof data === 'string') {
+      const trimmed = data.trim();
+      const matchedAct = DEFAULT_ACTIVITIES.find(a => a.id === trimmed || a.number === trimmed);
+      if (matchedAct) {
+        isActivityQr = true;
+        activityData = matchedAct;
+      }
+    }
+
+    // Se não for atividade, tenta resolver/enriquecer pelo helper do crachá/sympla/Firestore
+    if (!isActivityQr) {
       try {
         const resolved = await resolveParticipantFromQr(data);
         if (resolved) {
           isUserQr = true;
-          usernameToValidate = resolved.username || null;
-          participantData = resolved;
+          usernameToValidate = resolved.username || usernameToValidate || null;
+          participantData = participantData ? { ...participantData, ...resolved } : resolved;
         }
       } catch {}
     }
 
+    // ==========================================
+    // FLUXO A: QR CODE DE ATIVIDADE (PRESENÇA)
+    // ==========================================
+    if (isActivityQr) {
+      const actId = activityData?.id || parsedPayload?.lectureId || parsedPayload?.activityId || (typeof data === 'string' ? data.trim() : '');
+      const attResult = await registerActivityAttendance(actId, sessionToken);
+
+      if (attResult.success || attResult.alreadyCheckedIn) {
+        const earnedPoints = attResult.alreadyCheckedIn ? 0 : (attResult.points ?? 20);
+        setScanResult({
+          status: 'success',
+          type: 'activity',
+          title: 'Presença confirmada!',
+          message: attResult.alreadyCheckedIn
+            ? `Presença em "${activityData?.title || 'Atividade'}" validada. Os pontos já foram contabilizados na primeira leitura.`
+            : `Sua presença em "${activityData?.title || 'Atividade'}" foi confirmada com sucesso!`,
+          points: earnedPoints,
+          alreadyScanned: Boolean(attResult.alreadyCheckedIn),
+          activity: activityData
+        });
+      } else if (attResult.symplaRequired) {
+        setScanResult({
+          status: 'ticket_required',
+          type: 'activity',
+          title: 'Ingresso necessário',
+          message: attResult.message || 'É necessário ter um ingresso Sympla vinculado para confirmar presença nas atividades.',
+          activity: activityData
+        });
+      } else {
+        setScanResult({
+          status: 'error',
+          type: 'activity',
+          title: 'Não foi possível confirmar presença',
+          message: attResult.error || attResult.message || 'Ocorreu um erro ao registrar sua presença. Tente novamente.',
+          activity: activityData
+        });
+      }
+
+      setIsLoading(false);
+      return;
+    }
+
+    // ==========================================
+    // FLUXO B: QR CODE DE PARTICIPANTE OU MISSÃO
+    // ==========================================
     let fetchedProfile = null;
     if (isUserQr && usernameToValidate) {
       fetchedProfile = await findUserByUsername(usernameToValidate).catch(() => null);
@@ -466,10 +613,10 @@ export default function Scanner() {
       }
     }
 
-    const result = await registerCodeScan(data, 5);
-
     // Constrói objeto enriquecido do participante para o card (KAN-95)
     const consolidatedParticipant = isUserQr ? {
+      uid: fetchedProfile?.uid || fetchedProfile?.id || participantData?.uid || participantData?.participantUid || '',
+      participantUid: fetchedProfile?.uid || fetchedProfile?.id || participantData?.participantUid || participantData?.uid || '',
       name: fetchedProfile?.displayName || 
             [fetchedProfile?.firstName, fetchedProfile?.lastName].filter(Boolean).join(' ') || 
             participantData?.name || 
@@ -479,7 +626,8 @@ export default function Scanner() {
       username: fetchedProfile?.username || participantData?.username || usernameToValidate || '',
       avatarUrl: fetchedProfile?.avatarUrl || fetchedProfile?.photoURL || participantData?.avatarUrl || participantData?.photoURL || null,
       course: fetchedProfile?.course || participantData?.course || 'Computação',
-      period: fetchedProfile?.period || participantData?.period || null,
+      period: fetchedProfile?.period ?? participantData?.period ?? null,
+      institution: fetchedProfile?.institution || participantData?.institution || '',
       participantType: fetchedProfile?.participantType || fetchedProfile?.participant_type || participantData?.participantType || 'Aluno da UFU',
       phone: fetchedProfile?.phone || participantData?.phone || '',
       email: fetchedProfile?.email || participantData?.email || '',
@@ -488,43 +636,87 @@ export default function Scanner() {
       github: fetchedProfile?.github || participantData?.github || ''
     } : null;
 
-    if (result && result.success) {
+    // Detectar auto-scan no frontend antes de acionar a pontuação
+    const myUid = profile?.uid || profile?.id;
+    const myUsername = (profile?.username || '').replace(/^@/, '').toLowerCase();
+    const myTicket = profile?.symplaTicket || profile?.sympla_ticket;
+    const myQrData = myTicket?.qrCodeData || null;
+    const myTicketNumber = myTicket?.ticketNumber || profile?.ticketId || null;
+    const targetUid = consolidatedParticipant?.uid || participantData?.uid || participantData?.participantUid || fetchedProfile?.uid || fetchedProfile?.id;
+    const targetUsername = (consolidatedParticipant?.username || participantData?.username || usernameToValidate || fetchedProfile?.username || '').replace(/^@/, '').toLowerCase();
+    const trimmedRaw = typeof data === 'string' ? data.trim() : '';
+    const isMyOwnSymplaCode = Boolean(
+      (myQrData && trimmedRaw && trimmedRaw === myQrData) ||
+      (myTicketNumber && trimmedRaw && (trimmedRaw === myTicketNumber || trimmedRaw.replace(/^SYMPLA:/i, '') === myTicketNumber))
+    );
+
+    if (
+      isMyOwnSymplaCode ||
+      (isUserQr && ((myUid && targetUid && myUid === targetUid) || (myUsername && targetUsername && myUsername !== 'user' && myUsername === targetUsername)))
+    ) {
+      setIsLoading(false);
+      setScanResult({
+        status: 'self_scan',
+        type: 'participant',
+        title: 'Seu próprio crachá',
+        message: 'Você escaneou o seu próprio QR Code. Mostre para outras pessoas te adicionarem!',
+        participant: consolidatedParticipant || badge
+      });
+      return;
+    }
+
+    const result = await registerCodeScan(data, 5, consolidatedParticipant);
+
+    if (result && (result.success || result.alreadyScanned)) {
+      const earnedPoints = result.alreadyScanned ? 0 : (result.points ?? 5);
       if (isUserQr) {
         setScanResult({ 
           status: 'success',
           type: 'participant',
           title: 'QR Code identificado',
-          message: 'Conexão realizada com sucesso!',
-          points: 5,
-          challenges: result.unlockedChallenges,
+          message: result.alreadyScanned
+            ? 'Perfil aberto! Os pontos desta conexão já foram somados na primeira leitura.'
+            : 'Conexão realizada com sucesso!',
+          points: earnedPoints,
+          alreadyScanned: Boolean(result.alreadyScanned),
+          challenges: result.unlockedChallenges || [],
           participant: consolidatedParticipant
-        });
-      } else if (isActivityQr) {
-        setScanResult({
-          status: 'success',
-          type: 'activity',
-          title: 'Atividade identificada',
-          message: 'Presença e participação confirmadas!',
-          points: 5,
-          activity: activityData
         });
       } else {
         setScanResult({ 
           status: 'success',
           type: 'code',
           title: 'Código identificado',
-          message: 'Participação registrada com sucesso!',
-          points: 5,
-          challenges: result.unlockedChallenges
+          message: result.alreadyScanned
+            ? 'Código validado! Os pontos já foram contabilizados na primeira leitura.'
+            : 'Participação registrada com sucesso!',
+          points: earnedPoints,
+          alreadyScanned: Boolean(result.alreadyScanned),
+          challenges: result.unlockedChallenges || []
         });
       }
-    } else {
-      // Estado Já Lido ou Inválido
-      setScanResult({ 
-        status: 'already_scanned',
+    } else if (result?.selfScan) {
+      setScanResult({
+        status: 'self_scan',
+        type: 'participant',
+        title: 'Seu próprio crachá',
+        message: 'Você escaneou o seu próprio QR Code.',
+        participant: consolidatedParticipant || badge
+      });
+    } else if (result?.code === 'SYMPLA_TICKET_REQUIRED') {
+      setScanResult({
+        status: 'ticket_required',
         type: isUserQr ? 'participant' : 'generic',
-        title: 'Código já processado',
-        message: 'Você já escaneou este código anteriormente.',
+        title: 'Ingresso necessário',
+        message: result.error || 'É necessário ter um ingresso Sympla vinculado para realizar esta ação.',
+        participant: consolidatedParticipant
+      });
+    } else {
+      setScanResult({ 
+        status: 'error',
+        type: isUserQr ? 'participant' : 'generic',
+        title: 'Não foi possível processar',
+        message: result?.error || 'Não foi possível processar este código. Verifique e tente novamente.',
         participant: consolidatedParticipant
       });
     }
@@ -575,8 +767,15 @@ export default function Scanner() {
   const isParticipantResult = Boolean(scanResult?.participant);
   const unlocked = (scanResult?.challenges || []).map(missionTitle).filter(Boolean);
   const closeResultAndScan = () => {
+    isProcessingRef.current = false;
     setScanResult(null);
     setTab('scan');
+  };
+
+  const handleTabChange = (newTab) => {
+    isProcessingRef.current = false;
+    setScanResult(null);
+    setTab(newTab);
   };
 
   return (
@@ -594,10 +793,8 @@ export default function Scanner() {
             <p className="mt-6 text-center text-[13px] text-text-2">
               Abra o crachá uma vez com internet para salvá-lo neste celular.
             </p>
-          ) : hasSymplaTicket ? (
-            <OfflineBadge badge={badge} />
           ) : (
-            <LockedBadge badge={badge} onLink={() => setShowLinkTicket(true)} />
+            <OfflineBadge badge={badge} hasTicket={hasSymplaTicket} />
           )}
         </>
       ) : (
@@ -614,7 +811,7 @@ export default function Scanner() {
                 id={`cracha-tab-${key}`}
                 aria-selected={tab === key}
                 aria-controls={`cracha-panel-${key}`}
-                onClick={() => setTab(key)}
+                onClick={() => handleTabChange(key)}
                 className={`h-10 cursor-pointer rounded-[10px] border-0 font-[Montserrat] text-sm transition-colors duration-150 ${
                   tab === key ? 'bg-surface-selected font-bold text-text' : 'bg-transparent font-semibold text-text-2'
                 }`}
@@ -706,12 +903,16 @@ export default function Scanner() {
             </div>
           ) : (
             <div role="tabpanel" id="cracha-panel-qr" aria-labelledby="cracha-tab-qr">
-              {!badge ? (
+              {!badge || (ticketLoading && !hasResolvedSymplaQr) ? (
                 <div className="skeleton mt-4 h-[540px] rounded-[26px]" aria-label="Carregando crachá" />
-              ) : hasSymplaTicket ? (
-                <MyBadge badge={badge} points={points} onZoom={() => setQrZoom(true)} />
               ) : (
-                <LockedBadge badge={badge} onLink={() => setShowLinkTicket(true)} />
+                <MyBadge
+                  badge={badge}
+                  points={points}
+                  hasTicket={hasSymplaTicket}
+                  onLink={() => setShowLinkTicket(true)}
+                  onZoom={() => setQrZoom(true)}
+                />
               )}
             </div>
           )}
@@ -754,27 +955,79 @@ export default function Scanner() {
           >
             <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-center overflow-y-auto rounded-[28px] border border-[#2E3878] bg-[#0F1530] p-[18px] text-center shadow-[0_24px_60px_rgba(0,0,0,0.5)] [animation:dsFadeUp_300ms_var(--ease-out)_both]">
               {isParticipantResult ? (
-                <ParticipantCard
-                  participant={scanResult.participant}
-                  titleId="cracha-result-title"
-                  points={scanResult.status === 'success' ? scanResult.points : null}
-                  eyebrow={scanResult.status === 'success' ? 'Conexão feita!' : 'Vocês já estão conectados'}
-                  eyebrowTone={scanResult.status === 'success' ? 'ok' : 'neutral'}
-                />
+                <>
+                  <ParticipantCard
+                    participant={scanResult.participant}
+                    titleId="cracha-result-title"
+                    points={scanResult.status === 'success' && scanResult.points > 0 ? scanResult.points : null}
+                    eyebrow={
+                      scanResult.status === 'success'
+                        ? 'Conexão feita!'
+                        : scanResult.status === 'self_scan'
+                        ? 'Seu próprio crachá'
+                        : scanResult.status === 'already_scanned'
+                        ? 'Vocês já estão conectados'
+                        : 'Aviso'
+                    }
+                    eyebrowTone={
+                      scanResult.status === 'success'
+                        ? 'ok'
+                        : scanResult.status === 'already_scanned'
+                        ? 'warn'
+                        : 'neutral'
+                    }
+                  />
+                  {scanResult.status === 'self_scan' && (
+                    <p className="mt-3 text-xs leading-relaxed text-text-2">
+                      Mostre o seu crachá na aba &quot;Meu QR&quot; para outras pessoas se conectarem com você.
+                    </p>
+                  )}
+                  {(scanResult.alreadyScanned || scanResult.status === 'already_scanned') && (
+                    <p className="mt-3 text-xs leading-relaxed text-text-2">
+                      Os pontos desta conexão já foram contabilizados na primeira leitura.
+                    </p>
+                  )}
+                </>
               ) : (
                 <div className="flex w-full flex-1 flex-col items-center justify-center">
                   <span
                     className={`flex h-16 w-16 items-center justify-center rounded-full ${
-                      scanResult.status === 'success' ? 'bg-[rgba(111,216,166,0.16)] text-ok' : 'bg-[rgba(242,196,106,0.16)] text-warn'
+                      scanResult.status === 'success'
+                        ? 'bg-[rgba(111,216,166,0.16)] text-ok'
+                        : scanResult.status === 'already_scanned'
+                        ? 'bg-[rgba(242,196,106,0.16)] text-warn'
+                        : scanResult.status === 'ticket_required'
+                        ? 'bg-[rgba(155,123,255,0.18)] text-link'
+                        : 'bg-[rgba(255,90,90,0.16)] text-[#FF5A5A]'
                     }`}
                   >
-                    {scanResult.status === 'success' ? <Check size={30} strokeWidth={2.6} aria-hidden="true" /> : <AlertCircle size={30} aria-hidden="true" />}
+                    {scanResult.status === 'success' ? (
+                      <Check size={30} strokeWidth={2.6} aria-hidden="true" />
+                    ) : scanResult.status === 'ticket_required' ? (
+                      <Ticket size={28} strokeWidth={2.2} aria-hidden="true" />
+                    ) : (
+                      <AlertCircle size={30} aria-hidden="true" />
+                    )}
                   </span>
                   <h2 id="cracha-result-title" className="mt-4 mb-0 text-[22px] font-black">{scanResult.title}</h2>
-                  <p className="mt-1.5 mb-0 text-sm text-text-2">{scanResult.message}</p>
-                  {scanResult.status === 'success' && scanResult.points ? (
+                  <p className="mt-1.5 mb-0 text-sm leading-relaxed text-text-2">{scanResult.message}</p>
+                  {scanResult.status === 'success' && scanResult.points > 0 ? (
                     <span className="pts-chip mt-3">+{scanResult.points} pts</span>
                   ) : null}
+                  {scanResult.status === 'ticket_required' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScanResult(null);
+                        isProcessingRef.current = false;
+                        setShowLinkTicket(true);
+                      }}
+                      className="btn btn-primary btn-block mt-4"
+                    >
+                      <Ticket size={18} aria-hidden="true" />
+                      Vincular ingresso Sympla
+                    </button>
+                  )}
                   {scanResult.activity && (
                     <div className="mt-5 w-full rounded-2xl bg-surface p-3.5 text-left">
                       <div className="text-[15px] font-extrabold">{scanResult.activity.title}</div>
@@ -788,6 +1041,7 @@ export default function Scanner() {
                         type="button"
                         onClick={() => {
                           setScanResult(null);
+                          isProcessingRef.current = false;
                           navigate('/agenda');
                         }}
                         className="btn btn-secondary btn-sm btn-block mt-3"

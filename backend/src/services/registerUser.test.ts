@@ -144,5 +144,47 @@ describe('registerUser (REG-LGPD-001 / KAN-72)', () => {
     });
     expect(data).toHaveProperty('termsAcceptedAt');
   });
+
+  it('preserva roles pré-existentes de SPONSOR, STAFF e ADMIN sem rebaixar para PARTICIPANT (ERR-062)', async () => {
+    for (const specialRole of ['SPONSOR', 'STAFF', 'ADMIN'] as const) {
+      const existingUserDoc = {
+        role: specialRole,
+        totalPoints: 10
+      };
+      const { db, setSpy } = makeFakeDb(true, existingUserDoc);
+
+      const result = await registerUser(db as any, `uid-${specialRole.toLowerCase()}`, 'user@empresa.com');
+
+      expect(result).toEqual({
+        status: 'created',
+        user: {
+          uid: `uid-${specialRole.toLowerCase()}`,
+          email: 'user@empresa.com',
+          role: specialRole,
+          profile: undefined
+        }
+      });
+
+      expect(setSpy).toHaveBeenCalledTimes(1);
+      const [, data] = setSpy.mock.calls[0];
+      expect(data.role).toBe(specialRole);
+    }
+  });
+
+  it('rejeita UIDs inválidos defensivamente antes de consultar ou gravar no Firestore (ERR-063)', async () => {
+    const invalidUids = ['', '   ', 'user/subpath', 'uid..invalid', 'invalid@user', null as any, undefined as any];
+
+    for (const invalidUid of invalidUids) {
+      const { db, setSpy, tx } = makeFakeDb(false);
+
+      await expect(
+        registerUser(db as any, invalidUid, 'teste@example.com')
+      ).rejects.toThrow('Identificador de usuário (uid) inválido para o Firestore.');
+
+      // Garante que a transação nunca foi executada e nada foi gravado
+      expect(tx.get).not.toHaveBeenCalled();
+      expect(setSpy).not.toHaveBeenCalled();
+    }
+  });
 });
 

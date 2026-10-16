@@ -6,11 +6,14 @@ import {
   subscribeToUserPointEvents,
   reserveActivity,
   checkoutDoubleCheck,
+  registerActivityAttendance,
   calculateActivityStatus,
   formatActivityType,
   DEFAULT_ACTIVITIES
 } from './activityService';
 import { apiRequest } from './api';
+import { getCachedUserProfile } from './userService';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 vi.mock('./firebase', () => ({
   db: { mock: 'db' },
@@ -139,8 +142,43 @@ describe('activityService (KAN-50)', () => {
       expect(res.bookingId).toBe('test_user_id_palestra_abertura');
     });
 
+    it('deve repassar erro 401 (SESSION_EXPIRED) para a UI orientar nova autenticação (KAN-127)', async () => {
+      const err = new Error('Sua sessão expirou ou é inválida. Por favor, faça login novamente para continuar.');
+      err.status = 401;
+      err.code = 'SESSION_EXPIRED';
+      err.data = { error: 'INVALID_TOKEN' };
+      vi.mocked(apiRequest).mockRejectedValueOnce(err);
+
+      await expect(reserveActivity('palestra_abertura')).rejects.toMatchObject({
+        status: 401,
+        code: 'SESSION_EXPIRED'
+      });
+    });
+
     it('deve rejeitar se activityId não for fornecido', async () => {
       await expect(reserveActivity('')).rejects.toThrow('activityId é obrigatório');
+    });
+
+    it('deve bloquear reserva de atividade exclusiva se o participante não tiver ingresso Sympla', async () => {
+      vi.mocked(getCachedUserProfile).mockReturnValueOnce({ hasSymplaTicket: false, role: 'PARTICIPANT' });
+      await expect(reserveActivity('act_fechada', { isOpenEvent: false })).rejects.toMatchObject({
+        status: 403,
+        code: 'SYMPLA_TICKET_REQUIRED'
+      });
+    });
+
+    it('deve permitir reserva de atividade aberta mesmo se o participante não tiver ingresso Sympla', async () => {
+      vi.mocked(getCachedUserProfile).mockReturnValueOnce({ hasSymplaTicket: false, role: 'PARTICIPANT' });
+      vi.mocked(apiRequest).mockResolvedValueOnce({
+        status: 'CONFIRMED',
+        position: null
+      });
+
+      const res = await reserveActivity('act_aberta', { isOpenEvent: true });
+      expect(res.status).toBe('CONFIRMED');
+      expect(apiRequest).toHaveBeenCalledWith('/activities/act_aberta/reserve', {
+        method: 'POST'
+      });
     });
   });
 
@@ -173,6 +211,81 @@ describe('activityService (KAN-50)', () => {
       expect(typeof unsub).toBe('function');
     });
 
+    it('subscribeToUserBookings deve registrar snapshot e mesclar dados locais com remotos do Firestore', () => {
+      const mockUnsubSnapshot = vi.fn();
+      const addEventListener = vi.fn();
+      const removeEventListener = vi.fn();
+
+      vi.stubGlobal('window', { addEventListener, removeEventListener });
+      vi.stubGlobal('localStorage', {
+        getItem: vi.fn(() => JSON.stringify([{ activityId: 'act_local', title: 'Local' }])),
+        setItem: vi.fn()
+      });
+
+      onSnapshot.mockImplementationOnce((_q, onNext) => {
+        onNext({
+          docs: [
+            { id: 'book_remote', data: () => ({ activityId: 'act_remote', title: 'Remote' }) }
+          ]
+        });
+        return mockUnsubSnapshot;
+      });
+
+      const onUpdate = vi.fn();
+      const unsub = subscribeToUserBookings('user_123', onUpdate);
+
+      expect(where).toHaveBeenCalledWith('userId', '==', 'user_123');
+      expect(collection).toHaveBeenCalledWith(expect.anything(), 'bookings');
+      expect(addEventListener).toHaveBeenCalledWith('techweek_bookings_updated', expect.any(Function));
+
+      // Deve ter sido chamado inicialmente com local, e depois mesclado com snapshot
+      expect(onUpdate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ activityId: 'act_local' }),
+          expect.objectContaining({ activityId: 'act_remote' })
+        ])
+      );
+
+      unsub();
+      expect(removeEventListener).toHaveBeenCalledWith('techweek_bookings_updated', expect.any(Function));
+      expect(mockUnsubSnapshot).toHaveBeenCalled();
+
+      vi.unstubAllGlobals();
+    });
+
+    it('subscribeToUserBookings deve responder a evento techweek_bookings_updated e propagar erro no listener', () => {
+      let windowHandler = null;
+      vi.stubGlobal('window', {
+        addEventListener: vi.fn((event, handler) => {
+          if (event === 'techweek_bookings_updated') windowHandler = handler;
+        }),
+        removeEventListener: vi.fn()
+      });
+      vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() });
+
+      let errorCallback = null;
+      onSnapshot.mockImplementationOnce((_q, _onNext, onError) => {
+        errorCallback = onError;
+        return vi.fn();
+      });
+
+      const onUpdate = vi.fn();
+      const onError = vi.fn();
+      subscribeToUserBookings('user_123', onUpdate, onError);
+
+      // Simula evento da janela emitido com atualização local
+      expect(windowHandler).toBeInstanceOf(Function);
+      windowHandler({ detail: { userId: 'user_123', bookings: [{ activityId: 'act_window', status: 'CONFIRMED' }] } });
+      expect(onUpdate).toHaveBeenCalledWith([expect.objectContaining({ activityId: 'act_window' })]);
+
+      // Simula erro no Firestore listener
+      const firestoreErr = { code: 'unavailable', message: 'Network offline' };
+      errorCallback(firestoreErr);
+      expect(onError).toHaveBeenCalledWith(firestoreErr);
+
+      vi.unstubAllGlobals();
+    });
+
     it('subscribeToUserCheckins deve chamar onUpdate com array vazio se userId for nulo', () => {
       const onUpdate = vi.fn();
       const unsub = subscribeToUserCheckins(null, onUpdate);
@@ -180,11 +293,83 @@ describe('activityService (KAN-50)', () => {
       expect(typeof unsub).toBe('function');
     });
 
+    it('subscribeToUserCheckins deve escutar /checkins filtrando por uid do usuário', () => {
+      const mockUnsub = vi.fn();
+      onSnapshot.mockImplementationOnce((_q, onNext) => {
+        onNext({
+          docs: [
+            { id: 'chk_1', data: () => ({ uid: 'user_123', activityId: 'act_10', status: 'COMPLETED' }) }
+          ]
+        });
+        return mockUnsub;
+      });
+
+      const onUpdate = vi.fn();
+      const unsub = subscribeToUserCheckins('user_123', onUpdate);
+
+      expect(where).toHaveBeenCalledWith('uid', '==', 'user_123');
+      expect(collection).toHaveBeenCalledWith(expect.anything(), 'checkins');
+      expect(onUpdate).toHaveBeenCalledWith([
+        { id: 'chk_1', uid: 'user_123', activityId: 'act_10', status: 'COMPLETED' }
+      ]);
+      expect(unsub).toBe(mockUnsub);
+    });
+
+    it('subscribeToUserCheckins deve invocar onError e emitir array vazio em caso de falha', () => {
+      onSnapshot.mockImplementationOnce((_q, _onNext, onErrorCb) => {
+        onErrorCb(new Error('Falha de permissão'));
+        return vi.fn();
+      });
+
+      const onUpdate = vi.fn();
+      const onError = vi.fn();
+      subscribeToUserCheckins('user_123', onUpdate, onError);
+
+      expect(onError).toHaveBeenCalled();
+      expect(onUpdate).toHaveBeenCalledWith([]);
+    });
+
     it('subscribeToUserPointEvents deve chamar onUpdate com array vazio se userId for nulo', () => {
       const onUpdate = vi.fn();
       const unsub = subscribeToUserPointEvents(null, onUpdate);
       expect(onUpdate).toHaveBeenCalledWith([]);
       expect(typeof unsub).toBe('function');
+    });
+
+    it('subscribeToUserPointEvents deve escutar /pointEvents filtrando por userId', () => {
+      const mockUnsub = vi.fn();
+      onSnapshot.mockImplementationOnce((_q, onNext) => {
+        onNext({
+          docs: [
+            { id: 'pe_1', data: () => ({ userId: 'user_123', points: 30, type: 'CHECKIN' }) }
+          ]
+        });
+        return mockUnsub;
+      });
+
+      const onUpdate = vi.fn();
+      const unsub = subscribeToUserPointEvents('user_123', onUpdate);
+
+      expect(where).toHaveBeenCalledWith('userId', '==', 'user_123');
+      expect(collection).toHaveBeenCalledWith(expect.anything(), 'pointEvents');
+      expect(onUpdate).toHaveBeenCalledWith([
+        { id: 'pe_1', userId: 'user_123', points: 30, type: 'CHECKIN' }
+      ]);
+      expect(unsub).toBe(mockUnsub);
+    });
+
+    it('subscribeToUserPointEvents deve invocar onError e emitir array vazio em caso de erro', () => {
+      onSnapshot.mockImplementationOnce((_q, _onNext, onErrorCb) => {
+        onErrorCb(new Error('Erro no firestore'));
+        return vi.fn();
+      });
+
+      const onUpdate = vi.fn();
+      const onError = vi.fn();
+      subscribeToUserPointEvents('user_123', onUpdate, onError);
+
+      expect(onError).toHaveBeenCalled();
+      expect(onUpdate).toHaveBeenCalledWith([]);
     });
   });
 
@@ -204,6 +389,67 @@ describe('activityService (KAN-50)', () => {
       const act = onUpdate.mock.calls.at(-1)[0].find((a) => a.id === 'act_x');
       expect(act.vagas_disponiveis).toBe(7);
       expect(act.total_inscritos).toBe(3);
+    });
+  });
+
+  describe('registerActivityAttendance', () => {
+    it('retorna erro se activityId não for fornecido', async () => {
+      const res = await registerActivityAttendance(null);
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('Identificador da atividade não informado.');
+    });
+
+    it('registra presença via sessionToken (double check) com sucesso', async () => {
+      apiRequest.mockResolvedValueOnce({
+        success: true,
+        pointsCredited: 25,
+        activityId: 'act_1588971'
+      });
+
+      const res = await registerActivityAttendance('act_1588971', 'session_token_123');
+      expect(res.success).toBe(true);
+      expect(res.points).toBe(25);
+      expect(res.mode).toBe('double_check');
+      expect(apiRequest).toHaveBeenCalledWith('/checkin/checkout', expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ token: 'session_token_123' })
+      }));
+    });
+
+    it('permite ler novamente presença já registrada (409) com sucesso e 0 pontos', async () => {
+      const conflictError = new Error('Presença já confirmada');
+      conflictError.status = 409;
+      conflictError.data = { error: 'CHECKIN_DUPLICATE' };
+      apiRequest.mockRejectedValueOnce(conflictError);
+
+      const res = await registerActivityAttendance('act_1588971', 'session_token_123');
+      expect(res.success).toBe(true);
+      expect(res.points).toBe(0);
+      expect(res.alreadyCheckedIn).toBe(true);
+    });
+
+    it('identifica exigência de ingresso Sympla (403) adequadamente', async () => {
+      const ticketError = new Error('Ingresso Sympla obrigatório');
+      ticketError.status = 403;
+      ticketError.code = 'SYMPLA_TICKET_REQUIRED';
+      ticketError.data = { error: 'SYMPLA_TICKET_REQUIRED' };
+      apiRequest.mockRejectedValueOnce(ticketError);
+
+      const res = await registerActivityAttendance('act_1588971', null);
+      expect(res.success).toBe(false);
+      expect(res.symplaRequired).toBe(true);
+    });
+
+    it('registra presença direta por autoatendimento (/activities/:id/checkin)', async () => {
+      apiRequest.mockResolvedValueOnce({
+        success: true,
+        pointsCredited: 20
+      });
+
+      const res = await registerActivityAttendance('act_1588971', null);
+      expect(res.success).toBe(true);
+      expect(res.points).toBe(20);
+      expect(res.mode).toBe('self_scan');
     });
   });
 });

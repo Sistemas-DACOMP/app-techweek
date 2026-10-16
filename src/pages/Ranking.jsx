@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Crown, Ticket } from 'lucide-react';
-import { subscribeToLeaderboardUsers, getLeaderboardUsers, getUserProfile, getCachedUserProfile } from '../lib/userService';
+import { subscribeToLeaderboardUsers, getLeaderboardUsers, getUserProfile, getCachedUserProfile, syncUserRankingInFirestore } from '../lib/userService';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
 import ConquistasTabs from '../components/ConquistasTabs';
@@ -94,13 +94,65 @@ export default function Ranking() {
     Number(myProfileData?.total_points ?? 0)
   );
 
+  // Garante que a pontuação do usuário autenticado esteja sincronizada na coleção /ranking/{uid} do Firestore
+  useEffect(() => {
+    const activeRole = hookProfile?.role || myProfileData?.role || 'PARTICIPANT';
+    if (!myUserId || effectivePoints < 0 || activeRole === 'STAFF' || activeRole === 'SPONSOR') return;
+    if (typeof syncUserRankingInFirestore === 'function') {
+      const identitySource =
+        hookProfile ||
+        myProfileData ||
+        (authUser
+          ? {
+              uid: myUserId,
+              email: authUser.email || '',
+              displayName: authUser.displayName || '',
+              photoURL: authUser.photoURL || null
+            }
+          : null);
+      syncUserRankingInFirestore(myUserId, effectivePoints, identitySource).catch(() => {});
+    }
+  }, [myUserId, effectivePoints, hookProfile, myProfileData, authUser]);
+
   // Combina os dados do ranking remoto com a pontuação ao vivo do participante logado
   const displayedRanking = useMemo(() => {
     let list = [...ranking];
+    const activeRole = hookProfile?.role || myProfileData?.role || 'PARTICIPANT';
+    const isStaffOrSponsor = activeRole === 'STAFF' || activeRole === 'SPONSOR';
 
-    if (myUserId) {
+    const cleanUsername = (v) => {
+      const s = String(v || '').trim().replace(/^@/, '');
+      return !s || s === 'user' || s === 'Participante' || s === 'Você' ? '' : s;
+    };
+    const cleanName = (v) => {
+      const s = String(v || '').trim();
+      return !s || s === 'Participante' || s === 'user' || s === 'Você' ? '' : s;
+    };
+
+    if (myUserId && !isStaffOrSponsor) {
       const existingIdx = list.findIndex((u) => u.id === myUserId);
-      const myUsername = hookProfile?.username || myProfileData?.username || myProfileData?.firstName || authUser?.displayName || 'Você';
+      const myUsername =
+        cleanUsername(hookProfile?.username) ||
+        cleanUsername(myProfileData?.username) ||
+        cleanUsername(authUser?.email ? authUser.email.split('@')[0] : '') ||
+        cleanUsername(hookProfile?.email ? hookProfile.email.split('@')[0] : '') ||
+        cleanUsername(myProfileData?.email ? myProfileData.email.split('@')[0] : '') ||
+        cleanName(hookProfile?.firstName || hookProfile?.first_name) ||
+        cleanName(myProfileData?.firstName || myProfileData?.first_name) ||
+        cleanName(authUser?.displayName ? authUser.displayName.trim().split(' ')[0] : '') ||
+        'Você';
+      const myFirstName =
+        cleanName(hookProfile?.firstName || hookProfile?.first_name) ||
+        cleanName(myProfileData?.firstName || myProfileData?.first_name) ||
+        cleanName(authUser?.displayName ? authUser.displayName.trim().split(' ')[0] : '') ||
+        myUsername;
+      const myLastName =
+        hookProfile?.lastName ||
+        hookProfile?.last_name ||
+        myProfileData?.lastName ||
+        myProfileData?.last_name ||
+        (authUser?.displayName ? authUser.displayName.trim().split(' ').slice(1).join(' ') : '') ||
+        '';
       const myAvatar = hookProfile?.avatarUrl || hookProfile?.avatar_url || myProfileData?.avatarUrl || authUser?.photoURL || null;
 
       if (existingIdx >= 0) {
@@ -108,14 +160,16 @@ export default function Ranking() {
           ...list[existingIdx],
           points: Math.max(list[existingIdx].points || 0, effectivePoints),
           avatar_url: list[existingIdx].avatar_url || myAvatar,
-          username: list[existingIdx].username || myUsername
+          username: cleanUsername(list[existingIdx].username) || myUsername,
+          first_name: cleanName(list[existingIdx].first_name) || myFirstName,
+          last_name: list[existingIdx].last_name || myLastName
         };
-      } else {
+      } else if (activeRole !== 'ADMIN' || effectivePoints > 0) {
         list.push({
           id: myUserId,
           username: myUsername,
-          first_name: hookProfile?.firstName || myProfileData?.firstName || 'Você',
-          last_name: hookProfile?.lastName || myProfileData?.lastName || '',
+          first_name: myFirstName,
+          last_name: myLastName,
           avatar_url: myAvatar,
           points: effectivePoints,
           mascot: hookProfile?.mascot || myProfileData?.mascot || 'blue',
@@ -125,8 +179,15 @@ export default function Ranking() {
       }
     }
 
-    // Ordena de forma decrescente pela pontuação
-    list.sort((a, b) => (b.points || 0) - (a.points || 0));
+    // Ordena de forma decrescente pela pontuação com desempate determinístico (REG-RANK-001)
+    list.sort((a, b) => {
+      const diff = (b.points || 0) - (a.points || 0);
+      if (diff !== 0) return diff;
+      const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+      const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+      if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+      return String(a.username || '').localeCompare(String(b.username || ''));
+    });
     return list.map((item, idx) => ({ ...item, rank: idx + 1 }));
   }, [ranking, myUserId, effectivePoints, hookProfile, myProfileData, authUser]);
 

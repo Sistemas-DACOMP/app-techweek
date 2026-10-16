@@ -59,6 +59,7 @@ export function emailInDomain(email: string, domain: string): boolean {
 // houver sondagem distribuída de verdade.
 const MAX_INVALID_ATTEMPTS = 10;
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+export const MAX_INVALID_ENTRIES = 5000;
 const invalidAttempts = new Map<string, { count: number; resetAt: number }>();
 
 export function isTokenLocked(tokenHash: string): boolean {
@@ -72,12 +73,40 @@ export function isTokenLocked(tokenHash: string): boolean {
 }
 
 export function recordInvalidAttempt(tokenHash: string): void {
-  if (invalidAttempts.size > 5000) invalidAttempts.clear();
+  const now = Date.now();
+  if (invalidAttempts.size >= MAX_INVALID_ENTRIES && !invalidAttempts.has(tokenHash)) {
+    // 1. Purga seletiva de entradas expiradas
+    for (const [key, val] of invalidAttempts.entries()) {
+      if (val.resetAt <= now) {
+        invalidAttempts.delete(key);
+      }
+    }
+    // 2. Se ainda exceder o teto, descarta primeiro entradas não-bloqueadas (count < MAX_INVALID_ATTEMPTS)
+    // para impedir que flood de tokens efêmeros descarte tokens sob bloqueio ativo
+    if (invalidAttempts.size >= MAX_INVALID_ENTRIES) {
+      for (const [key, val] of invalidAttempts.entries()) {
+        if (val.count < MAX_INVALID_ATTEMPTS) {
+          invalidAttempts.delete(key);
+          if (invalidAttempts.size < MAX_INVALID_ENTRIES) break;
+        }
+      }
+    }
+    // 3. Se ainda assim exceder o teto (flood de tokens bloqueados), descarta as mais antigas (FIFO/LRU)
+    while (invalidAttempts.size >= MAX_INVALID_ENTRIES) {
+      const oldestKey = invalidAttempts.keys().next().value;
+      if (oldestKey === undefined) break;
+      invalidAttempts.delete(oldestKey);
+    }
+  }
+
   const entry = invalidAttempts.get(tokenHash);
-  if (!entry || entry.resetAt <= Date.now()) {
-    invalidAttempts.set(tokenHash, { count: 1, resetAt: Date.now() + ATTEMPT_WINDOW_MS });
+  if (!entry || entry.resetAt <= now) {
+    invalidAttempts.set(tokenHash, { count: 1, resetAt: now + ATTEMPT_WINDOW_MS });
   } else {
     entry.count++;
+    // Move para o final do Map (LRU)
+    invalidAttempts.delete(tokenHash);
+    invalidAttempts.set(tokenHash, entry);
   }
 }
 

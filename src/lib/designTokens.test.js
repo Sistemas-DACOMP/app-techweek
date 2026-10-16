@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { CATEGORY_STYLES, STATUS_STYLES } from '../components/Badge';
 import { formatActivityType } from './activityService';
+
+vi.mock('./firebase', () => ({
+  db: { mock: 'db' },
+  auth: { currentUser: null }
+}));
 
 describe('Design Tokens & Semantic Styling System', () => {
   it('contém definições completas e de alto contraste para todas as categorias de eventos', () => {

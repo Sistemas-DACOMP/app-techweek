@@ -43,6 +43,10 @@ export type ScreenTokenValidation =
   | { valid: false; reason: 'MALFORMED' | 'BAD_SIGNATURE' | 'EXPIRED' };
 
 export function verifyScreenToken(token: string, now: number = Date.now()): ScreenTokenValidation {
+  if (typeof token !== 'string' || !token) {
+    return { valid: false, reason: 'MALFORMED' };
+  }
+
   let decoded: string;
   try {
     decoded = Buffer.from(token, 'base64url').toString('utf8');
@@ -50,18 +54,39 @@ export function verifyScreenToken(token: string, now: number = Date.now()): Scre
     return { valid: false, reason: 'MALFORMED' };
   }
 
-  const parts = decoded.split('.');
-  if (parts.length !== 3) {
+  // O payload é no formato: <activityId>.<expiresAt>.<signature>
+  // Como activityId pode conter pontos (ex: palestra.ia.v1), localizamos
+  // a assinatura a partir do último ponto e o expiresAt a partir do penúltimo ponto.
+  const lastDot = decoded.lastIndexOf('.');
+  if (lastDot === -1) {
     return { valid: false, reason: 'MALFORMED' };
   }
 
-  const [activityId, expiresAtRaw, signature] = parts;
+  const signature = decoded.slice(lastDot + 1);
+  const payload = decoded.slice(0, lastDot);
+
+  const secondLastDot = payload.lastIndexOf('.');
+  if (secondLastDot === -1) {
+    return { valid: false, reason: 'MALFORMED' };
+  }
+
+  const activityId = payload.slice(0, secondLastDot);
+  const expiresAtRaw = payload.slice(secondLastDot + 1);
   const expiresAt = Number(expiresAtRaw);
-  if (!activityId || !Number.isFinite(expiresAt)) {
+
+  if (!activityId || !Number.isFinite(expiresAt) || !signature) {
     return { valid: false, reason: 'MALFORMED' };
   }
 
-  const expectedSignature = sign(`${activityId}.${expiresAtRaw}`);
+  let expectedSignature: string;
+  try {
+    expectedSignature = sign(payload);
+  } catch {
+    // Se o segredo de ambiente não estiver provisionado ou for inválido,
+    // não explode exceção derrubando o servidor com 500.
+    return { valid: false, reason: 'MALFORMED' };
+  }
+
   const providedBuf = Buffer.from(signature, 'hex');
   const expectedBuf = Buffer.from(expectedSignature, 'hex');
 

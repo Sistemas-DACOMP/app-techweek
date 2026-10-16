@@ -41,4 +41,24 @@ describe('evaluateGate', () => {
     expect(result.quality_score).toBeGreaterThan(0.5);
     expect(result.approved).toBe(false);
   });
+
+  it('aprova e pondera backend no score e checks quando hasBackend é true e backendOk é true', () => {
+    const result = evaluateGate({ lintOk: true, buildOk: true, hasTestScript: true, testOk: true, hasBackend: true, backendOk: true });
+    expect(result.approved).toBe(true);
+    expect(result.quality_score).toBe(1);
+    expect(result.mandatory_checks).toEqual({ lint: true, build: true, test: true, backend: true });
+  });
+
+  it('reprova quando hasBackend é true mas backendOk é false', () => {
+    const result = evaluateGate({ lintOk: true, buildOk: true, hasTestScript: true, testOk: true, hasBackend: true, backendOk: false });
+    expect(result.approved).toBe(false);
+    expect(result.mandatory_checks.backend).toBe(false);
+    expect(result.quality_score).toBe(0.75);
+  });
+
+  it('omite backend de mandatory_checks quando hasBackend é false', () => {
+    const result = evaluateGate({ lintOk: true, buildOk: true, hasTestScript: true, testOk: true, hasBackend: false });
+    expect(result.mandatory_checks.backend).toBeUndefined();
+  });
 });
+

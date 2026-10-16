@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { symplaService } from '../services/symplaService';
 import { linkSymplaTicket, TicketInUseError, TICKET_IN_USE_MESSAGE } from '../services/symplaLink';
 import { requireAuth, requireRole } from '../middlewares/authMiddleware';
+import { symplaPublicLimiter, symplaSyncLimiter, staffActionLimiter } from '../middlewares/rateLimiter';
+import { db } from '../config/firebaseAdmin';
 
 const router = Router();
 
@@ -9,7 +11,7 @@ const router = Router();
  * GET /api/sympla/event
  * Retorna os detalhes do evento configurado
  */
-router.get('/event', async (_req: Request, res: Response) => {
+router.get('/event', symplaPublicLimiter, async (_req: Request, res: Response) => {
   try {
     const event = await symplaService.getEventDetails();
     res.status(200).json({ status: 'success', data: event });
@@ -23,13 +25,15 @@ router.get('/event', async (_req: Request, res: Response) => {
  * Valida o ingresso do participante por e-mail ou número de ingresso.
  * Requer autenticação. Usuários normais só podem consultar o próprio ingresso.
  */
-router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) => {
+router.post('/verify-ticket', requireAuth, symplaSyncLimiter, async (req: Request, res: Response) => {
   try {
     const userEmail = req.user?.email;
-    const isAdmin = req.user?.role === 'ADMIN';
+    const userRole = req.user?.role;
+    const isAdmin = userRole === 'ADMIN';
+    const isPrivilegedScanner = isAdmin || userRole === 'SPONSOR' || userRole === 'STAFF';
     const { email, ticketNumber } = req.body;
 
-    const targetEmail = isAdmin ? (email || userEmail) : userEmail;
+    const targetEmail = isPrivilegedScanner ? (email || userEmail) : userEmail;
 
     if (!targetEmail && !ticketNumber) {
       res.status(400).json({ status: 'error', message: 'Informe o e-mail ou número do ingresso para validação.' });
@@ -40,11 +44,12 @@ router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) =
 
     if (ticketNumber) {
       participant = await symplaService.findParticipantByTicket(ticketNumber);
-      if (participant && !isAdmin && userEmail && participant.email?.toLowerCase() !== userEmail.toLowerCase()) {
+      if (participant && !isPrivilegedScanner && userEmail && participant.email?.toLowerCase() !== userEmail.toLowerCase()) {
         res.status(403).json({ status: 'error', message: 'Acesso não autorizado ao ingresso de outro participante.' });
         return;
       }
-    } else if (targetEmail) {
+    }
+    if (!participant && targetEmail) {
       participant = await symplaService.findParticipantByEmail(targetEmail);
     }
 
@@ -68,9 +73,12 @@ router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) =
       syncedAt: new Date().toISOString()
     };
 
-    // Vincula o ingresso ao participante (unicidade garantida no servidor, KAN-108)
+    // Vincula o ingresso ao participante apenas quando a consulta é do próprio titular (KAN-108)
     const uid = req.user?.uid;
-    if (uid && (!isAdmin || !email || email.toLowerCase() === userEmail?.toLowerCase())) {
+    const isOwnTicket =
+      !isPrivilegedScanner ||
+      (Boolean(participant.email) && Boolean(userEmail) && participant.email.toLowerCase() === userEmail!.toLowerCase());
+    if (uid && isOwnTicket) {
       try {
         await linkSymplaTicket(uid, ticketObj);
       } catch (linkErr) {
@@ -80,6 +88,65 @@ router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) =
         }
         throw linkErr;
       }
+    }
+
+    // Quando escaneado por SPONSOR/STAFF/ADMIN, busca também o perfil completo do titular no Firestore
+    let userProfile: Record<string, any> | null = null;
+    if (isPrivilegedScanner && db?.collection) {
+      try {
+        const ticketIdKey = String(participant.ticket_number || qrCodeData || '').trim().toUpperCase();
+        let matchedUid: string | null = null;
+        let matchedData: Record<string, any> | null = null;
+
+        if (ticketIdKey) {
+          const claimSnap = await db.collection('symplaTickets')?.doc?.(ticketIdKey)?.get?.();
+          const claimedUid = claimSnap?.exists ? claimSnap.data()?.uid : null;
+          if (claimedUid) {
+            const uSnap = await db.collection('users')?.doc?.(claimedUid)?.get?.();
+            if (uSnap?.exists) {
+              matchedUid = claimedUid;
+              matchedData = uSnap.data() || null;
+            }
+          }
+        }
+
+        if (!matchedData && participant.email && typeof (db.collection('users') as any)?.where === 'function') {
+          const cleanEmail = participant.email.trim().toLowerCase();
+          const emailSnap = await (db.collection('users') as any).where('email', '==', cleanEmail).limit(1).get();
+          if (emailSnap && !emailSnap.empty && emailSnap.docs?.[0]) {
+            matchedUid = emailSnap.docs[0].id;
+            matchedData = emailSnap.docs[0].data() || null;
+          }
+        }
+
+        if (matchedUid && matchedData) {
+          if (!matchedData.symplaTicket && ticketObj.ticketNumber) {
+            await linkSymplaTicket(matchedUid, ticketObj).catch(() => {});
+          }
+          const resolvedName =
+            matchedData.name ||
+            matchedData.displayName ||
+            [matchedData.firstName, matchedData.lastName].filter(Boolean).join(' ') ||
+            [participant.first_name, participant.last_name].filter(Boolean).join(' ');
+          userProfile = {
+            uid: matchedUid,
+            name: resolvedName,
+            firstName: matchedData.firstName || participant.first_name || '',
+            lastName: matchedData.lastName || participant.last_name || '',
+            username: matchedData.username || '',
+            email: matchedData.email || participant.email || '',
+            phone: matchedData.phone || matchedData.telefone || '',
+            course: matchedData.course || matchedData.curso || '',
+            period: matchedData.period ?? matchedData.periodo ?? null,
+            institution: matchedData.institution || matchedData.instituicao || '',
+            participantType: matchedData.participantType || matchedData.participant_type || '',
+            linkedin: matchedData.linkedin || '',
+            instagram: matchedData.instagram || '',
+            github: matchedData.github || '',
+            avatarUrl: matchedData.avatarUrl || matchedData.photoURL || null
+          };
+        }
+      } catch (_lookupErr) {}
     }
 
     res.status(200).json({
@@ -96,7 +163,8 @@ router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) =
         qrCodeData: qrCodeData,
         checkInStatus: participant.check_in?.[0]?.status || false
       },
-      symplaTicket: ticketObj
+      symplaTicket: ticketObj,
+      ...(userProfile ? { userProfile } : {})
     });
   } catch (error: any) {
     res.status(500).json({ status: 'error', message: error.message || 'Erro ao validar ingresso no Sympla.' });
@@ -107,7 +175,7 @@ router.post('/verify-ticket', requireAuth, async (req: Request, res: Response) =
  * POST /api/sympla/sync-user
  * Sincroniza o crachá/ingresso do Sympla diretamente com o perfil do usuário no Firestore
  */
-router.post('/sync-user', requireAuth, async (req: Request, res: Response) => {
+router.post('/sync-user', requireAuth, symplaSyncLimiter, async (req: Request, res: Response) => {
   try {
     const uid = req.user?.uid;
     const { email: bodyEmail, ticketNumber } = req.body;
@@ -174,7 +242,7 @@ router.post('/sync-user', requireAuth, async (req: Request, res: Response) => {
  * POST /api/sympla/checkin
  * Realiza o Check-in oficial na portaria (Exclusivo para STAFF e ADMIN)
  */
-router.post('/checkin', requireAuth, requireRole(['STAFF', 'ADMIN']), async (req: Request, res: Response) => {
+router.post('/checkin', requireAuth, requireRole(['STAFF', 'ADMIN']), staffActionLimiter, async (req: Request, res: Response) => {
   try {
     const { ticketNumber } = req.body;
     if (!ticketNumber) {

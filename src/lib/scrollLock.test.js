@@ -1,9 +1,18 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { lockScroll, unlockScroll, isScrollLocked, resetScrollLock } from './scrollLock';
 
 describe('scrollLock module (KAN-77)', () => {
   let mockBody;
   let mockContainers;
+  const originalDocument = globalThis.document;
+
+  afterAll(() => {
+    if (originalDocument === undefined) {
+      delete globalThis.document;
+    } else {
+      globalThis.document = originalDocument;
+    }
+  });
 
   beforeEach(() => {
     mockContainers = [];

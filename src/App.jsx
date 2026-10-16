@@ -19,6 +19,7 @@ import Terms from './pages/Terms';
 import TvProgramacao from './pages/TvProgramacao';
 import SponsorInvite from './pages/SponsorInvite';
 import BottomNavigation from './components/BottomNavigation';
+import EmailVerificationGate from './components/EmailVerificationGate';
 import logoTw from './assets/logo-tw.png';
 import Mascot from './components/Mascot';
 import './styles/entrada.css';
@@ -26,11 +27,15 @@ import { getAppSubdomain, isRouteAllowedOnSubdomain } from './lib/subdomain';
 import { shouldShowBottomNav } from './lib/bottomNav';
 import { getCachedUserProfile } from './lib/userService';
 import { stopAllMediaTracks } from './lib/cameraUtils';
+import { useNotifications } from './hooks/useNotifications';
+import { syncBackgroundWatcherWithSw, registerNotificationServiceWorker } from './lib/notifications';
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isEmailVerified } = useAuth();
+  // Mantém o listener global de notificações ativo em todas as telas do app
+  useNotifications();
   // Papel vindo do token (claim do servidor); enquanto não chega, usa o perfil em cache.
   const [claimRole, setClaimRole] = useState(null);
   const isPortalPage = location.pathname === '/admin' || location.pathname === '/staff' || location.pathname === '/sponsor';
@@ -40,9 +45,33 @@ function AppContent() {
   const [isSplashVisible, setIsSplashVisible] = useState(true);
 
   useEffect(() => {
+    registerNotificationServiceWorker().catch(() => {});
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        syncBackgroundWatcherWithSw({ startPolling: true }).catch(() => {});
+      } else {
+        syncBackgroundWatcherWithSw({ startPolling: false }).catch(() => {});
+      }
+    };
+    const handlePageHide = () => {
+      syncBackgroundWatcherWithSw({ startPolling: true }).catch(() => {});
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     if (!user) { setClaimRole(null); return undefined; }
-    user.getIdTokenResult().then((r) => { if (!cancelled) setClaimRole(r.claims?.role || null); }).catch(() => {});
+    if (typeof user.getIdTokenResult === 'function') {
+      user.getIdTokenResult().then((r) => { if (!cancelled) setClaimRole(r.claims?.role || null); }).catch(() => {});
+    }
     return () => { cancelled = true; };
   }, [user]);
 
@@ -73,12 +102,12 @@ function AppContent() {
     if (!isSplashVisible && !authLoading) {
       if (!user && !isAuthPage && !isPortalPage) {
         navigate('/login', { replace: true });
-      } else if (user && location.pathname === '/login') {
+      } else if (user && isEmailVerified && (location.pathname === '/login' || location.pathname === '/cadastro')) {
         const hasOnboarding = localStorage.getItem('facom_onboarding_completed') === 'true';
         navigate(hasOnboarding ? '/' : '/onboarding', { replace: true });
       }
     }
-  }, [user, authLoading, isSplashVisible, isAuthPage, isPortalPage, navigate, location.pathname]);
+  }, [user, authLoading, isSplashVisible, isAuthPage, isPortalPage, navigate, location.pathname, isEmailVerified]);
 
   if (isSplashVisible || authLoading) {
     // Abertura (EstAbertura, DESIGN.md §6/§9): única tela com animação em tela cheia.
@@ -109,6 +138,21 @@ function AppContent() {
             <span className="size-2 rounded-full bg-[#B794FF]" />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Intercepta qualquer usuário autenticado cujo e-mail ainda não tenha sido confirmado no Firebase.
+  // Permite acesso livre apenas a /termos para consulta da política do evento.
+  if (user && !isEmailVerified && location.pathname !== '/termos') {
+    return (
+      <div className={isPortalPage ? "portal-wrapper" : "app-wrapper"}>
+        <EmailVerificationGate
+          onVerified={() => {
+            const hasOnboarding = localStorage.getItem('facom_onboarding_completed') === 'true';
+            navigate(hasOnboarding ? '/' : '/onboarding', { replace: true });
+          }}
+        />
       </div>
     );
   }

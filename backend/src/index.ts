@@ -15,6 +15,8 @@ import entranceRouter from './routes/entrance';
 import sponsorsAdminRouter from './routes/sponsorsAdmin';
 import sponsorInvitesRouter from './routes/sponsorInvites';
 
+import { corsOptions } from './config/cors';
+
 const app = express();
 
 // Rate limit por IP das rotas públicas de convite (KAN-124) precisa do IP real do
@@ -25,7 +27,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 // Middlewares padrão
-app.use(cors({ origin: true }));
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Rotas de cadastro/autenticação (finalização de perfil pós Firebase Auth)
@@ -90,13 +92,19 @@ app.use(['/api/admin', '/admin'], adminRouter);
 app.use(['/api/admin', '/admin'], sponsorsAdminRouter);
 app.use(['/api/sponsor-invites', '/sponsor-invites'], sponsorInvitesRouter);
 
+export { app };
+
 // Exporta a Cloud Function 2nd Gen na região us-east1 (Free Tier)
 export const api = onRequest(
   {
     region: 'us-east1',
-    cors: true,
+    cors: false,
     memory: '256MiB',
-    maxInstances: 10
+    maxInstances: 10,
+    invoker: 'public'
   },
   app
 );
+
+
+

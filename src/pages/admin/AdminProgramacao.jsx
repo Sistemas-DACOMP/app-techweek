@@ -144,7 +144,7 @@ export default function AdminProgramacao(p) {
       </PageHead>
 
       {/* Abas (sublinhado) */}
-      <div role="tablist" aria-label="Programação" className="mb-5 flex gap-6 border-b border-line">
+      <div role="tablist" aria-label="Programação" className="adm-noscroll mb-5 flex gap-5 overflow-x-auto whitespace-nowrap border-b border-line sm:gap-6">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -152,7 +152,7 @@ export default function AdminProgramacao(p) {
             role="tab"
             aria-selected={progTab === t.key}
             onClick={() => setProgTab(t.key)}
-            className={`-mb-px min-h-11 border-b-[3px] text-[15px] transition-colors ${progTab === t.key ? 'border-you font-extrabold text-text' : 'border-transparent font-semibold text-text-2'}`}
+            className={`-mb-px min-h-11 shrink-0 border-b-[3px] text-[15px] transition-colors ${progTab === t.key ? 'border-you font-extrabold text-text' : 'border-transparent font-semibold text-text-2'}`}
             style={progTab === t.key ? { borderImage: 'var(--title-bar) 1' } : undefined}
           >
             {t.label} · {t.n}
@@ -220,7 +220,14 @@ export default function AdminProgramacao(p) {
                   {list.map((act) => (
                     <tr key={act.id} className="border-t border-line align-middle" style={{ opacity: liveStatus(act, now) === 'past' ? 0.6 : 1 }}>
                       <td className="max-w-[300px] px-3 py-4">
-                        <TypeTag type={act.type} />
+                        <div className="flex items-center gap-2">
+                          <TypeTag type={act.type} />
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            act.isOpenEvent ? 'bg-ok/15 text-ok' : 'bg-gold/15 text-gold'
+                          }`}>
+                            {act.isOpenEvent ? 'Entrada Livre' : 'Passaporte'}
+                          </span>
+                        </div>
                         <button type="button" onClick={() => onEdit(act)} className="mt-1 block text-left text-[15px] font-bold leading-snug text-text hover:text-link">{act.title}</button>
                         <span className="mt-0.5 block text-[13px] text-text-2">{whenOf(act)}</span>
                       </td>
@@ -258,6 +265,11 @@ export default function AdminProgramacao(p) {
                     <div className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
                         <span className="text-[13px] font-extrabold" style={{ color: typeColor(act.type) }}>{typeLabel(act.type)}</span>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          act.isOpenEvent ? 'bg-ok/15 text-ok' : 'bg-gold/15 text-gold'
+                        }`}>
+                          {act.isOpenEvent ? 'Entrada Livre' : 'Passaporte'}
+                        </span>
                         {live && <span className="rounded-lg bg-[rgba(111,216,166,0.14)] px-2 py-0.5 text-[12px] font-bold text-ok">Agora</span>}
                       </span>
                       <button type="button" onClick={() => onEdit(act)} className="mt-1.5 block text-left text-[16px] font-bold leading-snug text-text">{act.title}</button>

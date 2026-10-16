@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../config/firebaseAdmin';
 import * as admin from 'firebase-admin';
-import { requireAuth, requireRole } from '../middlewares/authMiddleware';
+import { requireAuth, requireRole, requireVerifiedEmail } from '../middlewares/authMiddleware';
+import { adminSponsorLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
 
 const router = Router();
@@ -137,21 +138,39 @@ async function resolveSponsorCompany(
  * Extraído para facilitar testes unitários isolados.
  */
 export async function leadsHandler(req: Request, res: Response): Promise<void> {
-  const { participantUid, notes, rating, validateOnly, tags } = req.body ?? {};
+  const { participantUid, notes, rating, validateOnly, tags, participantData } = req.body ?? {};
   const sponsorUid = req.user!.uid;
 
-  let resolvedUid = participantUid;
+  let resolvedUid = typeof participantUid === 'string' ? participantUid.replace(/^SYMPLA:/i, '').trim() : participantUid;
 
-  if (typeof resolvedUid === 'string' && resolvedUid.includes('@')) {
+  const candidateEmail =
+    (typeof resolvedUid === 'string' && resolvedUid.includes('@') ? resolvedUid : null) ||
+    (typeof participantData?.email === 'string' && participantData.email.includes('@') ? participantData.email : null);
+
+  if (typeof resolvedUid === 'string' && (resolvedUid.includes('@') || resolvedUid.startsWith('sympla_') || resolvedUid.startsWith('temp_'))) {
     try {
       const usersCol = db.collection('users');
-      if (typeof usersCol.where === 'function') {
-        const emailSnap = await usersCol.where('email', '==', resolvedUid.toLowerCase().trim()).limit(1).get();
+      if (candidateEmail && typeof usersCol.where === 'function') {
+        const emailSnap = await usersCol.where('email', '==', candidateEmail.toLowerCase().trim()).limit(1).get();
         if (emailSnap && !emailSnap.empty) {
           resolvedUid = emailSnap.docs[0].id;
         }
       }
-    } catch {}
+      if (resolvedUid.startsWith('sympla_')) {
+        const rawTicket = resolvedUid.replace(/^sympla_/i, '').trim().toUpperCase();
+        const ticketIndexDoc = await db.collection('symplaTickets').doc(encodeURIComponent(rawTicket)).get?.().catch?.(() => null);
+        const ticketData = ticketIndexDoc?.data?.();
+        if (ticketIndexDoc?.exists && ticketData?.uid) {
+          resolvedUid = ticketData.uid;
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao resolver UID por e-mail em leadsHandler:', e);
+    }
+  }
+
+  if (typeof resolvedUid === 'string' && resolvedUid.includes('@')) {
+    resolvedUid = `email_${resolvedUid.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
   }
 
   if (typeof resolvedUid !== 'string' || !resolvedUid || !isValidFirestoreId(resolvedUid)) {
@@ -193,17 +212,24 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
   const userRef = db.collection('users').doc(resolvedUid);
   const leadRef = db.collection('leads').doc(sponsorUid).collection('contacts').doc(resolvedUid);
   const pointEventRef = db.collection('pointEvents').doc(`${resolvedUid}_sponsor_lead_${sponsorUid}`);
+  const goldenTicketPointEventRef = db.collection('pointEvents').doc(`${resolvedUid}_passport_golden_ticket`);
   const sponsorRef = db.collection('users').doc(sponsorUid);
 
   try {
     const result = await db.runTransaction(async (tx) => {
-      const [userSnap, pointEventSnap, sponsorSnap] = await Promise.all([
+      const [userSnap, pointEventSnap, goldenTicketPointEventSnap, sponsorSnap] = await Promise.all([
         tx.get(userRef),
         tx.get(pointEventRef),
+        tx.get(goldenTicketPointEventRef),
         tx.get(sponsorRef).catch(() => ({ exists: false, data: () => ({}) }))
       ]);
 
-      if (!userSnap.exists) {
+      const hasFallbackParticipant =
+        participantData &&
+        typeof participantData === 'object' &&
+        Boolean(participantData.name || participantData.email || participantData.ticketId);
+
+      if (!userSnap.exists && !hasFallbackParticipant) {
         return {
           status: 404 as const,
           body: {
@@ -213,21 +239,26 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         };
       }
 
-      const userData = userSnap.data() ?? {};
+      const userData = userSnap.exists ? (userSnap.data() ?? {}) : (participantData ?? {});
       const name = (
         userData.name ||
         [userData.first_name, userData.last_name].filter(Boolean).join(' ') ||
         [userData.firstName, userData.lastName].filter(Boolean).join(' ') ||
+        participantData?.name ||
         'Participante'
       ).trim();
 
-      const email = userData.email || null;
-      const phone = userData.phone || userData.telefone || null;
-      const course = userData.course || userData.curso || null;
-      const period = userData.period || userData.periodo || null;
-      const linkedin = userData.linkedin || null;
-      const instagram = userData.instagram || null;
-      const github = userData.github || null;
+      const email = userData.email || participantData?.email || null;
+      const username = userData.username || participantData?.username || null;
+      const avatarUrl = userData.avatarUrl || userData.photoURL || participantData?.avatarUrl || participantData?.photoURL || null;
+      const phone = userData.phone || userData.telefone || participantData?.phone || null;
+      const course = userData.course || userData.curso || participantData?.course || null;
+      const period = userData.period || userData.periodo || participantData?.period || null;
+      const institution = userData.institution || userData.instituicao || participantData?.institution || participantData?.instituicao || null;
+      const participantType = userData.participantType || userData.participant_type || participantData?.participantType || null;
+      const linkedin = userData.linkedin || participantData?.linkedin || null;
+      const instagram = userData.instagram || participantData?.instagram || null;
+      const github = userData.github || participantData?.github || null;
 
       const birthDateRaw =
         userData.birthDate ||
@@ -254,9 +285,10 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         };
       }
 
-      // Checa se completou todas as 5 empresas do passaporte (Bilhete Dourado)
+      // Checa se completou todas as 5 empresas do passaporte (Bilhete Dourado) com idempotência atômica
       const allPassportVisited = PASSPORT_COMPANIES.every(c => !!updatedVisited[c]);
-      const isNewGoldenTicket = allPassportVisited && !userData.goldenTicketAwarded;
+      const goldenTicketAlreadyAwarded = Boolean(userData.goldenTicketAwarded || goldenTicketPointEventSnap.exists);
+      const isNewGoldenTicket = allPassportVisited && !goldenTicketAlreadyAwarded;
 
       let pointsToIncrement = 0;
       if (!alreadyAwarded) {
@@ -275,6 +307,9 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       if (isNewGoldenTicket) {
         userUpdates.goldenTicketAwarded = true;
         userUpdates.goldenTicketAwardedAt = now;
+      } else if (goldenTicketPointEventSnap.exists && !userData.goldenTicketAwarded) {
+        // Reconcilia campo no documento do usuário sem conceder pontos novamente
+        userUpdates.goldenTicketAwarded = true;
       }
 
       if (pointsToIncrement > 0) {
@@ -282,14 +317,14 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         userUpdates.pontuacaoTotal = admin.firestore.FieldValue.increment(pointsToIncrement);
       }
 
-      if (Object.keys(userUpdates).length > 0) {
+      if (userSnap.exists && Object.keys(userUpdates).length > 0) {
         userUpdates.updatedAt = now;
         tx.update(userRef, userUpdates);
       }
 
       if (!alreadyAwarded) {
         tx.set(pointEventRef, {
-          userId: participantUid,
+          userId: resolvedUid,
           eventType: 'sponsor_lead',
           referenceId: sponsorUid,
           points: 50,
@@ -303,9 +338,8 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       }
 
       if (isNewGoldenTicket) {
-        const goldenTicketPointEventRef = db.collection('pointEvents').doc(`${participantUid}_passport_golden_ticket`);
         tx.set(goldenTicketPointEventRef, {
-          userId: participantUid,
+          userId: resolvedUid,
           eventType: 'passport_golden_ticket',
           referenceId: 'golden_ticket',
           points: 100,
@@ -317,15 +351,19 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
       }
 
       const leadContactData: Record<string, any> = {
-        participantUid,
+        participantUid: resolvedUid,
         sponsorUid,
         companyId: companyId || null,
         collectedByEmail: req.user?.email || null,
         name,
+        username,
+        avatarUrl,
         email,
         phone,
         course,
         period,
+        institution,
+        participantType,
         linkedin,
         instagram,
         github,
@@ -344,7 +382,7 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
         tx.set(leadRef, leadContactData, { merge: true });
 
         if (companyId) {
-          const companyLeadRef = db.collection('company_leads').doc(companyId).collection('contacts').doc(participantUid);
+          const companyLeadRef = db.collection('company_leads').doc(companyId).collection('contacts').doc(resolvedUid);
           tx.set(companyLeadRef, leadContactData, { merge: true });
         }
       }
@@ -357,14 +395,18 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
           success: true,
           validateOnly: Boolean(validateOnly),
           lead: {
-            participantUid,
+            participantUid: resolvedUid,
             sponsorUid,
             companyId,
             name,
+            username,
+            avatarUrl,
             email,
             phone,
             course,
             period,
+            institution,
+            participantType,
             linkedin,
             instagram,
             github,
@@ -373,12 +415,35 @@ export async function leadsHandler(req: Request, res: Response): Promise<void> {
             notes: leadContactData.notes,
             rating: leadContactData.rating,
             pointsAwarded: pointsToIncrement,
-            goldenTicketAwarded: isNewGoldenTicket || !!userData.goldenTicketAwarded
+            goldenTicketAwarded: isNewGoldenTicket || goldenTicketAlreadyAwarded
           },
           whatsapp
         }
       };
     });
+
+    const leadData = (result.body as any)?.lead;
+    const awarded = leadData?.pointsAwarded ?? 0;
+    if (awarded > 0) {
+      try {
+        const rankingRef = db.collection('ranking').doc(resolvedUid) as any;
+        const rankingPayload: Record<string, any> = {
+          uid: resolvedUid,
+          role: 'PARTICIPANT',
+          totalPoints: admin.firestore.FieldValue.increment(awarded),
+          pontuacaoTotal: admin.firestore.FieldValue.increment(awarded),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+        if (leadData?.name) {
+          rankingPayload.displayName = leadData.name;
+          rankingPayload.firstName = String(leadData.name).trim().split(' ')[0];
+        }
+        if (leadData?.username) rankingPayload.username = leadData.username;
+        if (leadData?.avatarUrl) rankingPayload.avatarUrl = leadData.avatarUrl;
+        if (leadData?.course) rankingPayload.course = leadData.course;
+        await rankingRef.set?.(rankingPayload, { merge: true });
+      } catch {}
+    }
 
     res.status(result.status).json(result.body);
   } catch (error) {
@@ -407,17 +472,34 @@ export async function getLeadsHandler(req: Request, res: Response): Promise<void
     const resolved = await resolveSponsorCompany((ref) => ref.get(), sponsorData, req.user?.email);
     const companyId = queryCompany ? (resolveCompanyId(queryCompany) || queryCompany.toLowerCase()) : resolved.companyId;
 
-    const myLeadsSnap = await db.collection('leads').doc(sponsorUid).collection('contacts').get();
-    const myLeads: any[] = myLeadsSnap.docs ? myLeadsSnap.docs.map(d => ({ ...d.data(), id: d.id })) : [];
+    const rawLimit = Number(req.query?.limit);
+    const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50;
+
+    let myLeadsRef: any = db.collection('leads').doc(sponsorUid).collection('contacts');
+    if (typeof myLeadsRef.orderBy === 'function') {
+      myLeadsRef = myLeadsRef.orderBy('createdAt', 'desc');
+    }
+    if (typeof myLeadsRef.limit === 'function') {
+      myLeadsRef = myLeadsRef.limit(limit);
+    }
+    const myLeadsSnap = await myLeadsRef.get();
+    const myLeads: any[] = myLeadsSnap.docs ? myLeadsSnap.docs.map((d: any) => ({ ...d.data(), id: d.id })) : [];
 
     let companyLeads = [...myLeads];
     // Decisão do Fabio (KAN-124): leads por pessoa. Conta vinculada a sponsors/ não
     // enxerga leads dos colegas; o compartilhamento por empresa só sobra pro legado.
     if (companyId && (queryCompany || !resolved.linked)) {
-      const compLeadsSnap = await db.collection('company_leads').doc(companyId).collection('contacts').get();
+      let compLeadsRef: any = db.collection('company_leads').doc(companyId).collection('contacts');
+      if (typeof compLeadsRef.orderBy === 'function') {
+        compLeadsRef = compLeadsRef.orderBy('createdAt', 'desc');
+      }
+      if (typeof compLeadsRef.limit === 'function') {
+        compLeadsRef = compLeadsRef.limit(limit);
+      }
+      const compLeadsSnap = await compLeadsRef.get();
       if (compLeadsSnap.docs && compLeadsSnap.docs.length > 0) {
         const map = new Map<string, any>();
-        compLeadsSnap.docs.forEach(d => map.set(d.id, { ...d.data(), id: d.id }));
+        compLeadsSnap.docs.forEach((d: any) => map.set(d.id, { ...d.data(), id: d.id }));
         myLeads.forEach(l => map.set(l.participantUid || l.id, { ...map.get(l.participantUid || l.id), ...l }));
         companyLeads = Array.from(map.values());
       }
@@ -427,7 +509,11 @@ export async function getLeadsHandler(req: Request, res: Response): Promise<void
       success: true,
       myLeads,
       companyLeads,
-      companyId
+      companyId,
+      pagination: {
+        limit,
+        totalReturned: myLeads.length
+      }
     });
   } catch (error) {
     console.error('Erro ao buscar leads:', error);
@@ -532,10 +618,10 @@ export async function updateLeadHandler(req: Request, res: Response): Promise<vo
   }
 }
 
-// Registro das rotas com RBAC: apenas SPONSOR e ADMIN podem gerenciar leads
-router.get('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), getLeadsHandler);
-router.post('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), leadsHandler);
-router.patch('/:participantUid', requireAuth, requireRole(['SPONSOR', 'ADMIN']), updateLeadHandler);
+// Registro das rotas com RBAC e Rate Limiting: apenas SPONSOR e ADMIN podem gerenciar leads
+router.get('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), adminSponsorLimiter, getLeadsHandler);
+router.post('/', requireAuth, requireRole(['SPONSOR', 'ADMIN']), adminSponsorLimiter, requireVerifiedEmail, leadsHandler);
+router.patch('/:participantUid', requireAuth, requireRole(['SPONSOR', 'ADMIN']), adminSponsorLimiter, updateLeadHandler);
 
 export default router;
 

@@ -1,4 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
+// @vitest-environment happy-dom
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import React from 'react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+
+vi.mock('../../src/lib/firebase', () => ({
+  auth: { currentUser: null },
+  db: {},
+  storage: {},
+}));
+
 import { 
   calculateSponsorRoi, 
   exportLeadsToCsv,
@@ -8,8 +18,13 @@ import {
   submitLead,
   fetchLeads
 } from '../../src/lib/sponsorService';
+import SponsorRoiDashboard from '../../src/components/sponsor/SponsorRoiDashboard';
 
 describe('Sponsor Service & Innovation Features', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   describe('calculateSponsorRoi', () => {
     it('retorna estrutura segura vazia quando não há leads', () => {
       const roi = calculateSponsorRoi([]);
@@ -114,14 +129,21 @@ describe('Sponsor Service & Innovation Features', () => {
 
   describe('exportLeadsToCsv', () => {
     it('executa exportLeadsToCsv em ambiente sem DOM sem quebrar e retorna true', () => {
-      const leads = [{ name: 'Mariana', tags: ['Frontend'] }];
-      expect(exportLeadsToCsv(leads, 'EmpresaTeste', 'todos')).toBe(true);
+      const origDoc = global.document;
+      delete global.document;
+      try {
+        const leads = [{ name: 'Mariana', tags: ['Frontend'] }];
+        expect(exportLeadsToCsv(leads, 'EmpresaTeste', 'todos')).toBe(true);
+      } finally {
+        global.document = origDoc;
+      }
     });
 
     it('gera CSV com cabeçalho contendo a coluna Tags / Habilidades no browser', () => {
       let createdBlobText = null;
       const OrigBlob = global.Blob;
       const OrigURL = global.URL;
+      const origDoc = global.document;
 
       global.Blob = class MockBlob {
         constructor(parts) {
@@ -145,73 +167,104 @@ describe('Sponsor Service & Innovation Features', () => {
         }
       };
 
-      const leads = [
-        {
-          name: 'Mariana Souza',
-          email: 'mariana@ufu.br',
-          phone: '34999998888',
-          course: 'Engenharia da Computação',
-          period: 5,
-          rating: 4,
-          tags: ['Destaque', 'Frontend', 'TypeScript'],
-          notes: 'Ótima candidata para estágio',
-          github: 'marianasouza'
-        }
-      ];
+      try {
+        const leads = [
+          {
+            name: 'Mariana Souza',
+            email: 'mariana@ufu.br',
+            phone: '34999998888',
+            course: 'Engenharia da Computação',
+            period: 5,
+            rating: 4,
+            tags: ['Destaque', 'Frontend', 'TypeScript'],
+            notes: 'Ótima candidata para estágio',
+            github: 'marianasouza'
+          }
+        ];
 
-      const success = exportLeadsToCsv(leads, 'EmpresaTeste', 'todos');
-      expect(success).toBe(true);
-      expect(createdBlobText).toContain('Tags / Habilidades');
-      expect(createdBlobText).toContain('Destaque, Frontend, TypeScript');
-      expect(createdBlobText).toContain('Mariana Souza');
-
-      delete global.document;
-      global.Blob = OrigBlob;
-      global.URL = OrigURL;
+        const success = exportLeadsToCsv(leads, 'EmpresaTeste', 'todos');
+        expect(success).toBe(true);
+        expect(createdBlobText).toContain('Tags / Habilidades');
+        expect(createdBlobText).toContain('Destaque, Frontend, TypeScript');
+        expect(createdBlobText).toContain('Mariana Souza');
+      } finally {
+        global.document = origDoc;
+        global.Blob = OrigBlob;
+        global.URL = OrigURL;
+      }
     });
   });
 
-  describe('Print Layout & Executive Report Styles', () => {
-    it('garante que index.css possui regras de @media print com fundo azul e ajuste de cor exato', async () => {
+  describe('Print Layout & Executive Report Dashboard (ERR-043)', () => {
+    it('garante que index.css preserva regras de @media print e ajuste exato de cores', async () => {
       const fs = await import('fs');
       const path = await import('path');
       const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/index.css'), 'utf-8');
-      
-      expect(cssContent).toContain('@media print');
-      expect(cssContent).toContain('print-color-adjust: exact');
-      expect(cssContent).toContain('-webkit-print-color-adjust: exact');
-      expect(cssContent).toContain('#0A0F24');
-      expect(cssContent).toContain('aside');
+
+      expect(cssContent).toMatch(/@media\s+print/);
+      expect(cssContent).toMatch(/print-color-adjust:\s*exact/);
+      expect(cssContent).toMatch(/-webkit-print-color-adjust:\s*exact/);
     });
 
-    it('garante que SponsorShell esconde menu lateral e navegação na impressão', async () => {
-      const fs = await import('fs');
-      const path = await import('path');
-      const shellContent = fs.readFileSync(path.resolve(__dirname, '../../src/pages/sponsor/Shell.jsx'), 'utf-8');
-      
-      expect(shellContent).toContain('print:!hidden');
-      expect(shellContent).toContain('sponsor-shell');
-      expect(shellContent).toContain('print:p-0');
+    it('renderiza SponsorRoiDashboard com cabeçalho oficial de impressão, métricas de ROI e alternância de escopo', () => {
+      const allLeads = [
+        { participantUid: 'u1', name: 'Ana', course: 'Ciência da Computação', period: 7, rating: 5, phone: '34999991111', tags: ['React'] },
+        { participantUid: 'u2', name: 'Bruno', course: 'Sistemas de Informação', period: 4, rating: 4, phone: '34999992222', tags: ['Node'] },
+      ];
+      const myLeads = [allLeads[0]];
+
+      const { container } = render(
+        React.createElement(SponsorRoiDashboard, {
+          allCompanyLeads: allLeads,
+          myLeads,
+          companyName: 'Kanastra',
+          companyLogo: 'https://example.com/kanastra.png',
+          totalEventAttendees: 200,
+        })
+      );
+
+      // Cabeçalho de impressão (hidden print:flex) e cabeçalho de tela (print:hidden) presentes no DOM real
+      expect(screen.getByText('TechWeek 2026')).toBeDefined();
+      expect(screen.getByText('Relatório Oficial de Patrocínio')).toBeDefined();
+      expect(screen.getByText('Performance de Talentos • Kanastra')).toBeDefined();
+      expect(container.querySelector('.print\\:flex')).not.toBeNull();
+      expect(container.querySelector('.print\\:hidden')).not.toBeNull();
+
+      // Alterna escopo entre Toda a Empresa (2 leads) e Meus Leads (1 lead)
+      const mineTab = screen.getByRole('tab', { name: /meus leads/i });
+      fireEvent.click(mineTab);
+      expect(mineTab.getAttribute('aria-selected')).toBe('true');
+      expect(screen.getByText(/1 conexão capturada/i)).toBeDefined();
     });
 
-    it('garante que SponsorRoiDashboard possui cabeçalho formal e logo para impressão', async () => {
-      const fs = await import('fs');
-      const path = await import('path');
-      const dashboardContent = fs.readFileSync(path.resolve(__dirname, '../../src/components/sponsor/SponsorRoiDashboard.jsx'), 'utf-8');
-      
-      expect(dashboardContent).toContain('hidden print:flex');
-      expect(dashboardContent).toContain('TechWeek 2026');
-      expect(dashboardContent).toContain('Relatório Oficial de Patrocínio');
-      expect(dashboardContent).toContain('iconeTw');
-      expect(dashboardContent).toContain('brightness-0 invert');
-    });
+    it('aciona window.print() e onExportCsv nos botões de ação executiva do SponsorRoiDashboard', () => {
+      const originalPrint = window.print;
+      const printSpy = vi.fn();
+      window.print = printSpy;
+      const onExportCsv = vi.fn();
+      const leads = [
+        { participantUid: 'u1', name: 'Ana', course: 'Ciência da Computação', period: 7, rating: 5, phone: '34999991111', tags: ['React'] },
+      ];
 
-    it('garante que seletor CRM/ROI em Sponsor.jsx é oculto na impressão', async () => {
-      const fs = await import('fs');
-      const path = await import('path');
-      const sponsorContent = fs.readFileSync(path.resolve(__dirname, '../../src/pages/Sponsor.jsx'), 'utf-8');
-      
-      expect(sponsorContent).toContain('print:hidden flex items-center justify-between gap-2');
+      try {
+        render(
+          React.createElement(SponsorRoiDashboard, {
+            leads,
+            companyName: 'Kanastra',
+            onExportCsv,
+          })
+        );
+
+        const printBtn = screen.getByRole('button', { name: /imprimir \/ pdf/i });
+        fireEvent.click(printBtn);
+        expect(printSpy).toHaveBeenCalledTimes(1);
+
+        const exportBtn = screen.getByRole('button', { name: /exportar csv/i });
+        fireEvent.click(exportBtn);
+        expect(onExportCsv).toHaveBeenCalledWith(leads, 'company');
+      } finally {
+        window.print = originalPrint;
+      }
     });
   });
 
@@ -253,35 +306,49 @@ describe('Sponsor Service & Innovation Features', () => {
     });
 
     it('submitLead salva localmente e retorna sucesso com offline: true quando API não estiver disponível', async () => {
-      const result = await submitLead({
-        participantUid: 'demo_user_offline_test',
-        notes: 'Lead salvo em modo teste resiliente',
-        rating: 5,
-        companyId: 'test_company_offline',
-        tags: ['Frontend', 'Destaque'],
-        participantData: {
-          name: 'Lucas Teste',
-          course: 'Sistemas de Informação',
-          phone: '(34) 98888-7777',
-          email: 'lucas@ufu.br'
-        }
-      });
+      const fetchSpy = vi.spyOn(global, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const result = await submitLead({
+          participantUid: 'demo_user_offline_test',
+          notes: 'Lead salvo em modo teste resiliente',
+          rating: 5,
+          companyId: 'test_company_offline',
+          tags: ['Frontend', 'Destaque'],
+          participantData: {
+            name: 'Lucas Teste',
+            course: 'Sistemas de Informação',
+            phone: '(34) 98888-7777',
+            email: 'lucas@ufu.br'
+          }
+        });
 
-      expect(result.success).toBe(true);
-      expect(result.lead).toBeDefined();
-      expect(result.lead.participantUid).toBe('demo_user_offline_test');
-      expect(result.lead.name).toBe('Lucas Teste');
-      expect(result.lead.rating).toBe(5);
+        expect(result.success).toBe(true);
+        expect(result.lead).toBeDefined();
+        expect(result.lead.participantUid).toBe('demo_user_offline_test');
+        expect(result.lead.name).toBe('Lucas Teste');
+        expect(result.lead.rating).toBe(5);
+        expect(warnSpy).toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+        fetchSpy.mockRestore();
+      }
     });
 
     it('fetchLeads retorna leads da empresa com o lead semente quando não houver conexão com backend', async () => {
-      const data = await fetchLeads('test_fetch_company');
-      expect(data).toBeDefined();
-      expect(data.companyLeads).toBeDefined();
-      expect(data.companyLeads.length).toBeGreaterThanOrEqual(1);
-      expect(data.companyLeads[0].name).toBe('Mariana Souza');
+      const fetchSpy = vi.spyOn(global, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const data = await fetchLeads('test_fetch_company');
+        expect(data).toBeDefined();
+        expect(data.companyLeads).toBeDefined();
+        expect(data.companyLeads.length).toBeGreaterThanOrEqual(1);
+        expect(data.companyLeads[0].name).toBe('Mariana Souza');
+        expect(warnSpy).toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+        fetchSpy.mockRestore();
+      }
     });
   });
 });
-
-

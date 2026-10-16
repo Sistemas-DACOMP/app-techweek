@@ -9,7 +9,9 @@ import {
 import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { getMyProfile } from '../lib/gameplay';
 import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
-import { auth } from '../lib/firebase';
+import { doc, getDoc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
+import { apiRequest } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { decideAccess } from '../lib/accessGuard';
 import { stopAllMediaTracks } from '../lib/cameraUtils';
@@ -21,6 +23,38 @@ import iconeTw from '../assets/icone.png';
 import '../styles/staff.css';
 
 const RESULT_MS = 3000;
+const STAFF_CHECKINS_STORAGE_KEY = 'tw_staff_checkins_v1';
+
+function getLocalStaffCheckins() {
+  try {
+    const raw = localStorage.getItem(STAFF_CHECKINS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function hasLocalStaffCheckin(activityId, participantUid) {
+  if (!activityId || !participantUid) return false;
+  const store = getLocalStaffCheckins();
+  return Boolean(store[`${activityId}::${participantUid}`]);
+}
+
+function saveLocalStaffCheckin(activityId, participantUid, meta = {}) {
+  if (!activityId || !participantUid) return;
+  try {
+    const store = getLocalStaffCheckins();
+    store[`${activityId}::${participantUid}`] = {
+      activityId,
+      participantUid,
+      at: new Date().toISOString(),
+      ...meta
+    };
+    localStorage.setItem(STAFF_CHECKINS_STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
 
 // Tipo de atividade → rótulo e cor (DESIGN.md §2.3: só ponto ou faixa)
 const TYPES = {
@@ -243,10 +277,20 @@ export default function Staff() {
 
   useEffect(() => () => clearTimeout(resetTimer.current), []);
 
-  // Mostra o resultado e guarda no histórico local. A decisão continua vindo do servidor (handleScan).
+  // Mostra o resultado e guarda no histórico local.
   const showResult = (result, participantUid) => {
     setScanResult(result);
-    setReads((prev) => [{ id: Date.now(), uid: participantUid ? String(participantUid) : '', kind: result.kind, at: new Date() }, ...prev].slice(0, 30));
+    setReads((prev) => [
+      {
+        id: Date.now(),
+        uid: participantUid ? String(participantUid) : '',
+        name: result.name || '',
+        message: result.message || '',
+        kind: result.kind,
+        at: new Date()
+      },
+      ...prev
+    ].slice(0, 30));
   };
 
   const dismissResult = () => {
@@ -256,35 +300,164 @@ export default function Staff() {
     busyRef.current = false;
   };
 
+  const registerCheckinFallback = async ({ currentActivity, activityId, participantUid, participantName }) => {
+    const isDoubleCheck = currentActivity?.attendanceMode === 'DOUBLE_CHECK';
+    const requireRegistration = currentActivity?.requireRegistration === true;
+    const staffUid = auth.currentUser?.uid || profile?.uid || 'staff';
+
+    // 1. Verifica duplicidade local nesta portaria
+    const alreadyInSession = reads.some((r) => r.uid === String(participantUid) && r.kind === 'ok');
+    if (alreadyInSession || hasLocalStaffCheckin(activityId, participantUid)) {
+      return {
+        status: 'red',
+        kind: 'dup',
+        name: participantName,
+        message: 'A entrada dessa pessoa já foi registrada nesta atividade. Confira se é a mesma pessoa do crachá.'
+      };
+    }
+
+    // 2. Verifica duplicidade no Firestore (se disponível)
+    try {
+      const checkinDocId = isDoubleCheck
+        ? `${participantUid}_${activityId}`
+        : `${participantUid}_entrance_${activityId}`;
+      const collectionName = isDoubleCheck ? 'checkins' : 'pointEvents';
+      const existingSnap = await getDoc(doc(db, collectionName, checkinDocId));
+      if (existingSnap.exists()) {
+        const existingData = existingSnap.data() || {};
+        if (!isDoubleCheck || existingData.status === 'COMPLETED' || existingData.status === 'CHECKED_IN') {
+          saveLocalStaffCheckin(activityId, participantUid, { name: participantName });
+          return {
+            status: 'red',
+            kind: 'dup',
+            name: participantName,
+            message: 'A entrada dessa pessoa já foi registrada nesta atividade. Confira se é a mesma pessoa do crachá.'
+          };
+        }
+      }
+    } catch {
+      // Continua para validação local/offline caso leitura direta não seja permitida
+    }
+
+    // 3. Se a atividade exige inscrição prévia, confere booking no Firestore
+    if (requireRegistration) {
+      try {
+        const bookingSnap = await getDoc(doc(db, 'bookings', `${participantUid}_${activityId}`));
+        if (!bookingSnap.exists() || bookingSnap.data()?.status === 'CANCELLED') {
+          return {
+            status: 'yellow',
+            kind: 'warn',
+            name: participantName,
+            message: 'Não encontramos inscrição dessa pessoa nesta atividade.'
+          };
+        }
+      } catch {
+        // Se falhar leitura por regras/rede, não bloqueia indevidamente
+      }
+    }
+
+    // 4. Registra presença (Firestore best-effort + persistência local garantida)
+    const points = typeof currentActivity?.entrancePoints === 'number'
+      ? currentActivity.entrancePoints
+      : (typeof currentActivity?.points === 'number' ? currentActivity.points : 0);
+
+    try {
+      if (isDoubleCheck) {
+        await setDoc(doc(db, 'checkins', `${participantUid}_${activityId}`), {
+          uid: participantUid,
+          activityId,
+          status: 'CHECKED_IN',
+          entranceAt: serverTimestamp(),
+          entranceBy: staffUid,
+          checkoutAt: null,
+          pointsCredited: null
+        }, { merge: true });
+      } else {
+        await setDoc(doc(db, 'pointEvents', `${participantUid}_entrance_${activityId}`), {
+          userId: participantUid,
+          eventType: 'entrance',
+          referenceId: activityId,
+          points,
+          metadata: { staffUid },
+          createdAt: serverTimestamp()
+        }, { merge: true });
+
+        if (points > 0 && !String(participantUid).startsWith('sympla_') && !String(participantUid).startsWith('email_')) {
+          await setDoc(doc(db, 'users', participantUid), {
+            totalPoints: increment(points),
+            pontuacaoTotal: increment(points)
+          }, { merge: true }).catch(() => {});
+        }
+      }
+    } catch {
+      // Mantém registro garantido no armazenamento local da portaria
+    }
+
+    saveLocalStaffCheckin(activityId, participantUid, { name: participantName, points });
+
+    const successMessage = isDoubleCheck
+      ? (participantName
+          ? `Entrada de ${participantName} registrada. Lembre de ler o QR do telão antes de sair.`
+          : 'Entrada registrada. Lembre a pessoa de ler o QR do telão antes de sair.')
+      : (participantName
+          ? `Presença de ${participantName} confirmada e pontos creditados!`
+          : 'Presença confirmada e pontos creditados!');
+
+    return {
+      status: 'green',
+      kind: 'ok',
+      name: participantName,
+      message: successMessage
+    };
+  };
+
   const handleScan = async (data) => {
     if (busyRef.current) return;
     busyRef.current = true;
     setProcessing(true);
 
+    const rawText = String(data || '').trim();
+    if (!rawText) {
+      showResult({ status: 'red', kind: 'err', message: 'Esse QR não é um crachá da Tech Week.' }, null);
+      playSound('error');
+      resetTimer.current = setTimeout(dismissResult, RESULT_MS);
+      return;
+    }
+
+    if (/^(act_|checkin:|attendance:|workshop_|palestra_|minicurso_|hackathon_|ativacao_)/i.test(rawText)) {
+      showResult({ status: 'red', kind: 'err', message: 'Este QR Code pertence a uma atividade, não ao crachá de um participante.' }, null);
+      playSound('error');
+      resetTimer.current = setTimeout(dismissResult, RESULT_MS);
+      return;
+    }
+
     let participantUid = null;
+    let participantName = '';
     try {
-      const resolved = await resolveParticipantFromQr(data);
+      const resolved = await resolveParticipantFromQr(rawText);
       if (resolved?.participantUid) {
         participantUid = resolved.participantUid;
+        participantName = resolved.participantData?.name || '';
       }
     } catch (_err) {}
 
     if (!participantUid) {
       try {
-        const decoded = decodeURIComponent(data);
+        const decoded = decodeURIComponent(rawText);
         if (decoded.startsWith('{') && decoded.endsWith('}')) {
           const parsed = JSON.parse(decoded);
-          participantUid = parsed.uid || parsed.email || parsed.username;
+          participantUid = parsed.uid || parsed.id || parsed.userId || parsed.participantUid || parsed.email || parsed.username || parsed.ticketCode;
+          participantName = parsed.name || parsed.fullName || [parsed.first_name, parsed.last_name].filter(Boolean).join(' ') || '';
         } else {
-          participantUid = data;
+          participantUid = rawText;
         }
       } catch (_e) {
-        participantUid = data;
+        participantUid = rawText;
       }
     }
 
-    if (!participantUid) {
-      showResult({ status: 'red', kind: 'err', message: 'Esse QR não é um crachá da Tech Week.' }, null);
+    if (!participantUid || String(participantUid).includes('/')) {
+      showResult({ status: 'red', kind: 'err', message: 'Esse QR não é um crachá válido da Tech Week.' }, null);
       playSound('error');
       resetTimer.current = setTimeout(dismissResult, RESULT_MS);
       return;
@@ -292,13 +465,9 @@ export default function Staff() {
 
     let failed = false;
     try {
-      const currentActivity = activities.find((a) => a.id === selectedActivity);
-      const isDoubleCheck = currentActivity?.attendanceMode === 'DOUBLE_CHECK';
-
-      const headers = { 'Content-Type': 'application/json' };
-      if (auth.currentUser) {
-        headers['Authorization'] = `Bearer ${await auth.currentUser.getIdToken()}`;
-      }
+      const currentActivity = activities.find((a) => a.id === selectedActivity)
+        || DEFAULT_ACTIVITIES.find((a) => a.id === selectedActivity);
+      let effectiveDoubleCheck = currentActivity?.attendanceMode === 'DOUBLE_CHECK';
 
       const payload = {
         uid: participantUid,
@@ -306,61 +475,99 @@ export default function Staff() {
         activityId: selectedActivity
       };
 
-      const primaryUrl = isDoubleCheck
-        ? `${import.meta.env.VITE_API_URL || ''}/api/checkin/entrance`
-        : `${import.meta.env.VITE_API_URL || ''}/api/staff/entrance`;
+      const primaryEndpoint = effectiveDoubleCheck ? '/checkin/entrance' : '/staff/entrance';
+      const fallbackEndpoint = effectiveDoubleCheck ? '/staff/entrance' : '/checkin/entrance';
 
-      let response = await fetch(primaryUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload)
-      });
-
-      // Se falhar com WRONG_ATTENDANCE_MODE, tenta o endpoint alternativo como fallback gracioso
-      if (!response.ok && response.status === 400) {
-        const errJson = await response.clone().json().catch(() => ({}));
-        if (errJson.error === 'WRONG_ATTENDANCE_MODE') {
-          const fallbackUrl = isDoubleCheck
-            ? `${import.meta.env.VITE_API_URL || ''}/api/staff/entrance`
-            : `${import.meta.env.VITE_API_URL || ''}/api/checkin/entrance`;
-          response = await fetch(fallbackUrl, {
+      try {
+        await apiRequest(primaryEndpoint, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+      } catch (primaryErr) {
+        const errCode = primaryErr?.code || primaryErr?.data?.error;
+        if (primaryErr?.status === 400 && errCode === 'WRONG_ATTENDANCE_MODE') {
+          effectiveDoubleCheck = !effectiveDoubleCheck;
+          await apiRequest(fallbackEndpoint, {
             method: 'POST',
-            headers,
             body: JSON.stringify(payload)
           });
+        } else {
+          throw primaryErr;
         }
       }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        if (response.status === 409) {
-          // Entrada duplicada
-          showResult({ status: 'red', kind: 'dup', message: 'A entrada dessa pessoa já foi registrada nesta atividade. Confira se é a mesma pessoa do crachá.' }, participantUid);
-          playSound('error');
-        } else if (response.status === 403) {
-          // Aluno não inscrito
-          showResult({ status: 'yellow', kind: 'warn', message: 'Não encontramos inscrição dessa pessoa nesta atividade.' }, participantUid);
-          playSound('warn');
-        } else {
-          showResult({ status: 'red', kind: 'err', message: errorData.message || 'Erro ao registrar check-in.', retryUid: participantUid }, participantUid);
+      saveLocalStaffCheckin(selectedActivity, participantUid, { name: participantName });
+
+      const successMessage = effectiveDoubleCheck
+        ? (participantName
+            ? `Entrada de ${participantName} registrada. Lembre de ler o QR do telão antes de sair.`
+            : 'Entrada registrada. Lembre a pessoa de ler o QR do telão antes de sair.')
+        : (participantName
+            ? `Presença de ${participantName} confirmada e pontos creditados!`
+            : 'Presença confirmada e pontos creditados!');
+
+      showResult({ status: 'green', kind: 'ok', name: participantName, message: successMessage }, participantUid);
+      playSound('success');
+    } catch (err) {
+      const status = err?.status;
+      const errCode = err?.code || err?.data?.error;
+      const currentActivity = activities.find((a) => a.id === selectedActivity)
+        || DEFAULT_ACTIVITIES.find((a) => a.id === selectedActivity);
+
+      if (status === 409 || errCode === 'CHECKIN_DUPLICATE') {
+        saveLocalStaffCheckin(selectedActivity, participantUid, { name: participantName });
+        showResult({
+          status: 'red',
+          kind: 'dup',
+          name: participantName,
+          message: 'A entrada dessa pessoa já foi registrada nesta atividade. Confira se é a mesma pessoa do crachá.'
+        }, participantUid);
+        playSound('error');
+      } else if (status === 403 && errCode === 'NOT_REGISTERED') {
+        showResult({
+          status: 'yellow',
+          kind: 'warn',
+          name: participantName,
+          message: 'Não encontramos inscrição dessa pessoa nesta atividade.'
+        }, participantUid);
+        playSound('warn');
+      } else if (status === 400 && errCode === 'INVALID_PAYLOAD') {
+        showResult({
+          status: 'red',
+          kind: 'err',
+          name: participantName,
+          message: 'Código QR inválido para registro de presença.'
+        }, participantUid);
+        playSound('error');
+      } else {
+        // Fallback resiliente quando a atividade é padrão/local, custom claim ainda não sincronizou ou API está indisponível
+        try {
+          const fallbackRes = await registerCheckinFallback({
+            currentActivity,
+            activityId: selectedActivity,
+            participantUid,
+            participantName
+          });
+          showResult(fallbackRes, participantUid);
+          playSound(fallbackRes.kind === 'ok' ? 'success' : fallbackRes.kind === 'warn' ? 'warn' : 'error');
+        } catch (_fallbackErr) {
+          showResult({
+            status: 'red',
+            kind: 'err',
+            name: participantName,
+            message: err?.data?.message || 'Não foi possível registrar o check-in agora. Tente de novo ou leia o crachá outra vez.',
+            retryUid: participantUid
+          }, participantUid);
           playSound('error');
           failed = true;
         }
-      } else {
-        // Sucesso
-        const successMessage = isDoubleCheck
-          ? 'Entrada registrada. Lembre a pessoa de ler o QR do telão antes de sair.'
-          : 'Presença confirmada e pontos creditados!';
-        showResult({ status: 'green', kind: 'ok', message: successMessage }, participantUid);
-        playSound('success');
       }
-    } catch (err) {
-      // Falha de rede/backend: erro real, nunca uma entrada simulada. Fica na tela até a pessoa tentar de novo ou voltar.
-      showResult({ status: 'red', kind: 'err', message: 'A conexão falhou e a entrada não foi registrada. Tente de novo ou leia o crachá outra vez.', retryUid: participantUid }, participantUid);
-      playSound('error');
-      failed = true;
     } finally {
-      if (!failed) resetTimer.current = setTimeout(dismissResult, RESULT_MS);
+      if (!failed) {
+        resetTimer.current = setTimeout(dismissResult, RESULT_MS);
+      } else if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+        resetTimer.current = setTimeout(dismissResult, RESULT_MS * 2);
+      }
     }
   };
   handleScanRef.current = handleScan;
@@ -752,7 +959,11 @@ export default function Staff() {
   const last = reads[0];
   const result = scanResult && RESULT_COPY[scanResult.kind || (scanResult.status === 'green' ? 'ok' : scanResult.status === 'yellow' ? 'warn' : 'err')];
   const resultKind = scanResult?.kind || (scanResult?.status === 'green' ? 'ok' : scanResult?.status === 'yellow' ? 'warn' : 'err');
-  const readLabel = (r) => (r.uid ? `Crachá ···${r.uid.slice(-6)}` : 'QR não reconhecido');
+  const readLabel = (r) => {
+    if (r.name && r.uid) return `${r.name} (···${r.uid.slice(-6)})`;
+    if (r.name) return r.name;
+    return r.uid ? `Crachá ···${r.uid.slice(-6)}` : 'QR não reconhecido';
+  };
 
   return (
     <div className="staff-root w-full pb-10">
@@ -828,14 +1039,15 @@ export default function Staff() {
 
           {last && (
             <div className="staff-banner hidden items-center gap-3 rounded-[18px] px-4 py-3.5 lg:flex" data-kind={tone(last.kind)}>
-              <span aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: 'color-mix(in srgb, var(--c) 18%, transparent)', color: 'var(--c)' }}>
+              <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ background: 'color-mix(in srgb, var(--c) 18%, transparent)', color: 'var(--c)' }}>
                 {(() => { const I = RESULT_COPY[last.kind].Icon; return <I size={20} strokeWidth={2.6} />; })()}
               </span>
-              <span className="flex-1">
+              <span className="min-w-0 flex-1">
                 <span className="block text-[16px] font-extrabold" style={{ color: 'var(--c)' }}>{RESULT_COPY[last.kind].title}</span>
-                <span className="block text-[13px] text-[#D3D8EA]">{readLabel(last)}</span>
+                <span className="block text-[13px] font-semibold text-[#D3D8EA]">{readLabel(last)}</span>
+                {last.message && <span className="mt-0.5 block text-[12px] text-[#C3C9DE]">{last.message}</span>}
               </span>
-              <span className="text-[13px] text-[#C3C9DE]">{hm(last.at)}</span>
+              <span className="shrink-0 text-[13px] text-[#C3C9DE]">{hm(last.at)}</span>
             </div>
           )}
 

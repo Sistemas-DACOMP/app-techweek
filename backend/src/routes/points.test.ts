@@ -21,7 +21,7 @@ vi.mock('../config/firebaseAdmin', async () => {
 import router from './points';
 import { db } from '../config/firebaseAdmin';
 import { participantActionLimiter } from '../middlewares/rateLimiter';
-import { requireSymplaTicket } from '../middlewares/authMiddleware';
+import { requireSymplaTicket, requireVerifiedEmail } from '../middlewares/authMiddleware';
 
 function makeRes() {
   const res: Partial<Response> = {};
@@ -31,7 +31,7 @@ function makeRes() {
 }
 
 function makeReq(body: any = {}, uid = 'user-1') {
-  return { body, user: { uid } } as unknown as Request;
+  return { body, user: { uid, role: 'PARTICIPANT', emailVerified: true } } as unknown as Request;
 }
 
 // points.ts só exporta o router default — mesma técnica de booking.test.ts:
@@ -65,6 +65,16 @@ it('KAN-84: requireSymplaTicket está montado na rota real, antes do handler fin
   const handles = layer.route.stack.map((l: any) => l.handle);
   expect(handles).toContain(requireSymplaTicket);
   expect(handles.indexOf(requireSymplaTicket)).toBeLessThan(handles.length - 1);
+});
+
+// KAN-116: prova que requireVerifiedEmail está montado na rota real, antes do handler final
+it('KAN-116: requireVerifiedEmail está montado na rota real, antes do handler final', () => {
+  const layer = (router as unknown as { stack: any[] }).stack.find(
+    (l) => l.route?.path === '/claim'
+  );
+  const handles = layer.route.stack.map((l: any) => l.handle);
+  expect(handles).toContain(requireVerifiedEmail);
+  expect(handles.indexOf(requireVerifiedEmail)).toBeLessThan(handles.length - 1);
 });
 
 
@@ -236,6 +246,64 @@ describe('POST /api/points/claim (KAN-79, KAN-80)', () => {
     expect(tx.update).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'MISSION_NOT_FOUND' }));
+  });
+
+  it('executa auto-seed da missão no Firestore quando missionSnap.exists == false mas chave existe no DEFAULT_MISSION_CATALOG (ERR-078)', async () => {
+    const tx = makeTx({
+      eventSnap: { exists: false },
+      userSnap: { exists: true },
+      missionSnap: { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq({ eventType: 'challenge', referenceId: 'sponsor_visit' });
+    const res = makeRes();
+    await handler(req, res);
+
+    // Auto-seed da missão no Firestore
+    expect(tx.set).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'missions/sponsor_visit' }),
+      expect.objectContaining({ points: 15, createdAt: expect.anything() })
+    );
+
+    // Registro do evento do ponto do usuário
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: 'users/user-1/point_events/challenge_sponsor_visit' },
+      expect.objectContaining({ eventType: 'challenge', referenceId: 'sponsor_visit', points: 15 })
+    );
+
+    // Incremento dos pontos do usuário
+    expect(tx.update).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'users/user-1' }),
+      expect.objectContaining({ totalPoints: expect.anything(), pontuacaoTotal: expect.anything() })
+    );
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ success: true, points: 15 });
+  });
+
+  it('executa auto-seed de network_first com metadata de conexão válida quando ausente no banco (ERR-078)', async () => {
+    const tx = makeTx({
+      eventSnap: { exists: false },
+      userSnap: { exists: true },
+      missionSnap: { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq({
+      eventType: 'challenge',
+      referenceId: 'network_first',
+      metadata: { targetUid: 'user-2' }
+    });
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(tx.set).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'missions/network_first' }),
+      expect.objectContaining({ points: 10, createdAt: expect.anything() })
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ success: true, points: 10 });
   });
 
   it.each([

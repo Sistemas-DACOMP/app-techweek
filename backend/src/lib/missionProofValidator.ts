@@ -61,16 +61,32 @@ export async function validateMissionProof(
     }
 
     const cleanUrl = photoUrl.trim();
+    const isProduction = process.env.NODE_ENV === 'production';
+    const isLocalhost = cleanUrl.startsWith('http://localhost') || cleanUrl.startsWith('http://127.0.0.1');
+    const isBlob = cleanUrl.startsWith('blob:');
+
+    // Em produção, URLs locais ou blob: são estritamente rejeitadas (ERR-056)
+    if (isProduction && (isBlob || isLocalhost)) {
+      return {
+        valid: false,
+        error: 'INVALID_PHOTO_URL',
+        message: 'URL da foto de comprovação não é permitida em ambiente de produção.'
+      };
+    }
+
     const isValidStorageUrl =
+      cleanUrl.startsWith('https://firebasestorage.googleapis.com/') ||
+      cleanUrl.startsWith('https://storage.googleapis.com/') ||
       cleanUrl.includes('firebasestorage.googleapis.com') ||
       cleanUrl.includes('mission_photos') ||
       cleanUrl.includes('/b/') ||
-      cleanUrl.startsWith('http://localhost') ||
-      cleanUrl.startsWith('http://127.0.0.1') ||
-      cleanUrl.startsWith('blob:') ||
-      cleanUrl.startsWith('https://');
+      (!isProduction && (isLocalhost || isBlob)) ||
+      (!isProduction && cleanUrl.startsWith('https://'));
 
-    if (!isValidStorageUrl || (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://') && !cleanUrl.startsWith('blob:'))) {
+    if (
+      !isValidStorageUrl ||
+      (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://') && (!isProduction && isBlob ? false : true))
+    ) {
       return {
         valid: false,
         error: 'INVALID_PHOTO_URL',
@@ -82,12 +98,19 @@ export async function validateMissionProof(
 
   // 3. Palavra Secreta (secret_password ou triggerMode === 'secret' ou isSecret === true)
   if (missionId === 'secret_password' || missionData.triggerMode === 'secret' || missionData.isSecret === true) {
-    const inputWord =
+    let inputWord =
       typeof metadata?.secretWord === 'string'
         ? metadata.secretWord
         : typeof metadata?.password === 'string'
           ? metadata.password
           : null;
+
+    if (!inputWord && Array.isArray(missionData.fields)) {
+      const passField = missionData.fields.find((f: any) => f?.type === 'password' && f?.id);
+      if (passField && typeof metadata?.[passField.id] === 'string') {
+        inputWord = metadata[passField.id];
+      }
+    }
 
     if (!inputWord || !inputWord.trim()) {
       return {
@@ -111,6 +134,10 @@ export async function validateMissionProof(
 
     if (!expectedSecretWord && missionData.secretConfig?.secretWord) {
       expectedSecretWord = missionData.secretConfig.secretWord;
+    }
+
+    if (!expectedSecretWord && typeof missionData.secretWord === 'string') {
+      expectedSecretWord = missionData.secretWord;
     }
 
     if (!expectedSecretWord && missionId === 'secret_password') {
@@ -215,10 +242,18 @@ export async function validateMissionProof(
     // Busca o perfil do usuário alvo no Firestore
     let targetData: any = null;
     if (targetUid) {
-      const targetUserRef = db.collection('users').doc(targetUid);
-      const targetSnap = await tx.get(targetUserRef);
-      if (targetSnap.exists) {
-        targetData = typeof targetSnap.data === 'function' ? targetSnap.data() : (targetSnap as any);
+      try {
+        const targetUserRef = db.collection('users').doc(targetUid);
+        const targetSnap = await tx.get(targetUserRef);
+        if (targetSnap.exists) {
+          targetData = typeof targetSnap.data === 'function' ? targetSnap.data() : (targetSnap as any);
+        }
+      } catch (err) {
+        return {
+          valid: false,
+          error: 'TARGET_LOOKUP_FAILED',
+          message: 'Não foi possível carregar as informações do participante conectado no momento.'
+        };
       }
     }
 
@@ -241,9 +276,23 @@ export async function validateMissionProof(
     }
 
     if (missionId === 'network_course') {
-      const myCourse = (userData.course || '').trim().toLowerCase();
+      const myCourse = (userData.course || userData.curso || '').trim().toLowerCase();
       const targetCourse = (targetData?.course || targetData?.curso || '').trim().toLowerCase();
-      if (!myCourse || !targetCourse || myCourse === targetCourse) {
+      if (!myCourse) {
+        return {
+          valid: false,
+          error: 'INCOMPLETE_PROFILE',
+          message: 'Seu perfil precisa ter o curso preenchido para validar esta missão.'
+        };
+      }
+      if (!targetCourse) {
+        return {
+          valid: false,
+          error: 'INCOMPLETE_PROFILE',
+          message: 'O participante conectado precisa ter o curso preenchido para validar esta missão.'
+        };
+      }
+      if (myCourse === targetCourse) {
         return {
           valid: false,
           error: 'CRITERIA_NOT_MET',
@@ -255,7 +304,14 @@ export async function validateMissionProof(
 
     if (missionId === 'network_type') {
       const targetType = (targetData?.participantType || targetData?.participant_type || '').trim();
-      if (!targetType || targetType === 'Aluno da UFU' || targetType === 'Aluno UFU Graduação') {
+      if (!targetType) {
+        return {
+          valid: false,
+          error: 'INCOMPLETE_PROFILE',
+          message: 'O participante conectado não possui tipo de participante informado no perfil.'
+        };
+      }
+      if (targetType === 'Aluno da UFU' || targetType === 'Aluno UFU Graduação') {
         return {
           valid: false,
           error: 'CRITERIA_NOT_MET',
@@ -266,7 +322,21 @@ export async function validateMissionProof(
     }
 
     if (missionId === 'network_period') {
-      const targetPeriod = Number(targetData?.period ?? targetData?.periodo);
+      const rawPeriod = targetData?.period ?? targetData?.periodo;
+      if (rawPeriod === undefined || rawPeriod === null || (typeof rawPeriod === 'string' && !rawPeriod.trim())) {
+        return {
+          valid: false,
+          error: 'INCOMPLETE_PROFILE',
+          message: 'O participante conectado não possui período informado no perfil.'
+        };
+      }
+      let targetPeriod = Number(rawPeriod);
+      if (Number.isNaN(targetPeriod) && typeof rawPeriod === 'string') {
+        const match = rawPeriod.match(/\d+/);
+        if (match) {
+          targetPeriod = Number(match[0]);
+        }
+      }
       if (targetPeriod !== 1) {
         return {
           valid: false,
@@ -359,8 +429,46 @@ export async function validateMissionProof(
   if (missionId === 'sponsor_visit' || missionId === 'secret_qr') {
     const scanned = metadata?.scannedCode || metadata?.token || referenceId;
     if (missionId === 'sponsor_visit') {
-      const validCodes = ['kanastra_code', 'sponsor_visit', 'Kanastra'];
-      if (!scanned || (!validCodes.includes(scanned) && typeof scanned === 'string' && !scanned.toLowerCase().includes('kanastra'))) {
+      const defaultValidCodes = ['kanastra_code', 'sponsor_visit', 'Kanastra'];
+      const targetSponsor = (
+        missionData.autoConfig?.targetId ||
+        missionData.sponsorId ||
+        metadata?.sponsor ||
+        metadata?.company ||
+        ''
+      )
+        .toString()
+        .trim()
+        .toLowerCase();
+      const customCodes: string[] = Array.isArray(missionData.validCodes) ? missionData.validCodes : [];
+
+      const scannedStr = typeof scanned === 'string' ? scanned.trim() : '';
+      const scannedLower = scannedStr.toLowerCase();
+
+      let isMatch =
+        defaultValidCodes.some((c) => c.toLowerCase() === scannedLower) ||
+        scannedLower.includes('kanastra');
+
+      if (!isMatch && customCodes.some((c) => c.toLowerCase() === scannedLower)) {
+        isMatch = true;
+      }
+
+      if (!isMatch && targetSponsor && (scannedLower.includes(targetSponsor) || targetSponsor.includes(scannedLower))) {
+        isMatch = true;
+      }
+
+      // Suporta outros patrocinadores parceiros do evento (ex: Levty, Sankhya, Neospace, Sebrae, Bayer, Aimorés, Hyperflow)
+      const partnerSponsors = ['levty', 'sankhya', 'neospace', 'sebrae', 'bayer', 'aimores', 'aimorés', 'hyperflow'];
+      if (
+        !isMatch &&
+        partnerSponsors.some(
+          (p) => scannedLower.includes(p) || scannedLower === `${p}_code` || scannedLower === `sponsor_${p}`
+        )
+      ) {
+        isMatch = true;
+      }
+
+      if (!scannedStr || !isMatch) {
         return {
           valid: false,
           error: 'INVALID_QR_CODE',

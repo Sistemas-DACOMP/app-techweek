@@ -1,8 +1,25 @@
-import { describe, it, expect } from 'vitest';
+// @vitest-environment happy-dom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+
+vi.mock('../../src/lib/firebase', () => ({
+  db: {},
+  storage: {},
+  auth: {},
+}));
+
+vi.mock('../../src/lib/feedService', () => ({
+  uploadFeedMedia: vi.fn().mockResolvedValue({ url: 'https://cdn.exemplo.com/avatar.webp' }),
+}));
+
 import SponsorSettings from '../../src/components/sponsor/SponsorSettings';
-import { DEFAULT_QUALIFICATION_TAGS, DEFAULT_WHATSAPP_TEMPLATES } from '../../src/lib/sponsorSettingsService';
+import {
+  DEFAULT_QUALIFICATION_TAGS,
+  DEFAULT_WHATSAPP_TEMPLATES,
+  getSponsorSettings,
+} from '../../src/lib/sponsorSettingsService';
 
 describe('SponsorSettings UI Component', () => {
   const defaultProps = {
@@ -10,6 +27,15 @@ describe('SponsorSettings UI Component', () => {
     companyName: 'Kanastra',
     onSettingsSaved: () => {}
   };
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
 
   describe('Estrutura e Acessibilidade Geral', () => {
     it('renderiza o cabeçalho e descrição do painel de configurações', () => {
@@ -159,4 +185,96 @@ describe('SponsorSettings UI Component', () => {
       expect(html).toContain('min-h-[44px]');
     });
   });
+
+  describe('Interações Reais do Usuário — Abas, Perfil no Feed, Templates e Tags (ERR-045)', () => {
+    it('alterna entre abas e salva alterações no Perfil do Feed com sanitização do @handle', () => {
+      const onSettingsSaved = vi.fn();
+      const { container } = render(
+        React.createElement(SponsorSettings, {
+          ...defaultProps,
+          onSettingsSaved,
+        })
+      );
+
+      const handleInput = container.querySelector('#feed-handle-input');
+      const displayNameInput = container.querySelector('#feed-display-name-input');
+
+      fireEvent.change(handleInput, { target: { value: 'Kanastra Tech!!' } });
+      fireEvent.change(displayNameInput, { target: { value: 'Kanastra Oficial' } });
+
+      const saveFeedBtn = screen.getByRole('button', { name: /salvar perfil do feed/i });
+      fireEvent.click(saveFeedBtn);
+
+      expect(onSettingsSaved).toHaveBeenCalledTimes(1);
+      const saved = getSponsorSettings('kanastra');
+      expect(saved.feedProfile.handle).toBe('@kanastratech');
+      expect(saved.feedProfile.displayName).toBe('Kanastra Oficial');
+    });
+
+    it('adiciona nova tag, remove tag existente e restaura tags padrão na aba Mensagens & Tags', () => {
+      const onSettingsSaved = vi.fn();
+      render(
+        React.createElement(SponsorSettings, {
+          ...defaultProps,
+          defaultSection: 'messages_tags',
+          onSettingsSaved,
+        })
+      );
+
+      const tagInput = screen.getByPlaceholderText(/nova tag \(ex: ia, frontend\)/i);
+      fireEvent.change(tagInput, { target: { value: 'Python' } });
+
+      const addBtn = screen.getByRole('button', { name: /adicionar/i });
+      fireEvent.click(addBtn);
+
+      expect(getSponsorSettings('kanastra').tags).toContain('Python');
+      expect(onSettingsSaved).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          tags: expect.arrayContaining(['Python']),
+        })
+      );
+
+      const removePythonBtn = screen.getByRole('button', { name: 'Remover tag Python' });
+      fireEvent.click(removePythonBtn);
+      expect(getSponsorSettings('kanastra').tags).not.toContain('Python');
+
+      // Remove mais uma tag e restaura o padrão
+      fireEvent.click(screen.getByRole('button', { name: `Remover tag ${DEFAULT_QUALIFICATION_TAGS[0]}` }));
+      expect(getSponsorSettings('kanastra').tags.length).toBe(DEFAULT_QUALIFICATION_TAGS.length - 1);
+
+      fireEvent.click(screen.getByRole('button', { name: /restaurar tags padrão/i }));
+      expect(getSponsorSettings('kanastra').tags).toEqual(DEFAULT_QUALIFICATION_TAGS);
+    });
+
+    it('edita o texto de um modelo de WhatsApp, insere variável dinâmica e salva configurações', () => {
+      const onSettingsSaved = vi.fn();
+      const { container } = render(
+        React.createElement(SponsorSettings, {
+          ...defaultProps,
+          defaultSection: 'messages_tags',
+          onSettingsSaved,
+        })
+      );
+
+      const editor = container.querySelector('#template-text-editor');
+      fireEvent.change(editor, {
+        target: { value: 'Olá {nome}, gostamos do seu perfil na {empresa}!' },
+      });
+
+      const cursoVarBtn = screen.getByTitle('Insere o curso do aluno');
+      fireEvent.click(cursoVarBtn);
+
+      expect(editor.value).toContain('{curso}');
+
+      const saveTplBtn = screen.getByRole('button', { name: /salvar alterações/i });
+      fireEvent.click(saveTplBtn);
+
+      const saved = getSponsorSettings('kanastra');
+      const activeTpl = saved.templates.find((t) => t.id === 'recruiter_outreach');
+      expect(activeTpl.text).toContain('Olá {nome}, gostamos do seu perfil na {empresa}!');
+      expect(activeTpl.text).toContain('{curso}');
+      expect(onSettingsSaved).toHaveBeenCalled();
+    });
+  });
 });
+

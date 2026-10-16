@@ -49,6 +49,14 @@ export function createFakeDb() {
         };
         return q;
       },
+      limit(n: number) {
+        return {
+          __query: true,
+          _limit: n,
+          _paths: () => childrenOf(colPath).slice(0, n),
+          get: async () => querySnap(childrenOf(colPath).slice(0, n))
+        };
+      },
       __col: true,
       _paths: () => childrenOf(colPath),
       get: async () => querySnap(childrenOf(colPath))

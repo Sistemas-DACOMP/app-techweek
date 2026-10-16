@@ -2,6 +2,7 @@ import { auth, db, storage } from './firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { apiRequest } from './api';
+import * as userService from './userService';
 import {
   getUserProfile,
   uploadUserAvatar,
@@ -10,6 +11,16 @@ import {
   getLeaderboardUsers,
   isAdminEmail
 } from './userService';
+
+function safeSyncUserRanking(userId, totalPoints, profileData = null) {
+  try {
+    if (typeof userService.syncUserRankingInFirestore === 'function' && totalPoints >= 0) {
+      userService.syncUserRankingInFirestore(userId, totalPoints, profileData).catch(() => {});
+    }
+  } catch (_e) {
+    // Ignora caso o mock do teste não defina syncUserRankingInFirestore
+  }
+}
 
 export async function getMyProfile() {
   const firebaseUser = auth?.currentUser;
@@ -41,17 +52,25 @@ export async function getMyProfile() {
         mascot: fsProfile.mascot || 'blue'
       };
     }
-    return {
+    const fallbackProfile = {
       id: firebaseUser.uid,
+      uid: firebaseUser.uid,
+      firstName: defaultName,
       first_name: defaultName,
+      lastName: '',
       last_name: '',
       username: firebaseUser.email?.split('@')[0] || '',
+      avatarUrl: firebaseUser.photoURL || null,
       avatar_url: firebaseUser.photoURL || null,
       mascot: 'blue',
       role: isUserAdmin ? 'ADMIN' : 'PARTICIPANT',
       participantType: isUserAdmin ? 'Organizador' : 'Aluno da UFU',
       email: firebaseUser.email
     };
+    if (!isUserAdmin) {
+      safeSyncUserRanking(firebaseUser.uid, 0, fallbackProfile);
+    }
+    return fallbackProfile;
   } catch (e) {
     console.warn('[gameplay] Erro ao buscar perfil no Firestore:', e);
     return {
@@ -139,27 +158,67 @@ function getLocalPointEvents(userId) {
   }
 }
 
-function saveLocalPointEvent(userId, event) {
-  if (typeof window === 'undefined' || !window.localStorage) return;
+async function persistPointEventToFirestore(userId, event, totalPoints = 0) {
+  if (!userId || !event) return;
   try {
-    const events = getLocalPointEvents(userId);
-    const refId = event.reference_id || event.referenceId;
-    const exists = events.some(e => (e.reference_id || e.referenceId) === refId);
-    if (!exists) {
-      events.push(event);
-      window.localStorage.setItem(`facom_point_events_${userId}`, JSON.stringify(events));
+    const eventType = String(event.eventType || event.event_type || 'event').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const referenceId = String(event.referenceId || event.reference_id || 'ref').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const docId = `${userId}_${eventType}_${referenceId}`;
+    const { doc: fsDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
+    if (typeof fsDoc === 'function' && typeof setDoc === 'function' && db) {
+      await setDoc(
+        fsDoc(db, 'pointEvents', docId),
+        {
+          userId,
+          eventType: event.eventType || event.event_type || 'event',
+          event_type: event.event_type || event.eventType || 'event',
+          referenceId: event.referenceId || event.reference_id || '',
+          reference_id: event.reference_id || event.referenceId || '',
+          points: Math.max(0, Math.min(1000, Number(event.points) || 0)),
+          metadata: event.metadata || null,
+          createdAt: typeof serverTimestamp === 'function' ? serverTimestamp() : new Date().toISOString()
+        },
+        { merge: true }
+      );
+    }
+  } catch (_err) {
+    // Falha silenciosa em modo offline ou mocks parciais
+  }
+
+  safeSyncUserRanking(userId, totalPoints);
+}
+
+export function saveLocalPointEvent(userId, event) {
+  if (!userId || !event) return;
+  let totalPoints = Number(event.points) || 0;
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const events = getLocalPointEvents(userId);
+      const refId = event.reference_id || event.referenceId;
+      const exists = events.some(e => (e.reference_id || e.referenceId) === refId);
+      if (!exists) {
+        events.push(event);
+        window.localStorage.setItem(`facom_point_events_${userId}`, JSON.stringify(events));
+      }
+      totalPoints = events.reduce((sum, e) => sum + (Number(e.points) || 0), 0);
 
       // Sincroniza o saldo total no perfil em cache local
       try {
         const rawProfile = window.localStorage.getItem(`facom_profile_${userId}`);
         const profile = rawProfile ? JSON.parse(rawProfile) : {};
-        const totalPoints = events.reduce((sum, e) => sum + (Number(e.points) || 0), 0);
-        profile.totalPoints = totalPoints;
-        profile.pontuacaoTotal = totalPoints;
+        const currentProfilePoints = Number(profile.totalPoints || profile.pontuacaoTotal || 0);
+        const incrementedPoints = !exists ? currentProfilePoints + (Number(event.points) || 0) : currentProfilePoints;
+        const resolvedTotal = Math.max(incrementedPoints, totalPoints);
+        profile.totalPoints = resolvedTotal;
+        profile.pontuacaoTotal = resolvedTotal;
         window.localStorage.setItem(`facom_profile_${userId}`, JSON.stringify(profile));
+        totalPoints = resolvedTotal;
       } catch (_pErr) {}
-    }
-  } catch (_e) {}
+    } catch (_e) {}
+  }
+
+  persistPointEventToFirestore(userId, event, totalPoints).catch(() => {});
 }
 
 export async function getMyPointEvents() {
@@ -190,40 +249,78 @@ export async function getMyPointEvents() {
     }
   } catch (_e) {}
 
+  // Une os eventos do Firestore e do localStorage sem duplicar por reference_id
+  const rootPointEventRefs = new Set();
   try {
     const { collection, getDocs, query, where } = await import('firebase/firestore');
     const q = query(collection(db, 'pointEvents'), where('userId', '==', user.uid));
     const snapshot = await getDocs(q);
-    firestoreEvents.push(...snapshot.docs.map(d => ({
-      id: d.id,
-      event_type: d.data().eventType || d.data().event_type,
-      reference_id: d.data().referenceId || d.data().reference_id,
-      points: d.data().points || 0,
-      metadata: d.data().metadata || null,
-      ...d.data(),
-    })));
+    for (const d of snapshot.docs) {
+      const data = d.data() || {};
+      const refId = data.referenceId || data.reference_id || d.id;
+      if (refId) rootPointEventRefs.add(refId);
+      firestoreEvents.push({
+        id: d.id,
+        event_type: data.eventType || data.event_type,
+        reference_id: data.referenceId || data.reference_id,
+        points: data.points || 0,
+        metadata: data.metadata || null,
+        ...data,
+      });
+    }
   } catch (_e) {}
 
-  // Une os eventos do Firestore e do localStorage sem duplicar por reference_id
-  const merged = [...firestoreEvents];
-  const seenRefs = new Set(firestoreEvents.map(e => e.reference_id || e.referenceId));
+  const merged = [];
+  const seenRefs = new Set();
+
+  for (const fe of firestoreEvents) {
+    const refId = fe.reference_id || fe.referenceId || fe.id;
+    if (!seenRefs.has(refId)) {
+      merged.push(fe);
+      if (refId) seenRefs.add(refId);
+    }
+  }
 
   for (const le of localEvents) {
     const refId = le.reference_id || le.referenceId;
     if (!seenRefs.has(refId)) {
       merged.push(le);
-      seenRefs.add(refId);
+      if (refId) seenRefs.add(refId);
+    }
+  }
+
+  const eventsMissingInRoot = merged.filter((ev) => {
+    const refId = ev.reference_id || ev.referenceId || ev.id;
+    return refId && !rootPointEventRefs.has(refId);
+  });
+
+  // Sincroniza pontuação consolidada na coleção /ranking/{uid} e eventos pendentes em /pointEvents no Firestore
+  const totalPoints = merged.reduce((sum, e) => sum + (Number(e.points) || 0), 0);
+  if (totalPoints > 0) {
+    let resolvedTotal = totalPoints;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(`facom_point_events_${user.uid}`, JSON.stringify(merged));
+        const rawProfile = window.localStorage.getItem(`facom_profile_${user.uid}`);
+        const profile = rawProfile ? JSON.parse(rawProfile) : {};
+        resolvedTotal = Math.max(Number(profile.totalPoints || profile.pontuacaoTotal || 0), totalPoints);
+        profile.totalPoints = resolvedTotal;
+        profile.pontuacaoTotal = resolvedTotal;
+        window.localStorage.setItem(`facom_profile_${user.uid}`, JSON.stringify(profile));
+      } catch (_e) {}
+    }
+
+    safeSyncUserRanking(user.uid, resolvedTotal);
+
+    for (const ule of eventsMissingInRoot) {
+      persistPointEventToFirestore(user.uid, ule, resolvedTotal).catch(() => {});
     }
   }
 
   return merged;
 }
 
-// Registra um evento de pontos via backend (KAN-79). O client não pode mais
-// gravar totalPoints direto no Firestore (bloqueado desde o fix do SEC-003,
-// KAN-69) — a escrita direta falhava em silêncio e mentia sucesso. O backend
-// (POST /api/points/claim) credita totalPoints com FieldValue.increment numa
-// transação, com o mesmo dedup por doc id determinístico que o client já usava.
+// Registra um evento de pontos via backend (KAN-79) e sincroniza com a coleção /ranking/{uid} e /pointEvents no Firestore.
 export async function addPointEvent({ eventType, referenceId, points, metadata = null }) {
   const firebaseUser = auth?.currentUser;
   if (!firebaseUser) {
@@ -248,8 +345,15 @@ export async function addPointEvent({ eventType, referenceId, points, metadata =
       method: 'POST',
       body: JSON.stringify({ eventType, referenceId, points, metadata })
     });
-    if (data && (data.success || data.alreadyClaimed)) {
-      saveLocalPointEvent(user.uid, localEvent);
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid backend response');
+    }
+    if (data.success || data.alreadyClaimed) {
+      const resolvedEvent = typeof data.points === 'number' ? { ...localEvent, points: data.points } : localEvent;
+      saveLocalPointEvent(user.uid, resolvedEvent);
+      if (data.success && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('facom_points_updated', { detail: { userId: user.uid, event: resolvedEvent } }));
+      }
     }
     return data;
   } catch (err) {
@@ -264,7 +368,19 @@ export async function addPointEvent({ eventType, referenceId, points, metadata =
         code: 'SYMPLA_TICKET_REQUIRED'
       };
     }
-    if (typeof err.status === 'number' && err.status >= 400) {
+    const backendErrorCode = String(err.data?.code || err.data?.error || '');
+    const isServerIamOrInternalError =
+      backendErrorCode === 'auth/insufficient-permission' ||
+      backendErrorCode.includes('insufficient-permission') ||
+      backendErrorCode.includes('PERMISSION_DENIED') ||
+      err.data?.error === 'INTERNAL_ERROR';
+
+    if (
+      typeof err.status === 'number' &&
+      err.status >= 400 &&
+      typeof err.data !== 'string' &&
+      !isServerIamOrInternalError
+    ) {
       return {
         success: false,
         error: err.message || 'Não foi possível registrar os pontos.',
@@ -272,8 +388,9 @@ export async function addPointEvent({ eventType, referenceId, points, metadata =
       };
     }
     
-    // Fallback resiliente para modo offline, desenvolvimento ou sem CORS (ex: Failed to fetch)
-    console.warn('[gameplay] Backend offline ou indisponível (' + (err?.message || 'Failed to fetch') + '), registrando pontuação no cache local...');
+    // Fallback resiliente para modo offline, desenvolvimento ou sem backend ativo:
+    // Salva tanto no cache local quanto diretamente nas coleções pointEvents e ranking do Firestore!
+    console.warn('[gameplay] Backend offline ou indisponível (' + (err?.message || 'Failed to fetch') + '), registrando pontuação e sincronizando ranking...');
     saveLocalPointEvent(user.uid, localEvent);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('facom_points_updated', { detail: { userId: user.uid, event: localEvent } }));

@@ -5,6 +5,9 @@
 // db.collection(...).doc(id) tem que passar por aqui primeiro.
 const VALID_ID = /^[A-Za-z0-9_-]{1,200}$/;
 
-export function isValidFirestoreId(value: string): boolean {
+export function isValidFirestoreId(value: unknown): boolean {
+  if (typeof value !== 'string' || !value.trim()) {
+    return false;
+  }
   return VALID_ID.test(value);
 }
