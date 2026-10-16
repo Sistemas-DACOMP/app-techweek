@@ -142,23 +142,33 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
       <div className="ds-scrim" style={{ zIndex: SYMPLA_SHEET_Z }} aria-hidden="true" onClick={onClose} />
       <div
         ref={sheetRef}
-        className="ds-sheet relative !px-[22px] border-t border-amber-500/20 shadow-[0_-8px_32px_rgba(0,0,0,0.5)]"
-        style={{ zIndex: SYMPLA_SHEET_Z + 1, ...keyboardStyle }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="sympla-sheet-title"
+        className="fixed inset-x-0 bottom-0 z-[2201] mx-auto flex w-full max-w-[430px] flex-col overflow-hidden rounded-t-[28px] border-t border-amber-500/35 bg-[#0C1024] bg-[linear-gradient(180deg,rgba(217,119,6,0.14)_0%,rgba(147,51,234,0.08)_32%,rgba(12,16,36,0)_100%)] px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 text-text shadow-[0_-12px_44px_rgba(0,0,0,0.7)] animate-[dsSheetUp_250ms_var(--ease-out)] max-h-[92dvh] overflow-y-auto overscroll-contain transition-[bottom,max-height] duration-150"
+        style={keyboardStyle}
       >
+        {/* Marca d'água com cadeado de bloqueio na esquerda (estética oficial dos bloqueios) */}
+        <Lock
+          className="pointer-events-none absolute -bottom-10 -left-6 size-48 text-[rgba(245,158,11,0.045)] select-none"
+          aria-hidden="true"
+          strokeWidth={1.5}
+        />
+
+        {/* Alça superior nativa de bottom sheet do App */}
+        <div className="mx-auto mb-3 h-1 w-10 shrink-0 rounded-full bg-white/20" aria-hidden="true" />
+
         <button
           type="button"
           onClick={onClose}
           aria-label="Fechar"
-          className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-full text-text-3 transition-colors hover:bg-white/[0.08] hover:text-text active:scale-95"
+          className="absolute right-4 top-3.5 flex size-8 items-center justify-center rounded-full text-text-3 transition-colors hover:bg-white/[0.08] hover:text-text active:scale-95"
         >
           <X size={18} strokeWidth={2.2} aria-hidden="true" />
         </button>
 
         {state === 'done' ? (
-          <div className="flex flex-col items-center py-5 text-center" role="status">
+          <div className="flex flex-col items-center py-6 text-center" role="status">
             <span
               className="flex size-14 items-center justify-center rounded-full bg-ok text-[#0A2A1C] shadow-[0_0_24px_rgba(111,216,166,0.35)]"
               style={{ animation: 'dsPop 380ms var(--spring) both' }}
@@ -181,49 +191,80 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
           </div>
         ) : (
           <>
-            <div className="mt-0.5 flex items-start gap-3.5 pr-8">
-              <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-amber-500/35 bg-[linear-gradient(135deg,rgba(217,119,6,0.22)_0%,rgba(147,51,234,0.18)_100%)] text-gold shadow-[0_0_18px_rgba(245,158,11,0.15)]">
-                <Sparkles size={24} strokeWidth={2.2} aria-hidden="true" />
+            <div className="flex items-start gap-3 pr-8">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-amber-500/35 bg-[linear-gradient(135deg,rgba(217,119,6,0.24)_0%,rgba(147,51,234,0.18)_100%)] text-gold shadow-[0_0_16px_rgba(245,158,11,0.15)]">
+                <Sparkles size={22} strokeWidth={2.2} aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
                 <h2 id="sympla-sheet-title" className="m-0 text-[20px] font-black tracking-tight text-text sm:text-[22px]">
                   Passaporte Completo
                 </h2>
-                <p className="m-0 mt-0.5 text-[13px] leading-snug text-text-2">
-                  Vincule seu ingresso do Sympla para liberar acesso total às atividades e missões.
+                <p className="m-0 mt-0.5 text-[12.5px] leading-snug text-text-2">
+                  Vincule seu ingresso Sympla para liberar atividades exclusivas e missões.
                 </p>
               </div>
             </div>
 
             {featureName && (
-              <div className="mt-3 inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-gold">
-                <Lock size={12} strokeWidth={2.5} className="shrink-0" aria-hidden="true" />
+              <div className="mt-2.5 inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-gold">
+                <Lock size={12} strokeWidth={2.4} className="shrink-0" aria-hidden="true" />
                 <span className="truncate">Necessário para {featureName}</span>
               </div>
             )}
 
-            <ul className="m-0 mt-4 grid list-none grid-cols-3 gap-2.5 p-0">
-              {BENEFITS.map(({ title, subtitle, Icon, badgeColor }) => (
-                <li
-                  key={title}
-                  className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-white/[0.08] bg-surface-raised/70 px-2 py-3 text-center transition-all hover:bg-surface-raised"
-                >
-                  <span className={`flex size-8 items-center justify-center rounded-xl border ${badgeColor}`}>
-                    <Icon size={17} strokeWidth={2.2} aria-hidden="true" />
+            {/* Bloco unificado de benefícios: elegante, compacto e sem colunas truncadas */}
+            <div className="mt-3.5 rounded-2xl border border-white/[0.08] bg-surface-raised/70 p-3 backdrop-blur-sm">
+              <div className="mb-2.5 flex items-center justify-between border-b border-line/60 pb-1.5">
+                <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-text-3">
+                  Benefícios do Passaporte
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gold">
+                  <Lock size={11} strokeWidth={2.4} aria-hidden="true" /> Acesso Total
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="flex flex-col items-center gap-1 rounded-xl bg-white/[0.03] p-2 transition-colors">
+                  <span className="flex size-7 items-center justify-center rounded-lg border border-[#67D4E8]/25 bg-[#67D4E8]/10 text-[#67D4E8]">
+                    <GraduationCap size={15} strokeWidth={2.4} aria-hidden="true" />
                   </span>
                   <span className="text-[12px] font-extrabold leading-tight text-text">
-                    {title}
+                    Workshops
                   </span>
-                  <span className="text-[10.5px] font-medium leading-tight text-text-3">
-                    {subtitle}
+                  <span className="text-[10px] font-medium leading-tight text-text-3">
+                    Vagas na grade
                   </span>
-                </li>
-              ))}
-            </ul>
+                </div>
 
-            <form onSubmit={handleSubmit} noValidate className="mt-4">
+                <div className="flex flex-col items-center gap-1 rounded-xl bg-white/[0.03] p-2 transition-colors">
+                  <span className="flex size-7 items-center justify-center rounded-lg border border-[#B9A6F5]/25 bg-[#B9A6F5]/10 text-[#B9A6F5]">
+                    <Sparkles size={15} strokeWidth={2.4} aria-hidden="true" />
+                  </span>
+                  <span className="text-[12px] font-extrabold leading-tight text-text">
+                    Missões
+                  </span>
+                  <span className="text-[10px] font-medium leading-tight text-text-3">
+                    Desafios & prêmios
+                  </span>
+                </div>
+
+                <div className="flex flex-col items-center gap-1 rounded-xl bg-white/[0.03] p-2 transition-colors">
+                  <span className="flex size-7 items-center justify-center rounded-lg border border-amber-500/25 bg-amber-500/10 text-gold">
+                    <Trophy size={15} strokeWidth={2.4} aria-hidden="true" />
+                  </span>
+                  <span className="text-[12px] font-extrabold leading-tight text-text">
+                    Ranking
+                  </span>
+                  <span className="text-[10px] font-medium leading-tight text-text-3">
+                    Pontos oficiais
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} noValidate className="mt-3.5">
               <div>
-                <label htmlFor="sympla-email" className="field-label">
+                <label htmlFor="sympla-email" className="field-label text-xs font-bold text-text-2">
                   E-mail usado na compra do ingresso
                 </label>
                 <input
@@ -233,7 +274,7 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
                   inputMode="email"
                   autoComplete="email"
                   placeholder="seu-email@exemplo.com"
-                  className="field !min-h-[50px] !rounded-2xl !px-4"
+                  className="field !min-h-[48px] !rounded-xl !bg-[#131B3A] !border-[#26305A] !px-4 text-[14px] text-text placeholder:text-text-4 focus:!border-amber-500/60 focus:!ring-2 focus:!ring-amber-500/20"
                   value={email}
                   onFocus={handleInputFocus}
                   onChange={(e) => {
@@ -244,25 +285,26 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
                   aria-describedby="sympla-email-hint"
                 />
                 {state === 'error' ? (
-                  <p id="sympla-email-hint" className="field-error m-0" role="alert">
+                  <p id="sympla-email-hint" className="field-error m-0 mt-1.5" role="alert">
                     {message}
                   </p>
                 ) : (
-                  <p id="sympla-email-hint" className="m-0 mt-1.5 text-xs text-text-3">
+                  <p id="sympla-email-hint" className="m-0 mt-1.5 text-[11.5px] text-text-3">
                     A gente procura seu ingresso no Sympla com esse e-mail.
                   </p>
                 )}
               </div>
 
+              {/* Botão híbrido TechWeek: mistura o Dourado do bloqueio/passaporte com o Roxo da identidade do app */}
               <button
                 type="submit"
-                className="btn btn-block mt-3.5 !min-h-[50px] rounded-2xl !bg-[linear-gradient(135deg,#F59E0B,#D97706)] !text-[#1F1603] text-[15px] !font-black shadow-[0_4px_16px_rgba(217,119,6,0.3)] transition-transform active:scale-[0.98] hover:brightness-105"
+                className="btn btn-block mt-3.5 !min-h-[50px] rounded-xl !bg-[linear-gradient(135deg,#D97706_0%,#9333EA_100%)] !text-white text-[15px] !font-black shadow-[0_4px_18px_rgba(217,119,6,0.25)] transition-all active:scale-[0.98] hover:brightness-110"
                 disabled={state === 'loading'}
               >
                 {state === 'loading' ? (
                   <>
                     <span
-                      className="size-[18px] rounded-full border-2 border-[#1F1603]/30 border-t-[#1F1603]"
+                      className="size-[18px] rounded-full border-2 border-white/30 border-t-white"
                       style={{ animation: 'dsSpin 800ms linear infinite' }}
                       aria-hidden="true"
                     />
@@ -277,8 +319,8 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
               </button>
             </form>
 
-            <div className="mt-4 border-t border-line/60 pt-3.5">
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 px-3.5 transition-colors hover:bg-white/[0.04]">
+            <div className="mt-3.5 border-t border-line/60 pt-3">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5 px-3 transition-colors hover:bg-white/[0.04]">
                 <div className="min-w-0 flex-1">
                   <span className="block text-xs font-bold text-text">
                     Ainda não tem ingresso?
@@ -291,7 +333,7 @@ function LinkTicketSheet({ onClose, onLinked, featureName }) {
                   href={SYMPLA_EVENT_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs font-extrabold text-gold transition-all hover:bg-amber-500/20 active:scale-95 no-underline"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-gold transition-all hover:bg-amber-500/20 active:scale-95 no-underline"
                 >
                   <span>Comprar</span>
                   <ExternalLink size={12} strokeWidth={2.4} aria-hidden="true" className="opacity-80" />
