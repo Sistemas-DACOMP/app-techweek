@@ -410,25 +410,25 @@ export default function Challenges() {
         <ConquistasTabs active={activeTab === 'passport' ? 'passport' : 'missions'} />
 
         {!hasSymplaTicket && (
-          <div className="mt-3.5 rounded-2xl border border-[rgba(107,124,255,0.35)] bg-[linear-gradient(135deg,rgba(37,99,235,0.18)_0%,rgba(147,51,234,0.14)_100%)] p-4 text-left shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
+          <div className="mt-3.5 rounded-2xl border border-[rgba(245,158,11,0.35)] bg-[linear-gradient(135deg,rgba(217,119,6,0.18)_0%,rgba(147,51,234,0.14)_100%)] p-4 text-left shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
             <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-action/20 text-link">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/20 text-gold">
                 <Sparkles size={20} aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
                 <h3 className="m-0 text-sm font-extrabold text-text leading-tight">
-                  🎮 Gamificação Oficial Tech Week
+                  Gamificação Oficial Tech Week
                 </h3>
                 <p className="mt-1 mb-0 text-xs text-text-2 leading-relaxed">
-                  As missões e prêmios são exclusivos para participantes com ingresso. Vincule seu Sympla para desbloquear o envio e entrar no ranking!
+                  As missões, pontos no ranking e prêmios são exclusivos do <strong className="text-gold font-bold">Passaporte Completo</strong>. Ative seu ingresso para começar a jogar!
                 </p>
                 <button
                   type="button"
                   onClick={() => setShowSymplaModal(true)}
-                  className="press mt-2.5 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-action px-3.5 text-xs font-extrabold text-white transition hover:bg-action/90"
+                  className="press mt-2.5 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[linear-gradient(135deg,#D97706,#B45309)] px-3.5 text-xs font-extrabold text-white shadow transition hover:opacity-95"
                 >
                   <Lock size={13} aria-hidden="true" />
-                  Vincular ingresso Sympla
+                  Desbloquear Passaporte Completo
                 </button>
               </div>
             </div>
@@ -856,11 +856,12 @@ function FlashBanner({ mission, countdown, fraction, onJoin, hasTicket = true, o
         </span>
         <button
           type="button"
-          className="btn btn-action btn-sm press shrink-0 gap-1.5"
+          className="btn btn-action btn-sm press shrink-0 gap-1.5 !font-extrabold"
+          style={!hasTicket ? { background: 'linear-gradient(135deg, #D97706, #B45309)' } : undefined}
           onClick={!hasTicket ? onRequireSympla : onJoin}
         >
           {!hasTicket && <Lock size={13} aria-hidden="true" />}
-          {!hasTicket ? 'Vincular' : 'Participar'}
+          {!hasTicket ? 'Desbloquear' : 'Participar'}
         </button>
       </div>
       <div className="relative mt-3 h-1 overflow-hidden rounded-sm bg-surface-raised" aria-hidden="true">
@@ -940,9 +941,18 @@ function MissionCard({ mission, getIcon, onStart, done = false, hasTicket = true
   else if (secret) cardStyle = { background: 'linear-gradient(135deg, #1D1347, #0E0B26)', borderColor: 'rgba(167,139,250,0.45)', boxShadow: '0 10px 26px -14px rgba(124,58,237,0.8)' };
   else if (tier?.tint) cardStyle = { background: `linear-gradient(160deg, ${tier.tint}, var(--surface) 45%)`, borderColor: tier.cardLine };
   else if (style === 'relampago') cardStyle = { borderColor: 'rgba(245,158,11,0.28)' };
+  else if (!hasTicket) cardStyle = { borderColor: 'rgba(245,158,11,0.25)' };
 
   return (
     <article className="relative overflow-hidden rounded-[18px] border border-line bg-surface p-3.5" style={cardStyle}>
+      {!done && !hasTicket && (
+        <Lock
+          size={100}
+          strokeWidth={1.5}
+          className="pointer-events-none absolute -bottom-5 -right-3 text-[rgba(245,158,11,0.06)]"
+          aria-hidden="true"
+        />
+      )}
       {secret && (
         <>
           <span className="conq-dots absolute inset-0" aria-hidden="true" />
@@ -974,7 +984,7 @@ function MissionCard({ mission, getIcon, onStart, done = false, hasTicket = true
           {!done && !hasTicket && (
             <span className="inline-flex items-center gap-1 rounded-lg border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-2 py-0.5 text-xs font-extrabold text-gold">
               <Lock size={11} aria-hidden="true" />
-              Exclusivo Sympla
+              Exclusivo Passaporte
             </span>
           )}
           {!done && secret && hint && (
@@ -1001,13 +1011,13 @@ function MissionCard({ mission, getIcon, onStart, done = false, hasTicket = true
         ) : !hasTicket ? (
           <button
             type="button"
-            className="btn btn-action btn-sm press shrink-0 gap-1.5"
-            style={{ background: 'linear-gradient(135deg, #3B82F6, #6366F1)' }}
+            className="btn btn-action btn-sm press shrink-0 gap-1.5 !font-extrabold shadow-md"
+            style={{ background: 'linear-gradient(135deg, #D97706, #B45309)' }}
             onClick={onRequireSympla || onStart}
-            aria-label={`Vincular ingresso para desbloquear missão ${mission.title || mission.name}`}
+            aria-label={`Desbloquear missão ${mission.title || mission.name} com Passaporte Completo`}
           >
             <Lock size={13} aria-hidden="true" />
-            Vincular para Jogar
+            Desbloquear Missão
           </button>
         ) : (
           <button

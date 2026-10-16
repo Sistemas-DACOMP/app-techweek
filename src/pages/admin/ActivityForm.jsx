@@ -41,9 +41,9 @@ function AgendaPreview({ form, speakersSel = [] }) {
         <div className="flex items-center gap-2">
           <span style={{ color }}>{typeLabel(form.type)}</span>
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${
-            form.isOpenEvent ? 'bg-ok/15 text-ok' : 'bg-link/15 text-link'
+            form.isOpenEvent ? 'bg-ok/15 text-ok' : 'bg-gold/15 text-gold'
           }`}>
-            {form.isOpenEvent ? 'Evento Aberto' : 'Exclusivo Sympla'}
+            {form.isOpenEvent ? 'Entrada Livre' : 'Passaporte Completo'}
           </span>
         </div>
         <span className="text-you-text">+{Number(form.points) || 0} pts</span>
@@ -89,9 +89,9 @@ function OpenPreview({ form, speakersSel = [] }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-lg bg-[rgba(255,255,255,0.12)] px-2 py-0.5 text-[12px] font-bold">{typeLabel(form.type)}</span>
           <span className={`rounded-lg px-2 py-0.5 text-[12px] font-bold ${
-            form.isOpenEvent ? 'bg-ok/20 text-ok' : 'bg-link/20 text-link'
+            form.isOpenEvent ? 'bg-ok/20 text-ok' : 'bg-gold/20 text-gold'
           }`}>
-            {form.isOpenEvent ? 'Evento Aberto' : 'Exclusivo Sympla'}
+            {form.isOpenEvent ? 'Entrada Livre' : 'Passaporte Completo'}
           </span>
           <span className="pts-chip">+{Number(form.points) || 0} pts</span>
         </div>
@@ -595,7 +595,7 @@ export default function ActivityForm({ form, setForm, editingId, types, speakers
             <div className="mt-2 border-t border-line">
               <SwitchRow title="Limite de vagas" hint="Desligado, a atividade não tem lotação." checked={form.hasCapacityLimit} onChange={(v) => set({ hasCapacityLimit: v })} />
               <SwitchRow title="Exige inscrição no app" hint="A pessoa reserva a vaga antes de entrar." checked={form.requiresRegistration} onChange={(v) => set({ requiresRegistration: v })} />
-              <SwitchRow title="Evento Aberto (Não exige ingresso Sympla)" hint="Qualquer participante cadastrado no app pode se inscrever, mesmo sem ingresso Sympla." checked={form.isOpenEvent} onChange={(v) => set({ isOpenEvent: v })} />
+              <SwitchRow title="Entrada Livre (Não exige Passaporte Completo)" hint="Qualquer participante cadastrado no app pode se inscrever, mesmo sem Passaporte Completo." checked={form.isOpenEvent} onChange={(v) => set({ isOpenEvent: v })} />
             </div>
             <fieldset className="m-0 mt-3 border-0 p-0">
               <legend className="field-label">Como a presença é confirmada</legend>

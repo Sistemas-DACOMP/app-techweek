@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, X, MapPin, Users, Check, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Search, X, MapPin, Users, Check, ChevronRight, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
 import { onAuthChange } from '../lib/auth';
 import { useUser } from '../hooks/useUser';
 import ActivityModal, { SeatsLight, categoryOf, describeDay } from '../components/ActivityModal';
@@ -506,6 +506,7 @@ export default function Agenda() {
           status={activityStatuses[selectedActivity.id] || 'NONE'}
           isReserving={reservingId === selectedActivity.id}
           isCancelling={cancellingId === selectedActivity.id}
+          hasTicket={hasSymplaTicket}
           onReserve={handleReserve}
           onCancelReserve={handleCancelReserve}
           onClose={() => setSelectedActivity(null)}
@@ -585,6 +586,7 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
   const hasSeat = !readOnly && (status === 'BOOKED' || status === 'CHECKED_IN' || status === 'COMPLETED');
   const showLight = !hasSeat && status !== 'WAITING_LIST' && !isPast && !compact;
   const soldOut = !(typeof act.vagas_disponiveis === 'number' && act.vagas_disponiveis > 0);
+  const isLockedForUser = !readOnly && !hasTicket && !act.isOpenEvent && !hasSeat;
 
   let left;
   if (readOnly) {
@@ -606,7 +608,12 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
   } else if (isCurrent) {
     left = <span className="flex items-center gap-1.5 text-ok"><NowDot />Acontecendo agora</span>;
   } else if (!hasTicket && !act.isOpenEvent) {
-    left = <span className="text-link">Vincule o ingresso</span>;
+    left = (
+      <span className="inline-flex items-center gap-1 font-extrabold text-gold">
+        <Lock size={12} aria-hidden="true" />
+        Desbloquear com Passaporte
+      </span>
+    );
   } else if (soldOut) {
     left = <span className="text-warn">Entrar na lista de espera</span>;
   } else {
@@ -615,7 +622,7 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
 
   return (
     <div
-      className={`relative rounded-2xl border border-l-4 transition-transform duration-100 has-[>button:active]:scale-[0.98] pb-3 pl-4 pr-3.5 pt-3.5 ${isCurrent ? 'border-[#3D4BB0] bg-[#161F45]' : 'border-line bg-surface'} ${isPast ? 'opacity-60' : ''}`}
+      className={`relative rounded-2xl border border-l-4 transition-all duration-150 has-[>button:active]:scale-[0.98] pb-3 pl-4 pr-3.5 pt-3.5 ${isCurrent ? 'border-[#3D4BB0] bg-[#161F45]' : 'border-line bg-surface'} ${isPast ? 'opacity-60' : isLockedForUser ? 'opacity-75 hover:opacity-95' : ''}`}
       style={{ borderLeftColor: category.accent }}
     >
       {/* O cartão inteiro abre o painel; o botão cobre o cartão e o texto fica por cima sem capturar o toque */}
@@ -629,11 +636,16 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
       <div className="pointer-events-none relative">
         <div className="flex items-center gap-2">
           <span className="block text-xs font-extrabold" style={{ color: category.accent }}>{category.label}</span>
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
-            act.isOpenEvent ? 'bg-ok/15 text-ok' : 'bg-link/15 text-link'
-          }`}>
-            {act.isOpenEvent ? 'Evento Aberto' : 'Exclusivo Sympla'}
-          </span>
+          {act.isOpenEvent ? (
+            <span className="inline-flex items-center rounded-full bg-ok/15 px-2 py-0.5 text-[10px] font-bold text-ok">
+              Entrada Livre
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full border border-gold/30 bg-gold/15 px-2 py-0.5 text-[10px] font-extrabold text-gold">
+              <Lock size={10} aria-hidden="true" />
+              Passaporte Completo
+            </span>
+          )}
         </div>
         <span className="mt-1 block text-[15px] font-bold leading-[1.35]">{act.title}</span>
         {act.speaker && !compact && (

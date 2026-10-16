@@ -137,34 +137,38 @@ function MyBadge({ badge, points, onZoom, hasTicket = true, onLink }) {
         </div>
         <div className="mt-3 flex justify-center">
           {hasTicket ? (
-            <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] bg-[rgba(111,216,166,0.14)] px-3 text-xs font-extrabold text-ok">
+            <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] bg-[rgba(111,216,166,0.14)] px-3 text-xs font-black text-ok">
               <Check size={14} strokeWidth={2.6} aria-hidden="true" />
-              Ingresso Sympla vinculado
+              Passaporte Completo Ativo
             </span>
           ) : (
-            <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] bg-[rgba(107,124,255,0.18)] px-3 text-xs font-extrabold text-[#B4C0FF]">
-              Acesso a Eventos Abertos
+            <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] border border-line-2 bg-surface px-3 text-xs font-extrabold text-text-2">
+              Acesso Entrada Livre
             </span>
           )}
         </div>
 
         {!hasTicket && (
-          <div className="mt-3.5 rounded-2xl border border-[rgba(107,124,255,0.3)] bg-[rgba(37,99,235,0.12)] p-3.5 text-left">
+          <div className="mt-3.5 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-purple-500/10 to-transparent p-3.5 text-left shadow-[0_4px_16px_rgba(217,119,6,0.1)]">
             <div className="flex items-start gap-2.5">
-              <Ticket size={18} className="mt-0.5 shrink-0 text-link" aria-hidden="true" />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-gold">
+                <Lock size={16} aria-hidden="true" />
+              </div>
               <div className="min-w-0 flex-1">
-                <p className="m-0 text-[13px] font-bold text-text leading-snug">
-                  Quer acessar workshops exclusivos e pontuar no ranking?
+                <p className="m-0 text-[13px] font-black text-text leading-snug">
+                  Acesse workshops fechados e pontue no ranking oficial!
                 </p>
-                <p className="mt-1 mb-0 text-[12px] text-text-2">
-                  Vincule seu ingresso Sympla para liberar todas as atividades e concorrer a prêmios!
+                <p className="mt-1 mb-0 text-[12px] text-text-2 leading-relaxed">
+                  Desbloqueie o seu Passaporte Completo para liberar todas as atividades exclusivas, missões e concorrer aos prêmios.
                 </p>
                 <button
                   type="button"
                   onClick={onLink}
-                  className="press mt-2.5 inline-flex h-9 items-center justify-center rounded-xl bg-action px-3.5 text-xs font-extrabold text-white transition hover:bg-action/90"
+                  className="press mt-2.5 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border-none px-3.5 text-xs font-black text-black shadow-[0_4px_12px_rgba(217,119,6,0.3)] transition hover:opacity-95"
+                  style={{ background: 'linear-gradient(135deg, #D97706, #B45309)' }}
                 >
-                  Vincular ingresso Sympla
+                  <Lock size={13} aria-hidden="true" />
+                  Desbloquear com Passaporte
                 </button>
               </div>
             </div>
@@ -240,13 +244,13 @@ function OfflineBadge({ badge, hasTicket = true }) {
         </div>
         <div className="mt-3 flex items-center gap-1.5 text-[13px] font-bold">
           {hasTicket ? (
-            <span className="flex items-center gap-1.5 text-ok">
+            <span className="flex items-center gap-1.5 text-ok font-extrabold">
               <Check size={15} strokeWidth={2.6} aria-hidden="true" />
-              Salvo neste celular · funciona offline
+              Passaporte Completo · offline
             </span>
           ) : (
-            <span className="text-[#B4C0FF]">
-              Acesso a Eventos Abertos · offline
+            <span className="text-text-2 font-semibold">
+              Entrada Livre · offline
             </span>
           )}
         </div>
