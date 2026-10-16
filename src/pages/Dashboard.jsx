@@ -288,14 +288,17 @@ export default function Dashboard() {
       return;
     }
 
-    if (!hasSymplaTicket) {
+    const targetActivity = activities.find((a) => a.id === activityId);
+    const isOpen = Boolean(targetActivity?.isOpenEvent);
+
+    if (!hasSymplaTicket && !isOpen) {
       setShowSymplaModal(true);
       return;
     }
 
     setReservingId(activityId);
     try {
-      const res = await reserveActivity(activityId);
+      const res = await reserveActivity(activityId, targetActivity);
       if (res && (res.status === 'CONFIRMED' || res.status === 'WAITING_LIST' || res.success || res.alreadyBooked)) {
         setBookings((prev) => {
           const exists = prev.some((b) => (b.activityId || b.id) === activityId || b.id === `${currentUser.uid}_${activityId}`);

@@ -409,6 +409,32 @@ export default function Challenges() {
       <div className="px-5">
         <ConquistasTabs active={activeTab === 'passport' ? 'passport' : 'missions'} />
 
+        {!hasSymplaTicket && (
+          <div className="mt-3.5 rounded-2xl border border-[rgba(107,124,255,0.35)] bg-[linear-gradient(135deg,rgba(37,99,235,0.18)_0%,rgba(147,51,234,0.14)_100%)] p-4 text-left shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-action/20 text-link">
+                <Sparkles size={20} aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="m-0 text-sm font-extrabold text-text leading-tight">
+                  🎮 Gamificação Oficial Tech Week
+                </h3>
+                <p className="mt-1 mb-0 text-xs text-text-2 leading-relaxed">
+                  As missões e prêmios são exclusivos para participantes com ingresso. Vincule seu Sympla para desbloquear o envio e entrar no ranking!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowSymplaModal(true)}
+                  className="press mt-2.5 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-action px-3.5 text-xs font-extrabold text-white transition hover:bg-action/90"
+                >
+                  <Lock size={13} aria-hidden="true" />
+                  Vincular ingresso Sympla
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'passport' ? (
           <PassportTab userProfile={profile} />
         ) : loadingMissions ? (
@@ -434,6 +460,8 @@ export default function Challenges() {
                 mission={flashInBanner}
                 countdown={activeFlashCountdown}
                 fraction={flashFraction}
+                hasTicket={hasSymplaTicket}
+                onRequireSympla={() => setShowSymplaModal(true)}
                 onJoin={() => handleSimulateChallenge(flashInBanner)}
               />
             )}
@@ -448,7 +476,14 @@ export default function Challenges() {
                 </div>
                 <div className="flex flex-col gap-2.5">
                   {availableMissions.map((m) => (
-                    <MissionCard key={m.id} mission={m} getIcon={getMissionIcon} onStart={() => handleSimulateChallenge(m)} />
+                    <MissionCard
+                      key={m.id}
+                      mission={m}
+                      getIcon={getMissionIcon}
+                      hasTicket={hasSymplaTicket}
+                      onRequireSympla={() => setShowSymplaModal(true)}
+                      onStart={() => handleSimulateChallenge(m)}
+                    />
                   ))}
                 </div>
               </section>
@@ -801,7 +836,7 @@ function SummaryRing({ done, total, earned, open }) {
   );
 }
 
-function FlashBanner({ mission, countdown, fraction, onJoin }) {
+function FlashBanner({ mission, countdown, fraction, onJoin, hasTicket = true, onRequireSympla }) {
   return (
     <div className="relative mt-3 overflow-hidden rounded-[18px] border border-[rgba(245,158,11,0.28)] bg-surface px-4 py-3.5">
       <div className="flex items-center gap-3">
@@ -819,8 +854,13 @@ function FlashBanner({ mission, countdown, fraction, onJoin }) {
             {mission.title || mission.name} <span className="text-you-text">+{mission.points}</span>
           </span>
         </span>
-        <button type="button" className="btn btn-action btn-sm press shrink-0" onClick={onJoin}>
-          Participar
+        <button
+          type="button"
+          className="btn btn-action btn-sm press shrink-0 gap-1.5"
+          onClick={!hasTicket ? onRequireSympla : onJoin}
+        >
+          {!hasTicket && <Lock size={13} aria-hidden="true" />}
+          {!hasTicket ? 'Vincular' : 'Participar'}
         </button>
       </div>
       <div className="relative mt-3 h-1 overflow-hidden rounded-sm bg-surface-raised" aria-hidden="true">
@@ -885,7 +925,7 @@ function MissionIcon({ style, mission, sponsor, done, getIcon }) {
   }
 }
 
-function MissionCard({ mission, getIcon, onStart, done = false }) {
+function MissionCard({ mission, getIcon, onStart, done = false, hasTicket = true, onRequireSympla }) {
   const style = missionStyle(mission);
   const sponsor = style === 'patrocinador' ? missionSponsor(mission) : null;
   const tier = sponsor ? TIER_STYLE[sponsor.tier] : null;
@@ -931,6 +971,12 @@ function MissionCard({ mission, getIcon, onStart, done = false }) {
           >
             +{mission.points} pts
           </span>
+          {!done && !hasTicket && (
+            <span className="inline-flex items-center gap-1 rounded-lg border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-2 py-0.5 text-xs font-extrabold text-gold">
+              <Lock size={11} aria-hidden="true" />
+              Exclusivo Sympla
+            </span>
+          )}
           {!done && secret && hint && (
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/[.06] px-2 py-0.5 text-xs font-bold text-[#C4B5FD]">
               Dica:<span className="tracking-[2px] text-white blur-[3.5px]">{hint}</span>
@@ -952,6 +998,17 @@ function MissionCard({ mission, getIcon, onStart, done = false }) {
             <Check size={15} strokeWidth={2.6} aria-hidden="true" />
             Feita
           </span>
+        ) : !hasTicket ? (
+          <button
+            type="button"
+            className="btn btn-action btn-sm press shrink-0 gap-1.5"
+            style={{ background: 'linear-gradient(135deg, #3B82F6, #6366F1)' }}
+            onClick={onRequireSympla || onStart}
+            aria-label={`Vincular ingresso para desbloquear missão ${mission.title || mission.name}`}
+          >
+            <Lock size={13} aria-hidden="true" />
+            Vincular para Jogar
+          </button>
         ) : (
           <button
             type="button"

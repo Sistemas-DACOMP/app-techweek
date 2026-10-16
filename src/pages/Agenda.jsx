@@ -229,7 +229,10 @@ export default function Agenda() {
       return;
     }
 
-    if (!hasSymplaTicket) {
+    const targetActivity = activities.find((a) => a.id === activityId);
+    const isOpen = Boolean(targetActivity?.isOpenEvent);
+
+    if (!hasSymplaTicket && !isOpen) {
       setShowSymplaModal(true);
       return;
     }
@@ -243,7 +246,7 @@ export default function Agenda() {
 
     setReservingId(activityId);
     try {
-      const res = await reserveActivity(activityId);
+      const res = await reserveActivity(activityId, targetActivity);
       if (res && (res.status === 'CONFIRMED' || res.status === 'WAITING_LIST' || res.success || res.alreadyBooked)) {
         // Atualiza bookings localmente para resposta reativa instantânea
         setBookings((prev) => {
@@ -602,7 +605,7 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
     left = <span className="text-text-3">Encerrada</span>;
   } else if (isCurrent) {
     left = <span className="flex items-center gap-1.5 text-ok"><NowDot />Acontecendo agora</span>;
-  } else if (!hasTicket) {
+  } else if (!hasTicket && !act.isOpenEvent) {
     left = <span className="text-link">Vincule o ingresso</span>;
   } else if (soldOut) {
     left = <span className="text-warn">Entrar na lista de espera</span>;
@@ -624,7 +627,14 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
         className="absolute inset-0 rounded-2xl"
       />
       <div className="pointer-events-none relative">
-        <span className="block text-xs font-extrabold" style={{ color: category.accent }}>{category.label}</span>
+        <div className="flex items-center gap-2">
+          <span className="block text-xs font-extrabold" style={{ color: category.accent }}>{category.label}</span>
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+            act.isOpenEvent ? 'bg-ok/15 text-ok' : 'bg-link/15 text-link'
+          }`}>
+            {act.isOpenEvent ? 'Evento Aberto' : 'Exclusivo Sympla'}
+          </span>
+        </div>
         <span className="mt-1 block text-[15px] font-bold leading-[1.35]">{act.title}</span>
         {act.speaker && !compact && (
           <span className="mt-2 flex items-center gap-1.5 text-[13px] text-text-2">

@@ -50,14 +50,13 @@ it('KAN-75: participantActionLimiter está montado na rota real, antes do handle
   expect(handles.indexOf(participantActionLimiter)).toBeLessThan(handles.length - 1);
 });
 
-// KAN-84: prova que requireSymplaTicket está montado na rota real, antes do handler final
-it('KAN-84: requireSymplaTicket está montado na rota real, antes do handler final', () => {
+// OPEN-EVENTS: prova que a rota avalia requireSymplaTicket dinamicamente para não bloquear eventos abertos
+it('OPEN-EVENTS: requireSymplaTicket não está como middleware estático bloqueando reservas abertas', () => {
   const layer = (router as unknown as { stack: any[] }).stack.find(
     (l) => l.route?.path === '/:activityId/reserve'
   );
   const handles = layer.route.stack.map((l: any) => l.handle);
-  expect(handles).toContain(requireSymplaTicket);
-  expect(handles.indexOf(requireSymplaTicket)).toBeLessThan(handles.length - 1);
+  expect(handles).not.toContain(requireSymplaTicket);
 });
 
 // KAN-116: prova que requireVerifiedEmail está montado nas rotas reais de reserva e cancelamento
@@ -103,8 +102,8 @@ function mockCollection(name: string) {
   };
 }
 
-function makeTx(snaps: { bookingSnap: any; activitySnap: any; waitingSnap?: any }) {
-  const { bookingSnap, activitySnap, waitingSnap } = snaps;
+function makeTx(snaps: { bookingSnap: any; activitySnap: any; waitingSnap?: any; userSnap?: any }) {
+  const { bookingSnap, activitySnap, waitingSnap, userSnap } = snaps;
   return {
     get: vi.fn((ref: any) => {
       if (ref?.__kind === 'bookingsQuery') {
@@ -112,6 +111,7 @@ function makeTx(snaps: { bookingSnap: any; activitySnap: any; waitingSnap?: any 
       }
       if (ref?.path?.startsWith('bookings/')) return Promise.resolve(bookingSnap);
       if (ref?.path?.startsWith('activities/')) return Promise.resolve(activitySnap);
+      if (ref?.path?.startsWith('users/')) return Promise.resolve(userSnap ?? { exists: true, data: () => ({ hasSymplaTicket: true }) });
       throw new Error(`ref inesperada no mock: ${JSON.stringify(ref)}`);
     }),
     set: vi.fn(),
@@ -340,6 +340,63 @@ describe('POST /:activityId/reserve (KAN-49)', () => {
       error: 'INTERNAL_ERROR',
       message: 'Não foi possível processar a reserva.'
     });
+  });
+
+  it('bloqueia com 403 SYMPLA_TICKET_REQUIRED para atividade fechada quando participante não tem ingresso Sympla', async () => {
+    const tx = makeTx({
+      bookingSnap: { exists: false },
+      activitySnap: { exists: true, data: () => ({ vagas_disponiveis: 10, total_inscritos: 2, isOpenEvent: false }) },
+      userSnap: { exists: true, data: () => ({ hasSymplaTicket: false }) }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq();
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'SYMPLA_TICKET_REQUIRED',
+      message: 'É necessário possuir um ingresso oficial do Sympla vinculado à conta para realizar esta ação.'
+    });
+    expect(tx.set).not.toHaveBeenCalled();
+  });
+
+  it('permite reserva com 200 CONFIRMED em evento aberto (isOpenEvent: true) mesmo se o participante não tiver ingresso Sympla', async () => {
+    const tx = makeTx({
+      bookingSnap: { exists: false },
+      activitySnap: { exists: true, data: () => ({ vagas_disponiveis: 10, total_inscritos: 2, isOpenEvent: true }) },
+      userSnap: { exists: true, data: () => ({ hasSymplaTicket: false }) }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq();
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ status: 'CONFIRMED', position: null });
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: 'bookings/user-1_lecture-1' },
+      expect.objectContaining({ status: 'CONFIRMED' })
+    );
+  });
+
+  it('permite reserva para usuário ADMIN em atividade fechada mesmo sem doc de usuário com ingresso Sympla', async () => {
+    const tx = makeTx({
+      bookingSnap: { exists: false },
+      activitySnap: { exists: true, data: () => ({ vagas_disponiveis: 10, total_inscritos: 2, isOpenEvent: false }) },
+      userSnap: { exists: false }
+    });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq();
+    req.user!.role = 'ADMIN';
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ status: 'CONFIRMED', position: null });
   });
 });
 

@@ -220,7 +220,14 @@ export default function AdminProgramacao(p) {
                   {list.map((act) => (
                     <tr key={act.id} className="border-t border-line align-middle" style={{ opacity: liveStatus(act, now) === 'past' ? 0.6 : 1 }}>
                       <td className="max-w-[300px] px-3 py-4">
-                        <TypeTag type={act.type} />
+                        <div className="flex items-center gap-2">
+                          <TypeTag type={act.type} />
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            act.isOpenEvent ? 'bg-ok/15 text-ok' : 'bg-link/15 text-link'
+                          }`}>
+                            {act.isOpenEvent ? 'Aberto' : 'Sympla'}
+                          </span>
+                        </div>
                         <button type="button" onClick={() => onEdit(act)} className="mt-1 block text-left text-[15px] font-bold leading-snug text-text hover:text-link">{act.title}</button>
                         <span className="mt-0.5 block text-[13px] text-text-2">{whenOf(act)}</span>
                       </td>
@@ -258,6 +265,11 @@ export default function AdminProgramacao(p) {
                     <div className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
                         <span className="text-[13px] font-extrabold" style={{ color: typeColor(act.type) }}>{typeLabel(act.type)}</span>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          act.isOpenEvent ? 'bg-ok/15 text-ok' : 'bg-link/15 text-link'
+                        }`}>
+                          {act.isOpenEvent ? 'Aberto' : 'Sympla'}
+                        </span>
                         {live && <span className="rounded-lg bg-[rgba(111,216,166,0.14)] px-2 py-0.5 text-[12px] font-bold text-ok">Agora</span>}
                       </span>
                       <button type="button" onClick={() => onEdit(act)} className="mt-1.5 block text-left text-[16px] font-bold leading-snug text-text">{act.title}</button>

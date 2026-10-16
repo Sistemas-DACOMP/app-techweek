@@ -337,9 +337,14 @@ export default function ActivityModal({
             <span className="h-1 w-9 rounded-full bg-white/30" />
           </div>
           <div className="mt-2 flex items-center justify-between">
-            <span className="flex gap-2">
+            <span className="flex flex-wrap items-center gap-2">
               <span className="rounded-[10px] px-2.5 py-1 text-xs font-bold" style={{ background: `${category.accent}33`, color: category.text }}>
                 {category.label}
+              </span>
+              <span className={`rounded-[10px] px-2.5 py-1 text-xs font-bold ${
+                activity.isOpenEvent ? 'bg-ok/20 text-ok' : 'bg-link/20 text-link'
+              }`}>
+                {activity.isOpenEvent ? 'Evento Aberto' : 'Exclusivo Sympla'}
               </span>
               <span className="rounded-[10px] bg-[rgba(124,58,237,0.35)] px-2.5 py-1 text-xs font-extrabold text-white">
                 +{points} pts

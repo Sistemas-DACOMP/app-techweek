@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Share2, ArrowLeft, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Camera, Share2, ArrowLeft, Loader2, Image as ImageIcon, Lock, Ticket } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
 import SymplaRequirementModal from '../components/SymplaRequirementModal';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
@@ -423,6 +423,99 @@ export default function InstagramMission() {
     link.click();
     alert('Imagem baixada! Agora você pode postar no seu Instagram Stories.');
   };
+
+  if (!hasSymplaTicket) {
+    return (
+      <div className="page-container conq-page animate-fade-in flex flex-col">
+        <SymplaStickyBanner />
+
+        <div className="flex flex-1 flex-col px-5 pb-8">
+          <header className="relative pt-[18px]">
+            <button
+              type="button"
+              onClick={() => navigate('/challenges')}
+              aria-label="Voltar para as missões"
+              className="absolute left-[-8px] top-3 flex h-11 w-11 items-center justify-center rounded-full border-0 bg-transparent text-text"
+            >
+              <ArrowLeft size={22} aria-hidden="true" />
+            </button>
+            <h1 className="screen-title mb-0! text-[22px]!">Missão Stories</h1>
+            <p className="mt-3 text-center text-[13px] text-text-2">Compartilhe seu momento e concorra a prêmios!</p>
+          </header>
+
+          <div className="mt-5 flex flex-col items-center">
+            {/* Moldura de Prévia */}
+            <div className="relative flex aspect-[9/14] w-full max-w-[280px] flex-col items-center justify-between overflow-hidden rounded-[24px] border border-[rgba(147,51,234,0.4)] bg-[radial-gradient(120%_90%_at_50%_30%,#2B1B54_0%,#0F1530_80%)] p-5 text-center shadow-[0_16px_40px_rgba(0,0,0,0.5)]">
+              {/* Badges superiores da moldura */}
+              <div className="flex w-full items-center justify-between">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[rgba(56,189,248,0.2)] text-[10px] font-black text-[#38BDF8]">
+                  ALAN
+                </span>
+                <span className="rounded-full border border-[rgba(242,196,106,0.5)] bg-[rgba(242,196,106,0.15)] px-2.5 py-1 text-[11px] font-extrabold text-gold">
+                  +50 pts
+                </span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[rgba(192,132,252,0.2)] text-[10px] font-black text-[#C084FC]">
+                  ADA
+                </span>
+              </div>
+
+              {/* Centro com chamada de prévia */}
+              <div className="my-auto flex flex-col items-center px-2">
+                <div className="relative mb-3 flex h-16 w-16 items-center justify-center rounded-2xl p-0.5" style={{ background: 'linear-gradient(45deg, #F58529, #DD2A7B, #8134AF)' }}>
+                  <div className="flex h-full w-full items-center justify-center rounded-[14px] bg-[#0F1530]">
+                    <Camera size={28} className="text-[#F59AC0]" aria-hidden="true" />
+                  </div>
+                </div>
+                <h2 className="text-base font-black text-text">Moldura Oficial Exclusiva</h2>
+                <p className="mt-1.5 text-xs text-text-2 leading-relaxed">
+                  Tire fotos direto no app com o visual holográfico da TechWeek, Alan e Ada para postar nos seus stories.
+                </p>
+              </div>
+
+              {/* Tag inferior */}
+              <div className="w-full rounded-xl bg-surface/80 py-2 text-center backdrop-blur-sm">
+                <span className="text-[11px] font-bold text-link">#FACOMTECHWEEK</span>
+              </div>
+            </div>
+
+            {/* Card explicativo de conversão */}
+            <div className="mt-5 w-full max-w-[340px] rounded-2xl border border-[rgba(107,124,255,0.3)] bg-surface p-4 text-left">
+              <div className="flex items-center gap-2 text-xs font-bold text-gold">
+                <Lock size={14} aria-hidden="true" />
+                <span>EXCLUSIVO PARA PARTICIPANTES SYMPLA</span>
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-text-2">
+                O envio de stories e o resgate de pontos para o ranking oficial são liberados para participantes com ingresso vinculado.
+              </p>
+              <div className="mt-3 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSymplaModal(true)}
+                  className="btn btn-primary btn-block min-h-[46px] text-sm font-extrabold"
+                >
+                  <Ticket size={18} aria-hidden="true" />
+                  Vincular ingresso Sympla
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/challenges')}
+                  className="btn btn-secondary btn-block min-h-[42px] text-xs font-bold"
+                >
+                  Ver outras missões
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <SymplaRequirementModal
+          isOpen={showSymplaModal}
+          onClose={() => setShowSymplaModal(false)}
+          featureName="a missão de stories no Instagram"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="page-container conq-page animate-fade-in flex flex-col">
