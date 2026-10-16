@@ -18,7 +18,7 @@ import router, {
   acceptInviteHandler
 } from './sponsorInvites';
 import { requireAuth } from '../middlewares/authMiddleware';
-import { sponsorInviteIpLimiter, debugClientIp } from '../middlewares/rateLimiter';
+import { sponsorInviteIpLimiter, debugClientIp, resetDebugClientIpCount } from '../middlewares/rateLimiter';
 import {
   InviteError,
   RolePartiallyUpdatedError,
@@ -154,7 +154,13 @@ describe('parseAcceptBody (B6 / ERR-082)', () => {
 });
 
 describe('debugClientIp (M4)', () => {
-  afterEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    resetDebugClientIpCount();
+  });
+  afterEach(() => {
+    resetDebugClientIpCount();
+    vi.restoreAllMocks();
+  });
   const req = {
     ip: '1.2.3.4',
     headers: { 'x-forwarded-for': '1.2.3.4' },
@@ -170,10 +176,9 @@ describe('debugClientIp (M4)', () => {
     expect(next).toHaveBeenCalled();
   });
 
-  it('com a flag loga uma vez só e nunca a URL/token', () => {
+  it('com a flag loga o diagnóstico sem vazar a URL/token', () => {
     process.env.DEBUG_CLIENT_IP = '1';
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    debugClientIp(req, {} as any, vi.fn());
     debugClientIp(req, {} as any, vi.fn());
     delete process.env.DEBUG_CLIENT_IP;
     expect(warn).toHaveBeenCalledTimes(1);

@@ -108,13 +108,29 @@ export const sponsorInviteIpLimiter = rateLimit({
 });
 
 // Log temporário pra validar a topologia do proxy em homolog: só liga com
-// DEBUG_CLIENT_IP=1 (desligado por padrão), loga UMA vez por instância e
-// nunca o path/URL (o token do convite vai na URL).
-let clientIpLogged = false;
+// DEBUG_CLIENT_IP=1 (desligado por padrão), loga até MAX_DEBUG_LOGS vezes por
+// instância (permitindo comparar requisições de múltiplos IPs sem floodar logs)
+// e nunca o path/URL (o token do convite vai na URL).
+let debugLogsCount = 0;
+export const MAX_DEBUG_LOGS = 50;
+
 export function debugClientIp(req: Request, _res: Response, next: () => void): void {
-  if (process.env.DEBUG_CLIENT_IP === '1' && !clientIpLogged) {
-    clientIpLogged = true;
-    console.warn('DEBUG_CLIENT_IP req.ip=', req.ip, 'x-forwarded-for=', req.headers['x-forwarded-for']);
+  if (process.env.DEBUG_CLIENT_IP === '1' && debugLogsCount < MAX_DEBUG_LOGS) {
+    debugLogsCount++;
+    console.warn(
+      `DEBUG_CLIENT_IP [${debugLogsCount}/${MAX_DEBUG_LOGS}] req.ip=${req.ip} req.ips=${JSON.stringify(req.ips)} x-forwarded-for=${req.headers['x-forwarded-for']}`
+    );
   }
   next();
 }
+
+/** Reseta o contador de diagnósticos para testes unitários */
+export function resetDebugClientIpCount(): void {
+  debugLogsCount = 0;
+}
+
+/** Retorna a quantidade de diagnósticos emitidos pela instância atual */
+export function getDebugLogsCount(): number {
+  return debugLogsCount;
+}
+
