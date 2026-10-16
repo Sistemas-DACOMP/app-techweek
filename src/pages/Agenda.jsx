@@ -410,6 +410,7 @@ export default function Agenda() {
             <div className="no-scrollbar -mx-5 mt-2.5 flex gap-2 overflow-x-auto px-5" role="group" aria-label="Tipo de atividade">
               {TYPE_FILTERS.map((type) => {
                 const selected = selectedType === type.id;
+                const dotColor = type.id === 'open_event' ? '#6FD8A6' : categoryOf(type).accent;
                 return (
                   <button
                     key={type.id}
@@ -418,8 +419,8 @@ export default function Agenda() {
                     onClick={() => setSelectedType(type.id)}
                     className={`press inline-flex h-[34px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] ${selected ? 'bg-text font-bold text-bg' : 'border border-field-line font-semibold text-text'}`}
                   >
-                    {type.id !== 'all' && type.id !== 'open_event' && !selected && (
-                      <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full" style={{ background: categoryOf(type).accent }} />
+                    {type.id !== 'all' && !selected && (
+                      <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full" style={{ background: dotColor }} />
                     )}
                     {type.label}
                   </button>
@@ -553,7 +554,7 @@ export function dayOrder(id) {
 
 export const TYPE_FILTERS = [
   { id: 'all', type: 'palestra', label: 'Todos' },
-  { id: 'open_event', label: 'Entrada Livre 🟢' },
+  { id: 'open_event', label: 'Entrada Livre' },
   { id: 'palestra', type: 'palestra', label: 'Palestra' },
   { id: 'workshop', type: 'workshop', label: 'Workshop' },
   { id: 'minicurso', type: 'minicurso', label: 'Minicurso' },
@@ -640,14 +641,9 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
       <div className="pointer-events-none relative">
         <div className="flex items-center gap-2">
           <span className="block text-xs font-extrabold" style={{ color: category.accent }}>{category.label}</span>
-          {act.isOpenEvent ? (
+          {act.isOpenEvent && (
             <span className="inline-flex items-center rounded-full bg-ok/15 px-2 py-0.5 text-[10px] font-bold text-ok">
               Entrada Livre
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full border border-gold/30 bg-gold/15 px-2 py-0.5 text-[10px] font-extrabold text-gold">
-              <Lock size={10} aria-hidden="true" />
-              Passaporte Completo
             </span>
           )}
         </div>

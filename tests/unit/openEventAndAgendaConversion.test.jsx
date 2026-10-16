@@ -20,15 +20,15 @@ describe('Open Event & Agenda Conversion (PLG)', () => {
   });
 
   describe('TYPE_FILTERS', () => {
-    it('inclui filtro rapido de Entrada Livre', () => {
+    it('inclui filtro rapido de Entrada Livre sem emoji', () => {
       const openFilter = TYPE_FILTERS.find((f) => f.id === 'open_event');
       expect(openFilter).toBeDefined();
-      expect(openFilter.label).toContain('Entrada Livre');
+      expect(openFilter.label).toBe('Entrada Livre');
     });
   });
 
   describe('SymplaStickyBanner', () => {
-    it('renderiza proposta de valor do Modo Entrada Livre quando usuario nao tem Sympla', () => {
+    it('renderiza proposta de valor com Desbloqueie o Passaporte Completo quando usuario nao tem Sympla', () => {
       mockUseUser.mockReturnValue({
         hasSymplaTicket: false,
         profile: { uid: 'u1', name: 'Participante' },
@@ -36,7 +36,7 @@ describe('Open Event & Agenda Conversion (PLG)', () => {
 
       render(React.createElement(SymplaStickyBanner));
 
-      expect(screen.getByText(/Modo Entrada Livre/i)).toBeDefined();
+      expect(screen.getByText(/Desbloqueie o Passaporte Completo/i)).toBeDefined();
       expect(screen.getByText(/Desbloquear/i)).toBeDefined();
     });
 
@@ -65,7 +65,7 @@ describe('Open Event & Agenda Conversion (PLG)', () => {
       isOpenEvent: false,
     };
 
-    it('renderiza card bloqueado com Passaporte Completo, vagas a esquerda e botao Desbloquear a direita', () => {
+    it('renderiza card bloqueado com vagas a esquerda e botao Desbloquear a direita (sem badge Passaporte Completo no topo)', () => {
       render(
         React.createElement(ActivityRow, {
           act: baseActivity,
@@ -78,8 +78,8 @@ describe('Open Event & Agenda Conversion (PLG)', () => {
         })
       );
 
-      // Badge no topo
-      expect(screen.getByText(/Passaporte Completo/i)).toBeDefined();
+      // Não exibe badge redundante "Passaporte Completo" no topo
+      expect(screen.queryByText(/Passaporte Completo/i)).toBeNull();
 
       // Semáforo de vagas à esquerda (12 de 50 vagas = últimas 12)
       expect(screen.getByText(/Últimas 12/i)).toBeDefined();
