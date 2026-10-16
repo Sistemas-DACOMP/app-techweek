@@ -3,10 +3,10 @@ import { useNavigate, Link } from 'react-router-dom';
 import Mascot from '../components/Mascot';
 import AvatarCropperModal from '../components/AvatarCropperModal';
 import Terms from './Terms';
-import { Eye, EyeOff, Loader2, Camera, Trash2, ChevronLeft, ArrowRight, Check, User } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Camera, Trash2, ChevronLeft, ArrowRight, Check, User, UploadCloud, FileText, CheckCircle2, FileCheck } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { signUpWithEmail } from '../lib/auth';
-import { createUserProfile, uploadUserAvatar, findUserByUsername } from '../lib/userService';
+import { createUserProfile, uploadUserAvatar, findUserByUsername, uploadUserResume } from '../lib/userService';
 import { 
   getPasswordStrength, 
   MIN_PASSWORD_LENGTH, 
@@ -18,7 +18,9 @@ import {
   passwordsMatch,
   normalizeGithub,
   isValidGithub,
-  validateAcademicProfile
+  validateAcademicProfile,
+  formatFileSize,
+  validateResumeFile
 } from '../lib/validators';
 import { verifySymplaTicket } from '../lib/sympla';
 import '../styles/entrada.css';
@@ -130,9 +132,67 @@ export default function Register() {
     status: 'idle', // 'idle' | 'checking' | 'available' | 'taken'
     message: ''
   });
+  const [resumeFile, setResumeFile] = useState(null);
+  const [resumeError, setResumeError] = useState(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const resumeInputRef = useRef(null);
+
   const navigate = useNavigate();
   const scrollRef = useRef(null);
   const termsRef = useRef(null);
+
+  const handleResumeChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setResumeError(null);
+      const validation = validateResumeFile(file);
+      if (!validation.valid) {
+        setResumeError(validation.message || 'Arquivo inválido.');
+        e.target.value = '';
+        return;
+      }
+      setResumeFile(file);
+      e.target.value = '';
+    }
+  };
+
+  const handleResumeDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      setResumeError(null);
+      const validation = validateResumeFile(file);
+      if (!validation.valid) {
+        setResumeError(validation.message || 'Arquivo inválido.');
+        return;
+      }
+      setResumeFile(file);
+    }
+  };
+
+  const handleResumeDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleResumeDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleRemoveResume = () => {
+    setResumeFile(null);
+    setResumeError(null);
+  };
+
+  const handleSkipResume = (e) => {
+    if (e) e.preventDefault();
+    handleRegister(e, true);
+  };
 
   // Troca de etapa começa do topo da tela
   useEffect(() => {
@@ -283,12 +343,29 @@ export default function Register() {
     setStep(2);
   };
 
-  const handleRegister = async (e) => {
+  const handleNextStep2 = (e) => {
     e.preventDefault();
+    setError(null);
+
+    if (!formData.termsAccepted) {
+      const msg = "Você precisa aceitar os termos de privacidade (LGPD).";
+      setFieldErrors(prev => ({ ...prev, termsAccepted: msg }));
+      setError(msg);
+      termsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    setFieldErrors(prev => ({ ...prev, termsAccepted: '' }));
+    setStep(3);
+  };
+
+  const handleRegister = async (e, skipResume = false) => {
+    if (e?.preventDefault) e.preventDefault();
     setError(null);
 
     if (formData.password !== formData.confirmPassword) {
       setError("As senhas não coincidem!");
+      setStep(1);
       return;
     }
 
@@ -296,6 +373,7 @@ export default function Register() {
       const msg = "Você precisa aceitar os termos de privacidade (LGPD).";
       setFieldErrors(prev => ({ ...prev, termsAccepted: msg }));
       setError(msg);
+      setStep(2);
       termsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
       return;
     }
@@ -369,6 +447,15 @@ export default function Register() {
         avatarUrl: finalAvatarUrl
       });
 
+      // 4b. Faz upload do currículo se selecionado (opcional, não-bloqueante)
+      if (!skipResume && resumeFile) {
+        try {
+          await uploadUserResume(uid, resumeFile);
+        } catch (resumeErr) {
+          console.warn("Aviso: Upload do currículo falhou no cadastro, prosseguindo:", resumeErr);
+        }
+      }
+
       // 5. Consulta o Sympla DEPOIS de criar o perfil: o backend grava o vínculo do ingresso no perfil já existente
       // (as regras do Firestore não deixam o cliente gravar esses campos). Timeout resiliente de 3s.
       let symplaTicketData = null;
@@ -415,16 +502,17 @@ export default function Register() {
 
   // Lógica de interação do mascote Alan
   const isStep2 = step === 2;
-  const isPasswordFocused = !isStep2 && (focusedInput === 'password' || focusedInput === 'confirmPassword');
-  const isTypingSomething = !isStep2 && focusedInput !== null && !isPasswordFocused;
+  const isStep3 = step === 3;
+  const isPasswordFocused = step === 1 && (focusedInput === 'password' || focusedInput === 'confirmPassword');
+  const isTypingSomething = step === 1 && focusedInput !== null && !isPasswordFocused;
   const currentTextLength = isTypingSomething ? (formData[focusedInput] || '').length : 0;
   
-  // Na Etapa 2 de cadastro, o mascote Alan destampa os olhos e olha para baixo
-  const lookOffset = isStep2 ? 0 : (isTypingSomething ? -4 + (currentTextLength * 0.5) : 0);
-  const lookOffsetY = isStep2 ? 8 : (isTypingSomething ? 6 : 0);
+  // Nas Etapas 2 e 3 de cadastro, o mascote Alan destampa os olhos e olha para o conteúdo
+  const lookOffset = (isStep2 || isStep3) ? 0 : (isTypingSomething ? -4 + (currentTextLength * 0.5) : 0);
+  const lookOffsetY = (isStep2 || isStep3) ? 8 : (isTypingSomething ? 6 : 0);
   
-  const isCoveringEyes = !isStep2 && isPasswordFocused;
-  const isPeeking = !isStep2 && isPasswordFocused && showPassword;
+  const isCoveringEyes = step === 1 && isPasswordFocused;
+  const isPeeking = step === 1 && isPasswordFocused && showPassword;
 
   const isStudent = formData.participantType === 'Aluno UFU Graduação' || formData.participantType === 'Aluno da UFU' || formData.participantType === 'Aluno de outra instituição';
   const isPostgrad = formData.participantType === 'Aluno UFU Pós-graduação' || formData.participantType === 'Pós-graduação';
@@ -434,9 +522,13 @@ export default function Register() {
   const socialOk = (name) => Boolean(formData[name]) && SOCIAL_LOOKS_OK[name](formData[name]);
 
   return (
-    <div ref={scrollRef} className={`${isStep2 ? 'ent-bg-form-2' : 'ent-bg-form'} relative flex h-full w-full flex-col overflow-x-hidden overflow-y-auto text-text`}>
+    <div ref={scrollRef} className={`${step > 1 ? 'ent-bg-form-2' : 'ent-bg-form'} relative flex h-full w-full flex-col overflow-x-hidden overflow-y-auto text-text`}>
       <header className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center px-3 pt-2.5">
-        {isStep2 ? (
+        {step === 3 ? (
+          <button type="button" onClick={() => setStep(2)} aria-label="Voltar para a etapa 2" className="flex size-11 cursor-pointer items-center justify-center border-0 bg-transparent text-text">
+            <ChevronLeft size={22} aria-hidden="true" />
+          </button>
+        ) : step === 2 ? (
           <button type="button" onClick={() => setStep(1)} aria-label="Voltar para a etapa 1" className="flex size-11 cursor-pointer items-center justify-center border-0 bg-transparent text-text">
             <ChevronLeft size={22} aria-hidden="true" />
           </button>
@@ -445,15 +537,16 @@ export default function Register() {
             <ChevronLeft size={22} aria-hidden="true" />
           </Link>
         )}
-        <div className="text-center text-[13px] font-bold text-text-2">Etapa {step} de 2</div>
+        <div className="text-center text-[13px] font-bold text-text-2">Etapa {step} de 3</div>
         <span />
       </header>
-      <div className="mx-5 mt-2 grid shrink-0 grid-cols-2 gap-1.5" aria-hidden="true">
+      <div className="mx-5 mt-2 grid shrink-0 grid-cols-3 gap-1.5" aria-hidden="true">
         <span className="h-[5px] rounded-[3px] bg-[linear-gradient(90deg,#2563EB,#7C3AED)]" />
-        <span className={`h-[5px] rounded-[3px] ${isStep2 ? 'bg-[linear-gradient(90deg,#5B3BE0,#7C3AED)]' : 'bg-surface-raised'}`} />
+        <span className={`h-[5px] rounded-[3px] ${step >= 2 ? 'bg-[linear-gradient(90deg,#5B3BE0,#7C3AED)]' : 'bg-surface-raised'}`} />
+        <span className={`h-[5px] rounded-[3px] ${step === 3 ? 'bg-[linear-gradient(90deg,#7C3AED,#A855F7)]' : 'bg-surface-raised'}`} />
       </div>
 
-      <form onSubmit={step === 1 ? handleNextStep : handleRegister} className="flex flex-1 flex-col" noValidate>
+      <form onSubmit={step === 1 ? handleNextStep : step === 2 ? handleNextStep2 : handleRegister} className="flex flex-1 flex-col" noValidate>
         {step === 1 && (
           <>
             <div className="mx-5 mt-[22px] flex items-center gap-3">
@@ -775,6 +868,108 @@ export default function Register() {
           </>
         )}
 
+        {step === 3 && (
+          <div className="flex flex-1 flex-col">
+            <div className="mx-6 mt-6 flex flex-col items-center text-center">
+              <div aria-hidden="true" className="mb-2">
+                <Mascot
+                  color="blue"
+                  isWaving
+                  className="ent-still"
+                  style={{ width: 84, height: 84 }}
+                />
+              </div>
+              <h1 className="text-[23px] sm:text-[25px] leading-[1.25] font-extrabold text-balance">
+                Destaque-se para as empresas <br />
+                <span className="ent-grad-text">da Tech Week</span>
+              </h1>
+              <p className="mt-2 text-sm leading-relaxed text-text-2 max-w-[340px]">
+                Compartilhe seu currículo com os patrocinadores oficiais do evento e concorra a oportunidades de estágio e vagas de tecnologia.
+              </p>
+            </div>
+
+            <div className="mx-5 mt-6 flex flex-col gap-3">
+              {/* Dropzone / File Picker */}
+              <input
+                ref={resumeInputRef}
+                type="file"
+                id="resume-file-input"
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleResumeChange}
+                className="sr-only"
+                aria-describedby="resume-format-hint"
+              />
+
+              {!resumeFile ? (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => resumeInputRef.current?.click()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      resumeInputRef.current?.click();
+                    }
+                  }}
+                  onDrop={handleResumeDrop}
+                  onDragOver={handleResumeDragOver}
+                  onDragLeave={handleResumeDragLeave}
+                  className={`group relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition-all cursor-pointer ${
+                    isDragOver
+                      ? 'border-link bg-link/10 scale-[1.01]'
+                      : 'border-[var(--line-2,#2A3460)] bg-surface hover:border-link/60 hover:bg-surface-raised'
+                  }`}
+                  aria-label="Selecionar ou soltar arquivo de currículo em PDF ou DOCX até 5 MB"
+                >
+                  <div className="flex size-14 items-center justify-center rounded-2xl bg-link/15 text-link transition-transform group-hover:scale-105">
+                    <UploadCloud size={28} aria-hidden="true" />
+                  </div>
+                  <p className="mt-3 text-sm font-semibold text-text">
+                    Arraste seu currículo aqui ou <span className="text-link underline underline-offset-2">clique para enviar</span>
+                  </p>
+                  <p id="resume-format-hint" className="mt-1 text-xs text-text-3">
+                    PDF, DOC ou DOCX até 5 MB
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--line,#202A4A)] bg-surface-raised p-4 transition-all">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-ok/15 text-ok">
+                      <FileCheck size={22} aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-text" title={resumeFile.name}>
+                        {resumeFile.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-text-3">
+                        {formatFileSize(resumeFile.size)} · Pronto para envio
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveResume}
+                    aria-label="Remover currículo selecionado"
+                    className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent text-text-3 hover:border-err/30 hover:bg-err/10 hover:text-err transition-colors"
+                  >
+                    <Trash2 size={18} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+
+              {resumeError && (
+                <p role="alert" className="m-0 rounded-xl border border-err/35 bg-[#1B1630] px-3.5 py-2.5 text-xs font-semibold text-err">
+                  {resumeError}
+                </p>
+              )}
+
+              <div className="rounded-xl border border-[var(--line,#202A4A)]/60 bg-surface/60 p-3.5 text-xs text-text-2">
+                <span className="font-semibold text-text">Dica de carreira:</span> Patrocinadores com estande na Tech Week buscam ativamente alunos para estágios e vagas Jr. Manter seu currículo atualizado aumenta suas chances!
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="sticky bottom-0 z-20 mt-auto flex flex-col gap-2.5 bg-[linear-gradient(180deg,rgba(10,15,36,0),#0A0F24_24%)] px-5 pt-4 pb-[26px]">
           {error && (
             <p role="alert" className="m-0 rounded-xl border border-err/35 bg-[#1B1630] px-3.5 py-2.5 text-[13px] font-semibold text-err shadow-lg">
@@ -784,10 +979,25 @@ export default function Register() {
           <button type="submit" className="btn btn-primary btn-block ent-btn-lg ent-cta" disabled={loading}>
             {loading
               ? <><Loader2 className="animate-spin" size={20} aria-hidden="true" /> {step === 1 ? 'Verificando' : 'Criando seu crachá'}</>
-              : step === 1
+              : step === 1 || step === 2
                 ? <>Continuar <ArrowRight size={18} strokeWidth={2.4} aria-hidden="true" /></>
-                : 'Criar meu crachá'}
+                : resumeFile ? 'Concluir cadastro' : 'Avançar sem currículo'}
           </button>
+          {step === 3 && (
+            <>
+              <button
+                type="button"
+                onClick={handleSkipResume}
+                disabled={loading}
+                className="btn btn-secondary btn-block ent-btn-lg cursor-pointer"
+              >
+                Pular por enquanto
+              </button>
+              <p className="m-0 text-center text-xs text-text-3">
+                Você poderá adicionar seu currículo a qualquer momento pelo seu perfil.
+              </p>
+            </>
+          )}
         </div>
       </form>
 

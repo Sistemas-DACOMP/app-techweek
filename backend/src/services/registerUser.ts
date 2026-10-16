@@ -40,6 +40,7 @@ export async function registerUser(
   }
 
   const userRef = db.collection('users').doc(uid);
+  const publicProfileRef = db.collection('public_profiles').doc(uid);
 
   let userRole: UserRole = 'PARTICIPANT';
 
@@ -88,6 +89,28 @@ export async function registerUser(
     }
 
     tx.set(userRef, docData, { merge: true });
+
+    // Sincroniza documento público em /public_profiles/{uid} (KAN-137)
+    // NUNCA incluir email, phone nem termsAcceptedAt
+    const publicProfileData: Record<string, any> = {
+      uid,
+      role: userRole,
+      totalPoints: docData.totalPoints,
+      pontuacaoTotal: docData.pontuacaoTotal,
+      createdAt: docData.createdAt
+    };
+    if (docData.firstName) publicProfileData.firstName = docData.firstName;
+    if (docData.lastName) publicProfileData.lastName = docData.lastName;
+    if (docData.displayName) publicProfileData.displayName = docData.displayName;
+    if (docData.username) publicProfileData.username = docData.username;
+    if (docData.participantType) publicProfileData.participantType = docData.participantType;
+    if (docData.course) publicProfileData.course = docData.course;
+    if (docData.period) publicProfileData.period = docData.period;
+    if (docData.linkedin) publicProfileData.linkedin = docData.linkedin;
+    if (docData.instagram) publicProfileData.instagram = docData.instagram;
+    if (docData.photoURL) publicProfileData.photoURL = docData.photoURL;
+
+    tx.set(publicProfileRef, publicProfileData, { merge: true });
 
     return false;
   });

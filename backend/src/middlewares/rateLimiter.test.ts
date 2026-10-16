@@ -9,6 +9,9 @@ import {
   symplaPublicLimiter,
   sponsorInviteIpLimiter,
   debugClientIp,
+  resetDebugClientIpCount,
+  getDebugLogsCount,
+  MAX_DEBUG_LOGS,
   keyGenerator
 } from './rateLimiter';
 
@@ -307,10 +310,12 @@ describe('debugClientIp (ERR-061 / Ops)', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    resetDebugClientIpCount();
   });
 
   afterEach(() => {
     process.env = originalEnv;
+    resetDebugClientIpCount();
   });
 
   it('chama next() sem logar no console se DEBUG_CLIENT_IP não estiver configurado', () => {
@@ -324,10 +329,11 @@ describe('debugClientIp (ERR-061 / Ops)', () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(warnSpy).not.toHaveBeenCalled();
+    expect(getDebugLogsCount()).toBe(0);
     warnSpy.mockRestore();
   });
 
-  it('loga diagnóstico quando DEBUG_CLIENT_IP for "1"', () => {
+  it('loga diagnóstico quando DEBUG_CLIENT_IP for "1" incluindo contador, req.ip e x-forwarded-for', () => {
     process.env.DEBUG_CLIENT_IP = '1';
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const req = {
@@ -340,12 +346,76 @@ describe('debugClientIp (ERR-061 / Ops)', () => {
     debugClientIp(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('DEBUG_CLIENT_IP'),
-      expect.anything(),
-      expect.anything(),
-      '203.0.113.195'
+      expect.stringMatching(/DEBUG_CLIENT_IP \[1\/50\] req\.ip=10\.0\.0\.5.*x-forwarded-for=203\.0\.113\.195/)
     );
+    expect(getDebugLogsCount()).toBe(1);
+    warnSpy.mockRestore();
+  });
+
+  it('permite registrar múltiplas requisições de IPs distintos para validação em homologação', () => {
+    process.env.DEBUG_CLIENT_IP = '1';
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = makeRes();
+    const next = vi.fn();
+
+    const reqA = {
+      ...makeReq(undefined, '189.40.10.1'),
+      headers: { 'x-forwarded-for': '189.40.10.1' }
+    } as unknown as Request;
+    const reqB = {
+      ...makeReq(undefined, '201.55.20.2'),
+      headers: { 'x-forwarded-for': '201.55.20.2' }
+    } as unknown as Request;
+
+    debugClientIp(reqA, res, next);
+    debugClientIp(reqB, res, next);
+
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('[1/50] req.ip=189.40.10.1')
+    );
+    expect(warnSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('[2/50] req.ip=201.55.20.2')
+    );
+    expect(getDebugLogsCount()).toBe(2);
+    warnSpy.mockRestore();
+  });
+
+  it('interrompe os logs após atingir MAX_DEBUG_LOGS para prevenir flood', () => {
+    process.env.DEBUG_CLIENT_IP = '1';
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = makeRes();
+    const next = vi.fn();
+
+    for (let i = 0; i < MAX_DEBUG_LOGS + 5; i++) {
+      const req = makeReq(undefined, `10.0.0.${i}`);
+      debugClientIp(req, res, next);
+    }
+
+    expect(warnSpy).toHaveBeenCalledTimes(MAX_DEBUG_LOGS);
+    expect(getDebugLogsCount()).toBe(MAX_DEBUG_LOGS);
+    warnSpy.mockRestore();
+  });
+
+  it('resetDebugClientIpCount reinicia o contador para 0', () => {
+    process.env.DEBUG_CLIENT_IP = '1';
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = makeRes();
+    const next = vi.fn();
+
+    debugClientIp(makeReq(undefined, '10.0.0.1'), res, next);
+    expect(getDebugLogsCount()).toBe(1);
+
+    resetDebugClientIpCount();
+    expect(getDebugLogsCount()).toBe(0);
+
+    debugClientIp(makeReq(undefined, '10.0.0.2'), res, next);
+    expect(getDebugLogsCount()).toBe(1);
+    expect(warnSpy).toHaveBeenLastCalledWith(expect.stringContaining('[1/50]'));
     warnSpy.mockRestore();
   });
 });

@@ -15,8 +15,13 @@ import {
   ExternalLink, 
   Calendar, 
   UserCheck,
-  Pencil
+  Pencil,
+  FileText,
+  Download
 } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { formatFileSize } from '../lib/validators';
 import { GitHubIcon, LinkedInIcon, InstagramIcon, formatSocialUrl } from './ParticipantCard';
 import WhatsAppButton from './WhatsAppButton';
 import { submitLead, updateLead } from '../lib/sponsorService';
@@ -159,6 +164,67 @@ export default function SponsorLeadModal({
   const [emailCopied, setEmailCopied] = useState(false);
   const [updateSuccessToast, setUpdateSuccessToast] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
+  const [dynamicResume, setDynamicResume] = useState(() => ({
+    resumeUrl: participant?.resumeUrl || null,
+    resumeName: participant?.resumeName || null,
+    resumeSize: participant?.resumeSize ?? null,
+    resumeUpdatedAt: participant?.resumeUpdatedAt || null
+  }));
+
+  useEffect(() => {
+    let isMounted = true;
+    if (participant?.resumeUrl) {
+      setDynamicResume({
+        resumeUrl: participant.resumeUrl,
+        resumeName: participant.resumeName || 'curriculo.pdf',
+        resumeSize: participant.resumeSize,
+        resumeUpdatedAt: participant.resumeUpdatedAt
+      });
+      return;
+    }
+
+    const targetUid = participant?.participantUid || participant?.uid;
+    if (!targetUid || String(targetUid).startsWith('temp_') || String(targetUid).startsWith('sympla_')) {
+      setDynamicResume({
+        resumeUrl: null,
+        resumeName: null,
+        resumeSize: null,
+        resumeUpdatedAt: null
+      });
+      return;
+    }
+
+    const fetchResume = async () => {
+      try {
+        const uDoc = await getDoc(doc(db, 'users', targetUid));
+        if (isMounted && uDoc?.exists()) {
+          const data = uDoc.data();
+          if (data?.resumeUrl) {
+            setDynamicResume({
+              resumeUrl: data.resumeUrl,
+              resumeName: data.resumeName || 'curriculo.pdf',
+              resumeSize: data.resumeSize,
+              resumeUpdatedAt: data.resumeUpdatedAt
+            });
+            return;
+          }
+        }
+        if (isMounted) {
+          setDynamicResume({
+            resumeUrl: null,
+            resumeName: null,
+            resumeSize: null,
+            resumeUpdatedAt: null
+          });
+        }
+      } catch (_) {}
+    };
+
+    fetchResume();
+    return () => {
+      isMounted = false;
+    };
+  }, [participant?.participantUid, participant?.uid, participant?.resumeUrl, participant?.resumeName, participant?.resumeSize, participant?.resumeUpdatedAt]);
 
   useEffect(() => {
     if (participant) {
@@ -665,6 +731,79 @@ export default function SponsorLeadModal({
               </div>
             )}
 
+            {/* Ações de currículo pós-salvamento imediato */}
+            {(savedLeadData.resumeUrl || dynamicResume.resumeUrl) && (
+              <div
+                style={{
+                  background: '#1A2347',
+                  borderRadius: '16px',
+                  padding: '14px',
+                  border: '1px solid #1C2548',
+                  marginBottom: '18px',
+                  textAlign: 'left'
+                }}
+              >
+                <div style={{ fontSize: '11px', fontWeight: '700', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                  Currículo Profissional
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    <FileText size={18} color="#8FA0FF" style={{ flexShrink: 0 }} />
+                    <span style={{ fontSize: '12.5px', fontWeight: '700', color: '#EEF1FA', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {savedLeadData.resumeName || dynamicResume.resumeName || 'Currículo do Candidato'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                    <a
+                      href={savedLeadData.resumeUrl || dynamicResume.resumeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        minHeight: '38px',
+                        padding: '0 12px',
+                        background: '#121A36',
+                        border: '1px solid #1C2548',
+                        borderRadius: '10px',
+                        color: '#8FA0FF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11.5px',
+                        fontWeight: '700',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      <ExternalLink size={12} />
+                      <span>Abrir</span>
+                    </a>
+                    <a
+                      href={savedLeadData.resumeUrl || dynamicResume.resumeUrl}
+                      download={savedLeadData.resumeName || dynamicResume.resumeName || 'curriculo.pdf'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        minHeight: '38px',
+                        padding: '0 12px',
+                        background: '#2563EB',
+                        border: '1px solid #3B82F6',
+                        borderRadius: '10px',
+                        color: '#FFFFFF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11.5px',
+                        fontWeight: '700',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      <Download size={12} />
+                      <span>Baixar</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <button
               type="button"
               className="btn-primary"
@@ -1093,6 +1232,129 @@ export default function SponsorLeadModal({
                 )}
               </div>
 
+              {/* CURRÍCULO PROFISSIONAL */}
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ fontSize: '10.5px', fontWeight: '800', color: '#A9B1CC', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+                  Currículo Profissional
+                </div>
+                {dynamicResume.resumeUrl ? (
+                  <div
+                    style={{
+                      background: '#131B3A',
+                      borderRadius: '14px',
+                      padding: '12px 14px',
+                      border: '1px solid #1C2548',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '10px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          background: 'rgba(37, 99, 235, 0.15)',
+                          border: '1px solid rgba(56, 189, 248, 0.3)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}
+                      >
+                        <FileText size={18} color="#8FA0FF" />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: '12.5px',
+                            fontWeight: '700',
+                            color: '#EEF1FA',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {dynamicResume.resumeName || 'curriculo.pdf'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#8790AE', marginTop: '2px' }}>
+                          {dynamicResume.resumeSize ? formatFileSize(dynamicResume.resumeSize) : 'Documento anexado'}
+                          {dynamicResume.resumeUpdatedAt && (
+                            <span> · {new Date(dynamicResume.resumeUpdatedAt).toLocaleDateString('pt-BR')}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      <a
+                        href={dynamicResume.resumeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Abrir currículo em nova aba"
+                        style={{
+                          minHeight: '44px',
+                          padding: '0 12px',
+                          background: '#1A2347',
+                          border: '1px solid #1C2548',
+                          borderRadius: '10px',
+                          color: '#8FA0FF',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <ExternalLink size={13} />
+                        <span>Abrir</span>
+                      </a>
+                      <a
+                        href={dynamicResume.resumeUrl}
+                        download={dynamicResume.resumeName || 'curriculo.pdf'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Baixar arquivo de currículo"
+                        style={{
+                          minHeight: '44px',
+                          padding: '0 12px',
+                          background: '#2563EB',
+                          border: '1px solid #3B82F6',
+                          borderRadius: '10px',
+                          color: '#FFFFFF',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <Download size={13} />
+                        <span>Baixar</span>
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      background: '#131B3A',
+                      borderRadius: '14px',
+                      padding: '12px 14px',
+                      border: '1px solid #1C2548',
+                      fontSize: '12px',
+                      color: '#8790AE',
+                      fontStyle: 'italic'
+                    }}
+                  >
+                    Nenhum currículo anexado pelo participante até o momento.
+                  </div>
+                )}
+              </div>
+
               {/* COMPETÊNCIAS & TAGS (CHIPS ESTÁTICOS) */}
               {activeTags.length > 0 && (
                 <div style={{ marginBottom: '14px' }}>
@@ -1452,6 +1714,90 @@ export default function SponsorLeadModal({
                         )}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {dynamicResume.resumeUrl && (
+                  <div
+                    style={{
+                      borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                      paddingTop: '10px',
+                      marginTop: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <FileText size={15} color="#8FA0FF" style={{ flexShrink: 0 }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: '11.5px',
+                            fontWeight: '700',
+                            color: '#EEF1FA',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {dynamicResume.resumeName || 'Currículo anexado'}
+                        </div>
+                        {dynamicResume.resumeSize ? (
+                          <div style={{ fontSize: '10px', color: '#8790AE' }}>
+                            {formatFileSize(dynamicResume.resumeSize)}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      <a
+                        href={dynamicResume.resumeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          minHeight: '34px',
+                          padding: '0 10px',
+                          background: '#1A2347',
+                          border: '1px solid #1C2548',
+                          borderRadius: '8px',
+                          color: '#8FA0FF',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <ExternalLink size={11} />
+                        <span>Abrir</span>
+                      </a>
+                      <a
+                        href={dynamicResume.resumeUrl}
+                        download={dynamicResume.resumeName || 'curriculo.pdf'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          minHeight: '34px',
+                          padding: '0 10px',
+                          background: '#2563EB',
+                          border: '1px solid #3B82F6',
+                          borderRadius: '8px',
+                          color: '#FFFFFF',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <Download size={11} />
+                        <span>Baixar</span>
+                      </a>
+                    </div>
                   </div>
                 )}
               </div>

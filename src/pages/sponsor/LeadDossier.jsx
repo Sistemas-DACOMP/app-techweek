@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Mail, Plus, Loader2, MessageCircle } from 'lucide-react';
+import { Mail, Plus, Loader2, MessageCircle, FileText, Download, ExternalLink } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { formatFileSize } from '../../lib/validators';
 import { GitHubIcon } from '../../components/ParticipantCard';
 import { getAffiliationBadge } from '../../components/SponsorLeadModal';
 import { buildWhatsAppLink } from '../../lib/whatsapp';
@@ -38,8 +41,54 @@ export default function LeadDossier({ lead, companyName, companyId, tier, onUpda
   const [tplId, setTplId] = useState(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
+  const [dynamicResume, setDynamicResume] = useState(() => ({
+    resumeUrl: lead.resumeUrl || null,
+    resumeName: lead.resumeName || null,
+    resumeSize: lead.resumeSize ?? null,
+    resumeUpdatedAt: lead.resumeUpdatedAt || null
+  }));
 
   useEffect(() => subscribeToSponsorSettings(companyId, setSettings), [companyId]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (lead.resumeUrl) {
+      setDynamicResume({
+        resumeUrl: lead.resumeUrl,
+        resumeName: lead.resumeName || 'curriculo.pdf',
+        resumeSize: lead.resumeSize,
+        resumeUpdatedAt: lead.resumeUpdatedAt
+      });
+      return;
+    }
+
+    const targetUid = lead.participantUid;
+    if (!targetUid || String(targetUid).startsWith('temp_') || String(targetUid).startsWith('sympla_')) {
+      return;
+    }
+
+    const fetchResume = async () => {
+      try {
+        const uDoc = await getDoc(doc(db, 'users', targetUid));
+        if (isMounted && uDoc?.exists()) {
+          const data = uDoc.data();
+          if (data?.resumeUrl) {
+            setDynamicResume({
+              resumeUrl: data.resumeUrl,
+              resumeName: data.resumeName || 'curriculo.pdf',
+              resumeSize: data.resumeSize,
+              resumeUpdatedAt: data.resumeUpdatedAt
+            });
+          }
+        }
+      } catch (_) {}
+    };
+
+    fetchResume();
+    return () => {
+      isMounted = false;
+    };
+  }, [lead.participantUid, lead.resumeUrl, lead.resumeName, lead.resumeSize, lead.resumeUpdatedAt]);
 
   const save = async (next) => {
     setStatus('saving');
@@ -127,6 +176,52 @@ export default function LeadDossier({ lead, companyName, companyId, tier, onUpda
             )}
           </div>
         ) : <p className="m-0 text-[13px] text-text-3">O participante não informou contatos públicos.</p>}
+      </Card>
+
+      <Card title="Currículo">
+        {dynamicResume.resumeUrl ? (
+          <div className="flex flex-col gap-3 rounded-[14px] border border-line-2 bg-surface-selected p-3.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-action/10 text-link">
+                <FileText size={22} aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[14px] font-bold text-text">
+                  {dynamicResume.resumeName || 'Currículo do Candidato'}
+                </div>
+                <div className="text-[12px] text-text-3">
+                  {dynamicResume.resumeSize ? formatFileSize(dynamicResume.resumeSize) : 'Documento anexado'}
+                  {dynamicResume.resumeUpdatedAt && (
+                    <span> · Atualizado {new Date(dynamicResume.resumeUpdatedAt).toLocaleDateString('pt-BR')}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-1 sm:pt-0">
+              <a
+                href={dynamicResume.resumeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="tw-press flex h-11 min-w-[96px] flex-1 items-center justify-center gap-2 rounded-xl border border-line-2 bg-surface px-3.5 text-[13px] font-bold text-text hover:border-link sm:flex-initial"
+              >
+                <ExternalLink size={16} aria-hidden="true" className="text-link" />
+                <span>Abrir</span>
+              </a>
+              <a
+                href={dynamicResume.resumeUrl}
+                download={dynamicResume.resumeName || 'curriculo.pdf'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="tw-press flex h-11 min-w-[96px] flex-1 items-center justify-center gap-2 rounded-xl bg-action px-3.5 text-[13px] font-bold text-white hover:opacity-90 sm:flex-initial"
+              >
+                <Download size={16} aria-hidden="true" />
+                <span>Baixar</span>
+              </a>
+            </div>
+          </div>
+        ) : (
+          <p className="m-0 text-[13px] text-text-3">O participante ainda não anexou um currículo.</p>
+        )}
       </Card>
 
       <Card title="Tags" aside={onManageTags && <button type="button" onClick={onManageTags} className="tw-press min-h-11 text-[12px] font-bold text-link">Gerenciar</button>}>

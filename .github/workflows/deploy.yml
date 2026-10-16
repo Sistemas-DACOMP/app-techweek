@@ -49,6 +49,7 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
           DEBUG_CLIENT_IP: ${{ secrets.DEBUG_CLIENT_IP }}
+          TRUST_PROXY_HOPS: ${{ secrets.TRUST_PROXY_HOPS }}
         run: |
           cat << EOF > backend/.env
           SCREEN_TOKEN_SECRET=${SCREEN_TOKEN_SECRET}
@@ -60,6 +61,7 @@ jobs:
           EMAIL_FROM=${EMAIL_FROM}
           APP_BASE_URL=${APP_BASE_URL}
           DEBUG_CLIENT_IP=${DEBUG_CLIENT_IP}
+          TRUST_PROXY_HOPS=${TRUST_PROXY_HOPS}
           EOF
 
       - name: Build backend
