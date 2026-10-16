@@ -140,6 +140,68 @@ function persistDirectoryProfile(uid, profileObj) {
   } catch (_e) {}
 }
 
+const USER_ALLOWED_CREATE_KEYS = new Set([
+  'uid', 'email', 'firstName', 'lastName', 'displayName',
+  'username', 'phone', 'participantType', 'participant_type',
+  'course', 'period', 'institution', 'linkedin', 'instagram',
+  'github', 'avatarUrl', 'photoURL', 'mascot', 'role',
+  'totalPoints', 'pontuacaoTotal', 'termsAcceptedAt',
+  'createdAt', 'updatedAt', 'pendingEmailChange'
+]);
+
+const VALID_PARTICIPANT_TYPES = new Set([
+  'Aluno UFU Graduação', 'Aluno UFU Pós-graduação', 'Aluno de outra instituição',
+  'Servidor / Professor', 'Professor / Servidor UFU', 'Comunidade Externa',
+  'Outro', 'Aluno da UFU', 'Pós-graduação', 'Aluno UFU Pos graduação', 'Organizador'
+]);
+
+function sanitizeUsernameForRules(rawUsername) {
+  if (!rawUsername || typeof rawUsername !== 'string') return '';
+  const cleaned = rawUsername.trim().replace(/^@/, '').toLowerCase().replace(/[^a-z0-9._]/g, '');
+  if (cleaned.length >= 3 && cleaned.length <= 30 && /^[a-zA-Z0-9._]+$/.test(cleaned)) {
+    return cleaned;
+  }
+  return '';
+}
+
+function sanitizePeriodForRules(rawPeriod) {
+  if (rawPeriod === null || rawPeriod === undefined || rawPeriod === '') return null;
+  const num = Math.round(Number(rawPeriod));
+  if (Number.isInteger(num) && num >= 1 && num <= 20) return num;
+  return null;
+}
+
+function sanitizeParticipantTypeForRules(rawType) {
+  if (typeof rawType === 'string' && VALID_PARTICIPANT_TYPES.has(rawType)) {
+    return rawType;
+  }
+  return 'Aluno da UFU';
+}
+
+function sanitizeUserCreatePayload(rawPayload, uid) {
+  const sanitized = {};
+  for (const [key, val] of Object.entries(rawPayload || {})) {
+    if (USER_ALLOWED_CREATE_KEYS.has(key) && val !== undefined) {
+      sanitized[key] = val;
+    }
+  }
+  sanitized.uid = uid;
+  sanitized.role = 'PARTICIPANT';
+  sanitized.totalPoints = 0;
+  sanitized.pontuacaoTotal = 0;
+  sanitized.username = sanitizeUsernameForRules(sanitized.username);
+  sanitized.period = sanitizePeriodForRules(sanitized.period);
+  sanitized.participantType = sanitizeParticipantTypeForRules(sanitized.participantType);
+  sanitized.participant_type = sanitizeParticipantTypeForRules(sanitized.participant_type || sanitized.participantType);
+  if (typeof sanitized.avatarUrl === 'string' && sanitized.avatarUrl.length > 500) {
+    sanitized.avatarUrl = null;
+  }
+  if (typeof sanitized.photoURL === 'string' && sanitized.photoURL.length > 500) {
+    sanitized.photoURL = null;
+  }
+  return sanitized;
+}
+
 /**
  * Cria ou inicializa o perfil do usuário na coleção /users/{uid} do Firestore.
  */
@@ -168,7 +230,7 @@ export async function createUserProfile(uid, data) {
     participantType: isTargetAdmin ? 'Organizador' : (data.participantType || 'Aluno da UFU'),
     participant_type: isTargetAdmin ? 'Organizador' : (data.participantType || 'Aluno da UFU'),
     course: data.course || '',
-    period: data.period ? Number(data.period) : null,
+    period: sanitizePeriodForRules(data.period),
     institution: data.institution || '',
     linkedin: data.linkedin || '',
     instagram: data.instagram || '',
@@ -217,12 +279,7 @@ export async function createUserProfile(uid, data) {
     // Campos de ingresso Sympla são do backend (firestore.rules os bloqueia no cliente, KAN-108):
     // ficam só no cache local, nunca no payload do Firestore.
     // Além disso, firestore.rules exige role == 'PARTICIPANT' no allow create e avatarUrl <= 500 chars.
-    // eslint-disable-next-line no-unused-vars
-    const { hasSymplaTicket, symplaTicket, ticketId, ...firestoreData } = profileData;
-    firestoreData.role = 'PARTICIPANT';
-    if (typeof firestoreData.avatarUrl === 'string' && firestoreData.avatarUrl.length > 500) {
-      firestoreData.avatarUrl = null;
-    }
+    const firestoreData = sanitizeUserCreatePayload(profileData, uid);
     await setDoc(userRef, firestoreData, { merge: true });
   } catch (err) {
     console.warn('[userService] Aviso: Gravação do perfil no Firestore rejeitada por regras, dados preservados no cache local:', err);
@@ -284,7 +341,8 @@ export async function getUserProfile(uid) {
         merged.participant_type = merged.participant_type || 'Organizador';
       }
 
-      if (resolvedPoints > 0 && auth?.currentUser?.uid === uid) {
+      const canSyncRanking = merged.role !== 'STAFF' && merged.role !== 'SPONSOR';
+      if (resolvedPoints >= 0 && canSyncRanking && auth?.currentUser?.uid === uid) {
         syncUserRankingInFirestore(uid, resolvedPoints, merged).catch(() => {});
       }
 
@@ -350,6 +408,9 @@ export async function updateUserProfile(uid, updates) {
   if (typeof firestoreUpdates.avatarUrl === 'string' && firestoreUpdates.avatarUrl.length > 500) {
     delete firestoreUpdates.avatarUrl;
   }
+  if ('period' in firestoreUpdates) {
+    firestoreUpdates.period = sanitizePeriodForRules(firestoreUpdates.period);
+  }
   if (Object.keys(firestoreUpdates).length === 0) {
     return true;
   }
@@ -366,18 +427,18 @@ export async function updateUserProfile(uid, updates) {
       try {
         const now = serverTimestamp();
         const fallbackEmail = (merged.email || auth?.currentUser?.email || '').trim().toLowerCase();
-        const createPayload = {
+        const rawCreatePayload = {
           uid,
           email: fallbackEmail,
-          firstName: merged.firstName || '',
-          lastName: merged.lastName || '',
-          displayName: merged.displayName || [merged.firstName, merged.lastName].filter(Boolean).join(' ').trim() || '',
+          firstName: merged.firstName || merged.first_name || '',
+          lastName: merged.lastName || merged.last_name || '',
+          displayName: merged.displayName || [merged.firstName || merged.first_name, merged.lastName || merged.last_name].filter(Boolean).join(' ').trim() || '',
           username: merged.username ? String(merged.username).trim().toLowerCase() : '',
           phone: merged.phone || '',
           participantType: merged.participantType || 'Aluno da UFU',
           participant_type: merged.participant_type || merged.participantType || 'Aluno da UFU',
           course: merged.course || '',
-          period: merged.period ? Number(merged.period) : null,
+          period: merged.period,
           institution: merged.institution || '',
           linkedin: merged.linkedin || '',
           instagram: merged.instagram || '',
@@ -391,6 +452,7 @@ export async function updateUserProfile(uid, updates) {
           updatedAt: now,
           ...firestoreUpdates
         };
+        const createPayload = sanitizeUserCreatePayload(rawCreatePayload, uid);
         await setDoc(userRef, createPayload, { merge: true });
       } catch (createErr) {
         console.warn('[userService] Aviso: Gravação direta no Firestore bloqueada por regras, dados preservados localmente:', createErr);
@@ -613,6 +675,18 @@ export async function uploadUserAvatar(uid, file) {
   return finalUrl;
 }
 
+function cleanUsernameValue(val) {
+  const s = String(val || '').trim().replace(/^@/, '');
+  if (!s || s === 'user' || s === 'Participante' || s === 'Você') return '';
+  return s;
+}
+
+function cleanNameValue(val) {
+  const s = String(val || '').trim();
+  if (!s || s === 'Participante' || s === 'user' || s === 'Você') return '';
+  return s;
+}
+
 /**
  * Sincroniza o documento do usuário na coleção consolidada `/ranking/{uid}` do Firestore.
  * Permite que todos os dispositivos vejam os pontos em tempo real na coleção `/ranking`.
@@ -621,20 +695,29 @@ export async function syncUserRankingInFirestore(uid, points, profileData = null
   if (!uid) return false;
   const numericPoints = Math.max(0, Math.min(100000, Math.round(Number(points) || 0)));
 
-  let source = profileData || {};
+  let source = profileData ? { ...profileData } : {};
+  let cachedLocalPoints = 0;
+
   try {
-    if (typeof localStorage !== 'undefined' && (!source.firstName && !source.first_name)) {
+    if (typeof localStorage !== 'undefined') {
       const cached = localStorage.getItem(`facom_profile_${uid}`) || localStorage.getItem(`facom_user_dir_${uid}`);
       if (cached) {
-        source = { ...JSON.parse(cached), ...source };
+        const parsedCached = JSON.parse(cached);
+        cachedLocalPoints = Math.max(
+          0,
+          Number(parsedCached.totalPoints ?? parsedCached.pontuacaoTotal ?? parsedCached.total_points ?? 0) || 0
+        );
+        source = { ...parsedCached, ...source };
       }
-    }
-    if (typeof localStorage !== 'undefined') {
       const cachedKey = `facom_profile_${uid}`;
       const existingRaw = localStorage.getItem(cachedKey);
       if (existingRaw) {
         const existing = JSON.parse(existingRaw);
-        const maxPts = Math.max(numericPoints, Number(existing.totalPoints ?? existing.pontuacaoTotal ?? 0) || 0);
+        const maxPts = Math.max(
+          numericPoints,
+          cachedLocalPoints,
+          Number(existing.totalPoints ?? existing.pontuacaoTotal ?? 0) || 0
+        );
         if (maxPts !== existing.totalPoints || maxPts !== existing.pontuacaoTotal) {
           localStorage.setItem(cachedKey, JSON.stringify({
             ...existing,
@@ -646,27 +729,77 @@ export async function syncUserRankingInFirestore(uid, points, profileData = null
     }
   } catch (_e) {}
 
+  const effectiveRole = source.role || 'PARTICIPANT';
+  if (effectiveRole === 'STAFF' || effectiveRole === 'SPONSOR') {
+    return false;
+  }
+
+  const effectivePoints = Math.max(
+    0,
+    Math.min(
+      100000,
+      Math.max(
+        numericPoints,
+        cachedLocalPoints,
+        Math.round(Number(source.totalPoints ?? source.pontuacaoTotal ?? source.total_points ?? source.points ?? 0) || 0)
+      )
+    )
+  );
+
   try {
     if (typeof setDoc !== 'function' || typeof doc !== 'function') return false;
     const rankingRef = doc(db, 'ranking', uid);
     if (!rankingRef) return false;
 
-    const firstName = source.firstName || source.first_name || 'Participante';
-    const lastName = source.lastName || source.last_name || '';
+    const authUser = auth?.currentUser?.uid === uid ? auth.currentUser : null;
+    const rawFirstName =
+      cleanNameValue(source.firstName || source.first_name) ||
+      cleanNameValue(source.displayName ? String(source.displayName).trim().split(' ')[0] : '') ||
+      cleanNameValue(authUser?.displayName ? String(authUser.displayName).trim().split(' ')[0] : '') ||
+      cleanNameValue(source.email ? String(source.email).split('@')[0].split(/[._-]/)[0] : '') ||
+      cleanNameValue(authUser?.email ? String(authUser.email).split('@')[0].split(/[._-]/)[0] : '');
+    const rawLastName =
+      source.lastName ||
+      source.last_name ||
+      (source.displayName ? String(source.displayName).trim().split(' ').slice(1).join(' ') : '') ||
+      (authUser?.displayName ? String(authUser.displayName).trim().split(' ').slice(1).join(' ') : '') ||
+      '';
+    const rawUsername =
+      cleanUsernameValue(source.username) ||
+      cleanUsernameValue(source.email ? String(source.email).split('@')[0] : '') ||
+      cleanUsernameValue(authUser?.email ? String(authUser.email).split('@')[0] : '') ||
+      cleanUsernameValue(rawFirstName ? rawFirstName.toLowerCase() : '');
+    const hasExplicitIdentity = Boolean(
+      profileData ||
+      rawFirstName ||
+      rawUsername ||
+      cleanNameValue(source.displayName) ||
+      cleanNameValue(authUser?.displayName) ||
+      source.avatarUrl ||
+      source.avatar_url ||
+      source.photoURL ||
+      authUser?.photoURL
+    );
+
     const payload = {
       uid,
-      username: source.username || firstName || 'user',
-      firstName,
-      lastName,
-      displayName: source.displayName || [firstName, lastName].filter(Boolean).join(' ') || 'Participante',
-      avatarUrl: source.avatarUrl || source.avatar_url || source.photoURL || null,
-      course: source.course || '',
-      mascot: source.mascot || 'blue',
-      role: source.role || 'PARTICIPANT',
-      totalPoints: numericPoints,
-      pontuacaoTotal: numericPoints,
+      role: 'PARTICIPANT',
+      totalPoints: effectivePoints,
+      pontuacaoTotal: effectivePoints,
       updatedAt: typeof serverTimestamp === 'function' ? serverTimestamp() : new Date().toISOString()
     };
+
+    if (hasExplicitIdentity) {
+      const firstName = rawFirstName || 'Participante';
+      const lastName = rawLastName || '';
+      payload.username = rawUsername || cleanUsernameValue(firstName) || 'user';
+      payload.firstName = firstName;
+      payload.lastName = lastName;
+      payload.displayName = cleanNameValue(source.displayName) || [firstName, lastName].filter(Boolean).join(' ') || firstName || 'Participante';
+      payload.avatarUrl = source.avatarUrl || source.avatar_url || source.photoURL || authUser?.photoURL || null;
+      payload.course = source.course || '';
+      payload.mascot = source.mascot || 'blue';
+    }
 
     await setDoc(rankingRef, payload, { merge: true });
     return true;
@@ -694,26 +827,123 @@ export async function getUserPointEvents(uid) {
 
 function mapUserToLeaderboard(d, index) {
   const data = typeof d.data === 'function' ? d.data() : d;
-  const points = Number(data.pontuacaoTotal ?? data.totalPoints ?? data.points ?? 0);
+  const docId = d.id || data.id || data.uid;
+  const authUser = docId && auth?.currentUser?.uid === docId ? auth.currentUser : null;
+  const points = Math.max(
+    0,
+    Number(data.pontuacaoTotal ?? data.totalPoints ?? data.total_points ?? data.points ?? 0) || 0
+  );
+  const derivedFirstName =
+    cleanNameValue(data.firstName || data.first_name) ||
+    cleanNameValue(data.displayName ? String(data.displayName).trim().split(' ')[0] : '') ||
+    cleanNameValue(authUser?.displayName ? String(authUser.displayName).trim().split(' ')[0] : '') ||
+    cleanNameValue(data.email ? String(data.email).split('@')[0] : '') ||
+    cleanNameValue(authUser?.email ? String(authUser.email).split('@')[0] : '') ||
+    cleanUsernameValue(data.username) ||
+    'Participante';
+  const derivedUsername =
+    cleanUsernameValue(data.username) ||
+    cleanUsernameValue(data.email ? String(data.email).split('@')[0] : '') ||
+    cleanUsernameValue(authUser?.email ? String(authUser.email).split('@')[0] : '') ||
+    cleanUsernameValue(data.firstName || data.first_name) ||
+    cleanUsernameValue(authUser?.displayName ? String(authUser.displayName).trim().split(' ')[0] : '') ||
+    'user';
+
   return {
-    id: d.id || data.id || data.uid,
+    id: docId,
     rank: index + 1,
-    username: data.username || data.firstName || data.first_name || 'user',
-    first_name: data.firstName || data.first_name || 'Participante',
-    last_name: data.lastName || data.last_name || '',
-    avatar_url: data.avatarUrl || data.avatar_url || data.photoURL || null,
+    username: derivedUsername,
+    first_name: derivedFirstName,
+    last_name: data.lastName || data.last_name || (authUser?.displayName ? String(authUser.displayName).trim().split(' ').slice(1).join(' ') : '') || '',
+    avatar_url: data.avatarUrl || data.avatar_url || data.photoURL || authUser?.photoURL || null,
     points,
     mascot: data.mascot || 'blue',
     course: data.course || '',
     role: data.role || 'PARTICIPANT',
+    email: data.email || authUser?.email || '',
     createdAt: data.createdAt || data.updatedAt || null
   };
 }
 
-function mergeUsersAndRankingForLeaderboard(usersList = [], rankingDocs = []) {
+function isNonParticipantEntry(role) {
+  if (role === 'ADMIN' || role === 'STAFF' || role === 'SPONSOR') return true;
+  return false;
+}
+
+function aggregatePointEventsByUid(pointEventDocs = []) {
+  const perUserEvents = new Map();
+  for (let i = 0; i < pointEventDocs.length; i++) {
+    const evDoc = pointEventDocs[i];
+    if (!evDoc) continue;
+    const data = typeof evDoc.data === 'function' ? evDoc.data() : evDoc;
+    if (!data) continue;
+    const uid = data.userId || data.user_id || data.uid;
+    if (!uid) continue;
+    const pts = Math.max(0, Number(data.points) || 0);
+    if (pts <= 0) continue;
+    const refKey = data.referenceId || data.reference_id || evDoc.id || `evt_${i}`;
+    if (!perUserEvents.has(uid)) {
+      perUserEvents.set(uid, new Map());
+    }
+    const userMap = perUserEvents.get(uid);
+    userMap.set(refKey, Math.max(userMap.get(refKey) || 0, pts));
+  }
+
+  const totalsByUid = new Map();
+  for (const [uid, userMap] of perUserEvents.entries()) {
+    let sum = 0;
+    for (const val of userMap.values()) {
+      sum += val;
+    }
+    totalsByUid.set(uid, sum);
+  }
+  return totalsByUid;
+}
+
+function mergeLeaderboardEntry(existing, incoming) {
+  existing.points = Math.max(Number(existing.points || 0), Number(incoming.points || 0));
+  if (!cleanNameValue(existing.first_name) && cleanNameValue(incoming.first_name)) {
+    existing.first_name = incoming.first_name;
+  }
+  if (!existing.last_name && incoming.last_name) {
+    existing.last_name = incoming.last_name;
+  }
+  if (!cleanUsernameValue(existing.username) && cleanUsernameValue(incoming.username)) {
+    existing.username = incoming.username;
+  }
+  if (!existing.avatar_url && incoming.avatar_url) {
+    existing.avatar_url = incoming.avatar_url;
+  }
+  if (!existing.course && incoming.course) {
+    existing.course = incoming.course;
+  }
+  if (incoming.mascot && (!existing.mascot || existing.mascot === 'blue')) {
+    existing.mascot = incoming.mascot;
+  }
+  if (!existing.createdAt && incoming.createdAt) {
+    existing.createdAt = incoming.createdAt;
+  }
+}
+
+function mergeUsersAndRankingForLeaderboard(usersList = [], rankingDocs = [], pointEventDocs = [], allUsersLookup = []) {
   const map = new Map();
+  const profileById = new Map();
+
+  for (const u of [...usersList, ...allUsersLookup]) {
+    if (!u || !u.id) continue;
+    if (profileById.has(u.id)) {
+      mergeLeaderboardEntry(profileById.get(u.id), u);
+    } else {
+      profileById.set(u.id, { ...u });
+    }
+  }
+
   for (const item of usersList) {
-    if (item && item.id) {
+    if (!item || !item.id) continue;
+    if (isNonParticipantEntry(item.role)) continue;
+    if (map.has(item.id)) {
+      mergeLeaderboardEntry(map.get(item.id), item);
+    } else {
       map.set(item.id, { ...item });
     }
   }
@@ -727,34 +957,28 @@ function mergeUsersAndRankingForLeaderboard(usersList = [], rankingDocs = []) {
     if (!uid) continue;
 
     const rRole = rData.role || 'PARTICIPANT';
-    if (rRole === 'ADMIN' || rRole === 'STAFF' || rRole === 'SPONSOR') {
+    if (isNonParticipantEntry(rRole)) {
       continue;
     }
 
-    const rPoints = Number(rData.pontuacaoTotal ?? rData.totalPoints ?? rData.points ?? 0) || 0;
+    const mappedRankingItem = mapUserToLeaderboard(rDoc, map.size);
+    const knownProfile = profileById.get(uid);
+    if (knownProfile) {
+      mergeLeaderboardEntry(mappedRankingItem, knownProfile);
+    }
+
+    if (map.has(uid)) {
+      mergeLeaderboardEntry(map.get(uid), mappedRankingItem);
+    } else {
+      map.set(uid, mappedRankingItem);
+    }
+  }
+
+  const eventTotals = aggregatePointEventsByUid(pointEventDocs);
+  for (const [uid, eventSum] of eventTotals.entries()) {
     if (map.has(uid)) {
       const existing = map.get(uid);
-      existing.points = Math.max(Number(existing.points || 0), rPoints);
-      if ((!existing.first_name || existing.first_name === 'Participante') && (rData.firstName || rData.first_name)) {
-        existing.first_name = rData.firstName || rData.first_name;
-      }
-      if (!existing.last_name && (rData.lastName || rData.last_name)) {
-        existing.last_name = rData.lastName || rData.last_name;
-      }
-      if ((!existing.username || existing.username === 'user') && rData.username) {
-        existing.username = rData.username;
-      }
-      if (!existing.avatar_url && (rData.avatarUrl || rData.avatar_url || rData.photoURL)) {
-        existing.avatar_url = rData.avatarUrl || rData.avatar_url || rData.photoURL;
-      }
-      if (!existing.course && rData.course) {
-        existing.course = rData.course;
-      }
-      if (rData.mascot) {
-        existing.mascot = rData.mascot;
-      }
-    } else {
-      map.set(uid, mapUserToLeaderboard(rDoc, map.size));
+      existing.points = Math.max(Number(existing.points || 0), eventSum);
     }
   }
 
@@ -777,10 +1001,12 @@ function sortLeaderboardWithTiebreak(list) {
 /**
  * Obtém os líderes do ranking de pontuação filtrando apenas participantes
  * e ordenando por pontuacaoTotal desc com limite configurável (padrão 50),
- * consolidando dados das coleções `/users` e `/ranking`.
+ * consolidando dados das coleções `/users`, `/ranking` e `/pointEvents` (incluindo participantes
+ * com 0 pontos ou sem campo pontuacaoTotal indexado).
  */
 export async function getLeaderboardUsers(maxLimit = 50) {
   const usersRef = collection(db, 'users');
+  const broadLimit = Math.max(maxLimit * 4, 200);
   try {
     let snap;
     try {
@@ -804,6 +1030,7 @@ export async function getLeaderboardUsers(maxLimit = 50) {
 
     const list = (snap?.docs || []).map((d, index) => mapUserToLeaderboard(d, index));
     let rankingDocs = [];
+    let pointEventDocs = [];
     try {
       const rankSnap = await getDocs(collection(db, 'ranking'));
       if (rankSnap && Array.isArray(rankSnap.docs)) {
@@ -811,23 +1038,47 @@ export async function getLeaderboardUsers(maxLimit = 50) {
       }
     } catch (_rankErr) {}
 
-    const merged = mergeUsersAndRankingForLeaderboard(list, rankingDocs);
+    // Busca complementar sem orderBy composto para incluir todos os participantes de /users
+    // mesmo que não possuam pontuacaoTotal indexado ou tenham 0 pontos.
+    try {
+      const broadSnap = await getDocs(query(usersRef, limit(broadLimit)));
+      if (broadSnap && Array.isArray(broadSnap.docs)) {
+        for (let i = 0; i < broadSnap.docs.length; i++) {
+          list.push(mapUserToLeaderboard(broadSnap.docs[i], list.length));
+        }
+      }
+    } catch (_broadErr) {}
+
+    try {
+      const eventsSnap = await getDocs(collection(db, 'pointEvents'));
+      if (eventsSnap && Array.isArray(eventsSnap.docs)) {
+        pointEventDocs = eventsSnap.docs;
+      }
+    } catch (_eventsErr) {}
+
+    const merged = mergeUsersAndRankingForLeaderboard(list, rankingDocs, pointEventDocs);
     return sortLeaderboardWithTiebreak(merged).slice(0, maxLimit);
   } catch (err) {
     console.warn('Erro ao carregar ranking com índices, tentando fallback direto sem índice composto:', err);
     try {
-      const basicSnap = await getDocs(query(usersRef, limit(maxLimit)));
+      const basicSnap = await getDocs(query(usersRef, limit(broadLimit)));
       const list = (basicSnap?.docs || [])
-        .map((d, index) => mapUserToLeaderboard(d, index))
-        .filter(u => u.role !== 'ADMIN' && u.role !== 'STAFF' && u.role !== 'SPONSOR');
+        .map((d, index) => mapUserToLeaderboard(d, index));
       let rankingDocs = [];
+      let pointEventDocs = [];
       try {
         const rankSnap = await getDocs(collection(db, 'ranking'));
         if (rankSnap && Array.isArray(rankSnap.docs)) {
           rankingDocs = rankSnap.docs;
         }
       } catch (_rankErr) {}
-      const merged = mergeUsersAndRankingForLeaderboard(list, rankingDocs);
+      try {
+        const eventsSnap = await getDocs(collection(db, 'pointEvents'));
+        if (eventsSnap && Array.isArray(eventsSnap.docs)) {
+          pointEventDocs = eventsSnap.docs;
+        }
+      } catch (_eventsErr) {}
+      const merged = mergeUsersAndRankingForLeaderboard(list, rankingDocs, pointEventDocs);
       return sortLeaderboardWithTiebreak(merged).slice(0, maxLimit);
     } catch (_fallbackErr) {
       return [];
@@ -837,11 +1088,14 @@ export async function getLeaderboardUsers(maxLimit = 50) {
 
 /**
  * Escuta atualizações do ranking em tempo real via onSnapshot do Firestore (KAN-55),
- * consolidando em tempo real as coleções `/ranking` e `/users`.
+ * consolidando em tempo real as coleções `/ranking`, `/pointEvents` e `/users` (tanto via query
+ * indexada quanto via varredura inclusiva de `/users`).
  */
 export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
   const usersRef = collection(db, 'users');
   const rankingRef = collection(db, 'ranking');
+  const pointEventsRef = collection(db, 'pointEvents');
+  const broadLimit = Math.max(maxLimit * 4, 200);
   const q = query(
     usersRef,
     where('role', '==', 'PARTICIPANT'),
@@ -849,14 +1103,19 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
     limit(maxLimit)
   );
 
-  let usersList = [];
+  let indexedUsersList = [];
+  let broadUsersList = [];
   let rankingDocs = [];
+  let pointEventDocs = [];
   let hasUsersEmitted = false;
   let activeUsersUnsub = null;
+  let broadUsersUnsub = null;
   let rankingUnsub = null;
+  let pointEventsUnsub = null;
 
   const emitConsolidated = () => {
-    const merged = mergeUsersAndRankingForLeaderboard(usersList, rankingDocs);
+    const combinedUsers = [...indexedUsersList, ...broadUsersList];
+    const merged = mergeUsersAndRankingForLeaderboard(combinedUsers, rankingDocs, pointEventDocs);
     callback(sortLeaderboardWithTiebreak(merged).slice(0, maxLimit));
   };
 
@@ -873,11 +1132,37 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
     );
   } catch (_e) {}
 
+  try {
+    pointEventsUnsub = onSnapshot(
+      pointEventsRef,
+      (evSnap) => {
+        pointEventDocs = evSnap?.docs || [];
+        if (hasUsersEmitted || rankingDocs.length > 0) {
+          emitConsolidated();
+        }
+      },
+      () => {}
+    );
+  } catch (_e) {}
+
+  try {
+    broadUsersUnsub = onSnapshot(
+      query(usersRef, limit(broadLimit)),
+      (broadSnap) => {
+        hasUsersEmitted = true;
+        broadUsersList = (broadSnap?.docs || [])
+          .map((d, index) => mapUserToLeaderboard(d, index));
+        emitConsolidated();
+      },
+      () => {}
+    );
+  } catch (_e) {}
+
   activeUsersUnsub = onSnapshot(
     q,
     (snap) => {
       hasUsersEmitted = true;
-      usersList = (snap?.docs || []).map((d, index) => mapUserToLeaderboard(d, index));
+      indexedUsersList = (snap?.docs || []).map((d, index) => mapUserToLeaderboard(d, index));
       emitConsolidated();
     },
     (err) => {
@@ -892,23 +1177,22 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
         fallbackQuery,
         (fallbackSnap) => {
           hasUsersEmitted = true;
-          usersList = (fallbackSnap?.docs || []).map((d, index) => mapUserToLeaderboard(d, index));
+          indexedUsersList = (fallbackSnap?.docs || []).map((d, index) => mapUserToLeaderboard(d, index));
           emitConsolidated();
         },
         (finalErr) => {
           console.warn('Fallback totalPoints falhou, ouvindo coleção users sem ordenação composta:', finalErr);
           try {
             activeUsersUnsub = onSnapshot(
-              query(usersRef, limit(maxLimit)),
+              query(usersRef, limit(broadLimit)),
               (simpleSnap) => {
                 hasUsersEmitted = true;
-                usersList = (simpleSnap?.docs || [])
-                  .map((d, index) => mapUserToLeaderboard(d, index))
-                  .filter(u => u.role !== 'ADMIN' && u.role !== 'STAFF' && u.role !== 'SPONSOR');
+                indexedUsersList = (simpleSnap?.docs || [])
+                  .map((d, index) => mapUserToLeaderboard(d, index));
                 emitConsolidated();
               },
               (ultraErr) => {
-                if (rankingDocs.length > 0) {
+                if (rankingDocs.length > 0 || broadUsersList.length > 0) {
                   emitConsolidated();
                 } else if (onError) {
                   onError(ultraErr);
@@ -925,7 +1209,9 @@ export function subscribeToLeaderboardUsers(callback, onError, maxLimit = 50) {
 
   return () => {
     if (typeof activeUsersUnsub === 'function') activeUsersUnsub();
+    if (typeof broadUsersUnsub === 'function') broadUsersUnsub();
     if (typeof rankingUnsub === 'function') rankingUnsub();
+    if (typeof pointEventsUnsub === 'function') pointEventsUnsub();
   };
 }
 
@@ -948,19 +1234,24 @@ export async function findUserByUsername(username) {
 export function subscribeToAllUsers(callback) {
   const usersRef = collection(db, 'users');
   const rankingRef = collection(db, 'ranking');
+  const pointEventsRef = collection(db, 'pointEvents');
   let rawUsers = [];
   let rankingMap = new Map();
+  let pointEventsMap = new Map();
   let hasUsersEmitted = false;
   let rankingUnsub = null;
+  let pointEventsUnsub = null;
 
   const emitMergedUsers = () => {
     const merged = rawUsers.map(u => {
       const uid = u.uid || u.id;
       const rData = uid ? rankingMap.get(uid) : null;
-      if (!rData) return u;
+      const evSum = uid ? (pointEventsMap.get(uid) || 0) : 0;
+      if (!rData && evSum <= 0) return u;
       const maxPoints = Math.max(
         Number(u.totalPoints ?? u.pontuacaoTotal ?? 0) || 0,
-        Number(rData.totalPoints ?? rData.pontuacaoTotal ?? rData.points ?? 0) || 0
+        Number(rData?.totalPoints ?? rData?.pontuacaoTotal ?? rData?.points ?? 0) || 0,
+        evSum
       );
       return {
         ...u,
@@ -981,6 +1272,19 @@ export function subscribeToAllUsers(callback) {
           nextMap.set(docSnap.id || data?.uid, data);
         });
         rankingMap = nextMap;
+        if (hasUsersEmitted) {
+          emitMergedUsers();
+        }
+      },
+      () => {}
+    );
+  } catch (_e) {}
+
+  try {
+    pointEventsUnsub = onSnapshot(
+      pointEventsRef,
+      (evSnap) => {
+        pointEventsMap = aggregatePointEventsByUid(evSnap?.docs || []);
         if (hasUsersEmitted) {
           emitMergedUsers();
         }
@@ -1021,6 +1325,7 @@ export function subscribeToAllUsers(callback) {
   return () => {
     if (typeof usersUnsub === 'function') usersUnsub();
     if (typeof rankingUnsub === 'function') rankingUnsub();
+    if (typeof pointEventsUnsub === 'function') pointEventsUnsub();
   };
 }
 

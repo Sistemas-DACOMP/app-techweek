@@ -198,11 +198,12 @@ export function useUser() {
 
   useEffect(() => {
     const uid = profile?.uid || profile?.id;
-    if (!uid || points <= 0) return;
+    const role = profile?.role || 'PARTICIPANT';
+    if (!uid || points < 0 || role === 'STAFF' || role === 'SPONSOR') return;
     if (typeof syncUserRankingInFirestore === 'function') {
       syncUserRankingInFirestore(uid, points, profile).catch(() => {});
     }
-  }, [points, profile?.uid, profile?.id, profile?.username, profile?.firstName, profile?.avatarUrl, profile?.avatar_url]);
+  }, [points, profile?.uid, profile?.id, profile?.role, profile?.username, profile?.firstName, profile?.avatarUrl, profile?.avatar_url]);
 
   const scannedCodes = pointEvents
     .filter(event => (event.event_type || event.eventType) === 'scan')
