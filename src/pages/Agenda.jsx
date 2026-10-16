@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, X, MapPin, Users, Check, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Search, X, MapPin, Users, Check, ChevronRight, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
 import { onAuthChange } from '../lib/auth';
 import { useUser } from '../hooks/useUser';
 import ActivityModal, { SeatsLight, categoryOf, describeDay } from '../components/ActivityModal';
@@ -143,7 +143,9 @@ export default function Agenda() {
   const groupedByDay = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const visible = (isMyTab ? myListActivities : activities).filter((act) => {
-      if (selectedType !== 'all') {
+      if (selectedType === 'open_event') {
+        if (!act.isOpenEvent) return false;
+      } else if (selectedType !== 'all') {
         const actType = String(act.type || 'palestra').toLowerCase().trim();
         if (actType !== selectedType) return false;
       }
@@ -229,7 +231,10 @@ export default function Agenda() {
       return;
     }
 
-    if (!hasSymplaTicket) {
+    const targetActivity = activities.find((a) => a.id === activityId);
+    const isOpen = Boolean(targetActivity?.isOpenEvent);
+
+    if (!hasSymplaTicket && !isOpen) {
       setShowSymplaModal(true);
       return;
     }
@@ -243,7 +248,7 @@ export default function Agenda() {
 
     setReservingId(activityId);
     try {
-      const res = await reserveActivity(activityId);
+      const res = await reserveActivity(activityId, targetActivity);
       if (res && (res.status === 'CONFIRMED' || res.status === 'WAITING_LIST' || res.success || res.alreadyBooked)) {
         // Atualiza bookings localmente para resposta reativa instantânea
         setBookings((prev) => {
@@ -405,6 +410,7 @@ export default function Agenda() {
             <div className="no-scrollbar -mx-5 mt-2.5 flex gap-2 overflow-x-auto px-5" role="group" aria-label="Tipo de atividade">
               {TYPE_FILTERS.map((type) => {
                 const selected = selectedType === type.id;
+                const dotColor = type.id === 'open_event' ? '#6FD8A6' : categoryOf(type).accent;
                 return (
                   <button
                     key={type.id}
@@ -414,7 +420,7 @@ export default function Agenda() {
                     className={`press inline-flex h-[34px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] ${selected ? 'bg-text font-bold text-bg' : 'border border-field-line font-semibold text-text'}`}
                   >
                     {type.id !== 'all' && !selected && (
-                      <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full" style={{ background: categoryOf(type).accent }} />
+                      <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full" style={{ background: dotColor }} />
                     )}
                     {type.label}
                   </button>
@@ -503,6 +509,7 @@ export default function Agenda() {
           status={activityStatuses[selectedActivity.id] || 'NONE'}
           isReserving={reservingId === selectedActivity.id}
           isCancelling={cancellingId === selectedActivity.id}
+          hasTicket={hasSymplaTicket}
           onReserve={handleReserve}
           onCancelReserve={handleCancelReserve}
           onClose={() => setSelectedActivity(null)}
@@ -547,6 +554,7 @@ export function dayOrder(id) {
 
 export const TYPE_FILTERS = [
   { id: 'all', type: 'palestra', label: 'Todos' },
+  { id: 'open_event', label: 'Entrada Livre' },
   { id: 'palestra', type: 'palestra', label: 'Palestra' },
   { id: 'workshop', type: 'workshop', label: 'Workshop' },
   { id: 'minicurso', type: 'minicurso', label: 'Minicurso' },
@@ -582,6 +590,7 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
   const hasSeat = !readOnly && (status === 'BOOKED' || status === 'CHECKED_IN' || status === 'COMPLETED');
   const showLight = !hasSeat && status !== 'WAITING_LIST' && !isPast && !compact;
   const soldOut = !(typeof act.vagas_disponiveis === 'number' && act.vagas_disponiveis > 0);
+  const isLockedForUser = !readOnly && !hasTicket && !act.isOpenEvent && !hasSeat;
 
   let left;
   if (readOnly) {
@@ -602,8 +611,8 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
     left = <span className="text-text-3">Encerrada</span>;
   } else if (isCurrent) {
     left = <span className="flex items-center gap-1.5 text-ok"><NowDot />Acontecendo agora</span>;
-  } else if (!hasTicket) {
-    left = <span className="text-link">Vincule o ingresso</span>;
+  } else if (isLockedForUser) {
+    left = <SeatsLight activity={act} />;
   } else if (soldOut) {
     left = <span className="text-warn">Entrar na lista de espera</span>;
   } else {
@@ -612,7 +621,13 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
 
   return (
     <div
-      className={`relative rounded-2xl border border-l-4 transition-transform duration-100 has-[>button:active]:scale-[0.98] pb-3 pl-4 pr-3.5 pt-3.5 ${isCurrent ? 'border-[#3D4BB0] bg-[#161F45]' : 'border-line bg-surface'} ${isPast ? 'opacity-60' : ''}`}
+      className={`relative overflow-hidden rounded-2xl border border-l-4 transition-all duration-150 has-[>button:active]:scale-[0.98] pb-3 pl-4 pr-3.5 pt-3.5 ${
+        isCurrent
+          ? 'border-[#3D4BB0] bg-[#161F45]'
+          : isLockedForUser
+            ? 'border-amber-500/25 bg-[radial-gradient(120%_90%_at_100%_0%,rgba(217,119,6,0.06)_0%,var(--surface)_65%)]'
+            : 'border-line bg-surface'
+      } ${isPast ? 'opacity-60' : isLockedForUser ? 'opacity-90 hover:opacity-100' : ''}`}
       style={{ borderLeftColor: category.accent }}
     >
       {/* O cartão inteiro abre o painel; o botão cobre o cartão e o texto fica por cima sem capturar o toque */}
@@ -623,8 +638,23 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
         aria-label={`${act.title} · ${category.label}${act.time ? ` · ${act.time}` : ''}`}
         className="absolute inset-0 rounded-2xl"
       />
+      {isLockedForUser && (
+        <Lock
+          size={84}
+          strokeWidth={1.5}
+          className="pointer-events-none absolute -bottom-4 -left-3 text-[rgba(245,158,11,0.07)]"
+          aria-hidden="true"
+        />
+      )}
       <div className="pointer-events-none relative">
-        <span className="block text-xs font-extrabold" style={{ color: category.accent }}>{category.label}</span>
+        <div className="flex items-center gap-2">
+          <span className="block text-xs font-extrabold" style={{ color: category.accent }}>{category.label}</span>
+          {act.isOpenEvent && (
+            <span className="inline-flex items-center rounded-full bg-ok/15 px-2 py-0.5 text-[10px] font-bold text-ok">
+              Entrada Livre
+            </span>
+          )}
+        </div>
         <span className="mt-1 block text-[15px] font-bold leading-[1.35]">{act.title}</span>
         {act.speaker && !compact && (
           <span className="mt-2 flex items-center gap-1.5 text-[13px] text-text-2">
@@ -646,6 +676,11 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
             >
               <span className="flex h-[30px] items-center rounded-[9px] bg-action px-3 text-xs font-extrabold text-white">Validar presença</span>
             </button>
+          ) : isLockedForUser ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/15 px-2.5 py-0.5 text-[11px] font-extrabold text-gold shadow-[0_1px_4px_rgba(217,119,6,0.2)]">
+              <Lock size={11} aria-hidden="true" />
+              Desbloquear
+            </span>
           ) : showLight ? (
             <span className="flex items-center gap-1.5">
               <SeatsLight activity={act} />

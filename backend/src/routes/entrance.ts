@@ -4,7 +4,7 @@ import { requireAuth, requireRole } from '../middlewares/authMiddleware';
 
 const router = Router();
 
-const DEFAULT_ACTIVITIES_FALLBACK: Record<string, { points: number; entrancePoints?: number; attendanceMode: string; requireRegistration?: boolean }> = {
+const DEFAULT_ACTIVITIES_FALLBACK: Record<string, { points: number; entrancePoints?: number; attendanceMode: string; requireRegistration?: boolean; isOpenEvent?: boolean }> = {
   act_1588971: { points: 25, attendanceMode: 'SELF_SCAN' },
   act_1589102: { points: 30, attendanceMode: 'SELF_SCAN' },
   act_1588972: { points: 20, attendanceMode: 'SELF_SCAN' },
@@ -33,7 +33,15 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
     return;
   }
 
-  let resolvedUid = rawUid.replace(/^mailto:/i, '').replace(/^SYMPLA:/i, 'sympla_').trim();
+  let parsedUid = rawUid;
+  if (typeof parsedUid === 'string' && parsedUid.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(parsedUid.trim());
+      parsedUid = parsed.uid || parsed.id || (parsed.username ? `@${parsed.username}` : (parsed.email || parsedUid));
+    } catch (_e) {}
+  }
+
+  let resolvedUid = String(parsedUid).replace(/^mailto:/i, '').replace(/^SYMPLA:/i, 'sympla_').trim();
   if (!resolvedUid) {
     res.status(400).json({
       error: 'INVALID_PAYLOAD',
@@ -93,12 +101,14 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
 
   const activityRef = db.collection('activities').doc(activityId);
   const pointEventRef = db.collection('pointEvents').doc(`${resolvedUid}_entrance_${activityId}`);
+  const userRef = db.collection('users').doc(resolvedUid);
 
   try {
     const result = await db.runTransaction(async (tx) => {
-      const [activitySnap, pointEventSnap] = await Promise.all([
+      const [activitySnap, pointEventSnap, userSnap] = await Promise.all([
         tx.get(activityRef),
-        tx.get(pointEventRef)
+        tx.get(pointEventRef),
+        tx.get(userRef)
       ]);
 
       const fallbackActivity = DEFAULT_ACTIVITIES_FALLBACK[activityId];
@@ -110,6 +120,26 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
       }
 
       const activityData = activitySnap.exists ? (activitySnap.data() ?? {}) : fallbackActivity;
+      const isOpenEvent = Boolean(activityData.isOpenEvent);
+
+      const userData = userSnap?.exists ? userSnap.data() : null;
+      const hasSymplaTicket = Boolean(
+        userData?.hasSymplaTicket ||
+        userData?.symplaTicket ||
+        userData?.sympla_ticket
+      );
+
+      // Se a atividade for fechada (exclusiva) e o usuário não tiver ingresso Sympla, barra a entrada
+      if (!isOpenEvent && !hasSymplaTicket) {
+        return {
+          status: 403 as const,
+          body: {
+            error: 'SYMPLA_TICKET_REQUIRED',
+            message: 'Esta atividade é exclusiva para participantes com ingresso oficial do Sympla vinculado.'
+          }
+        };
+      }
+
       const requireRegistration = activityData.requireRegistration === true;
 
       if (requireRegistration) {
@@ -131,21 +161,27 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
         };
       }
 
-      const points = typeof activityData.entrancePoints === 'number'
-        ? activityData.entrancePoints
-        : (typeof activityData.points === 'number' ? activityData.points : 0);
+      // Participantes sem Sympla em eventos abertos têm presença computada para controle de sala, mas pontos zerados
+      const points = (!hasSymplaTicket)
+        ? 0
+        : (typeof activityData.entrancePoints === 'number'
+            ? activityData.entrancePoints
+            : (typeof activityData.points === 'number' ? activityData.points : 0));
+
+      const metadata: Record<string, any> = { staffUid };
+      if (isOpenEvent) metadata.isOpenEvent = true;
+      if (!hasSymplaTicket) metadata.hasSymplaTicket = false;
 
       tx.set(pointEventRef, {
         userId: resolvedUid,
         eventType: 'entrance',
         referenceId: activityId,
         points,
-        metadata: { staffUid },
+        metadata,
         createdAt: new Date()
       });
 
       if (points > 0) {
-        const userRef = db.collection('users').doc(resolvedUid);
         const rankingRef = db.collection('ranking').doc(resolvedUid);
         tx.set(userRef, {
           totalPoints: FieldValue.increment(points),

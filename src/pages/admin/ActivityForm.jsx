@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, AlertTriangle, X, Plus, ArrowRight, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Check, AlertTriangle, X, Plus, ArrowRight, Trash2, ChevronUp, ChevronDown, Lock } from 'lucide-react';
 import Mascot from '../../components/Mascot';
 import { btn, ICON_BTN, Section, Field, Stepper, SwitchRow, EVENT_DAYS, dayLabel, typeColor, typeLabel, initials } from './ui';
 
@@ -34,11 +34,27 @@ function findConflict(activities, editingId, row) {
 function AgendaPreview({ form, speakersSel = [] }) {
   const row = form.scheduleRows[0] || {};
   const color = typeColor(form.type);
+  const isLocked = !form.isOpenEvent;
   return (
     <div className="relative overflow-hidden rounded-[18px] bg-surface p-4 pl-5">
       <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1" style={{ background: color }} />
+      {isLocked && (
+        <Lock
+          size={76}
+          strokeWidth={1.5}
+          className="pointer-events-none absolute -bottom-3 -left-2 text-[rgba(245,158,11,0.07)]"
+          aria-hidden="true"
+        />
+      )}
       <div className="flex items-center justify-between text-[13px] font-extrabold">
-        <span style={{ color }}>{typeLabel(form.type)}</span>
+        <div className="flex items-center gap-2">
+          <span style={{ color }}>{typeLabel(form.type)}</span>
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${
+            form.isOpenEvent ? 'bg-ok/15 text-ok' : 'bg-gold/15 text-gold'
+          }`}>
+            {form.isOpenEvent ? 'Entrada Livre' : 'Passaporte Completo'}
+          </span>
+        </div>
         <span className="text-you-text">+{Number(form.points) || 0} pts</span>
       </div>
       <div className="mt-1.5 text-[17px] font-extrabold leading-snug">{form.title || 'Título da atividade'}</div>
@@ -79,8 +95,13 @@ function OpenPreview({ form, speakersSel = [] }) {
   return (
     <div className="overflow-hidden rounded-[18px] bg-surface">
       <div className="p-4" style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.35), rgba(124,58,237,0.35))' }}>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-lg bg-[rgba(255,255,255,0.12)] px-2 py-0.5 text-[12px] font-bold">{typeLabel(form.type)}</span>
+          <span className={`rounded-lg px-2 py-0.5 text-[12px] font-bold ${
+            form.isOpenEvent ? 'bg-ok/20 text-ok' : 'bg-gold/20 text-gold'
+          }`}>
+            {form.isOpenEvent ? 'Entrada Livre' : 'Passaporte Completo'}
+          </span>
           <span className="pts-chip">+{Number(form.points) || 0} pts</span>
         </div>
         <div className="mt-2 text-[19px] font-extrabold leading-snug">{form.title || 'Título da atividade'}</div>
@@ -583,6 +604,7 @@ export default function ActivityForm({ form, setForm, editingId, types, speakers
             <div className="mt-2 border-t border-line">
               <SwitchRow title="Limite de vagas" hint="Desligado, a atividade não tem lotação." checked={form.hasCapacityLimit} onChange={(v) => set({ hasCapacityLimit: v })} />
               <SwitchRow title="Exige inscrição no app" hint="A pessoa reserva a vaga antes de entrar." checked={form.requiresRegistration} onChange={(v) => set({ requiresRegistration: v })} />
+              <SwitchRow title="Entrada Livre (Não exige Passaporte Completo)" hint="Qualquer participante cadastrado no app pode se inscrever, mesmo sem Passaporte Completo." checked={form.isOpenEvent} onChange={(v) => set({ isOpenEvent: v })} />
             </div>
             <fieldset className="m-0 mt-3 border-0 p-0">
               <legend className="field-label">Como a presença é confirmada</legend>

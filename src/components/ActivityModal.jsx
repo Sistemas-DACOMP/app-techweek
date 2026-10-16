@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Loader2, ScanLine, User, Star } from 'lucide-react';
+import { X, Check, Loader2, ScanLine, User, Star, Lock } from 'lucide-react';
 import { useScrollLock } from '../hooks/useScrollLock';
 import ConfirmModal from './ConfirmModal';
 import ActivityFeedbackModal from './ActivityFeedbackModal';
@@ -86,6 +86,7 @@ export default function ActivityModal({
   isReserving = false,
   isCancelling = false,
   readOnly = false,
+  hasTicket = true,
   onClose,
   onReserve,
   onCancelReserve,
@@ -293,6 +294,25 @@ export default function ActivityModal({
         {cancelButton}
       </div>
     );
+  } else if (!hasTicket && !activity.isOpenEvent) {
+    footer = (
+      <>
+        <div className="mb-3 flex justify-center">
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-gold">
+            <Lock size={14} aria-hidden="true" />
+            Exclusivo para portadores do Passaporte Completo
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onReserve && onReserve(activity.id)}
+          className="flex min-h-[54px] w-full items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#D97706,#B45309)] text-[16px] font-extrabold text-white shadow-lg transition-transform active:scale-[0.98]"
+        >
+          <Lock size={18} aria-hidden="true" />
+          Desbloquear com Passaporte
+        </button>
+      </>
+    );
   } else {
     footer = (
       <>
@@ -337,10 +357,20 @@ export default function ActivityModal({
             <span className="h-1 w-9 rounded-full bg-white/30" />
           </div>
           <div className="mt-2 flex items-center justify-between">
-            <span className="flex gap-2">
+            <span className="flex flex-wrap items-center gap-2">
               <span className="rounded-[10px] px-2.5 py-1 text-xs font-bold" style={{ background: `${category.accent}33`, color: category.text }}>
                 {category.label}
               </span>
+              {activity.isOpenEvent ? (
+                <span className="rounded-[10px] bg-ok/20 px-2.5 py-1 text-xs font-bold text-ok">
+                  Entrada Livre
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-[10px] border border-gold/30 bg-gold/20 px-2.5 py-1 text-xs font-extrabold text-gold">
+                  <Lock size={12} aria-hidden="true" />
+                  Passaporte Completo
+                </span>
+              )}
               <span className="rounded-[10px] bg-[rgba(124,58,237,0.35)] px-2.5 py-1 text-xs font-extrabold text-white">
                 +{points} pts
               </span>

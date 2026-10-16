@@ -91,7 +91,8 @@ function makeTx(snaps = {}) {
   const {
     activitySnap = { exists: true, data: () => ({ entrancePoints: 30, requireRegistration: false }) },
     pointEventSnap = { exists: false },
-    bookingSnap = { exists: true }
+    bookingSnap = { exists: true },
+    userSnap = { exists: true, data: () => ({ hasSymplaTicket: true }) }
   } = snaps;
 
   return {
@@ -99,6 +100,7 @@ function makeTx(snaps = {}) {
       if (ref.path.startsWith('activities/')) return Promise.resolve(activitySnap);
       if (ref.path.startsWith('pointEvents/')) return Promise.resolve(pointEventSnap);
       if (ref.path.startsWith('bookings/')) return Promise.resolve(bookingSnap);
+      if (ref.path.startsWith('users/')) return Promise.resolve(userSnap);
       throw new Error(`Ref inesperada no mock tx.get: ${ref.path}`);
     }),
     set: vi.fn(),
@@ -693,6 +695,104 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
         error: 'INTERNAL_ERROR',
         message: 'Não foi possível registrar a entrada.'
       });
+    });
+  });
+
+  // =========================================================================
+  // 9. Suporte a Evento Aberto e Crachá Geral (Conversão & Portaria)
+  // =========================================================================
+  describe('Suporte a Evento Aberto e Crachá Geral (Conversão & Portaria)', () => {
+    it('aceita QR Code em formato JSON serializado (crachá geral sem Sympla)', async () => {
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 20, isOpenEvent: true, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false },
+        userSnap: { exists: true, data: () => ({ hasSymplaTicket: false }) }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const qrJson = JSON.stringify({
+        uid: 'user-sem-sympla-1',
+        username: 'sem_sympla',
+        name: 'Aluno Livre'
+      });
+
+      const req = makeReq({ participantUid: qrJson, activityId: 'palestra-aberta-1' });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({ success: true, points: 0 });
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/user-sem-sympla-1_entrance_palestra-aberta-1' },
+        expect.objectContaining({
+          userId: 'user-sem-sympla-1',
+          points: 0,
+          metadata: expect.objectContaining({ isOpenEvent: true, hasSymplaTicket: false })
+        })
+      );
+      // Nao deve incrementar pontuacao no doc de usuario nem no ranking
+      expect(tx.set).not.toHaveBeenCalledWith(
+        { path: 'users/user-sem-sympla-1' },
+        expect.anything(),
+        expect.anything()
+      );
+      expect(tx.set).not.toHaveBeenCalledWith(
+        { path: 'ranking/user-sem-sympla-1' },
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
+    it('bloqueia entrada em evento fechado com 403 SYMPLA_TICKET_REQUIRED para participante sem Sympla', async () => {
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 30, isOpenEvent: false, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false },
+        userSnap: { exists: true, data: () => ({ hasSymplaTicket: false }) }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({ participantUid: 'user-sem-sympla-2', activityId: 'workshop-fechado' });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        error: 'SYMPLA_TICKET_REQUIRED'
+      }));
+      expect(tx.set).not.toHaveBeenCalled();
+    });
+
+    it('concede pontos normalmente em evento aberto para participante que possui Sympla vinculado', async () => {
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 25, isOpenEvent: true, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false },
+        userSnap: { exists: true, data: () => ({ hasSymplaTicket: true }) }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const req = makeReq({ participantUid: 'user-com-sympla-1', activityId: 'palestra-aberta-1' });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({ success: true, points: 25 });
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'users/user-com-sympla-1' },
+        expect.objectContaining({ totalPoints: expect.anything() }),
+        { merge: true }
+      );
     });
   });
 });
