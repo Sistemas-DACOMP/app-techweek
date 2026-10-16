@@ -479,7 +479,13 @@ export default function InstagramMission() {
             </div>
 
             {/* Card explicativo de conversão */}
-            <div className="mt-5 w-full max-w-[340px] rounded-2xl border border-amber-500/40 bg-[linear-gradient(135deg,rgba(217,119,6,0.18)_0%,rgba(147,51,234,0.14)_100%)] p-4 text-left shadow-[0_8px_24px_rgba(217,119,6,0.12)]">
+            <div className="relative overflow-hidden mt-5 w-full max-w-[340px] rounded-2xl border border-amber-500/40 bg-[linear-gradient(135deg,rgba(217,119,6,0.18)_0%,rgba(147,51,234,0.14)_100%)] p-4 text-left shadow-[0_8px_24px_rgba(217,119,6,0.12)]">
+              <Lock
+                size={90}
+                strokeWidth={1.5}
+                className="pointer-events-none absolute -bottom-4 -left-3 text-[rgba(245,158,11,0.07)]"
+                aria-hidden="true"
+              />
               <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gold">
                 <Lock size={14} aria-hidden="true" />
                 <span>EXCLUSIVO PASSAPORTE COMPLETO</span>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, AlertTriangle, X, Plus, ArrowRight, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Check, AlertTriangle, X, Plus, ArrowRight, Trash2, ChevronUp, ChevronDown, Lock } from 'lucide-react';
 import Mascot from '../../components/Mascot';
 import { btn, ICON_BTN, Section, Field, Stepper, SwitchRow, EVENT_DAYS, dayLabel, typeColor, typeLabel, initials } from './ui';
 
@@ -34,9 +34,18 @@ function findConflict(activities, editingId, row) {
 function AgendaPreview({ form, speakersSel = [] }) {
   const row = form.scheduleRows[0] || {};
   const color = typeColor(form.type);
+  const isLocked = !form.isOpenEvent;
   return (
     <div className="relative overflow-hidden rounded-[18px] bg-surface p-4 pl-5">
       <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1" style={{ background: color }} />
+      {isLocked && (
+        <Lock
+          size={76}
+          strokeWidth={1.5}
+          className="pointer-events-none absolute -bottom-3 -left-2 text-[rgba(245,158,11,0.07)]"
+          aria-hidden="true"
+        />
+      )}
       <div className="flex items-center justify-between text-[13px] font-extrabold">
         <div className="flex items-center gap-2">
           <span style={{ color }}>{typeLabel(form.type)}</span>

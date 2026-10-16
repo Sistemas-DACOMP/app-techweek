@@ -653,11 +653,19 @@ function UpNext({ items, now, statusOf, hasTicket = true, onOpen, onAgenda }) {
               <button
                 type="button"
                 onClick={() => onOpen(a)}
-                className={`press flex h-full w-full flex-col justify-start cursor-pointer rounded-[18px] border border-solid border-line p-3.5 text-left font-sans text-text transition-all duration-150 ${
+                className={`press relative overflow-hidden flex h-full w-full flex-col justify-start cursor-pointer rounded-[18px] border border-solid border-line p-3.5 text-left font-sans text-text transition-all duration-150 ${
                   isLocked ? 'opacity-75 hover:opacity-95' : ''
                 }`}
                 style={{ background: `linear-gradient(160deg, color-mix(in srgb, ${cat.color} 15%, transparent), var(--surface) 55%)` }}
               >
+                {isLocked && (
+                  <Lock
+                    size={72}
+                    strokeWidth={1.5}
+                    className="pointer-events-none absolute -bottom-3 -left-3 text-[rgba(245,158,11,0.07)]"
+                    aria-hidden="true"
+                  />
+                )}
                 <span className="flex items-center justify-between">
                   <span className="text-[22px] font-extrabold leading-none">{hhmm(w.start)}</span>
                   {isEnrolled && (
@@ -814,11 +822,19 @@ function PendingHome({ installed, notificationsEnabled, onLink, onInstall, onEna
                   <button
                     type="button"
                     onClick={() => onOpen(a)}
-                    className={`press flex h-full w-full flex-col justify-start cursor-pointer rounded-2xl border-0 border-t-[3px] border-solid bg-surface p-3 text-left font-sans text-text transition-all duration-150 ${
+                    className={`press relative overflow-hidden flex h-full w-full flex-col justify-start cursor-pointer rounded-2xl border-0 border-t-[3px] border-solid bg-surface p-3 text-left font-sans text-text transition-all duration-150 ${
                       isLocked ? 'opacity-75 hover:opacity-95' : ''
                     }`}
                     style={{ borderTopColor: cat.color }}
                   >
+                    {isLocked && (
+                      <Lock
+                        size={64}
+                        strokeWidth={1.5}
+                        className="pointer-events-none absolute -bottom-2 -left-2 text-[rgba(245,158,11,0.07)]"
+                        aria-hidden="true"
+                      />
+                    )}
                     <div className="flex items-center justify-between w-full">
                       <span className="block text-xs font-bold" style={{ color: cat.color }}>{cat.label}</span>
                       {isLocked ? (

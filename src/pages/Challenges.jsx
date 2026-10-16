@@ -947,9 +947,9 @@ function MissionCard({ mission, getIcon, onStart, done = false, hasTicket = true
     <article className="relative overflow-hidden rounded-[18px] border border-line bg-surface p-3.5" style={cardStyle}>
       {!done && !hasTicket && (
         <Lock
-          size={100}
+          size={96}
           strokeWidth={1.5}
-          className="pointer-events-none absolute -bottom-5 -right-3 text-[rgba(245,158,11,0.06)]"
+          className="pointer-events-none absolute -bottom-4 -left-3 text-[rgba(245,158,11,0.07)]"
           aria-hidden="true"
         />
       )}

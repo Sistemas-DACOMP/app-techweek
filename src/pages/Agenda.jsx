@@ -621,7 +621,7 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
 
   return (
     <div
-      className={`relative rounded-2xl border border-l-4 transition-all duration-150 has-[>button:active]:scale-[0.98] pb-3 pl-4 pr-3.5 pt-3.5 ${
+      className={`relative overflow-hidden rounded-2xl border border-l-4 transition-all duration-150 has-[>button:active]:scale-[0.98] pb-3 pl-4 pr-3.5 pt-3.5 ${
         isCurrent
           ? 'border-[#3D4BB0] bg-[#161F45]'
           : isLockedForUser
@@ -638,6 +638,14 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
         aria-label={`${act.title} · ${category.label}${act.time ? ` · ${act.time}` : ''}`}
         className="absolute inset-0 rounded-2xl"
       />
+      {isLockedForUser && (
+        <Lock
+          size={84}
+          strokeWidth={1.5}
+          className="pointer-events-none absolute -bottom-4 -left-3 text-[rgba(245,158,11,0.07)]"
+          aria-hidden="true"
+        />
+      )}
       <div className="pointer-events-none relative">
         <div className="flex items-center gap-2">
           <span className="block text-xs font-extrabold" style={{ color: category.accent }}>{category.label}</span>
