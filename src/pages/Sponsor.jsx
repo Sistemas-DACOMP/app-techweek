@@ -24,8 +24,10 @@ import {
   Send,
   Image as ImageIcon,
   Film,
-  TrendingUp
+  TrendingUp,
+  Trash2
 } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
 import { 
@@ -184,6 +186,8 @@ export default function Sponsor() {
   const [mediaPreview, setMediaPreview] = useState(null); // { url, type: 'image' | 'video', name }
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [feedPostToDelete, setFeedPostToDelete] = useState(null);
+  const [isDeletingFeedPost, setIsDeletingFeedPost] = useState(false);
   const fileInputRef = useRef(null);
 
   // Show Toast helper
@@ -614,20 +618,28 @@ export default function Sponsor() {
     return Boolean(isAuthor || isCompanyAuthor);
   };
 
-  const handleDeleteFeedPost = async (post) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta publicação?')) {
-      return;
-    }
+  const handleDeleteFeedPost = (post) => {
+    setFeedPostToDelete(post);
+  };
+
+  const handleConfirmDeleteFeedPost = async () => {
+    if (!feedPostToDelete) return;
+    const post = feedPostToDelete;
+    setIsDeletingFeedPost(true);
     setFeedPosts((prev) => prev.filter((p) => p.id !== post.id));
     try {
       await deleteFeedPost(post.id);
+      setFeedPostToDelete(null);
       showToast('Publicação excluída com sucesso.', 'success');
     } catch (err) {
       console.error('Erro ao excluir post no feed do patrocinador:', err);
+      setFeedPostToDelete(null);
       showToast('Não foi possível excluir a publicação.', 'error');
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('facom_feed_updated'));
       }
+    } finally {
+      setIsDeletingFeedPost(false);
     }
   };
 
@@ -1628,6 +1640,23 @@ export default function Sponsor() {
         senderEmail={userProfile?.email || authUser?.email || ''}
         defaultLocation={`Estande ${sponsorName}`}
       />
+      {/* ========================================================================= */}
+      {/* MODAL 6: CONFIRMAÇÃO DE EXCLUSÃO DE PUBLICAÇÃO NO FEED                   */}
+      {/* ========================================================================= */}
+      {feedPostToDelete && (
+        <ConfirmModal
+          isOpen={Boolean(feedPostToDelete)}
+          title="Excluir publicação?"
+          message="Essa publicação será removida do Feed imediatamente e não poderá ser recuperada."
+          confirmLabel="Excluir publicação"
+          cancelLabel="Cancelar"
+          variant="danger"
+          Icon={Trash2}
+          isLoading={isDeletingFeedPost}
+          onConfirm={handleConfirmDeleteFeedPost}
+          onCancel={() => !isDeletingFeedPost && setFeedPostToDelete(null)}
+        />
+      )}
     </Shell>
   );
 }

@@ -22,6 +22,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getUserProfile, getCachedUserProfile, isAdminEmail } from '../lib/userService';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
 import Mascot from '../components/Mascot';
+import ConfirmModal from '../components/ConfirmModal';
 import iconeTw from '../assets/icone.png';
 
 export const FILTERS = [
@@ -222,6 +223,8 @@ export default function Feed() {
   const [isPublishing, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
   const [popId, setPopId] = useState(null);
+  const [postToDelete, setPostToDelete] = useState(null);
+  const [isDeletingPost, setIsDeletingPost] = useState(false);
 
   useEffect(() => {
     if (user?.uid) {
@@ -275,22 +278,30 @@ export default function Feed() {
     return Boolean(isAuthor || isCompanyAuthor);
   };
 
-  const handleDeletePost = async (post) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta publicação?')) {
-      return;
-    }
+  const handleDeletePost = (post) => {
+    setPostToDelete(post);
+  };
+
+  const handleConfirmDeletePost = async () => {
+    if (!postToDelete) return;
+    const post = postToDelete;
+    setIsDeletingPost(true);
     setPosts((prev) => prev.filter((p) => p.id !== post.id));
     try {
       await deleteFeedPost(post.id);
+      setPostToDelete(null);
       setToast('Publicação excluída com sucesso.');
       setTimeout(() => setToast(null), 3000);
     } catch (err) {
       console.error('Erro ao excluir post:', err);
+      setPostToDelete(null);
       setToast('Não foi possível excluir a publicação.');
       setTimeout(() => setToast(null), 3000);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('facom_feed_updated'));
       }
+    } finally {
+      setIsDeletingPost(false);
     }
   };
 
@@ -662,6 +673,21 @@ export default function Feed() {
           </div>
         </>,
         document.body
+      )}
+
+      {postToDelete && (
+        <ConfirmModal
+          isOpen={Boolean(postToDelete)}
+          title="Excluir publicação?"
+          message="Essa publicação será removida do Feed imediatamente e não poderá ser recuperada."
+          confirmLabel="Excluir publicação"
+          cancelLabel="Cancelar"
+          variant="danger"
+          Icon={Trash2}
+          isLoading={isDeletingPost}
+          onConfirm={handleConfirmDeletePost}
+          onCancel={() => !isDeletingPost && setPostToDelete(null)}
+        />
       )}
     </div>
   );

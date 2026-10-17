@@ -310,9 +310,10 @@ service cloud.firestore {
     // backend, ver regra de /users), porque contas antigas podem ter o papel só no doc.
     function isSponsorUser() {
       return isAuthenticated() && (
-        request.auth.token.role == 'SPONSOR' ||
+        request.auth.token.get('role', '') == 'SPONSOR' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SPONSOR')
+          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['SPONSOR', 'sponsor'] ||
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('userRole', '') in ['SPONSOR', 'sponsor']))
       );
     }
 
@@ -328,7 +329,10 @@ service cloud.firestore {
       return isStaffOrAdmin() || (
         isAuthenticated() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['ADMIN', 'STAFF', 'ORGANIZATION'])
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['ADMIN', 'STAFF', 'ORGANIZATION', 'admin', 'staff', 'organization'] ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('userRole', '') in ['ADMIN', 'STAFF', 'ORGANIZATION', 'admin', 'staff', 'organization']
+        )
       );
     }
 
@@ -361,7 +365,8 @@ service cloud.firestore {
 
       // Exclusão: Staff/Admin ou o próprio autor do post (incluindo patrocinador de autoria própria)
       allow delete: if isStaffOrDocAdmin() || (isAuthenticated() && (
-        resource.data.get('authorUid', resource.data.get('authorId', '')) == request.auth.uid
+        resource.data.get('authorUid', '') == request.auth.uid
+        || resource.data.get('authorId', '') == request.auth.uid
         || ((isSponsor() || isSponsorUser()) && (
           ('companyId' in resource.data && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && resource.data.companyId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('companyId', ''))
           || ('sponsorId' in resource.data && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && resource.data.sponsorId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('sponsorId', ''))

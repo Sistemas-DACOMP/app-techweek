@@ -175,6 +175,15 @@ export function markFeedPostAsDeleted(postId) {
   } catch (_e) {}
 }
 
+export function unmarkFeedPostAsDeleted(postId) {
+  if (!postId || typeof localStorage === 'undefined') return;
+  try {
+    const deleted = getDeletedFeedPostIds();
+    deleted.delete(postId);
+    localStorage.setItem(DELETED_FEED_KEY, JSON.stringify(Array.from(deleted)));
+  } catch (_e) {}
+}
+
 function getLocalFeedPosts() {
   if (typeof localStorage === 'undefined') return [];
   try {
@@ -382,11 +391,11 @@ export async function createFeedPost(postData) {
   const mediaType = postData.mediaType || (postData.videoUrl ? 'video' : (postData.imageUrl ? 'image' : ''));
   const nowIso = new Date().toISOString();
 
-  const currentUid = postData.authorId || auth?.currentUser?.uid || undefined;
+  const currentUid = auth?.currentUser?.uid || postData.authorId || postData.authorUid || undefined;
   const formattedPost = {
     // As regras do Firestore exigem authorUid == uid de quem escreve; é também o que
     // permite o autor apagar o próprio post.
-    authorUid: auth?.currentUser?.uid || '',
+    authorUid: String(auth?.currentUser?.uid || postData.authorUid || postData.authorId || ''),
     author: String(postData.author || 'Organização FACOM'),
     authorRole: String(postData.authorRole || 'ORGANIZATION'),
     authorAvatar: String(postData.authorAvatar || ''),
@@ -452,6 +461,10 @@ export async function deleteFeedPost(postId) {
     return { success: true };
   } catch (err) {
     console.error('Erro ao excluir publicação no Firestore:', err);
+    unmarkFeedPostAsDeleted(postId);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('facom_feed_updated'));
+    }
     throw err;
   }
 }
