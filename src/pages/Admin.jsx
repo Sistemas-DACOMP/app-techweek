@@ -1013,6 +1013,8 @@ export default function Admin() {
     if (!window.confirm(`Tem certeza que deseja excluir "${title}"?`)) return;
     try {
       await deleteActivity(id);
+      setIsActivityModalOpen(false);
+      setEditingActivityId(null);
     } catch (err) {
       alert('Erro ao excluir: ' + err.message);
     }
@@ -1529,6 +1531,7 @@ export default function Admin() {
               onSubmit={handleSaveActivity}
               onCancel={() => setIsActivityModalOpen(false)}
               onNewSpeaker={() => { setEditingSpeakerId(null); setGuestForm(initialGuestForm); setIsGuestModalOpen(true); }}
+              onDelete={handleDeleteActivity}
             />
           )}
           {view === 'conta' && (

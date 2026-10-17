@@ -153,7 +153,7 @@ function Checklist({ items, mascot }) {
   );
 }
 
-export default function ActivityForm({ form, setForm, editingId, types, speakers, locations, activities, onSubmit, onCancel, onNewSpeaker }) {
+export default function ActivityForm({ form, setForm, editingId, types, speakers, locations, activities, onSubmit, onCancel, onNewSpeaker, onDelete }) {
   const [step, setStep] = useState(1);
   const [previewTab, setPreviewTab] = useState('agenda');
   const [spkQuery, setSpkQuery] = useState('');
@@ -288,6 +288,15 @@ export default function ActivityForm({ form, setForm, editingId, types, speakers
           </div>
           <h1 className="m-0 mt-1.5 text-[28px] font-extrabold">{title}</h1>
         </div>
+        {editingId && onDelete && (
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-err/30 bg-err/10 px-4 text-[14px] font-bold text-err transition-colors hover:bg-err/20"
+            onClick={() => onDelete(editingId, form.title)}
+          >
+            <Trash2 size={16} aria-hidden="true" /> Excluir atividade
+          </button>
+        )}
         <button type="button" className={btn('quiet')} onClick={onCancel}>Cancelar</button>
         <button type="submit" form={FORM_ID} className={btn('action')}><Check size={18} aria-hidden="true" /> {submitLabel}</button>
       </div>
@@ -650,9 +659,21 @@ export default function ActivityForm({ form, setForm, editingId, types, speakers
       {/* Rodapé fixo (celular) */}
       <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2.5 border-t border-line bg-nav px-4 pb-[max(14px,env(safe-area-inset-bottom))] pt-3 lg:hidden">
         {step === 1 ? (
-          <button type="button" className={btn('action', 'h-[52px] flex-1 text-[16px]')} onClick={() => { setStep(2); window.scrollTo(0, 0); }}>
-            Ver prévia <ArrowRight size={18} aria-hidden="true" />
-          </button>
+          <>
+            {editingId && onDelete && (
+              <button
+                type="button"
+                className="inline-flex h-[52px] items-center justify-center rounded-xl border border-err/30 bg-err/10 px-4 text-[14px] font-bold text-err"
+                onClick={() => onDelete(editingId, form.title)}
+                title="Excluir atividade"
+              >
+                <Trash2 size={18} aria-hidden="true" />
+              </button>
+            )}
+            <button type="button" className={btn('action', 'h-[52px] flex-1 text-[16px]')} onClick={() => { setStep(2); window.scrollTo(0, 0); }}>
+              Ver prévia <ArrowRight size={18} aria-hidden="true" />
+            </button>
+          </>
         ) : (
           <>
             <button type="button" className={btn('secondary', 'h-[52px] px-6')} onClick={() => { setStep(1); window.scrollTo(0, 0); }}>Editar</button>

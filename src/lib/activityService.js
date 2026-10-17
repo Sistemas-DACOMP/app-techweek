@@ -223,6 +223,35 @@ export const DEFAULT_ACTIVITIES = [
 ];
 
 const LOCAL_ACTIVITIES_KEY = 'techweek_custom_activities';
+const DELETED_ACTIVITIES_KEY = 'techweek_deleted_activities';
+
+export function getDeletedActivityIds() {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(DELETED_ACTIVITIES_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch (_e) {
+    return new Set();
+  }
+}
+
+export function markActivityDeleted(id) {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const deleted = getDeletedActivityIds();
+    deleted.add(id);
+    localStorage.setItem(DELETED_ACTIVITIES_KEY, JSON.stringify(Array.from(deleted)));
+  } catch (_e) {}
+}
+
+export function unmarkActivityDeleted(id) {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const deleted = getDeletedActivityIds();
+    deleted.delete(id);
+    localStorage.setItem(DELETED_ACTIVITIES_KEY, JSON.stringify(Array.from(deleted)));
+  } catch (_e) {}
+}
 
 export function getLocalCustomActivities() {
   if (typeof window === 'undefined') return [];
@@ -237,6 +266,7 @@ export function getLocalCustomActivities() {
 export function saveLocalCustomActivity(activity) {
   if (typeof window === 'undefined' || !activity?.id) return;
   try {
+    unmarkActivityDeleted(activity.id);
     const current = getLocalCustomActivities();
     const filtered = current.filter(a => a.id !== activity.id);
     const updated = [activity, ...filtered];
@@ -263,8 +293,13 @@ export function subscribeToActivities(onUpdate, onError) {
   let lastBookingsCounts = {};
 
   const mergeAndNotify = (firestoreList) => {
-    const baseList = firestoreList && firestoreList.length > 0 ? [...DEFAULT_ACTIVITIES.filter(da => !firestoreList.some(fa => fa.id === da.id)), ...firestoreList] : DEFAULT_ACTIVITIES;
-    const customLocal = getLocalCustomActivities();
+    const deletedIds = getDeletedActivityIds();
+    const availableDefaults = DEFAULT_ACTIVITIES.filter(da => !deletedIds.has(da.id));
+    const filteredFirestore = (firestoreList || []).filter(fa => !deletedIds.has(fa.id));
+    const baseList = filteredFirestore.length > 0
+      ? [...availableDefaults.filter(da => !filteredFirestore.some(fa => fa.id === da.id)), ...filteredFirestore]
+      : availableDefaults;
+    const customLocal = getLocalCustomActivities().filter(a => !deletedIds.has(a.id));
     const map = new Map();
     baseList.forEach(item => map.set(item.id, item));
     customLocal.forEach(item => {
@@ -1247,13 +1282,18 @@ export async function createActivity(activityData) {
  * Remove uma atividade do Firestore.
  */
 export async function deleteActivity(id) {
+  if (!id) return { success: false, error: 'ID da atividade não informado.' };
+  markActivityDeleted(id);
   removeLocalCustomActivity(id);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('techweek_activities_updated', { detail: { deletedId: id } }));
+  }
   try {
     const docRef = doc(db, 'activities', id);
     await deleteDoc(docRef);
     return { success: true };
   } catch (err) {
-    console.warn('Erro ao deletar atividade no Firestore:', err);
+    console.warn('Aviso ao deletar atividade no Firestore (marcada como deletada localmente):', err);
     return { success: true };
   }
 }
