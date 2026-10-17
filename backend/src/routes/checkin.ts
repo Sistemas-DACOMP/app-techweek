@@ -136,9 +136,14 @@ router.post('/:activityId/checkin', requireAuth, participantActionLimiter, async
         }, { merge: true });
       }
 
+      let message = 'Presença registrada com sucesso!';
+      if (!hasSymplaTicket && isOpenEvent) {
+        message = 'Presença confirmada no evento gratuito (pontos de ranking requerem Passaporte Completo)';
+      }
+
       return {
         status: 201 as const,
-        body: { success: true, points }
+        body: { success: true, points, message }
       };
     });
 

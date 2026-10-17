@@ -220,9 +220,14 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
         }, { merge: true });
       }
 
+      let message = 'Entrada registrada com sucesso!';
+      if (!hasSymplaTicket && isOpenEvent) {
+        message = 'Entrada liberada (evento gratuito). Pontos de ranking requerem Passaporte Completo.';
+      }
+
       return {
         status: 201 as const,
-        body: { success: true, points }
+        body: { success: true, points, message }
       };
     });
 

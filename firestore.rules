@@ -383,10 +383,8 @@ service cloud.firestore {
 
     // Central de Apoio & SOS: chamados de suporte técnico e emergência
     match /support_tickets/{ticketId} {
-      allow read: if isStaffOrAdmin() || isSponsor() || isSponsorUser() || (isAuthenticated() && resource.data.senderUid == request.auth.uid);
-      allow create: if isAuthenticated();
-      allow update: if isStaffOrAdmin() || isSponsor() || isSponsorUser() || (isAuthenticated() && resource.data.senderUid == request.auth.uid);
-      allow delete: if isAdmin();
+      allow read, create: if isAuthenticated();
+      allow update, delete: if isStaffOrAdmin();
     }
   }
 }

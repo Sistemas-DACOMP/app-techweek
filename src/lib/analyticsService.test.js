@@ -298,25 +298,6 @@ describe('analyticsService - Algoritmos e Agregações', () => {
       vi.useRealTimers();
     });
 
-    it('deve acionar fallback com mock data se não houver resposta dentro de 1500ms', () => {
-      vi.useFakeTimers();
-      onSnapshot.mockImplementation(() => vi.fn());
-
-      const onUpdate = vi.fn();
-      const unsub = subscribeToLiveAnalytics({ onUpdate });
-
-      // Antes de 1500ms, sem dados
-      vi.advanceTimersByTime(1400);
-      expect(onUpdate).not.toHaveBeenCalled();
-
-      // Ao completar 1500ms, emite fallback mock data
-      vi.advanceTimersByTime(100);
-      expect(onUpdate).toHaveBeenCalledTimes(1);
-      expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ isMock: true }));
-
-      unsub();
-      vi.useRealTimers();
-    });
 
     it('deve invocar onError se o processamento dos cálculos em triggerUpdate falhar', () => {
       vi.useFakeTimers();

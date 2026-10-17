@@ -774,7 +774,6 @@ export default function Admin() {
   };
 
   const handleDeletePost = async (postId) => {
-    if (!window.confirm('Deseja excluir esta publicação do Feed?')) return;
     try {
       await deleteFeedPost(postId);
       setFeedPosts(prev => prev.filter(p => p.id !== postId));

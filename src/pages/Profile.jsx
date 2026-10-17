@@ -1519,7 +1519,30 @@ export default function Profile() {
               ? <span className="rounded-[9px] bg-[rgba(111,216,166,0.14)] px-[9px] py-[3px] text-[12px] font-extrabold text-ok">Ativo</span>
               : <span className="rounded-[9px] bg-[rgba(143,160,255,0.16)] px-[9px] py-[3px] text-[12px] font-extrabold text-link">Abrir</span>
           }
-          onClick={() => setNotificationModalOpen(true)}
+          onClick={async () => {
+            if (notif.permission === 'denied') {
+              setFeedbackModal({
+                title: 'Avisos bloqueados',
+                text: 'As notificações estão bloqueadas no seu navegador. Acesse as configurações do Safari/Chrome ou do dispositivo para permitir.',
+                icon: 'warning'
+              });
+              return;
+            }
+            const enabled = await notif.toggleNativeNotifications();
+            if (enabled) {
+              setFeedbackModal({
+                title: 'Notificações ativadas!',
+                text: 'Você agora receberá alertas da Tech Week neste aparelho.',
+                icon: 'success'
+              });
+            } else {
+              setFeedbackModal({
+                title: 'Notificações desativadas',
+                text: 'Você não receberá mais alertas neste aparelho.',
+                icon: 'success' // Not exactly an error
+              });
+            }
+          }}
         />
         <AccountRow
           color="#A855F7"
