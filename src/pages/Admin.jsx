@@ -68,8 +68,7 @@ import {
   DEFAULT_SPEAKERS,
   subscribeToLocations,
   createLocation,
-  DEFAULT_LOCATIONS,
-  filterSpeakers
+  DEFAULT_LOCATIONS
 } from '../lib/activityService';
 import { 
   subscribeToFeedPosts, 
@@ -97,12 +96,9 @@ import AdminInicio from './admin/AdminInicio';
 import AdminDados from './admin/AdminDados';
 import AdminProgramacao from './admin/AdminProgramacao';
 import ActivityForm from './admin/ActivityForm';
-import ActivityAttendeesModal from './admin/ActivityAttendeesModal';
 import AdminPessoas from './admin/AdminPessoas';
-import AdminPatrocinadores from './admin/patrocinadores/AdminPatrocinadores';
 import { ROLE_LABELS } from '../components/RoleSwitcher';
 import { Toast } from './admin/ui';
-import ConfirmModal from '../components/ConfirmModal';
 import MissionForm from './admin/MissionForm';
 import AdminMissoes from './admin/AdminMissoes';
 import AdminConta from './admin/AdminConta';
@@ -174,14 +170,13 @@ const MISSION_TRIGGER_MODES = [
   { id: 'auto', label: 'Automático pelo App', desc: 'Concluído por ações do usuário (escanear, check-in)' }
 ];
 
-const VIEW_KEYS = ['inicio', 'dados', 'programacao', 'feed', 'pessoas', 'patrocinadores', 'missoes', 'config', 'conta'];
+const VIEW_KEYS = ['inicio', 'dados', 'programacao', 'feed', 'pessoas', 'missoes', 'config', 'conta'];
 const MOBILE_TITLES = {
   inicio: 'Visão geral',
   dados: 'Dados & Ao Vivo',
   programacao: 'Programação',
   feed: 'Feed e avisos',
   pessoas: 'Pessoas',
-  patrocinadores: 'Patrocinadores',
   missoes: 'Missões',
   config: 'Configurações',
   conta: 'Sua conta',
@@ -286,7 +281,6 @@ export default function Admin() {
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [qrModalActivity, setQrModalActivity] = useState(null);
   const [feedback, setFeedback] = useState(null);
-  const [confirmConfig, setConfirmConfig] = useState(null);
   const [editingActivityId, setEditingActivityId] = useState(null);
   const [editingSpeakerId, setEditingSpeakerId] = useState(null);
   const [speakerSearch, setSpeakerSearch] = useState('');
@@ -294,8 +288,6 @@ export default function Admin() {
 
   // Estados do Modo Projeção de Telão (Projector Mode)
   const [projectorActivity, setProjectorActivity] = useState(null);
-  // Estado do Modal de Inscritos e Fila de Espera
-  const [attendeesActivity, setAttendeesActivity] = useState(null);
 
   // Form Atividade
   const initialActivityForm = {
@@ -305,7 +297,6 @@ export default function Admin() {
     isMultiSession: false,
     registrationType: 'Não requer inscrição',
     requiresRegistration: false,
-    isOpenEvent: false,
     hasCapacityLimit: true,
     capacity: 100,
     points: 50,
@@ -313,7 +304,6 @@ export default function Admin() {
     scheduleRows: [
       { date: '2026-10-21', startTime: '14:00', endTime: '15:30', location: 'Anfiteatro FACOM' }
     ],
-    speakersList: [],
     selectedSpeakerIds: [],
     speakerId: '',
     speakerName: '',
@@ -323,6 +313,7 @@ export default function Admin() {
     showExtraDetails: false,
     location: 'Anfiteatro FACOM',
     tags: 'Computação, Tecnologia, Geral',
+    isOpenEvent: false,
     hidden: false,
     value: 'Grátis',
     attendanceMode: 'SELF_SCAN'
@@ -630,66 +621,40 @@ export default function Admin() {
     }
   };
 
-  const handleDeleteMission = (mission) => {
-    setConfirmConfig({
-      title: 'Excluir missão?',
-      message: `Tem certeza que deseja excluir a missão "${mission.title}"? Essa ação não poderá ser desfeita.`,
-      confirmLabel: 'Excluir missão',
-      cancelLabel: 'Cancelar',
-      variant: 'danger',
-      Icon: Trash2,
-      onConfirm: async () => {
-        try {
-          await deleteMission(mission.id);
-          setConfirmConfig(null);
-          setFeedback({
-            type: 'success',
-            title: 'Missão Excluída',
-            message: `A missão "${mission.title}" foi removida.`
-          });
-        } catch (err) {
-          console.error(err);
-          setConfirmConfig(null);
-          setFeedback({
-            type: 'error',
-            title: 'Erro ao excluir missão',
-            message: err.message || 'Falha ao remover a missão.'
-          });
-        }
-      }
-    });
+  const handleDeleteMission = async (mission) => {
+    if (!window.confirm(`Tem certeza que deseja excluir a missão "${mission.title}"?`)) return;
+    try {
+      await deleteMission(mission.id);
+      setFeedback({
+        type: 'success',
+        title: 'Missão Excluída',
+        message: `A missão "${mission.title}" foi removida.`
+      });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleSeedDefaultMissions = () => {
-    setConfirmConfig({
-      title: 'Sincronizar missões padrão?',
-      message: 'Deseja popular ou sincronizar todas as missões padrão da TechWeek no Firestore? Missões existentes serão preservadas e atualizadas.',
-      confirmLabel: 'Sincronizar missões',
-      cancelLabel: 'Cancelar',
-      variant: 'warning',
-      Icon: Sparkles,
-      onConfirm: async () => {
-        setIsSeedingMissions(true);
-        setConfirmConfig(null);
-        try {
-          const count = await seedDefaultMissions();
-          setFeedback({
-            type: 'success',
-            title: 'Missões Sincronizadas!',
-            message: `${count} missões padrão foram gravadas com sucesso no Firestore.`
-          });
-        } catch (err) {
-          console.error('Erro ao popular missões padrão:', err);
-          setFeedback({
-            type: 'error',
-            title: 'Falha na Sincronização',
-            message: err.message || 'Ocorreu um erro ao gravar as missões padrão no Firestore.'
-          });
-        } finally {
-          setIsSeedingMissions(false);
-        }
-      }
-    });
+  const handleSeedDefaultMissions = async () => {
+    if (!window.confirm('Deseja popular ou sincronizar todas as missões padrão da TechWeek no Firestore? Missões existentes serão preservadas e atualizadas.')) return;
+    setIsSeedingMissions(true);
+    try {
+      const count = await seedDefaultMissions();
+      setFeedback({
+        type: 'success',
+        title: 'Missões Sincronizadas!',
+        message: `${count} missões padrão foram gravadas com sucesso no Firestore.`
+      });
+    } catch (err) {
+      console.error('Erro ao popular missões padrão:', err);
+      setFeedback({
+        type: 'error',
+        title: 'Falha na Sincronização',
+        message: err.message || 'Ocorreu um erro ao gravar as missões padrão no Firestore.'
+      });
+    } finally {
+      setIsSeedingMissions(false);
+    }
   };
 
   const handleTriggerQuickFlash = async (e) => {
@@ -718,11 +683,7 @@ export default function Admin() {
     const isVideo = file.type.startsWith('video/');
     const isImage = file.type.startsWith('image/');
     if (!isVideo && !isImage) {
-      setFeedback({
-        type: 'warning',
-        title: 'Formato não suportado',
-        message: 'Selecione uma imagem (PNG, JPG, WebP) ou vídeo (MP4) válido.'
-      });
+      alert('Selecione uma imagem ou vídeo válido.');
       return;
     }
     const previewUrl = URL.createObjectURL(file);
@@ -812,30 +773,19 @@ export default function Admin() {
     }
   };
 
-  const handleDeletePost = (postId) => {
-    setConfirmConfig({
-      title: 'Excluir publicação?',
-      message: 'Essa publicação será removida do Feed imediatamente e não poderá ser recuperada.',
-      confirmLabel: 'Excluir publicação',
-      cancelLabel: 'Cancelar',
-      variant: 'danger',
-      Icon: Trash2,
-      onConfirm: async () => {
-        try {
-          await deleteFeedPost(postId);
-          setFeedPosts(prev => prev.filter(p => p.id !== postId));
-          setConfirmConfig(null);
-          setFeedback({
-            type: 'success',
-            title: 'Publicação Removida',
-            message: 'A postagem foi excluída do Feed.'
-          });
-        } catch (err) {
-          setConfirmConfig(null);
-          setFeedback({ type: 'error', title: 'Erro ao excluir', message: err.message || 'Falha ao remover a publicação.' });
-        }
-      }
-    });
+  const handleDeletePost = async (postId) => {
+    if (!window.confirm('Deseja excluir esta publicação do Feed?')) return;
+    try {
+      await deleteFeedPost(postId);
+      setFeedPosts(prev => prev.filter(p => p.id !== postId));
+      setFeedback({
+        type: 'success',
+        title: 'Publicação Removida',
+        message: 'A postagem foi excluída do Feed.'
+      });
+    } catch (err) {
+      setFeedback({ type: 'error', title: 'Erro', message: err.message });
+    }
   };
 
   const handleTogglePinPost = async (postId, currentPinned) => {
@@ -918,11 +868,7 @@ export default function Admin() {
   const handleSaveActivity = async (e) => {
     e.preventDefault();
     if (!activityForm.title) {
-      setFeedback({
-        type: 'warning',
-        title: 'Campo obrigatório',
-        message: 'Preencha o título da atividade antes de salvar.'
-      });
+      alert('Preencha o título da atividade.');
       return;
     }
 
@@ -930,27 +876,13 @@ export default function Admin() {
     const dayFormatted = firstSchedule.date ? firstSchedule.date.split('-').reverse().slice(0, 2).join('/') : '21/10';
 
     // Resolver palestrantes vinculados
-    let finalSpeakers = [];
-    if (Array.isArray(activityForm.speakersList) && activityForm.speakersList.length > 0) {
-      finalSpeakers = activityForm.speakersList;
-    } else {
-      finalSpeakers = (activityForm.selectedSpeakerIds || []).map(id => {
-        const spk = speakers.find(s => s.id === id);
-        return spk ? { id: spk.id, name: spk.name, role: spk.role || spk.institution || '', photo: spk.photo || '', classification: spk.classification || '' } : null;
-      }).filter(Boolean);
-      if (finalSpeakers.length === 0 && (activityForm.speakerName || activityForm.speaker)) {
-        finalSpeakers = [{
-          id: activityForm.speakerId || `spk_${Date.now()}`,
-          name: activityForm.speakerName || activityForm.speaker,
-          role: activityForm.speakerRole || '',
-          photo: activityForm.speakerPhoto || '',
-          bio: ''
-        }];
-      }
-    }
+    const selectedSpeakersList = (activityForm.selectedSpeakerIds || []).map(id => {
+      const spk = speakers.find(s => s.id === id);
+      return spk ? { id: spk.id, name: spk.name, role: spk.role || spk.institution || '', photo: spk.photo || '', classification: spk.classification || '' } : null;
+    }).filter(Boolean);
 
-    const primarySpeaker = finalSpeakers[0] || null;
-    const speakerNamesJoined = finalSpeakers.map(s => s.name).filter(Boolean).join(', ') || activityForm.speakerName || 'Comissão Organizadora FACOM';
+    const primarySpeaker = selectedSpeakersList[0] || null;
+    const speakerNamesJoined = selectedSpeakersList.map(s => s.name).join(', ') || activityForm.speakerName || 'Comissão Organizadora FACOM';
 
     const maxCap = activityForm.hasCapacityLimit ? Number(activityForm.capacity || 100) : 9999;
 
@@ -962,7 +894,6 @@ export default function Admin() {
       isMultiSession: Boolean(activityForm.isMultiSession),
       registrationType: activityForm.requiresRegistration ? 'Gratuita' : 'Não requer inscrição',
       requiresRegistration: Boolean(activityForm.requiresRegistration),
-      isOpenEvent: Boolean(activityForm.isOpenEvent),
       hasCapacityLimit: Boolean(activityForm.hasCapacityLimit),
       vagas_totais: maxCap,
       maxCapacity: maxCap,
@@ -983,10 +914,11 @@ export default function Admin() {
       speakerRole: primarySpeaker?.role || activityForm.speakerRole || '',
       speakerPhoto: primarySpeaker?.photo || activityForm.speakerPhoto || '',
       speakerId: primarySpeaker?.id || activityForm.speakerId || '',
-      speakers: finalSpeakers,
-      speakerIds: finalSpeakers.map(s => s.id).filter(Boolean),
+      speakers: selectedSpeakersList,
+      speakerIds: activityForm.selectedSpeakerIds || [],
       location: firstSchedule.location || activityForm.location || 'Anfiteatro FACOM',
       tags: activityForm.tags,
+      isOpenEvent: Boolean(activityForm.isOpenEvent),
       hidden: activityForm.hidden,
       value: activityForm.value || 'Grátis',
       attendanceMode: activityForm.attendanceMode === 'DOUBLE_CHECK' ? 'DOUBLE_CHECK' : 'SELF_SCAN'
@@ -1007,11 +939,7 @@ export default function Admin() {
         message: `A atividade "${payload.title}" está disponível na grade oficial.`
       });
     } catch (err) {
-      setFeedback({
-        type: 'error',
-        title: 'Erro ao salvar atividade',
-        message: err.message || 'Ocorreu um erro ao salvar a atividade.'
-      });
+      alert('Erro ao salvar atividade: ' + err.message);
     }
   };
 
@@ -1026,26 +954,13 @@ export default function Admin() {
         }))
       : [{ date: act.date || '2026-10-21', startTime: act.time || '14:00', endTime: act.endTime || '15:30', location: act.location || 'Anfiteatro FACOM' }];
 
-    let speakersList = [];
-    if (Array.isArray(act.speakers) && act.speakers.length > 0) {
-      speakersList = act.speakers;
-    } else if (Array.isArray(act.speakerIds) && act.speakerIds.length > 0) {
-      speakersList = act.speakerIds.map(id => {
-        const s = speakers.find(x => x.id === id);
-        return s ? { id: s.id, name: s.name, role: s.role || s.institution || '', photo: s.photo || '', bio: s.bio || '' } : null;
-      }).filter(Boolean);
-    } else if (act.speaker || act.speakerName) {
-      const names = (act.speaker || act.speakerName).split(',').map(s => s.trim()).filter(Boolean);
-      speakersList = names.map((name, i) => ({
-        id: i === 0 && act.speakerId ? act.speakerId : `spk_${i}_${Date.now()}`,
-        name,
-        role: i === 0 ? (act.speakerRole || '') : '',
-        photo: i === 0 ? (act.speakerPhoto || '') : '',
-        bio: ''
-      }));
+    let speakerIds = Array.isArray(act.speakerIds) ? act.speakerIds : [];
+    if (speakerIds.length === 0 && Array.isArray(act.speakers) && act.speakers.length > 0) {
+      speakerIds = act.speakers.map(s => s.id).filter(Boolean);
     }
-
-    const speakerIds = speakersList.map(s => s.id).filter(Boolean);
+    if (speakerIds.length === 0 && act.speakerId) {
+      speakerIds = [act.speakerId];
+    }
 
     setActivityForm({
       title: act.title || '',
@@ -1054,22 +969,21 @@ export default function Admin() {
       isMultiSession: Boolean(act.isMultiSession || rows.length > 1),
       registrationType: act.registrationType || 'Não requer inscrição',
       requiresRegistration: act.requiresRegistration !== undefined ? Boolean(act.requiresRegistration) : (act.registrationType !== 'Não requer inscrição'),
-      isOpenEvent: Boolean(act.isOpenEvent),
       hasCapacityLimit: act.hasCapacityLimit !== undefined ? Boolean(act.hasCapacityLimit) : (Number(act.vagas_totais) < 900),
       capacity: act.vagas_totais || act.maxCapacity || 100,
       points: Number(act.points || 50),
       duration: act.duration || (rows.length > 1 ? `${rows.length} dias` : 'Um dia'),
       scheduleRows: rows,
-      speakersList,
       selectedSpeakerIds: speakerIds,
-      speakerId: act.speakerId || (speakersList[0]?.id || ''),
-      speakerName: act.speaker || (speakersList.map(s => s.name).join(', ') || ''),
-      speakerRole: act.speakerRole || (speakersList[0]?.role || ''),
-      speakerPhoto: act.speakerPhoto || (speakersList[0]?.photo || ''),
+      speakerId: act.speakerId || '',
+      speakerName: act.speaker || '',
+      speakerRole: act.speakerRole || '',
+      speakerPhoto: act.speakerPhoto || '',
       materials: act.materials || [],
       showExtraDetails: true,
       location: act.location || 'Anfiteatro FACOM',
       tags: Array.isArray(act.tags) ? act.tags.join(', ') : (act.tags || 'Computação, Tecnologia, Geral'),
+      isOpenEvent: Boolean(act.isOpenEvent),
       hidden: Boolean(act.hidden),
       value: act.value || 'Grátis',
       attendanceMode: act.attendanceMode === 'DOUBLE_CHECK' ? 'DOUBLE_CHECK' : 'SELF_SCAN'
@@ -1077,34 +991,13 @@ export default function Admin() {
     setIsActivityModalOpen(true);
   };
 
-  const handleDeleteActivity = (id, title) => {
-    setConfirmConfig({
-      title: 'Excluir atividade?',
-      message: `Tem certeza que deseja excluir "${title}"? A atividade e todas as suas sessões serão removidas da grade oficial.`,
-      confirmLabel: 'Excluir atividade',
-      cancelLabel: 'Cancelar',
-      variant: 'danger',
-      Icon: Trash2,
-      onConfirm: async () => {
-        try {
-          await deleteActivity(id);
-          setActivities(prev => prev.filter(a => a.id !== id));
-          setConfirmConfig(null);
-          setFeedback({
-            type: 'success',
-            title: 'Atividade Excluída',
-            message: `A atividade "${title}" foi removida da grade.`
-          });
-        } catch (err) {
-          setConfirmConfig(null);
-          setFeedback({
-            type: 'error',
-            title: 'Erro ao excluir atividade',
-            message: err.message || 'Falha ao remover a atividade.'
-          });
-        }
-      }
-    });
+  const handleDeleteActivity = async (id, title) => {
+    if (!window.confirm(`Tem certeza que deseja excluir "${title}"?`)) return;
+    try {
+      await deleteActivity(id);
+    } catch (err) {
+      alert('Erro ao excluir: ' + err.message);
+    }
   };
 
   // Abrir Modal de Edição de Palestrante
@@ -1138,11 +1031,7 @@ export default function Admin() {
   const handleSaveGuest = async (e) => {
     e.preventDefault();
     if (!guestForm.name) {
-      setFeedback({
-        type: 'warning',
-        title: 'Campo obrigatório',
-        message: 'Informe o nome do palestrante para continuar.'
-      });
+      alert('Informe o nome do palestrante.');
       return;
     }
 
@@ -1176,42 +1065,18 @@ export default function Admin() {
         message: `${guestForm.name} foi salvo na lista de palestrantes.`
       });
     } catch (err) {
-      setFeedback({
-        type: 'error',
-        title: 'Erro ao salvar convidado',
-        message: err.message || 'Não foi possível salvar o palestrante.'
-      });
+      alert('Erro ao salvar convidado: ' + err.message);
     }
   };
 
-  const handleDeleteSpeaker = (id, name) => {
-    setConfirmConfig({
-      title: 'Excluir palestrante?',
-      message: `Tem certeza que deseja excluir o palestrante "${name}"? Essa ação removerá o convidado da grade oficial.`,
-      confirmLabel: 'Excluir palestrante',
-      cancelLabel: 'Cancelar',
-      variant: 'danger',
-      Icon: Trash2,
-      onConfirm: async () => {
-        try {
-          await deleteSpeaker(id);
-          setSpeakers(prev => prev.filter(s => s.id !== id));
-          setConfirmConfig(null);
-          setFeedback({
-            type: 'success',
-            title: 'Palestrante Excluído',
-            message: `O palestrante "${name}" foi removido da lista.`
-          });
-        } catch (err) {
-          setConfirmConfig(null);
-          setFeedback({
-            type: 'error',
-            title: 'Erro ao excluir palestrante',
-            message: err.message || 'Falha ao remover o palestrante.'
-          });
-        }
-      }
-    });
+  const handleDeleteSpeaker = async (id, name) => {
+    if (!window.confirm(`Excluir palestrante "${name}"?`)) return;
+    try {
+      await deleteSpeaker(id);
+      setSpeakers(prev => prev.filter(s => s.id !== id));
+    } catch (err) {
+      alert('Erro ao excluir palestrante: ' + err.message);
+    }
   };
 
   const handleAddSocialLink = () => {
@@ -1244,11 +1109,7 @@ export default function Admin() {
         message: `Local "${locationForm.name}" disponível para atividades.`
       });
     } catch (err) {
-      setFeedback({
-        type: 'error',
-        title: 'Erro ao salvar local',
-        message: err.message || 'Não foi possível cadastrar o local.'
-      });
+      alert('Erro ao salvar local: ' + err.message);
     }
   };
 
@@ -1292,7 +1153,13 @@ export default function Admin() {
 
   // Filtros de Palestrantes & Convidados
   const filteredSpeakers = useMemo(() => {
-    return filterSpeakers(speakers, speakerSearch, speakerClassificationFilter);
+    return (speakers || []).filter((spk) => {
+      const matchText = (spk.name || '').toLowerCase().includes((speakerSearch || '').toLowerCase()) ||
+                        (spk.institution || '').toLowerCase().includes((speakerSearch || '').toLowerCase()) ||
+                        (spk.role || '').toLowerCase().includes((speakerSearch || '').toLowerCase());
+      const matchClass = speakerClassificationFilter === 'ALL' || spk.classification === speakerClassificationFilter;
+      return matchText && matchClass;
+    });
   }, [speakers, speakerSearch, speakerClassificationFilter]);
 
   // Filtros de Missões & Desafios (KAN-106)
@@ -1413,7 +1280,6 @@ export default function Admin() {
         active={view}
         onNavigate={goTo}
         navigate={navigate}
-        onLogout={handleAdminLogout}
         me={me}
         search={sectionSearch ? sectionSearch[0] : globalSearch}
         onSearch={sectionSearch ? sectionSearch[1] : setGlobalSearch}
@@ -1480,7 +1346,6 @@ export default function Admin() {
               onEditSpeaker={handleOpenEditGuest}
               onDeleteSpeaker={handleDeleteSpeaker}
               onNewLocation={() => setIsLocationModalOpen(true)}
-              onViewAttendees={setAttendeesActivity}
             />
           )}
 
@@ -1507,8 +1372,6 @@ export default function Admin() {
               currentAdminAvatar={currentAdminAvatar}
             />
           )}
-
-          {view === 'patrocinadores' && <AdminPatrocinadores />}
 
           {/* SEÇÃO: PARTICIPANTES & PERMISSÕES */}
           {view === 'pessoas' && (
@@ -1566,7 +1429,7 @@ export default function Admin() {
 
                 <div style={{ height: '1px', backgroundColor: 'var(--line-2)' }} />
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div>
                     <span style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>PERÍODO OFICIAL</span>
                     <div style={{ fontSize: '0.86rem', color: 'var(--text)' }}>21 de Outubro a 27 de Outubro de 2026</div>
@@ -1606,7 +1469,7 @@ export default function Admin() {
           {view === 'conta' && (
             <AdminConta
               me={me}
-              handle={profile?.username ? `@${profile.username}` : profile?.email ? `@${String(profile.email).split('@')[0]}` : ''}
+              handle={profile?.username ? `@${profile.username}` : profile?.email ? `@${profile.email.split('@')[0]}` : ''}
               role={profile?.role || 'ADMIN'}
               onProfile={() => navigate('/profile?edit=true')}
               onLogout={handleAdminLogout}
@@ -1628,9 +1491,9 @@ export default function Admin() {
 
       {/* MODAL: CONVIDADO / PALESTRANTE */}
       {isGuestModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px', overflowY: 'auto' }}>
-          <div style={{ width: '100%', maxWidth: '520px', maxHeight: '90vh', backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: 'var(--text)' }}>
-            <div style={{ backgroundColor: 'var(--surface-raised)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--line-2)', flexShrink: 0 }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '520px', backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: 'var(--text)' }}>
+            <div style={{ backgroundColor: 'var(--surface-raised)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--line-2)' }}>
               <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700 }}>
                 {editingSpeakerId ? 'Editar Palestrante' : 'Cadastrar Convidado / Palestrante'}
               </h3>
@@ -1643,8 +1506,8 @@ export default function Admin() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveGuest} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <form onSubmit={handleSaveGuest} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Nome Completo *</label>
                   <input
@@ -1668,7 +1531,7 @@ export default function Admin() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Classificação do Palestrante</label>
                   <select
@@ -1713,7 +1576,7 @@ export default function Admin() {
                   onChange={(e) => setGuestForm(prev => ({ ...prev, photo: e.target.value }))}
                   style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box', marginBottom: '6px' }}
                 />
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                <div style={{ display: 'flex', gap: '6px' }}>
                   {SAMPLE_SPEAKER_PHOTOS.map((pic, idx) => (
                     <button
                       key={idx}
@@ -1853,15 +1716,6 @@ export default function Admin() {
         </div>
       )}
 
-      {/* MODAL: INSCRITOS E FILA DE ESPERA DA ATIVIDADE */}
-      {attendeesActivity && (
-        <ActivityAttendeesModal
-          activity={attendeesActivity}
-          usersList={usersList}
-          onClose={() => setAttendeesActivity(null)}
-        />
-      )}
-
       {/* MODAL: ADICIONAR / EDITAR MISSÃO (KAN-104) */}
 
       {/* MODAL: DISPARO RELÂMPAGO RÁPIDO (KAN-104) */}
@@ -1928,7 +1782,7 @@ export default function Admin() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>
                     Duração (Minutos) *
@@ -1943,7 +1797,7 @@ export default function Admin() {
                     style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: '#FDE68A', fontWeight: 700, fontSize: '0.84rem', boxSizing: 'border-box' }}
                   />
                 </div>
-                <div className="sm:col-span-2">
+                <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>
                     Fala do Mascote (Alerta em Tempo Real)
                   </label>
@@ -1975,21 +1829,6 @@ export default function Admin() {
             </form>
           </div>
         </div>
-      )}
-
-      {confirmConfig && (
-        <ConfirmModal
-          isOpen={Boolean(confirmConfig)}
-          title={confirmConfig.title}
-          message={confirmConfig.message}
-          confirmLabel={confirmConfig.confirmLabel || 'Confirmar'}
-          cancelLabel={confirmConfig.cancelLabel || 'Cancelar'}
-          variant={confirmConfig.variant || 'danger'}
-          Icon={confirmConfig.Icon || Trash2}
-          isLoading={Boolean(confirmConfig.isLoading)}
-          onConfirm={confirmConfig.onConfirm}
-          onCancel={() => setConfirmConfig(null)}
-        />
       )}
 
       <Toast feedback={feedback} onClose={closeFeedback} />

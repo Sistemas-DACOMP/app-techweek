@@ -35,6 +35,7 @@ export const DEFAULT_ACTIVITIES = [
     ],
     duration: 'Um dia',
     location: 'Laboratório 1 - FACOM',
+    isOpenEvent: false,
     vagas_disponiveis: 50,
     vagas_totais: 50,
     total_inscritos: 0,
@@ -62,6 +63,7 @@ export const DEFAULT_ACTIVITIES = [
     ],
     duration: 'Dois dias',
     location: 'Sala 5R',
+    isOpenEvent: false,
     vagas_disponiveis: 199,
     vagas_totais: 200,
     total_inscritos: 1,
@@ -88,6 +90,7 @@ export const DEFAULT_ACTIVITIES = [
     ],
     duration: 'A definir',
     location: 'Anfiteatro FACOM',
+    isOpenEvent: true,
     vagas_disponiveis: 999,
     vagas_totais: 999,
     total_inscritos: 0,
@@ -209,6 +212,7 @@ export const DEFAULT_ACTIVITIES = [
     date: '2026-10-26',
     time: '19:00',
     location: 'Anfiteatro principal',
+    isOpenEvent: true,
     vagas_disponiveis: 150,
     vagas_totais: 150,
     total_inscritos: 75,
@@ -313,6 +317,7 @@ export function subscribeToActivities(onUpdate, onError) {
             date: data.date || data.data || '',
             time: data.time || data.horario || data.hora || '',
             location: data.location || data.local || '',
+            isOpenEvent: Boolean(data.isOpenEvent || data.is_open_event || data.isPublic),
             vagas_disponiveis: typeof data.vagas_disponiveis === 'number' 
               ? data.vagas_disponiveis 
               : (typeof data.vagasDisponiveis === 'number' ? data.vagasDisponiveis : 0),
@@ -624,6 +629,8 @@ export async function reserveActivity(activityId, activityMeta = null) {
         await updateDoc(userRef, {
           [`bookedActivities.${activityId}`]: {
             status: 'CONFIRMED',
+            activityId,
+            userId: currentUser.uid,
             bookedAt: now
           }
         });

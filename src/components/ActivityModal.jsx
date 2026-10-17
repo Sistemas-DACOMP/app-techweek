@@ -327,7 +327,13 @@ export default function ActivityModal({
           className={primaryClass}
         >
           {isReserving && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
-          {isReserving ? 'Reservando' : isSoldOut ? 'Entrar na lista de espera' : 'Reservar vaga'}
+          {isReserving
+            ? 'Reservando'
+            : isSoldOut
+            ? 'Entrar na lista de espera'
+            : !hasTicket && activity.isOpenEvent
+            ? 'Garantir minha vaga (Entrada Livre)'
+            : 'Reservar vaga'}
         </button>
       </>
     );
