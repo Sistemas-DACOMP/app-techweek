@@ -9,7 +9,7 @@ import {
 import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityService';
 import { getMyProfile } from '../lib/gameplay';
 import { loginWithEmailAndPassword, logoutUser } from '../lib/auth';
-import { doc, getDoc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -356,58 +356,15 @@ export default function Staff() {
       }
     }
 
-    // 4. Registra presença (Firestore best-effort + persistência local garantida)
-    const points = typeof currentActivity?.entrancePoints === 'number'
-      ? currentActivity.entrancePoints
-      : (typeof currentActivity?.points === 'number' ? currentActivity.points : 0);
-
-    try {
-      if (isDoubleCheck) {
-        await setDoc(doc(db, 'checkins', `${participantUid}_${activityId}`), {
-          uid: participantUid,
-          activityId,
-          status: 'CHECKED_IN',
-          entranceAt: serverTimestamp(),
-          entranceBy: staffUid,
-          checkoutAt: null,
-          pointsCredited: null
-        }, { merge: true });
-      } else {
-        await setDoc(doc(db, 'pointEvents', `${participantUid}_entrance_${activityId}`), {
-          userId: participantUid,
-          eventType: 'entrance',
-          referenceId: activityId,
-          points,
-          metadata: { staffUid },
-          createdAt: serverTimestamp()
-        }, { merge: true });
-
-        if (points > 0 && !String(participantUid).startsWith('sympla_') && !String(participantUid).startsWith('email_')) {
-          await setDoc(doc(db, 'users', participantUid), {
-            totalPoints: increment(points),
-            pontuacaoTotal: increment(points)
-          }, { merge: true }).catch(() => {});
-        }
-      }
-    } catch {
-      // Mantém registro garantido no armazenamento local da portaria
-    }
-
-    saveLocalStaffCheckin(activityId, participantUid, { name: participantName, points });
-
-    const successMessage = isDoubleCheck
-      ? (participantName
-          ? `Entrada de ${participantName} registrada. Lembre de ler o QR do telão antes de sair.`
-          : 'Entrada registrada. Lembre a pessoa de ler o QR do telão antes de sair.')
-      : (participantName
-          ? `Presença de ${participantName} confirmada e pontos creditados!`
-          : 'Presença confirmada e pontos creditados!');
+    // 4. Contingência local: se a API do backend falhar ou estiver indisponível,
+    // salva o registro na memória local desta portaria sem fingir escrita direta no Firestore
+    saveLocalStaffCheckin(activityId, participantUid, { name: participantName, points, offline: true });
 
     return {
-      status: 'green',
-      kind: 'ok',
+      status: 'yellow',
+      kind: 'warn',
       name: participantName,
-      message: successMessage
+      message: 'Falha de comunicação com o servidor. Presença anotada localmente na portaria (pendente de sincronização online).'
     };
   };
 

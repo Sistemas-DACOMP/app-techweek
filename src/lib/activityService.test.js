@@ -12,7 +12,10 @@ import {
   registerActivityAttendance,
   calculateActivityStatus,
   formatActivityType,
-  DEFAULT_ACTIVITIES
+  DEFAULT_ACTIVITIES,
+  toEpochMillis,
+  formatBookingDateTime,
+  subscribeToActivityBookings
 } from './activityService';
 import { apiRequest } from './api';
 import { getCachedUserProfile } from './userService';
@@ -454,8 +457,10 @@ describe('activityService (KAN-50)', () => {
       const stale = { id: 'act_x', title: 'X', vagas_totais: 10, vagas_disponiveis: 10, total_inscritos: 0, total_espera: 0 };
       vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() });
       vi.stubGlobal('localStorage', { getItem: () => JSON.stringify([stale]), setItem: vi.fn() });
-      onSnapshot.mockImplementationOnce((_ref, onNext) => {
-        onNext({ empty: false, docs: [{ id: 'act_x', data: () => ({ ...stale, vagas_disponiveis: 7, total_inscritos: 3 }) }] });
+      onSnapshot.mockImplementation((ref, onNext) => {
+        if (ref?.path === 'activities') {
+          onNext({ empty: false, docs: [{ id: 'act_x', data: () => ({ ...stale, vagas_disponiveis: 7, total_inscritos: 3 }) }] });
+        }
         return vi.fn();
       });
       const onUpdate = vi.fn();
@@ -464,6 +469,60 @@ describe('activityService (KAN-50)', () => {
       const act = onUpdate.mock.calls.at(-1)[0].find((a) => a.id === 'act_x');
       expect(act.vagas_disponiveis).toBe(7);
       expect(act.total_inscritos).toBe(3);
+    });
+
+    it('subscribeToActivities atualiza total_inscritos e vagas_disponiveis ao receber snapshots de /bookings', async () => {
+      const { onSnapshot } = await import('firebase/firestore');
+      let bookingsCb = null;
+      let activitiesCb = null;
+
+      onSnapshot.mockImplementation((ref, onNext) => {
+        if (ref?.path === 'bookings') {
+          bookingsCb = onNext;
+        } else if (ref?.path === 'activities') {
+          activitiesCb = onNext;
+        }
+        return vi.fn();
+      });
+
+      const onUpdate = vi.fn();
+      subscribeToActivities(onUpdate);
+
+      // Emite activities
+      activitiesCb({
+        empty: false,
+        docs: [
+          {
+            id: 'act_test_cap',
+            data: () => ({
+              id: 'act_test_cap',
+              title: 'Workshop de Testes',
+              vagas_totais: 50,
+              vagas_disponiveis: 50,
+              total_inscritos: 0,
+              total_espera: 0
+            })
+          }
+        ]
+      });
+
+      let latest = onUpdate.mock.calls.at(-1)[0].find((a) => a.id === 'act_test_cap');
+      expect(latest.total_inscritos).toBe(0);
+      expect(latest.vagas_disponiveis).toBe(50);
+
+      // Emite bookings para act_test_cap (2 confirmados, 1 espera)
+      bookingsCb({
+        docs: [
+          { id: 'b1', data: () => ({ activityId: 'act_test_cap', status: 'CONFIRMED' }) },
+          { id: 'b2', data: () => ({ activityId: 'act_test_cap', status: 'CONFIRMED' }) },
+          { id: 'b3', data: () => ({ activityId: 'act_test_cap', status: 'WAITING_LIST' }) }
+        ]
+      });
+
+      latest = onUpdate.mock.calls.at(-1)[0].find((a) => a.id === 'act_test_cap');
+      expect(latest.total_inscritos).toBe(2);
+      expect(latest.total_espera).toBe(1);
+      expect(latest.vagas_disponiveis).toBe(48);
     });
   });
 
@@ -527,4 +586,175 @@ describe('activityService (KAN-50)', () => {
       expect(res.mode).toBe('self_scan');
     });
   });
+
+  describe('toEpochMillis & formatBookingDateTime', () => {
+    it('toEpochMillis lida com datas nos formatos Date, Timestamp, seconds e ISO string', () => {
+      const fixedIso = '2026-10-21T14:30:00.000Z';
+      const expectedMs = Date.parse(fixedIso);
+
+      expect(toEpochMillis(new Date(fixedIso))).toBe(expectedMs);
+      expect(toEpochMillis(fixedIso)).toBe(expectedMs);
+      expect(toEpochMillis({ toDate: () => new Date(fixedIso) })).toBe(expectedMs);
+      expect(toEpochMillis({ toMillis: () => expectedMs })).toBe(expectedMs);
+      expect(toEpochMillis({ seconds: Math.floor(expectedMs / 1000), nanoseconds: 0 })).toBe(Math.floor(expectedMs / 1000) * 1000);
+      expect(toEpochMillis(null)).toBe(0);
+      expect(toEpochMillis(undefined)).toBe(0);
+    });
+
+    it('formatBookingDateTime formata datas de forma amigável em pt-BR', () => {
+      const date = new Date(2026, 9, 21, 14, 32, 10);
+      const formatted = formatBookingDateTime(date);
+      expect(formatted).toBe('21/10 às 14:32');
+
+      const formattedWithSec = formatBookingDateTime(date, { withSeconds: true });
+      expect(formattedWithSec).toBe('21/10 às 14:32:10');
+
+      expect(formatBookingDateTime(null)).toBe('Data não registrada');
+    });
+  });
+
+  describe('subscribeToActivityBookings', () => {
+    it('retorna estrutura vazia caso a atividade não seja informada', () => {
+      const onUpdate = vi.fn();
+      const unsub = subscribeToActivityBookings(null, onUpdate);
+
+      expect(onUpdate).toHaveBeenCalledWith({
+        confirmed: [],
+        waitingList: [],
+        all: [],
+        stats: { confirmedCount: 0, waitingCount: 0, checkedInCount: 0 }
+      });
+      expect(typeof unsub).toBe('function');
+      unsub();
+    });
+
+    it('escuta bookings e checkins, cruzando com usersList e ordenando cronologicamente', () => {
+      let bookingsListener = null;
+      let checkinsListener = null;
+
+      onSnapshot.mockImplementation((q, onNext) => {
+        const collName = q?.coll?.path;
+        if (collName === 'bookings') {
+          bookingsListener = onNext;
+        } else if (collName === 'checkins') {
+          checkinsListener = onNext;
+        }
+        return vi.fn();
+      });
+
+      const onUpdate = vi.fn();
+      const usersList = [
+        {
+          uid: 'u_1',
+          displayName: 'Mariana Silva',
+          username: 'mariana',
+          email: 'mariana@ufu.br',
+          course: 'Sistemas de Informação',
+          period: '6º período',
+          hasSymplaTicket: true,
+          ticketNumber: 'SYM-123'
+        },
+        {
+          uid: 'u_2',
+          displayName: 'Carlos Souza',
+          username: 'carlos',
+          email: 'carlos@ufu.br',
+          course: 'Ciência da Computação',
+          hasSymplaTicket: false
+        },
+        {
+          uid: 'u_3',
+          displayName: 'Beatriz Lima',
+          email: 'beatriz@ufu.br',
+          hasSymplaTicket: true
+        }
+      ];
+
+      const unsub = subscribeToActivityBookings('act_workshop_ia', onUpdate, null, { usersList });
+
+      expect(onSnapshot).toHaveBeenCalled();
+
+      // Simula emissão do Firestore /bookings com 2 confirmados e 1 em fila de espera
+      const mockBookingsSnapshot = {
+        docs: [
+          {
+            id: 'b_2',
+            data: () => ({
+              userId: 'u_2',
+              activityId: 'act_workshop_ia',
+              status: 'CONFIRMED',
+              createdAt: '2026-10-21T10:15:00.000Z'
+            })
+          },
+          {
+            id: 'b_1',
+            data: () => ({
+              userId: 'u_1',
+              activityId: 'act_workshop_ia',
+              status: 'CONFIRMED',
+              createdAt: '2026-10-21T10:00:00.000Z'
+            })
+          },
+          {
+            id: 'b_3',
+            data: () => ({
+              userId: 'u_3',
+              activityId: 'act_workshop_ia',
+              status: 'WAITING_LIST',
+              position: 1,
+              createdAt: '2026-10-21T10:30:00.000Z'
+            })
+          }
+        ]
+      };
+
+      bookingsListener(mockBookingsSnapshot);
+
+      expect(onUpdate).toHaveBeenCalled();
+      const lastCall = onUpdate.mock.calls[onUpdate.mock.calls.length - 1][0];
+
+      // Confirmados devem vir ordenados cronologicamente: u_1 (10:00) depois u_2 (10:15)
+      expect(lastCall.confirmed).toHaveLength(2);
+      expect(lastCall.confirmed[0].userId).toBe('u_1');
+      expect(lastCall.confirmed[0].rank).toBe(1);
+      expect(lastCall.confirmed[0].rankLabel).toBe('1º');
+      expect(lastCall.confirmed[0].fullName).toBe('Mariana Silva');
+      expect(lastCall.confirmed[0].hasSymplaTicket).toBe(true);
+
+      expect(lastCall.confirmed[1].userId).toBe('u_2');
+      expect(lastCall.confirmed[1].rank).toBe(2);
+      expect(lastCall.confirmed[1].rankLabel).toBe('2º');
+
+      // Fila de espera
+      expect(lastCall.waitingList).toHaveLength(1);
+      expect(lastCall.waitingList[0].userId).toBe('u_3');
+      expect(lastCall.waitingList[0].rankLabel).toBe('1º da fila');
+
+      // Simula checkin presencial emitido para u_1
+      const mockCheckinsSnapshot = {
+        docs: [
+          {
+            id: 'u_1_act_workshop_ia',
+            data: () => ({
+              uid: 'u_1',
+              activityId: 'act_workshop_ia',
+              status: 'CHECKED_IN',
+              entranceAt: new Date(2026, 9, 21, 10, 55, 0)
+            })
+          }
+        ]
+      };
+
+      checkinsListener(mockCheckinsSnapshot);
+
+      const updatedCall = onUpdate.mock.calls[onUpdate.mock.calls.length - 1][0];
+      expect(updatedCall.confirmed[0].checkedIn).toBe(true);
+      expect(updatedCall.confirmed[0].checkedInAtFormatted).toContain('10:55');
+      expect(updatedCall.confirmed[1].checkedIn).toBe(false);
+      expect(updatedCall.stats.checkedInCount).toBe(1);
+
+      unsub();
+    });
+  });
 });
+

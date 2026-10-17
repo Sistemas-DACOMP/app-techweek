@@ -35,6 +35,7 @@ export const DEFAULT_ACTIVITIES = [
     ],
     duration: 'Um dia',
     location: 'Laboratório 1 - FACOM',
+    isOpenEvent: false,
     vagas_disponiveis: 50,
     vagas_totais: 50,
     total_inscritos: 0,
@@ -62,6 +63,7 @@ export const DEFAULT_ACTIVITIES = [
     ],
     duration: 'Dois dias',
     location: 'Sala 5R',
+    isOpenEvent: false,
     vagas_disponiveis: 199,
     vagas_totais: 200,
     total_inscritos: 1,
@@ -88,6 +90,7 @@ export const DEFAULT_ACTIVITIES = [
     ],
     duration: 'A definir',
     location: 'Anfiteatro FACOM',
+    isOpenEvent: true,
     vagas_disponiveis: 999,
     vagas_totais: 999,
     total_inscritos: 0,
@@ -209,6 +212,7 @@ export const DEFAULT_ACTIVITIES = [
     date: '2026-10-26',
     time: '19:00',
     location: 'Anfiteatro principal',
+    isOpenEvent: true,
     vagas_disponiveis: 150,
     vagas_totais: 150,
     total_inscritos: 75,
@@ -256,9 +260,10 @@ export function removeLocalCustomActivity(id) {
  */
 export function subscribeToActivities(onUpdate, onError) {
   let lastFirestoreList = [];
+  let lastBookingsCounts = {};
 
   const mergeAndNotify = (firestoreList) => {
-    const baseList = (firestoreList && firestoreList.length > 0) ? firestoreList : DEFAULT_ACTIVITIES;
+    const baseList = firestoreList && firestoreList.length > 0 ? [...DEFAULT_ACTIVITIES.filter(da => !firestoreList.some(fa => fa.id === da.id)), ...firestoreList] : DEFAULT_ACTIVITIES;
     const customLocal = getLocalCustomActivities();
     const map = new Map();
     baseList.forEach(item => map.set(item.id, item));
@@ -272,7 +277,27 @@ export function subscribeToActivities(onUpdate, onError) {
       }
       map.set(item.id, merged);
     });
-    const combined = Array.from(map.values());
+    const combined = Array.from(map.values()).map(item => {
+      const actId = item.id;
+      const numId = item.number ? String(item.number) : null;
+      const bCount = (actId && lastBookingsCounts[actId]) || (numId && lastBookingsCounts[numId]);
+
+      if (bCount) {
+        const totalInscritos = bCount.confirmed;
+        const totalEspera = bCount.waiting;
+        const vagasTotais = typeof item.vagas_totais === 'number' 
+          ? item.vagas_totais 
+          : (typeof item.vagasTotais === 'number' ? item.vagasTotais : (typeof item.capacidade === 'number' ? item.capacidade : 0));
+        const vagasDisponiveis = vagasTotais > 0 ? Math.max(0, vagasTotais - totalInscritos) : (typeof item.vagas_disponiveis === 'number' ? item.vagas_disponiveis : 0);
+        return {
+          ...item,
+          total_inscritos: totalInscritos,
+          total_espera: totalEspera,
+          vagas_disponiveis: vagasDisponiveis
+        };
+      }
+      return item;
+    });
     combined.sort((a, b) => {
       const dayCompare = (a.date || a.day || '').localeCompare(b.date || b.day || '');
       if (dayCompare !== 0) return dayCompare;
@@ -289,19 +314,53 @@ export function subscribeToActivities(onUpdate, onError) {
     window.addEventListener('techweek_activities_updated', handleLocalUpdate);
   }
 
+  let unsubBookings = () => {};
+  try {
+    const bookingsRef = collection(db, 'bookings');
+    const unsubB = onSnapshot(
+      bookingsRef,
+      (snapshot) => {
+        if (!snapshot) return;
+        const counts = {};
+        const docs = snapshot.docs || [];
+        docs.forEach((docSnap) => {
+          const data = (typeof docSnap.data === 'function' ? docSnap.data() : docSnap) || {};
+          const actId = data.activityId;
+          if (!actId) return;
+          if (!counts[actId]) {
+            counts[actId] = { confirmed: 0, waiting: 0 };
+          }
+          const isWaiting = data.status === 'WAITING_LIST' || data.status === 'WAITING' || data.status === 'FILA';
+          const isConfirmed = data.status === 'CONFIRMED' || data.status === 'ACTIVE' || (!data.status && !data.position && !isWaiting);
+          if (isWaiting) {
+            counts[actId].waiting += 1;
+          } else if (isConfirmed) {
+            counts[actId].confirmed += 1;
+          }
+        });
+        lastBookingsCounts = counts;
+        mergeAndNotify(lastFirestoreList);
+      },
+      (_err) => {
+        // Silencioso se usuário não tiver permissão global para /bookings (ex: não-admin)
+      }
+    );
+    if (typeof unsubB === 'function') unsubBookings = unsubB;
+  } catch (_e) {}
+
   try {
     const activitiesRef = collection(db, 'activities');
     const unsub = onSnapshot(
       activitiesRef,
       (snapshot) => {
-        if (snapshot.empty) {
+        if (!snapshot || snapshot.empty) {
           lastFirestoreList = [];
           mergeAndNotify([]);
           return;
         }
 
-        const list = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data() || {};
+        const list = (snapshot.docs || []).map((docSnap) => {
+          const data = (typeof docSnap.data === 'function' ? docSnap.data() : docSnap) || {};
           return {
             ...data,
             id: docSnap.id,
@@ -313,6 +372,7 @@ export function subscribeToActivities(onUpdate, onError) {
             date: data.date || data.data || '',
             time: data.time || data.horario || data.hora || '',
             location: data.location || data.local || '',
+            isOpenEvent: Boolean(data.isOpenEvent || data.is_open_event || data.isPublic),
             vagas_disponiveis: typeof data.vagas_disponiveis === 'number' 
               ? data.vagas_disponiveis 
               : (typeof data.vagasDisponiveis === 'number' ? data.vagasDisponiveis : 0),
@@ -339,7 +399,8 @@ export function subscribeToActivities(onUpdate, onError) {
     );
 
     return () => {
-      unsub();
+      if (typeof unsub === 'function') unsub();
+      if (typeof unsubBookings === 'function') unsubBookings();
       if (typeof window !== 'undefined') {
         window.removeEventListener('techweek_activities_updated', handleLocalUpdate);
       }
@@ -349,6 +410,7 @@ export function subscribeToActivities(onUpdate, onError) {
     if (onError) onError(err);
     mergeAndNotify([]);
     return () => {
+      if (typeof unsubBookings === 'function') unsubBookings();
       if (typeof window !== 'undefined') {
         window.removeEventListener('techweek_activities_updated', handleLocalUpdate);
       }
@@ -638,6 +700,8 @@ export async function reserveActivity(activityId, activityMeta = null) {
           [`bookedActivities.${activityId}`]: {
             status: fallbackStatus,
             position: fallbackPosition,
+            activityId,
+            userId: currentUser.uid,
             bookedAt: now
           }
         });
@@ -1158,6 +1222,9 @@ export async function createActivity(activityData) {
     points: Number(activityData.points || 20),
     tags: Array.isArray(activityData.tags) ? activityData.tags : (activityData.tags ? String(activityData.tags).split(',').map(t => t.trim()) : []),
     attendanceMode: activityData.attendanceMode || 'SELF_SCAN',
+    isOpenEvent: Boolean(activityData.isOpenEvent),
+    requiresRegistration: Boolean(activityData.requiresRegistration),
+    hasCapacityLimit: activityData.hasCapacityLimit !== undefined ? Boolean(activityData.hasCapacityLimit) : true,
     materials: Array.isArray(activityData.materials) ? activityData.materials : [],
     hidden: Boolean(activityData.hidden),
     value: activityData.value || 'Grátis',
@@ -1368,29 +1435,19 @@ export async function createSpeaker(speakerData) {
     updatedAt: new Date().toISOString()
   };
 
+  await setDoc(docRef, payload, { merge: true });
   saveLocalCustomSpeaker(payload);
-
-  try {
-    await setDoc(docRef, payload, { merge: true });
-    return { success: true, speaker: payload };
-  } catch (err) {
-    console.warn('Erro ao salvar speaker no Firestore (salvo em cache local):', err);
-    return { success: true, speaker: payload };
-  }
+  return { success: true, speaker: payload };
 }
 
 /**
  * Remove um convidado do Firestore.
  */
 export async function deleteSpeaker(id) {
+  const docRef = doc(db, 'speakers', id);
+  await deleteDoc(docRef);
   removeLocalCustomSpeaker(id);
-  try {
-    const docRef = doc(db, 'speakers', id);
-    await deleteDoc(docRef);
-    return { success: true };
-  } catch (err) {
-    return { success: true };
-  }
+  return { success: true };
 }
 
 /**
@@ -1505,14 +1562,306 @@ export async function createLocation(locData) {
     description: locData.description || ''
   };
 
+  await setDoc(docRef, payload, { merge: true });
   saveLocalCustomLocation(payload);
+  return { success: true, location: payload };
+}
 
-  try {
-    await setDoc(docRef, payload, { merge: true });
-    return { success: true, location: payload };
-  } catch (err) {
-    return { success: true, location: payload };
+export async function deleteLocation(id) {
+  const docRef = doc(db, 'locations', id);
+  await deleteDoc(docRef);
+  removeLocalCustomLocation(id);
+  return { success: true };
+}
+
+/**
+ * Converte qualquer formato de data/timestamp para milissegundos desde o epoch.
+ */
+export function toEpochMillis(val) {
+  if (!val) return 0;
+  if (typeof val.toMillis === 'function') return val.toMillis();
+  if (typeof val.toDate === 'function') return val.toDate().getTime();
+  if (val instanceof Date) return val.getTime();
+  if (typeof val === 'number') return val;
+  if (typeof val.seconds === 'number') {
+    return val.seconds * 1000 + (val.nanoseconds ? Math.floor(val.nanoseconds / 1e6) : 0);
   }
+  const parsed = Date.parse(val);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Formata data/timestamp para exibição legível de inscritos.
+ * Exemplo: "21/10 às 14:32" ou "21/10 às 14:32:05"
+ */
+export function formatBookingDateTime(val, options = {}) {
+  const ms = toEpochMillis(val);
+  if (!ms) return 'Data não registrada';
+  const d = new Date(ms);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  if (options.withSeconds) {
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${day}/${month} às ${hours}:${minutes}:${seconds}`;
+  }
+  return `${day}/${month} às ${hours}:${minutes}`;
+}
+
+/**
+ * Escuta em tempo real os inscritos e fila de espera de uma atividade no Firestore (/bookings).
+ * Cruza com a coleção /users e os check-ins /checkins para fornecer dados completos.
+ * 
+ * @param {string|object} activityOrId - ID da atividade ou objeto da atividade
+ * @param {function} onUpdate - Callback chamado com { confirmed, waitingList, all, stats }
+ * @param {function} onError - Callback de erro
+ * @param {object} options - Opções adicionais (ex: { usersList })
+ * @returns {function} unsubscribe
+ */
+export function subscribeToActivityBookings(activityOrId, onUpdate, onError, options = {}) {
+  if (!activityOrId) {
+    onUpdate({ confirmed: [], waitingList: [], all: [], stats: { confirmedCount: 0, waitingCount: 0, checkedInCount: 0 } });
+    return () => {};
+  }
+
+  const actObj = typeof activityOrId === 'object' && activityOrId !== null ? activityOrId : null;
+  const primaryId = actObj?.id || String(activityOrId);
+  const secondaryId = actObj?.number && String(actObj.number) !== primaryId ? String(actObj.number) : null;
+  const targetIds = secondaryId ? [primaryId, secondaryId] : [primaryId];
+
+  let rawBookings = [];
+  let checkinsMap = new Map();
+  const fetchedUsersMap = new Map();
+  let isUnsubscribed = false;
+
+  const emit = () => {
+    if (isUnsubscribed) return;
+
+    // Resolve user data from options.usersList or fetched cache
+    const usersList = options.usersList || [];
+    const usersProvidedMap = new Map();
+    for (const u of usersList) {
+      if (u) {
+        if (u.uid) usersProvidedMap.set(u.uid, u);
+        if (u.id) usersProvidedMap.set(u.id, u);
+      }
+    }
+
+    // Suplementa com bookedActivities de usuários se a collection bookings ainda estiver vazia
+    let effectiveBookings = [...rawBookings];
+    if (effectiveBookings.length === 0 && usersList.length === 0) {
+      if (!isUnsubscribed) {
+        import('firebase/firestore').then(({ getDocs, collection }) => {
+          getDocs(collection(db, 'users')).then(snap => {
+            const fetchedList = snap.docs.map(d => ({id: d.id, ...d.data()}));
+            for (const u of fetchedList) {
+              const bEntry = u.bookedActivities?.[primaryId] || (secondaryId && u.bookedActivities?.[secondaryId]);
+              if (bEntry) {
+                effectiveBookings.push({
+                  id: `${u.uid || u.id}_${primaryId}`,
+                  userId: u.uid || u.id,
+                  activityId: primaryId,
+                  status: bEntry.status || 'CONFIRMED',
+                  position: bEntry.position || null,
+                  createdAt: bEntry.bookedAt || bEntry.createdAt || null
+                });
+                fetchedUsersMap.set(u.uid || u.id, u);
+              }
+            }
+            if (effectiveBookings.length > 0) {
+              rawBookings = effectiveBookings; // Update rawBookings so next emit uses it
+              emit();
+            }
+          });
+        });
+      }
+    }
+    
+    if (usersList.length > 0) {
+      const existingUserIds = new Set(effectiveBookings.map(b => String(b.userId || b.uid || b.id)));
+      for (const u of usersList) {
+        const uid = String(u.uid || u.id);
+        if (existingUserIds.has(uid)) continue;
+        const bEntry = u.bookedActivities?.[primaryId] || (secondaryId && u.bookedActivities?.[secondaryId]);
+        if (bEntry) {
+          effectiveBookings.push({
+            id: `${uid}_${primaryId}`,
+            userId: uid,
+            activityId: primaryId,
+            status: bEntry.status || 'CONFIRMED',
+            position: bEntry.position || null,
+            createdAt: bEntry.bookedAt || bEntry.createdAt || null
+          });
+        }
+      }
+    }
+
+    const enriched = effectiveBookings.map((b) => {
+      const uid = b.userId || b.uid || b.id;
+      const user = usersProvidedMap.get(uid) || fetchedUsersMap.get(uid) || {};
+
+      const checkinDoc = checkinsMap.get(uid);
+      const isCheckedIn = Boolean(
+        checkinDoc && 
+        (checkinDoc.status === 'CHECKED_IN' || checkinDoc.status === 'COMPLETED' || checkinDoc.entranceAt)
+      );
+      const checkinTime = checkinDoc?.entranceAt || checkinDoc?.createdAt || null;
+
+      const fullName = user.displayName || user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ') || b.userName || b.displayName || 'Participante';
+      const username = user.username ? (user.username.startsWith('@') ? user.username : `@${user.username}`) : (b.username ? (b.username.startsWith('@') ? b.username : `@${b.username}`) : '');
+      const email = user.email || b.userEmail || b.email || '';
+      const phone = user.phone || user.whatsapp || user.phoneNumber || b.phone || '';
+      const course = user.course || user.curso || b.course || '';
+      const period = user.period || user.periodo || b.period || '';
+      const hasSympla = Boolean(user.hasSymplaTicket || user.symplaTicket || user.ticketNumber || user.ticketId || b.hasSymplaTicket);
+      const ticketNumber = user.ticketNumber || user.ticketId || (user.symplaTicket && user.symplaTicket.ticketNumber) || b.ticketNumber || null;
+      const avatarUrl = user.avatarUrl || user.photoURL || b.avatarUrl || null;
+      const participantType = user.participantType || user.participant_type || b.participantType || 'Estudante';
+
+      const createdAtMs = toEpochMillis(b.createdAt);
+
+      return {
+        id: b.id,
+        bookingId: b.id,
+        userId: uid,
+        status: b.status || 'CONFIRMED',
+        position: typeof b.position === 'number' ? b.position : null,
+        createdAt: b.createdAt,
+        createdAtMs,
+        createdAtFormatted: formatBookingDateTime(b.createdAt),
+        checkedIn: isCheckedIn,
+        checkedInAt: checkinTime,
+        checkedInAtFormatted: checkinTime ? formatBookingDateTime(checkinTime) : null,
+        fullName,
+        displayName: fullName,
+        username,
+        email,
+        phone,
+        course,
+        period,
+        hasSymplaTicket: hasSympla,
+        ticketNumber,
+        avatarUrl,
+        participantType
+      };
+    });
+
+    // Filtra confirmados e lista de espera
+    const confirmedList = enriched
+      .filter((b) => b.status === 'CONFIRMED' || b.status === 'ACTIVE' || (!b.status && !b.position))
+      .sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0))
+      .map((item, index) => ({
+        ...item,
+        rank: index + 1,
+        rankLabel: `${index + 1}º`
+      }));
+
+    const waitingList = enriched
+      .filter((b) => b.status === 'WAITING_LIST' || b.status === 'WAITING' || b.status === 'FILA')
+      .sort((a, b) => {
+        if (a.position !== null && b.position !== null) return a.position - b.position;
+        if (a.position !== null) return -1;
+        if (b.position !== null) return 1;
+        return (a.createdAtMs || 0) - (b.createdAtMs || 0);
+      })
+      .map((item, index) => {
+        const queuePosition = item.position !== null ? item.position : index + 1;
+        return {
+          ...item,
+          queuePosition,
+          rank: queuePosition,
+          rankLabel: `${queuePosition}º da fila`
+        };
+      });
+
+    const checkedInCount = confirmedList.filter((b) => b.checkedIn).length;
+
+    onUpdate({
+      confirmed: confirmedList,
+      waitingList,
+      all: [...confirmedList, ...waitingList],
+      stats: {
+        confirmedCount: confirmedList.length,
+        waitingCount: waitingList.length,
+        checkedInCount
+      }
+    });
+
+    // Se houver usuários sem dados no cache, busca no Firestore
+    for (const b of effectiveBookings) {
+      const uid = b.userId || b.uid || b.id;
+      if (uid && !usersProvidedMap.has(uid) && !fetchedUsersMap.has(uid)) {
+        getDoc(doc(db, 'users', uid)).then((snap) => {
+          if (isUnsubscribed) return;
+          if (snap && snap.exists()) {
+            fetchedUsersMap.set(uid, { id: snap.id, uid: snap.id, ...snap.data() });
+            emit();
+          }
+        }).catch(() => {});
+      }
+    }
+  };
+
+  // 1. Escuta a coleção /bookings para a atividade
+  let unsubBookings = () => {};
+  try {
+    const qBookings = targetIds.length > 1
+      ? query(collection(db, 'bookings'), where('activityId', 'in', targetIds))
+      : query(collection(db, 'bookings'), where('activityId', '==', targetIds[0]));
+
+    unsubBookings = onSnapshot(
+      qBookings,
+      (snapshot) => {
+        rawBookings = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        emit();
+      },
+      (err) => {
+        if (err?.code !== 'permission-denied') {
+          console.warn('[subscribeToActivityBookings] Erro ao escutar bookings:', err);
+        }
+        if (onError) onError(err);
+        emit();
+      }
+    );
+  } catch (err) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('[subscribeToActivityBookings] Falha na query de bookings:', err);
+    }
+    if (onError) onError(err);
+  }
+
+  // 2. Escuta a coleção /checkins para saber quem deu entrada presencial
+  let unsubCheckins = () => {};
+  try {
+    const qCheckins = targetIds.length > 1
+      ? query(collection(db, 'checkins'), where('activityId', 'in', targetIds))
+      : query(collection(db, 'checkins'), where('activityId', '==', targetIds[0]));
+
+    unsubCheckins = onSnapshot(
+      qCheckins,
+      (snapshot) => {
+        checkinsMap = new Map();
+        snapshot.docs.forEach((d) => {
+          const data = d.data();
+          const uid = data.uid || data.userId;
+          if (uid) {
+            checkinsMap.set(uid, { id: d.id, ...data });
+          }
+        });
+        emit();
+      },
+      () => {
+        // Silencioso se der erro em checkins (ex: coleção nova)
+      }
+    );
+  } catch (_err) {}
+
+  return () => {
+    isUnsubscribed = true;
+    if (typeof unsubBookings === 'function') unsubBookings();
+    if (typeof unsubCheckins === 'function') unsubCheckins();
+  };
 }
 
 

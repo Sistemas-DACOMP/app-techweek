@@ -12,6 +12,7 @@
  */
 
 import { addNotification } from './notifications';
+import { apiRequest } from './api';
 
 const INCIDENTS_STORAGE_KEY = 'techweek_live_incidents_v2';
 const WALKIN_STORAGE_KEY = 'techweek_walkin_releases_v2';
@@ -204,18 +205,29 @@ export function getWalkinReleases() {
   }
 }
 
-export function releaseWalkinSeats(activityId, releasedCount, activityTitle = '', location = '') {
+export async function releaseWalkinSeats(activityId, releasedCount, activityTitle = '', location = '') {
   const current = getWalkinReleases();
+  const releasedSeats = Number(releasedCount) || 10;
   const record = {
     activityId,
     activityTitle,
     location,
-    releasedSeats: Number(releasedCount) || 10,
+    releasedSeats,
     releasedAt: new Date().toISOString(),
     isWalkinActive: true,
   };
   current[activityId] = record;
   storageSet(WALKIN_STORAGE_KEY, JSON.stringify(current));
+
+  try {
+    await apiRequest(`/admin/activities/${activityId}/release-walkins`, {
+      method: 'POST',
+      body: JSON.stringify({ releasedSeats })
+    });
+  } catch (err) {
+    console.error('[LiveOps] Erro ao liberar vagas no backend:', err);
+  }
+
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('techweek_walkin_released', { detail: record }));
   }
@@ -753,7 +765,7 @@ export function getActivityBroadcasts(activityId = null) {
   }
 }
 
-export function sendActivityBroadcast({
+export async function sendActivityBroadcast({
   activityId,
   activityTitle = '',
   location = '',
@@ -784,6 +796,21 @@ export function sendActivityBroadcast({
 
   const updated = [broadcast, ...current];
   storageSet(ACTIVITY_BROADCASTS_KEY, JSON.stringify(updated));
+
+  try {
+    await apiRequest(`/admin/activities/${activityId}/broadcast`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: broadcast.title,
+        body: broadcast.message,
+        message: broadcast.message,
+        targetAudience: broadcast.targetAudience,
+        urgent: broadcast.urgent,
+      }),
+    });
+  } catch (error) {
+    console.error('[LiveOps] Erro ao disparar push nativo para a atividade:', error);
+  }
 
   try {
     addNotification({

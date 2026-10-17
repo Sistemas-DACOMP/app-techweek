@@ -88,8 +88,8 @@ describe('liveOpsService - Live Operations & Event Steering Engine', () => {
   });
 
   describe('Pilar 1: No-Show Buster & Walk-in Release', () => {
-    it('registra liberação de vagas para walk-ins', () => {
-      const record = releaseWalkinSeats('act_101', 25, 'Palestra DevOps', 'Anfiteatro FACOM');
+    it('registra liberação de vagas para walk-ins', async () => {
+      const record = await releaseWalkinSeats('act_101', 25, 'Palestra DevOps', 'Anfiteatro FACOM');
       expect(record.activityId).toBe('act_101');
       expect(record.releasedSeats).toBe(25);
       expect(record.isWalkinActive).toBe(true);
@@ -99,8 +99,8 @@ describe('liveOpsService - Live Operations & Event Steering Engine', () => {
       expect(releases['act_101'].releasedSeats).toBe(25);
     });
 
-    it('cancela liberação de walk-in', () => {
-      releaseWalkinSeats('act_102', 15);
+    it('cancela liberação de walk-in', async () => {
+      await releaseWalkinSeats('act_102', 15);
       cancelWalkinRelease('act_102');
       const releases = getWalkinReleases();
       expect(releases['act_102']).toBeUndefined();
@@ -339,8 +339,8 @@ describe('liveOpsService - Live Operations & Event Steering Engine', () => {
   });
 
   describe('Pilar 6: Avisos Segmentados por Atividade & Avaliação Pós-Presença', () => {
-    it('dispara avisos segmentados com audiência específica e templates', () => {
-      const bc = sendActivityBroadcast({
+    it('dispara avisos segmentados com audiência específica e templates', async () => {
+      const bc = await sendActivityBroadcast({
         activityId: 'act_cloud_2026',
         activityTitle: 'Oficina de Kubernetes & Cloud',
         location: 'Lab 2 (Bloco 5R)',

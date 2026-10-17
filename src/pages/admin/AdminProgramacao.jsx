@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Monitor, Pencil, QrCode, Trash2, Download, MapPin, Search, Radio } from 'lucide-react';
+import { Plus, Monitor, Pencil, QrCode, Trash2, Download, MapPin, Search, Radio, Users } from 'lucide-react';
 import Mascot from '../../components/Mascot';
 import ActivityBroadcastModal from '../../components/ActivityBroadcastModal';
 import { LinkedinIcon, GithubIcon, InstagramIcon } from './SocialIcons';
@@ -109,6 +109,7 @@ export default function AdminProgramacao(p) {
     progTab, setProgTab, activities, filteredActivities, activityFilter, setActivityFilter, activitySearch, setActivitySearch, mobileSearchOpen,
     speakers, filteredSpeakers, speakerSearch, setSpeakerSearch, speakerClassificationFilter, setSpeakerClassificationFilter, classifications,
     locations, onNew, onEdit, onDelete, onTelao, onQr, onExport, onNewSpeaker, onEditSpeaker, onDeleteSpeaker, onNewLocation, photoFallback,
+    onViewAttendees = () => {},
   } = p;
   const [day, setDay] = useState('ALL');
   const [broadcastAct, setBroadcastAct] = useState(null);
@@ -125,6 +126,7 @@ export default function AdminProgramacao(p) {
   const tipFull = tipActs.find((a) => { const c = capacityOf(a); return c.limited && c.taken >= c.total; });
 
   const menuFor = (act) => [
+    { label: 'Ver inscritos e fila', icon: Users, onClick: () => onViewAttendees(act) },
     { label: 'Avisar inscritos (Push/Feed)', icon: Radio, onClick: () => setBroadcastAct(act) },
     { label: 'QR de check-in', icon: QrCode, onClick: () => onQr(act) },
     { label: 'Excluir atividade', icon: Trash2, onClick: () => onDelete(act.id, act.title), danger: true },
@@ -235,7 +237,20 @@ export default function AdminProgramacao(p) {
                         <SpeakersCell act={act} />
                       </td>
                       <td className="max-w-[150px] px-3 py-4 text-[14px] text-text-2">{locationOf(act)}</td>
-                      <td className="px-3 py-4"><Capacity act={act} /></td>
+                      <td className="px-3 py-4">
+                        <button
+                          type="button"
+                          onClick={() => onViewAttendees(act)}
+                          className="group block text-left transition-colors hover:text-link focus:outline-none"
+                          title="Ver inscritos e fila de espera"
+                        >
+                          <Capacity act={act} />
+                          <span className="mt-1 flex items-center gap-1 text-[11px] font-bold text-link group-hover:underline">
+                            <Users size={12} aria-hidden="true" />
+                            <span>Ver inscritos</span>
+                          </span>
+                        </button>
+                      </td>
                       <td className="px-3 py-4"><span className="pts-chip text-[13px]">+{act.points || 50}</span></td>
                       <td className="px-3 py-4"><PresenceTag act={act} /></td>
                       <td className="whitespace-nowrap px-3 py-4 text-right">
@@ -281,7 +296,14 @@ export default function AdminProgramacao(p) {
                     <MoreMenu items={[{ label: 'Abrir telão', icon: Monitor, onClick: () => onTelao(act) }, { label: 'Editar', icon: Pencil, onClick: () => onEdit(act) }, ...menuFor(act)]} />
                   </div>
                   <div className="mt-3.5 flex items-center gap-3">
-                    <span className="flex-1"><Capacity act={act} compact /></span>
+                    <button
+                      type="button"
+                      onClick={() => onViewAttendees(act)}
+                      className="flex-1 text-left active:opacity-75 focus:outline-none"
+                      title="Ver inscritos e fila de espera"
+                    >
+                      <Capacity act={act} compact />
+                    </button>
                     <PresenceTag act={act} />
                   </div>
                 </article>

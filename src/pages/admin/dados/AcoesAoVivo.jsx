@@ -30,8 +30,8 @@ export default function AcoesAoVivo({ activities, sponsors, courses }) {
     .map(({ a, cap }) => ({ ...a, capacity: cap.total, idleSeats: cap.total - cap.taken, occPct: Math.round((cap.taken / cap.total) * 100) }))
     .sort((x, y) => y.idleSeats - x.idleSeats).slice(0, 5);
 
-  const release = (a) => {
-    releaseWalkinSeats(a.id, a.idleSeats || Math.max(10, Math.round((a.capacity || 50) * 0.2)), a.title || '', a.location || '');
+  const release = async (a) => {
+    await releaseWalkinSeats(a.id, a.idleSeats || Math.max(10, Math.round((a.capacity || 50) * 0.2)), a.title || '', a.location || '');
     setWalkins(getWalkinReleases());
   };
   const cancel = (id) => { cancelWalkinRelease(id); setWalkins(getWalkinReleases()); };

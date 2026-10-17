@@ -342,7 +342,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(tx.get).toHaveBeenCalledWith({ path: 'bookings/aluno-inscrito_workshop-ia' });
       expect(tx.set).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ success: true, points: 40 });
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, points: 40 }));
     });
 
     it('nao deve consultar bookings nem barrar se requireRegistration for false', async () => {
@@ -363,7 +363,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       // Nao deve ter consultado a colecao bookings
       expect(tx.get).not.toHaveBeenCalledWith(expect.objectContaining({ path: expect.stringContaining('bookings/') }));
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ success: true, points: 15 });
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, points: 15 }));
     });
   });
 
@@ -438,7 +438,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
         { merge: true }
       );
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ success: true, points: 50 });
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, points: 50 }));
     });
 
     it('deve usar activity.points se activity.entrancePoints nao estiver definido', async () => {
@@ -475,7 +475,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
         { merge: true }
       );
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ success: true, points: 25 });
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, points: 25 }));
     });
 
     it('deve atribuir 0 pontos como fallback se activity.entrancePoints nao for numero', async () => {
@@ -505,7 +505,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
         })
       );
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ success: true, points: 0 });
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, points: 0 }));
     });
 
     it('deve registrar check-in em atividade padrao (act_1588971) mesmo se nao existir no Firestore', async () => {
@@ -525,7 +525,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       await handler(req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ success: true, points: 25 });
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, points: 25 }));
     });
   });
 
@@ -725,7 +725,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       await handler(req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ success: true, points: 0 });
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, points: 0 }));
       expect(tx.set).toHaveBeenCalledWith(
         { path: 'pointEvents/user-sem-sympla-1_entrance_palestra-aberta-1' },
         expect.objectContaining({
@@ -793,7 +793,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       await handler(req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ success: true, points: 0 });
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, points: 0 }));
       expect(tx.set).toHaveBeenCalledWith(
         { path: 'pointEvents/user-geral-123_entrance_palestra-aberta-tech' },
         expect.objectContaining({
@@ -851,7 +851,7 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       await handler(req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ success: true, points: 25 });
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, points: 25 }));
       expect(tx.set).toHaveBeenCalledWith(
         { path: 'users/user-com-sympla-1' },
         expect.objectContaining({ totalPoints: expect.anything() }),

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { updateProfile } from 'firebase/auth';
 import {
   ChevronLeft, ChevronRight, Camera, Loader2, Ticket, Link as LinkIcon, ShieldCheck, Lock, Check, Trash2, LogOut,
-  ExternalLink, CalendarCheck, QrCode, Trophy, Mail, BellRing, Download, UploadCloud, FileText, FileCheck
+  ExternalLink, CalendarCheck, QrCode, Trophy, Mail, BellRing, Download, UploadCloud, FileText, FileCheck, AlertTriangle
 } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
 import { useNotifications } from '../hooks/useNotifications';
@@ -20,6 +20,7 @@ import {
 import AvatarCropperModal from '../components/AvatarCropperModal';
 import ConfirmModal from '../components/ConfirmModal';
 import FeedbackModal from '../components/FeedbackModal';
+import NotificationModal from '../components/NotificationModal';
 import RoleSwitcher, { rolesFor } from '../components/RoleSwitcher';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
 import Mascot from '../components/Mascot';
@@ -150,6 +151,7 @@ export default function Profile() {
   const [ticketSheetOpen, setTicketSheetOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState(null);
   const [feedbackModal, setFeedbackModal] = useState(null);
+  const [notificationModalOpen, setNotificationModalOpen] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [rankPosition, setRankPosition] = useState(null);
   const [usernameStatus, setUsernameStatus] = useState(null); // null | 'checking' | 'ok' | 'taken'
@@ -596,50 +598,65 @@ export default function Profile() {
     }
   };
 
-  const handleUnlinkTicketInModal = async () => {
-    if (!window.confirm('Tem certeza que deseja desvincular seu ingresso Sympla desta conta?')) {
-      return;
-    }
-    setUnlinkingTicket(true);
-    setEditFeedback(null);
-    try {
-      const res = await unlinkUserSymplaTicket();
-      if (res.unlinked) {
-        setProfile(prev => ({
-          ...prev,
-          symplaTicket: null,
-          hasSymplaTicket: false,
-          ticketId: null,
-          symplaTicketCode: null
-        }));
-        setEditForm(prev => ({
-          ...prev,
-          ticketNumber: ''
-        }));
-        const uid = profile.id || auth.currentUser?.uid;
-        if (uid) {
-          try {
-            const cached = localStorage.getItem(`facom_profile_${uid}`);
-            const parsed = cached ? JSON.parse(cached) : {};
-            localStorage.setItem(`facom_profile_${uid}`, JSON.stringify({
-              ...parsed,
+  const handleUnlinkTicketInModal = () => {
+    setConfirmModal({
+      title: 'Desvincular ingresso Sympla',
+      message: 'Seu crachá oficial e acesso a workshops reservados serão desativados. Você voltará a ter o Crachá de Acesso Geral. Deseja continuar?',
+      confirmLabel: 'Sim, desvincular',
+      cancelLabel: 'Manter ingresso',
+      variant: 'warning',
+      Icon: AlertTriangle,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        setUnlinkingTicket(true);
+        setEditFeedback(null);
+        try {
+          const res = await unlinkUserSymplaTicket();
+          if (res.unlinked) {
+            setProfile(prev => ({
+              ...prev,
               symplaTicket: null,
               hasSymplaTicket: false,
               ticketId: null,
               symplaTicketCode: null
             }));
-          } catch (_e) {}
+            setEditForm(prev => ({
+              ...prev,
+              ticketNumber: ''
+            }));
+            const uid = profile.id || auth.currentUser?.uid;
+            if (uid) {
+              try {
+                const cached = localStorage.getItem(`facom_profile_${uid}`);
+                const parsed = cached ? JSON.parse(cached) : {};
+                localStorage.setItem(`facom_profile_${uid}`, JSON.stringify({
+                  ...parsed,
+                  symplaTicket: null,
+                  hasSymplaTicket: false,
+                  ticketId: null,
+                  symplaTicketCode: null
+                }));
+              } catch (_e) {}
+            }
+            setEditFeedback({ type: 'success', text: 'Ingresso desvinculado com sucesso.' });
+            setFeedbackModal({
+              type: 'success',
+              title: 'Ingresso desvinculado',
+              message: 'Seu ingresso foi desvinculado com sucesso. Seu crachá agora é de Acesso Geral.',
+              actionLabel: 'OK',
+              onClose: () => setFeedbackModal(null)
+            });
+          } else {
+            setEditFeedback({ type: 'error', text: res.message || 'Erro ao desvincular ingresso.' });
+          }
+        } catch (err) {
+          console.error('[Profile] Erro ao desvincular ingresso:', err);
+          setEditFeedback({ type: 'error', text: 'Erro ao desvincular ingresso. Tente novamente.' });
+        } finally {
+          setUnlinkingTicket(false);
         }
-        setEditFeedback({ type: 'success', text: 'Ingresso desvinculado com sucesso.' });
-      } else {
-        setEditFeedback({ type: 'error', text: res.message || 'Erro ao desvincular ingresso.' });
       }
-    } catch (err) {
-      console.error('[Profile] Erro ao desvincular ingresso:', err);
-      setEditFeedback({ type: 'error', text: 'Erro ao desvincular ingresso. Tente novamente.' });
-    } finally {
-      setUnlinkingTicket(false);
-    }
+    });
   };
 
   const handleAvatarClick = () => {
@@ -1007,6 +1024,10 @@ export default function Profile() {
           }}
         />
       )}
+      <NotificationModal
+        isOpen={notificationModalOpen}
+        onClose={() => setNotificationModalOpen(false)}
+      />
       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
     </>
   );
@@ -1328,10 +1349,28 @@ export default function Profile() {
                 )}
               </div>
             )}
-            <button type="button" onClick={handleDeleteAccount} className="flex min-h-14 w-full items-center gap-3 text-left text-err">
-              <Trash2 size={18} aria-hidden="true" />
-              <span className="flex-1 text-[14px] font-bold">Apagar minha conta</span>
-            </button>
+            <div className="mt-5 rounded-2xl border border-err/25 bg-err/[0.04] p-4 text-left transition-colors">
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-err/15 text-err">
+                  <Trash2 size={16} aria-hidden="true" />
+                </span>
+                <div>
+                  <h4 className="text-[13px] font-extrabold uppercase tracking-wider text-err">Zona de Perigo</h4>
+                  <p className="text-[12px] text-text-3">Ação permanente e irreversível</p>
+                </div>
+              </div>
+              <p className="mt-2.5 text-[12.5px] leading-relaxed text-text-2">
+                A exclusão da conta é definitiva. Todos os seus pontos acumulados, carimbos do passaporte e dados cadastrais serão removidos do evento.
+              </p>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                className="press mt-3.5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-err/30 bg-err/10 px-4 text-xs font-bold text-err transition-colors hover:bg-err/20"
+              >
+                <Trash2 size={15} aria-hidden="true" />
+                Apagar minha conta definitivamente
+              </button>
+            </div>
           </div>
 
           {editFeedback && (
@@ -1360,13 +1399,13 @@ export default function Profile() {
     : null;
 
   return (
-    <div className="perfil-scroll relative h-full overflow-y-auto overflow-x-hidden bg-bg pb-[110px] text-text">
+    <div className="perfil-scroll relative h-full overflow-y-auto overflow-x-hidden bg-bg pb-[calc(80px+env(safe-area-inset-bottom,16px))] text-text">
       <SymplaStickyBanner />
 
       <div className="relative">
         <ProfileArt />
 
-        <header className="relative flex items-center justify-between pl-2 pr-2.5 pt-2.5">
+        <header className="relative flex items-center justify-between pl-2 pr-2.5 pt-[max(12px,env(safe-area-inset-top))]">
           <button type="button" onClick={() => navigate(-1)} aria-label="Voltar" className="press flex h-11 w-11 items-center justify-center rounded-full text-white">
             <ChevronLeft size={22} aria-hidden="true" />
           </button>
@@ -1469,22 +1508,39 @@ export default function Profile() {
           icon={BellRing}
           title="Notificações e alertas"
           desc={
-            notif.permission === 'granted' && notif.enabled
-              ? 'Ativas neste aparelho (funciona mesmo sem instalar o app)'
+            notif.permission === 'granted' && notif.nativeEnabled
+              ? 'Ativas neste aparelho · Toque para gerenciar avisos'
               : notif.permission === 'denied'
-                ? 'Bloqueadas nas permissões do navegador'
-                : 'Toque para ativar avisos no navegador ou no celular'
+                ? 'Bloqueadas no navegador · Toque para orientações'
+                : 'Toque para ativar avisos e ver histórico'
           }
           badge={
-            notif.permission === 'granted' && notif.enabled
+            notif.permission === 'granted' && notif.nativeEnabled
               ? <span className="rounded-[9px] bg-[rgba(111,216,166,0.14)] px-[9px] py-[3px] text-[12px] font-extrabold text-ok">Ativo</span>
-              : <span className="rounded-[9px] bg-[rgba(143,160,255,0.16)] px-[9px] py-[3px] text-[12px] font-extrabold text-link">Ativar</span>
+              : <span className="rounded-[9px] bg-[rgba(143,160,255,0.16)] px-[9px] py-[3px] text-[12px] font-extrabold text-link">Abrir</span>
           }
-          onClick={() => {
-            if (notif.permission !== 'granted') {
-              notif.requestPermission();
+          onClick={async () => {
+            if (notif.permission === 'denied') {
+              setFeedbackModal({
+                title: 'Avisos bloqueados',
+                text: 'As notificações estão bloqueadas no seu navegador. Acesse as configurações do Safari/Chrome ou do dispositivo para permitir.',
+                icon: 'warning'
+              });
+              return;
+            }
+            const enabled = await notif.toggleNativeNotifications();
+            if (enabled) {
+              setFeedbackModal({
+                title: 'Notificações ativadas!',
+                text: 'Você agora receberá alertas da Tech Week neste aparelho.',
+                icon: 'success'
+              });
             } else {
-              notif.toggleEnabled();
+              setFeedbackModal({
+                title: 'Notificações desativadas',
+                text: 'Você não receberá mais alertas neste aparelho.',
+                icon: 'success' // Not exactly an error
+              });
             }
           }}
         />
@@ -1522,7 +1578,36 @@ export default function Profile() {
         </section>
       )}
 
-      <button type="button" onClick={handleLogout} className="press mx-5 mb-4 mt-2.5 flex h-12 w-[calc(100%-40px)] items-center justify-center text-[14px] font-bold text-err">
+      {/* Card Nativo e Personalizado: Zona de Perigo / Apagar Conta */}
+      <section aria-label="Zona de Perigo" className="mx-5 mt-6">
+        <div className="rounded-2xl border border-err/25 bg-err/[0.04] p-4 text-left transition-colors">
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-err/15 text-err">
+              <Trash2 size={16} aria-hidden="true" />
+            </span>
+            <div>
+              <h3 className="text-[13px] font-extrabold uppercase tracking-wider text-err">
+                Zona de Perigo
+              </h3>
+              <p className="text-[12px] text-text-3">Exclusão permanente de dados</p>
+            </div>
+          </div>
+          <p className="mt-2.5 text-[12.5px] leading-relaxed text-text-2">
+            Apagar sua conta remove permanentemente todos os seus pontos acumulados, carimbos do passaporte e dados do evento.
+          </p>
+          <button
+            type="button"
+            onClick={handleDeleteAccount}
+            className="press mt-3.5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-err/30 bg-err/10 px-4 text-xs font-bold text-err transition-colors hover:bg-err/20"
+          >
+            <Trash2 size={15} aria-hidden="true" />
+            Apagar minha conta definitivamente
+          </button>
+        </div>
+      </section>
+
+      <button type="button" onClick={handleLogout} className="press mx-5 mb-6 mt-3 flex h-12 w-[calc(100%-40px)] items-center justify-center gap-2 text-[14px] font-bold text-text-3 hover:text-err transition-colors">
+        <LogOut size={16} aria-hidden="true" />
         Sair da conta
       </button>
 

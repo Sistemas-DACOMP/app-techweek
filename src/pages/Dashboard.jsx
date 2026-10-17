@@ -294,10 +294,12 @@ export default function Dashboard() {
     );
     const future = timed.filter((x) => x.w.start > now);
     const liveItem = live.find(mine) || live[0];
-    const heroItem = liveItem ? { ...liveItem, live: true } : (future[0] ? { ...future[0], live: false } : null);
+    const heroItem = liveItem ? { ...liveItem, live: true } : (future[0] ? { ...future[0], live: false } : (timed[0] ? { ...timed[0], live: false } : null));
+    const futureUpcoming = future.filter((x) => x.a.id !== heroItem?.a.id).slice(0, 6);
+    const fallbackUpcoming = futureUpcoming.length > 0 ? futureUpcoming : timed.filter((x) => x.a.id !== heroItem?.a.id).slice(0, 6);
     return {
       hero: heroItem,
-      upcoming: future.filter((x) => x.a.id !== heroItem?.a.id).slice(0, 6)
+      upcoming: fallbackUpcoming
     };
   }, [activities, bookings, checkins, pointEvents, now]);
 
@@ -412,6 +414,27 @@ export default function Dashboard() {
     if (!hasSymplaTicket && !isOpen) {
       setShowSymplaModal(true);
       return;
+    }
+
+    // Check conflict
+    if (targetActivity) {
+      const myAgendaActivities = activities.filter((act) => {
+        const s = calculateActivityStatus(act.id, bookings, checkins, pointEvents);
+        return s === 'BOOKED' || s === 'CHECKED_IN' || s === 'COMPLETED';
+      });
+      const conflictingActivity = myAgendaActivities.find((bookedAct) => {
+        if (bookedAct.id === targetActivity.id) return false;
+        return bookedAct.day === targetActivity.day && bookedAct.time === targetActivity.time;
+      });
+      
+      if (conflictingActivity) {
+        setToastMessage({ 
+          type: 'warning', 
+          message: `Você já está inscrito em "${conflictingActivity.title}" neste mesmo horário. Cancele a anterior para reservar esta.` 
+        });
+        setTimeout(() => setToastMessage(null), 5000);
+        return;
+      }
     }
 
     setReservingId(activityId);

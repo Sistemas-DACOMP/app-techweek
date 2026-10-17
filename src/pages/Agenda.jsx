@@ -151,9 +151,15 @@ export default function Agenda() {
         if (!act.isOpenEvent) return false;
       } else if (selectedType !== 'all') {
         const actType = String(act.type || 'palestra').toLowerCase().trim();
-        if (actType !== selectedType) return false;
+        if (selectedType === 'ativacao' && (actType === 'estande' || actType === 'ativacao')) {
+          // allow
+        } else if (actType !== selectedType) return false;
       }
-      if (dayFilter !== 'all' && act.day !== dayFilter) return false;
+      
+      const isActivation = String(act.type || '').toLowerCase().trim() === 'ativacao' || String(act.type || '').toLowerCase().trim() === 'estande';
+      const isContinuous = isActivation && (!act.day || act.day.toLowerCase() === 'todos');
+      
+      if (dayFilter !== 'all' && act.day !== dayFilter && !isContinuous) return false;
       if (query) {
         const matchTitle = act.title?.toLowerCase().includes(query);
         const matchSpeaker = act.speaker?.toLowerCase().includes(query);
@@ -165,8 +171,11 @@ export default function Agenda() {
 
     const days = new Map();
     visible.forEach((act) => {
-      const dayKey = act.day || '';
-      const timeKey = act.time || '19:00';
+      const isActivation = String(act.type || '').toLowerCase().trim() === 'ativacao' || String(act.type || '').toLowerCase().trim() === 'estande';
+      const isContinuous = isActivation && (!act.day || act.day.toLowerCase() === 'todos');
+      
+      const dayKey = isContinuous && dayFilter !== 'all' ? dayFilter : (act.day || '');
+      const timeKey = isContinuous ? '00:00 - Todo o evento' : (act.time || '19:00');
       if (!days.has(dayKey)) days.set(dayKey, new Map());
       const times = days.get(dayKey);
       if (!times.has(timeKey)) times.set(timeKey, []);
@@ -296,8 +305,10 @@ export default function Agenda() {
     if (conflictingActivity) {
       setToastMessage({ 
         type: 'warning', 
-        message: `Atenção: você já possui "${conflictingActivity.title}" neste mesmo horário.` 
+        message: `Você já está inscrito em "${conflictingActivity.title}" neste mesmo horário. Cancele a anterior para reservar esta.` 
       });
+      setTimeout(() => setToastMessage(null), 5000);
+      return; // Bloqueia a inscrição
     }
 
     setReservingId(activityId);
@@ -740,6 +751,10 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
             <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/15 px-2.5 py-0.5 text-[11px] font-extrabold text-gold shadow-[0_1px_4px_rgba(217,119,6,0.2)]">
               <Lock size={11} aria-hidden="true" />
               Desbloquear
+            </span>
+          ) : act.isOpenEvent ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-ok/40 bg-ok/15 px-2.5 py-0.5 text-[11px] font-extrabold text-ok">
+              Entrada Livre
             </span>
           ) : showLight ? (
             <span className="flex items-center gap-1.5">

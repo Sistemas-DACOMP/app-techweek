@@ -81,7 +81,7 @@ export default function ActivityBroadcastModal({ activity, onClose, onSuccess })
 
     setSending(true);
     try {
-      const result = sendActivityBroadcast({
+      const result = await sendActivityBroadcast({
         activityId: activity.id,
         activityTitle,
         location: activityLocation,

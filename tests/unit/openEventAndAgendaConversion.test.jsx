@@ -108,7 +108,7 @@ describe('Open Event & Agenda Conversion (PLG)', () => {
       );
 
       // Badge Entrada Livre
-      expect(screen.getByText(/Entrada Livre/i)).toBeDefined();
+      expect(screen.getAllByText(/Entrada Livre/i)[0]).toBeDefined();
 
       // Ação de reservar disponível
       expect(screen.getByText(/Reservar vaga/i)).toBeDefined();

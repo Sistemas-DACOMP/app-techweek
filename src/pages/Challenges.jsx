@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../hooks/useUser';
-import { Check, MapPin, Camera, Users, MessageSquare, X, Search, Lock, Loader2, Trash2, QrCode, Sparkles, Zap, CircleHelp } from 'lucide-react';
+import { Check, MapPin, Camera, Users, MessageSquare, X, Search, Lock, Loader2, Trash2, QrCode, Sparkles, Zap, CircleHelp, Share2 } from 'lucide-react';
 import { uploadMissionPhoto } from '../lib/gameplay';
 import { onAuthChange } from '../lib/auth';
 import { getUserProfile, getCachedUserProfile } from '../lib/userService';
@@ -21,6 +21,7 @@ import PassportTab, { SPONSORS_CONFIG, TIER_STYLE } from '../components/Passport
 import ConquistasTabs from '../components/ConquistasTabs';
 import Mascot from '../components/Mascot';
 import { useScrollLock } from '../hooks/useScrollLock';
+import StoryGeneratorModal from '../components/StoryGeneratorModal';
 import '../styles/conquistas.css';
 
 /* ---------- Estilo do cartão de missão (DESIGN.md §6 Missões) ---------- */
@@ -49,7 +50,7 @@ export function missionStyle(m) {
   if (m?.isFlash) return 'relampago';
   if (id === 'secret_qr' || m?.autoConfig?.eventType === 'secret_qr') return 'caca-qr';
   if (id === 'secret_password' || m?.triggerMode === 'secret') return 'secreta';
-  if (id === 'instagram_story') return 'stories';
+  if (id === 'instagram_story' || m?.triggerMode === 'share_instagram_story') return 'stories';
   if (m?.triggerMode === 'quiz' || m?.quizConfig || id.includes('quiz')) return 'quiz';
   if (missionSponsor(m)) return 'patrocinador';
   return 'padrao';
@@ -58,7 +59,8 @@ export function missionStyle(m) {
 const isPassportMission = (c) => c.autoConfig?.eventType === 'passport_complete' || c.id?.includes('passport') || c.id === 'sponsor_colecao';
 
 const ctaLabel = (c) => {
-  if (c.id === 'instagram_story') return 'Criar story';
+  if (c.id === 'instagram_story' || c.triggerMode === 'share_instagram_story') return 'Criar story';
+  if (c.triggerMode === 'share_whatsapp') return 'Compartilhar';
   if (c.isAction) return 'Começar';
   if (c.triggerMode === 'quiz') return 'Fazer quiz';
   if (c.triggerMode === 'secret') return 'Desvendar';
@@ -91,6 +93,7 @@ export default function Challenges() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [showSymplaModal, setShowSymplaModal] = useState(false);
+  const [storyMission, setStoryMission] = useState(null);
 
   const [profile, setProfile] = useState(() => {
     const cached = getCachedUserProfile();
@@ -194,6 +197,7 @@ export default function Challenges() {
       case 'Zap': return Zap;
       case 'HelpCircle': return CircleHelp;
       case 'QrCode': return QrCode;
+      case 'Share2': return Share2;
       case 'Sparkles':
       default:
         return Sparkles;
@@ -208,6 +212,39 @@ export default function Challenges() {
 
     if (challenge.id === 'instagram_story') {
       navigate('/instagram-mission');
+      return;
+    }
+
+    if (challenge.triggerMode === 'share_whatsapp') {
+      const url = challenge.shareUrl || 'https://facomtechweek.com.br';
+      const text = challenge.shareText || 'Estou participando da FACOM TechWeek!';
+      const shareData = { title: 'FACOM TechWeek', text, url };
+
+      try {
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+        } else {
+          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
+        }
+        const res = await completeChallenge(challenge.id, challenge.points);
+        if (res && (res.success || res === true)) {
+          setFeedback({
+            type: 'success',
+            title: 'Desafio Concluído!',
+            message: `Parabéns! Você compartilhou o evento e garantiu seus pontos!`,
+            points: (res && res.points) || challenge.points
+          });
+        }
+      } catch (err) {
+        if (err?.name !== 'AbortError') {
+          console.error("Erro ao compartilhar WhatsApp:", err);
+        }
+      }
+      return;
+    }
+
+    if (challenge.triggerMode === 'share_instagram_story') {
+      setStoryMission(challenge);
       return;
     }
 
@@ -784,6 +821,28 @@ export default function Challenges() {
         </>,
         document.body
       )}
+
+      <StoryGeneratorModal
+        isOpen={Boolean(storyMission)}
+        onClose={() => setStoryMission(null)}
+        mission={storyMission}
+        participantId={profile?.uid || profile?.id}
+        onComplete={async () => {
+          if (storyMission) {
+            const targetMission = storyMission;
+            setStoryMission(null);
+            const res = await completeChallenge(targetMission.id, targetMission.points);
+            if (res && (res.success || res === true)) {
+              setFeedback({
+                type: 'success',
+                title: 'Story Gerado!',
+                message: `Parabéns! Você completou "${targetMission.title || targetMission.name}" com seu Story oficial #EuVou!`,
+                points: (res && res.points) || targetMission.points
+              });
+            }
+          }
+        }}
+      />
 
       {/* Card Modal Estilizado de Feedback (Sucesso / Erro / Atenção) */}
       <FeedbackModal

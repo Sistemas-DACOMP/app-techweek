@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, QrCode, CalendarDays, MessageSquare, TrendingUp, Download,
+  LayoutDashboard, Users, UserCheck, QrCode, CalendarDays, MessageSquare, TrendingUp, Download,
   Pencil, ArrowLeftRight, X, SlidersHorizontal, LifeBuoy, LogOut,
 } from 'lucide-react';
 import iconeTw from '../../assets/icone.png';
@@ -21,6 +21,7 @@ const MENU_GROUPS = [
     items: [
       { key: 'home', label: 'Visão geral', icon: LayoutDashboard },
       { key: 'leads', label: 'Leads do estande', icon: Users, badgeKey: 'leads' },
+      { key: 'team', label: 'Equipe do estande', icon: UserCheck, tag: 'Equipe' },
       { key: 'settings', label: 'Configurações', icon: SlidersHorizontal, tag: 'Perfil e feed' },
       { key: 'roi', label: 'Relatório executivo', icon: TrendingUp, tag: 'ROI' },
       { key: 'scanner', label: 'Scanner de crachá', icon: QrCode, tag: 'SCAN' },
@@ -50,6 +51,7 @@ const MOBILE_NAV_TABS = [
 const CONTEXT_HEADERS = {
   home: { title: 'Visão geral do estande', subtitle: 'Painel de operações, conexões e atração de talentos' },
   leads: { title: 'CRM de talentos do estande', subtitle: 'Banco de contatos e avaliação de participantes' },
+  team: { title: 'Equipe do estande', subtitle: 'Gestão de membros com acesso ao estande, convites e cota de crachás' },
   settings: { title: 'Configurações do estande', subtitle: 'Perfil no feed, mensagens de WhatsApp e tags de recrutamento' },
   roi: { title: 'Relatório executivo de ROI', subtitle: 'Métricas de atração, engajamento e funil de conversão' },
   scanner: { title: 'Scanner de crachá', subtitle: 'Leitura instantânea de QR do participante e crachá Sympla' },
