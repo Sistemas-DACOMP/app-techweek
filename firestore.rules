@@ -22,15 +22,17 @@ service cloud.firestore {
     
     function isAdmin() {
       return isAuthenticated() && 
-        (request.auth.token.role == 'ADMIN' || request.auth.token.admin == true);
+        (request.auth.token.get('role', '') == 'ADMIN' ||
+         request.auth.token.get('admin', false) == true ||
+         ('email' in request.auth.token && request.auth.token.email in ['sam03amorim@gmail.com', 'admin@techweek.facom.ufu.br']));
     }
 
     function isStaffOrAdmin() {
-      return isAdmin() || (isAuthenticated() && request.auth.token.role == 'STAFF');
+      return isAdmin() || (isAuthenticated() && request.auth.token.get('role', '') == 'STAFF');
     }
 
     function isSponsor() {
-      return isAuthenticated() && request.auth.token.role == 'SPONSOR';
+      return isAuthenticated() && request.auth.token.get('role', '') == 'SPONSOR';
     }
 
     // Whitelist de campos permitidos para criação e atualização do perfil do usuário
@@ -227,6 +229,18 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Regras de Palestrantes: Leitura pública; escrita apenas para ADMIN
+    match /speakers/{speakerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Regras de Locais / Salas: Leitura pública; escrita apenas para ADMIN
+    match /locations/{locationId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Catálogo de missões/desafios (KAN-80): mesmo padrão de activities —
     // ADMIN escreve/edita direto pelo Firestore (sem admin-web ainda pra
     // isso). POST /api/points/claim (backend/src/routes/points.ts) usa o
@@ -280,17 +294,10 @@ service cloud.firestore {
       allow write: if false; // Apenas backend via Firebase Admin SDK
     }
 
-    // Regras de Pontos: usuários autenticados leem eventos para reconciliação do Ranking e sincronizam os próprios eventos; Staff/Admin também têm acesso
+    // Regras de Pontos: Apenas leitura por usuários autenticados; escrita restrita a ADMIN ou Backend Admin SDK
     match /pointEvents/{eventId} {
       allow read: if isAuthenticated();
-      allow create, update: if isStaffOrAdmin() || (
-        isAuthenticated() &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.points is number &&
-        request.resource.data.points >= 0 &&
-        request.resource.data.points <= 1000
-      );
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // Regras de Check-ins (double-check de presença): leitura restrita ao participante verificado ou Staff/ADMIN
@@ -317,6 +324,14 @@ service cloud.firestore {
         resource.data.get('likes', []).toSet().difference(request.resource.data.likes.toSet()).hasOnly([request.auth.uid]);
     }
 
+    function isStaffOrDocAdmin() {
+      return isStaffOrAdmin() || (
+        isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['ADMIN', 'STAFF', 'ORGANIZATION'])
+      );
+    }
+
     // Regras do Feed de Notícias e Comunidade.
     // Antes: read/create/update/delete eram `if true`, ou seja, qualquer pessoa, até
     // sem login, podia criar, editar e apagar posts. Agora:
@@ -324,13 +339,13 @@ service cloud.firestore {
     //  - criar: ADMIN/STAFF (posts da organização) ou patrocinador (posts de patrocinador),
     //    sempre com authorUid == uid de quem escreve e authorRole coerente com o papel;
     //  - editar: ADMIN (fixar etc.) ou qualquer autenticado só pra curtir/descurtir;
-    //  - apagar: ADMIN, ou o próprio autor (patrocinador apagando o que postou).
+    //  - apagar: ADMIN/STAFF, ou o próprio autor (patrocinador apagando o que postou).
     match /feed_posts/{postId} {
       allow read: if isAuthenticated();
 
       // Criação: Staff/Admin (tolerante para legado sem authorId) ou Patrocinador (authorUid/authorId próprio e sem campos reservados)
       allow create: if (
-        (isStaffOrAdmin() && (!('authorId' in request.resource.data) || request.resource.data.authorId == request.auth.uid || request.resource.data.get('authorUid', '') == request.auth.uid))
+        (isStaffOrDocAdmin() && (!('authorId' in request.resource.data) || request.resource.data.authorId == request.auth.uid || request.resource.data.get('authorUid', '') == request.auth.uid))
         ||
         ((isSponsor() || isSponsorUser())
           && (request.resource.data.get('authorUid', request.resource.data.get('authorId', '')) == request.auth.uid)
@@ -342,27 +357,31 @@ service cloud.firestore {
       );
 
       // Edição: Staff/Admin (livre) ou participante com e-mail verificado alterando unicamente o próprio like
-      allow update: if isStaffOrAdmin() || (isVerified() && onlyOwnLikeChanged());
+      allow update: if isStaffOrDocAdmin() || (isVerified() && onlyOwnLikeChanged());
 
-      // Exclusão: Staff/Admin ou o próprio autor do post
-      allow delete: if isStaffOrAdmin() || (isAuthenticated() && (resource.data.get('authorUid', resource.data.get('authorId', '')) == request.auth.uid));
+      // Exclusão: Staff/Admin ou o próprio autor do post (incluindo patrocinador de autoria própria)
+      allow delete: if isStaffOrDocAdmin() || (isAuthenticated() && (
+        resource.data.get('authorUid', resource.data.get('authorId', '')) == request.auth.uid
+        || ((isSponsor() || isSponsorUser()) && (
+          ('companyId' in resource.data && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && resource.data.companyId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('companyId', ''))
+          || ('sponsorId' in resource.data && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && resource.data.sponsorId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('sponsorId', ''))
+          || ('sponsorId' in resource.data && resource.data.sponsorId == request.auth.token.get('sponsorId', ''))
+        ))
+      ));
     }
 
-    // Regras de Ranking / Leaderboard consolidado
+    // Regras de Ranking / Leaderboard consolidado: Apenas leitura por usuários autenticados; escrita restrita a ADMIN ou Backend Admin SDK
     match /ranking/{docId} {
       allow read: if isAuthenticated();
-      allow create, update: if isStaffOrAdmin() || (
-        isAuthenticated() &&
-        request.auth.uid == docId &&
-        request.resource.data.uid == docId &&
-        request.resource.data.totalPoints is number &&
-        request.resource.data.totalPoints >= 0 &&
-        request.resource.data.totalPoints <= 100000 &&
-        request.resource.data.pontuacaoTotal is number &&
-        request.resource.data.pontuacaoTotal >= 0 &&
-        request.resource.data.pontuacaoTotal <= 100000
-      );
-      allow delete: if isAdmin() || (isAuthenticated() && request.auth.uid == docId);
+      allow write: if isAdmin();
+    }
+
+    // Central de Apoio & SOS: chamados de suporte técnico e emergência
+    match /support_tickets/{ticketId} {
+      allow read: if isStaffOrAdmin() || isSponsor() || isSponsorUser() || (isAuthenticated() && resource.data.senderUid == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update: if isStaffOrAdmin() || isSponsor() || isSponsorUser() || (isAuthenticated() && resource.data.senderUid == request.auth.uid);
+      allow delete: if isAdmin();
     }
   }
 }

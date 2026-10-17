@@ -30,7 +30,6 @@ export default function AdminFeed({
   currentAdminAvatar,
   feedTemplates = DEFAULT_TEMPLATES
 }) {
-  const [deleteTargetId, setDeleteTargetId] = useState(null);
   const internalFileInputRef = useRef(null);
   const fileInputRef = adminFeedFileInputRef || internalFileInputRef;
 
@@ -360,11 +359,7 @@ export default function AdminFeed({
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (window.confirm('Tem certeza que deseja excluir esta publicação?')) {
-                                handleDeletePost(post.id);
-                              }
-                            }}
+                            onClick={() => handleDeletePost(post.id)}
                             title="Excluir publicação"
                             aria-label="Excluir publicação"
                             className={`${ICON_BTN} text-err hover:bg-err/15`}

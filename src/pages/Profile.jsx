@@ -1360,13 +1360,13 @@ export default function Profile() {
     : null;
 
   return (
-    <div className="perfil-scroll relative h-full overflow-y-auto overflow-x-hidden bg-bg pb-[110px] text-text">
+    <div className="perfil-scroll relative h-full overflow-y-auto overflow-x-hidden bg-bg pb-[calc(80px+env(safe-area-inset-bottom,16px))] text-text">
       <SymplaStickyBanner />
 
       <div className="relative">
         <ProfileArt />
 
-        <header className="relative flex items-center justify-between pl-2 pr-2.5 pt-2.5">
+        <header className="relative flex items-center justify-between pl-2 pr-2.5 pt-[max(12px,env(safe-area-inset-top))]">
           <button type="button" onClick={() => navigate(-1)} aria-label="Voltar" className="press flex h-11 w-11 items-center justify-center rounded-full text-white">
             <ChevronLeft size={22} aria-hidden="true" />
           </button>
@@ -1469,22 +1469,51 @@ export default function Profile() {
           icon={BellRing}
           title="Notificações e alertas"
           desc={
-            notif.permission === 'granted' && notif.enabled
+            notif.permission === 'granted' && notif.nativeEnabled
               ? 'Ativas neste aparelho (funciona mesmo sem instalar o app)'
               : notif.permission === 'denied'
                 ? 'Bloqueadas nas permissões do navegador'
                 : 'Toque para ativar avisos no navegador ou no celular'
           }
           badge={
-            notif.permission === 'granted' && notif.enabled
+            notif.permission === 'granted' && notif.nativeEnabled
               ? <span className="rounded-[9px] bg-[rgba(111,216,166,0.14)] px-[9px] py-[3px] text-[12px] font-extrabold text-ok">Ativo</span>
               : <span className="rounded-[9px] bg-[rgba(143,160,255,0.16)] px-[9px] py-[3px] text-[12px] font-extrabold text-link">Ativar</span>
           }
-          onClick={() => {
-            if (notif.permission !== 'granted') {
-              notif.requestPermission();
-            } else {
-              notif.toggleEnabled();
+          onClick={async () => {
+            try {
+              if (notif.permission === 'denied') {
+                setFeedbackModal({
+                  type: 'info',
+                  title: 'Permissão Bloqueada',
+                  message: 'As notificações estão bloqueadas nas configurações do seu navegador ou celular. Para ativá-las, acesse as permissões do site no seu navegador.',
+                  onClose: () => setFeedbackModal(null)
+                });
+                return;
+              }
+              const enabled = await notif.toggleNativeNotifications();
+              if (enabled) {
+                setFeedbackModal({
+                  type: 'success',
+                  title: 'Notificações Ativadas!',
+                  message: 'Você receberá avisos sobre palestras, comunicados e novidades da TechWeek.',
+                  onClose: () => setFeedbackModal(null)
+                });
+              } else {
+                setFeedbackModal({
+                  type: 'info',
+                  title: 'Notificações Pausadas',
+                  message: 'Os alertas neste aparelho foram pausados. Você pode reativá-los a qualquer momento.',
+                  onClose: () => setFeedbackModal(null)
+                });
+              }
+            } catch (err) {
+              setFeedbackModal({
+                type: 'error',
+                title: 'Não foi possível alterar notificações',
+                message: err?.message || 'Verifique as permissões de notificação do seu navegador.',
+                onClose: () => setFeedbackModal(null)
+              });
             }
           }}
         />

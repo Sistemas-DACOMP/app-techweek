@@ -828,14 +828,22 @@ export function subscribeToLiveAnalytics({ onUpdate, onError, throttleMs = 300 }
   } catch (err) {
     console.warn('Erro ao configurar listeners de analytics:', err);
     if (!hasReceivedData) {
-      onUpdate(getMockAnalyticsData());
+      if (import.meta.env?.DEV) {
+        onUpdate(getMockAnalyticsData());
+      } else {
+        triggerUpdate();
+      }
     }
   }
 
-  // Se demorar mais de 1.5s sem resposta do Firestore (ex: offline), entrega mock data
+  // Se demorar mais de 1.5s sem resposta do Firestore (ex: offline), entrega mock data APENAS em DEV
   const fallbackTimer = setTimeout(() => {
     if (!hasReceivedData) {
-      onUpdate(getMockAnalyticsData());
+      if (import.meta.env?.DEV) {
+        onUpdate(getMockAnalyticsData());
+      } else {
+        triggerUpdate();
+      }
     }
   }, 1500);
 

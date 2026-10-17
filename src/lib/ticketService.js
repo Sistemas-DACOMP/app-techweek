@@ -9,6 +9,15 @@
  * 3. Organização / Admin (Gestão unificada, despacho de apoio e notas em tempo real)
  */
 
+import {
+  collection,
+  doc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+} from 'firebase/firestore';
+import { db, auth } from './firebase';
 import { addNotification } from './notifications';
 
 export const TICKETS_STORAGE_KEY = 'techweek_support_tickets_v1';
@@ -102,85 +111,10 @@ export const STAFF_PRESETS = [
   },
 ];
 
-// Mocks iniciais realistas para povoar o sistema
-const INITIAL_TICKETS = [
-  {
-    id: 'tkt_init_1',
-    role: 'SPONSOR',
-    senderName: 'Samuel Amorim',
-    senderEmail: 'samuel@kanastra.com.br',
-    senderPhone: '(34) 99123-4567',
-    entityName: 'KANASTRA',
-    location: 'Estande KANASTRA (Hall Central)',
-    category: 'infra',
-    priority: 'alta',
-    title: 'Precisamos de extensão 220v para telão extra',
-    description: 'Estamos montando um segundo display para apresentação da esteira de crédito e precisamos de uma régua/extensão.',
-    status: 'in_progress',
-    assignedTo: 'Guilherme (Infra UFU)',
-    createdAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-    resolvedAt: null,
-    notes: [
-      {
-        id: 'note_1',
-        author: 'Coordenação TechWeek',
-        text: 'Guilherme da equipe de infraestrutura já está a caminho com a extensão 220v.',
-        createdAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-        isStaffOrAdmin: true,
-      },
-    ],
-  },
-  {
-    id: 'tkt_init_2',
-    role: 'STAFF',
-    senderName: 'Lucas Oliveira',
-    senderEmail: 'lucas.staff@ufu.br',
-    senderPhone: '(34) 99876-5432',
-    entityName: 'Portaria Principal',
-    location: 'Portaria Anfiteatro FACOM',
-    category: 'crowd',
-    priority: 'alta',
-    title: 'Fila de entrada longa para o Keynote de IA',
-    description: 'Muitos alunos chegando simultaneamente no hall. Precisamos de mais um monitor com scanner.',
-    status: 'open',
-    assignedTo: null,
-    createdAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-    resolvedAt: null,
-    notes: [],
-  },
-  {
-    id: 'tkt_init_3',
-    role: 'SPONSOR',
-    senderName: 'Mariana Costa',
-    senderEmail: 'mariana@sankhya.com.br',
-    senderPhone: '(34) 98888-2233',
-    entityName: 'SANKHYA',
-    location: 'Estande SANKHYA',
-    category: 'supplies',
-    priority: 'baixa',
-    title: 'Reposição de água mineral e copos',
-    description: 'Galão de água do estande terminou. Solicitamos reposição para nossa equipe.',
-    status: 'resolved',
-    assignedTo: 'Equipe de Apoio',
-    createdAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    resolvedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    notes: [
-      {
-        id: 'note_2',
-        author: 'Equipe de Apoio',
-        text: 'Galão e copos entregues no estande pela equipe de apoio.',
-        createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-        isStaffOrAdmin: true,
-      },
-    ],
-  },
-];
-
 // Fallback em memória para ambientes de teste e Node
 const memoryStorage = new Map();
+let firestoreTickets = [];
+let isFirestoreInitialized = false;
 
 function storageGet(key) {
   try {
@@ -214,8 +148,50 @@ function triggerTicketsUpdate(tickets) {
   }
 }
 
+function saveTicketsToLocalCache(tickets) {
+  storageSet(TICKETS_STORAGE_KEY, JSON.stringify(tickets));
+}
+
+// Inicializa o listener do Firestore em tempo real
+function initFirestoreListener() {
+  if (typeof window === 'undefined' || !db) return;
+  try {
+    const colRef = collection(db, 'support_tickets');
+    onSnapshot(
+      colRef,
+      (snapshot) => {
+        firestoreTickets = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt || new Date().toISOString()),
+            resolvedAt: data.resolvedAt?.toDate ? data.resolvedAt.toDate().toISOString() : data.resolvedAt,
+            notes: Array.isArray(data.notes) ? data.notes : [],
+          };
+        });
+        isFirestoreInitialized = true;
+        saveTicketsToLocalCache(firestoreTickets);
+        triggerTicketsUpdate(firestoreTickets);
+      },
+      (err) => {
+        console.warn('[TicketService] Aviso ao escutar /support_tickets:', err);
+      }
+    );
+  } catch (err) {
+    console.warn('[TicketService] Erro ao inicializar listener:', err);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  initFirestoreListener();
+}
+
 export function resetTicketsStorage() {
   memoryStorage.clear();
+  firestoreTickets = [];
+  isFirestoreInitialized = false;
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.removeItem(TICKETS_STORAGE_KEY);
@@ -226,15 +202,19 @@ export function resetTicketsStorage() {
 }
 
 /**
- * Retorna todos os chamados cadastrados, inicializando os defaults se vazio
+ * Retorna todos os chamados cadastrados
  */
 export function getTickets(filters = {}) {
   try {
-    const raw = storageGet(TICKETS_STORAGE_KEY);
-    let tickets = raw ? JSON.parse(raw) : null;
-    if (!tickets || !Array.isArray(tickets)) {
-      tickets = INITIAL_TICKETS;
-      storageSet(TICKETS_STORAGE_KEY, JSON.stringify(tickets));
+    let tickets = [];
+    if (isFirestoreInitialized && Array.isArray(firestoreTickets)) {
+      tickets = [...firestoreTickets];
+    } else {
+      const raw = storageGet(TICKETS_STORAGE_KEY);
+      tickets = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(tickets)) {
+        tickets = [];
+      }
     }
 
     let filtered = [...tickets];
@@ -271,7 +251,7 @@ export function getTickets(filters = {}) {
     return filtered;
   } catch (err) {
     console.error('[TicketService] Erro ao carregar chamados:', err);
-    return INITIAL_TICKETS;
+    return [];
   }
 }
 
@@ -280,7 +260,7 @@ export function getTickets(filters = {}) {
  */
 export function saveTickets(tickets) {
   try {
-    storageSet(TICKETS_STORAGE_KEY, JSON.stringify(tickets));
+    saveTicketsToLocalCache(tickets);
     triggerTicketsUpdate(tickets);
   } catch (err) {
     console.error('[TicketService] Erro ao salvar chamados:', err);
@@ -288,7 +268,7 @@ export function saveTickets(tickets) {
 }
 
 /**
- * Cria um novo chamado de suporte (Sponsor, Staff ou Admin)
+ * Cria um novo chamado de suporte (Sponsor, Staff ou Admin) e persiste no Firestore
  */
 export function createTicket({
   role = 'SPONSOR',
@@ -304,12 +284,15 @@ export function createTicket({
 }) {
   const current = getTickets();
   const nowIso = new Date().toISOString();
+  const ticketId = `tkt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const senderUid = auth?.currentUser?.uid || '';
 
   const newTicket = {
-    id: `tkt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    id: ticketId,
+    senderUid,
     role: role.toUpperCase(),
     senderName: senderName || (role === 'SPONSOR' ? 'Patrocinador' : 'Staff'),
-    senderEmail: senderEmail || '',
+    senderEmail: senderEmail || (auth?.currentUser?.email || ''),
     senderPhone: senderPhone || '',
     entityName: entityName || (role === 'SPONSOR' ? 'Estande Patrocinador' : 'Equipe Staff'),
     location: location || 'Local não informado',
@@ -325,8 +308,19 @@ export function createTicket({
     notes: [],
   };
 
-  const updated = [newTicket, ...current];
-  saveTickets(updated);
+  const updated = [newTicket, ...current.filter((t) => t.id !== ticketId)];
+  if (isFirestoreInitialized) {
+    firestoreTickets = updated;
+  }
+  saveTicketsToLocalCache(updated);
+  triggerTicketsUpdate(updated);
+
+  // Persistência assíncrona no Firestore
+  if (db) {
+    setDoc(doc(db, 'support_tickets', ticketId), newTicket).catch((err) => {
+      console.warn('[TicketService] Erro ao persistir ticket no Firestore:', err);
+    });
+  }
 
   // Notificação do sistema para visibilidade imediata
   addNotification({
@@ -348,6 +342,7 @@ export function updateTicketStatus(ticketId, status, assignedTo = null, response
   const current = getTickets();
   const nowIso = new Date().toISOString();
 
+  let target = null;
   const updated = current.map((tkt) => {
     if (tkt.id !== ticketId) return tkt;
 
@@ -362,7 +357,7 @@ export function updateTicketStatus(ticketId, status, assignedTo = null, response
       });
     }
 
-    return {
+    target = {
       ...tkt,
       status,
       assignedTo: assignedTo !== null ? assignedTo : tkt.assignedTo,
@@ -370,10 +365,29 @@ export function updateTicketStatus(ticketId, status, assignedTo = null, response
       updatedAt: nowIso,
       notes,
     };
+    return target;
   });
 
-  saveTickets(updated);
-  return updated.find((t) => t.id === ticketId);
+  if (isFirestoreInitialized) {
+    firestoreTickets = updated;
+  }
+  saveTicketsToLocalCache(updated);
+  triggerTicketsUpdate(updated);
+
+  // Atualização no Firestore
+  if (db && target) {
+    updateDoc(doc(db, 'support_tickets', ticketId), {
+      status: target.status,
+      assignedTo: target.assignedTo,
+      resolvedAt: target.resolvedAt,
+      updatedAt: target.updatedAt,
+      notes: target.notes,
+    }).catch((err) => {
+      console.warn('[TicketService] Erro ao atualizar status no Firestore:', err);
+    });
+  }
+
+  return target || updated.find((t) => t.id === ticketId);
 }
 
 /**
@@ -405,7 +419,22 @@ export function addTicketNote(ticketId, { author = 'Solicitante', text = '', isS
     return target;
   });
 
-  saveTickets(updated);
+  if (isFirestoreInitialized) {
+    firestoreTickets = updated;
+  }
+  saveTicketsToLocalCache(updated);
+  triggerTicketsUpdate(updated);
+
+  // Atualização no Firestore
+  if (db && target) {
+    updateDoc(doc(db, 'support_tickets', ticketId), {
+      updatedAt: target.updatedAt,
+      notes: target.notes,
+    }).catch((err) => {
+      console.warn('[TicketService] Erro ao adicionar nota no Firestore:', err);
+    });
+  }
+
   return target;
 }
 
@@ -415,7 +444,19 @@ export function addTicketNote(ticketId, { author = 'Solicitante', text = '', isS
 export function deleteTicket(ticketId) {
   const current = getTickets();
   const updated = current.filter((t) => t.id !== ticketId);
-  saveTickets(updated);
+  if (isFirestoreInitialized) {
+    firestoreTickets = updated;
+  }
+  saveTicketsToLocalCache(updated);
+  triggerTicketsUpdate(updated);
+
+  // Remoção no Firestore
+  if (db) {
+    deleteDoc(doc(db, 'support_tickets', ticketId)).catch((err) => {
+      console.warn('[TicketService] Erro ao excluir chamado do Firestore:', err);
+    });
+  }
+
   return updated;
 }
 
@@ -439,3 +480,23 @@ export function getTicketStats(filters = {}) {
   };
 }
 
+/**
+ * Escuta atualizações do Firestore em tempo real via callback
+ */
+export function subscribeToSupportTickets(callback) {
+  if (!db) return () => {};
+  const colRef = collection(db, 'support_tickets');
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
+      callback(list);
+    },
+    (err) => {
+      console.warn('[TicketService] Erro no listener de tickets:', err);
+    }
+  );
+}

@@ -85,13 +85,20 @@ describe('POST /:activityId/checkin — validação de activityId (KAN-49 securi
   });
 });
 
-function makeCheckinTx(activityData: Record<string, unknown> | null, pointEventExists = false) {
+function makeCheckinTx(
+  activityData: Record<string, unknown> | null,
+  pointEventExists = false,
+  userData: Record<string, unknown> | null = { hasSymplaTicket: true }
+) {
   return {
     get: vi.fn((ref: { path: string }) => {
       if (ref.path.startsWith('activities/')) {
         return Promise.resolve(activityData ? { exists: true, data: () => activityData } : { exists: false });
       }
       if (ref.path.startsWith('pointEvents/')) return Promise.resolve({ exists: pointEventExists });
+      if (ref.path.startsWith('users/')) {
+        return Promise.resolve(userData ? { exists: true, data: () => userData } : { exists: false, data: () => ({}) });
+      }
       throw new Error(`ref inesperada no mock: ${ref.path}`);
     }),
     set: vi.fn(),
@@ -169,6 +176,41 @@ describe('POST /:activityId/checkin — fluxos de negócio e erros (ERR-072)', (
     });
   });
 
+  it('retorna 403 SYMPLA_TICKET_REQUIRED quando usuário não tem Sympla em atividade fechada', async () => {
+    const tx = makeCheckinTx({ points: 20, isOpenEvent: false }, false, { hasSymplaTicket: false });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq('lecture-1', 'lecture-1');
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(tx.set).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      error: 'SYMPLA_TICKET_REQUIRED'
+    }));
+  });
+
+  it('permite 201 com 0 pontos para participante sem Sympla em evento aberto (isOpenEvent: true)', async () => {
+    const tx = makeCheckinTx({ points: 20, isOpenEvent: true }, false, { hasSymplaTicket: false });
+    (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
+
+    const req = makeReq('lecture-1', 'lecture-1', 'user-geral');
+    const res = makeRes();
+    await handler(req, res);
+
+    expect(tx.set).toHaveBeenCalledWith(
+      { path: 'pointEvents/user-geral_lecture_attendance_lecture-1' },
+      expect.objectContaining({
+        userId: 'user-geral',
+        points: 0,
+        metadata: expect.objectContaining({ isOpenEvent: true, hasSymplaTicket: false })
+      })
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ success: true, points: 0 });
+  });
+
   it('retorna 409 CHECKIN_DUPLICATE quando a presença já foi registrada anteriormente', async () => {
     const tx = makeCheckinTx({ points: 20 }, true);
     (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
@@ -200,7 +242,7 @@ describe('POST /:activityId/checkin — fluxos de negócio e erros (ERR-072)', (
         eventType: 'lecture_attendance',
         referenceId: 'lecture-1',
         points: 25,
-        metadata: { rating: 5 },
+        metadata: expect.objectContaining({ rating: 5 }),
         createdAt: expect.any(Date)
       })
     );
@@ -208,7 +250,7 @@ describe('POST /:activityId/checkin — fluxos de negócio e erros (ERR-072)', (
     expect(res.json).toHaveBeenCalledWith({ success: true, points: 25 });
   });
 
-  it('registra presença com sucesso (201) com metadata null quando rating não é informado', async () => {
+  it('registra presença com sucesso (201) quando rating não é informado', async () => {
     const tx = makeCheckinTx({ points: 25 });
     (db.runTransaction as any).mockImplementation((cb: any) => cb(tx));
 
@@ -223,7 +265,7 @@ describe('POST /:activityId/checkin — fluxos de negócio e erros (ERR-072)', (
         eventType: 'lecture_attendance',
         referenceId: 'lecture-1',
         points: 25,
-        metadata: null,
+        metadata: expect.objectContaining({ isOpenEvent: false, hasSymplaTicket: true }),
         createdAt: expect.any(Date)
       })
     );

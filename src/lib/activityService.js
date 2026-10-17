@@ -1208,29 +1208,19 @@ export async function createSpeaker(speakerData) {
     updatedAt: new Date().toISOString()
   };
 
+  await setDoc(docRef, payload, { merge: true });
   saveLocalCustomSpeaker(payload);
-
-  try {
-    await setDoc(docRef, payload, { merge: true });
-    return { success: true, speaker: payload };
-  } catch (err) {
-    console.warn('Erro ao salvar speaker no Firestore (salvo em cache local):', err);
-    return { success: true, speaker: payload };
-  }
+  return { success: true, speaker: payload };
 }
 
 /**
  * Remove um convidado do Firestore.
  */
 export async function deleteSpeaker(id) {
+  const docRef = doc(db, 'speakers', id);
+  await deleteDoc(docRef);
   removeLocalCustomSpeaker(id);
-  try {
-    const docRef = doc(db, 'speakers', id);
-    await deleteDoc(docRef);
-    return { success: true };
-  } catch (err) {
-    return { success: true };
-  }
+  return { success: true };
 }
 
 /**
@@ -1345,14 +1335,16 @@ export async function createLocation(locData) {
     description: locData.description || ''
   };
 
+  await setDoc(docRef, payload, { merge: true });
   saveLocalCustomLocation(payload);
+  return { success: true, location: payload };
+}
 
-  try {
-    await setDoc(docRef, payload, { merge: true });
-    return { success: true, location: payload };
-  } catch (err) {
-    return { success: true, location: payload };
-  }
+export async function deleteLocation(id) {
+  const docRef = doc(db, 'locations', id);
+  await deleteDoc(docRef);
+  removeLocalCustomLocation(id);
+  return { success: true };
 }
 
 /**

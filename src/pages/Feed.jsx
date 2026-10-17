@@ -13,12 +13,13 @@ import {
   Building2,
   Loader2,
   ShieldCheck,
-  Film
+  Film,
+  Trash2
 } from 'lucide-react';
-import { subscribeToFeedPosts, createFeedPost, toggleLikeFeedPost, uploadFeedMedia, DEFAULT_FEED_POSTS } from '../lib/feedService';
+import { subscribeToFeedPosts, createFeedPost, deleteFeedPost, toggleLikeFeedPost, uploadFeedMedia, DEFAULT_FEED_POSTS } from '../lib/feedService';
 import { getSponsorSettings } from '../lib/sponsorSettingsService';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserProfile, getCachedUserProfile } from '../lib/userService';
+import { getUserProfile, getCachedUserProfile, isAdminEmail } from '../lib/userService';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
 import Mascot from '../components/Mascot';
 import iconeTw from '../assets/icone.png';
@@ -68,7 +69,7 @@ export function VerifiedBadge() {
   );
 }
 
-export function PostCard({ post, featured, isLiked, popping, onLike, onPopEnd, onShare }) {
+export function PostCard({ post, featured, isLiked, popping, onLike, onPopEnd, onShare, canDelete, onDelete }) {
   const isOrg = post.authorRole === 'ORGANIZATION';
   const tier = isOrg ? null : tierOf(post);
   const tinted = tier && tier.tint;
@@ -155,33 +156,47 @@ export function PostCard({ post, featured, isLiked, popping, onLike, onPopEnd, o
         />
       )}
 
-      <div className={`flex gap-5 ${featured ? 'mt-3!' : 'mt-2.5!'}`}>
-        <button
-          type="button"
-          onClick={() => onLike(post)}
-          aria-pressed={!!isLiked}
-          aria-label={`Curtir · ${likesCount} curtida${likesCount === 1 ? '' : 's'}`}
-          className={`flex min-h-11 items-center gap-1.5 text-sm ${isLiked ? 'font-bold' : 'font-semibold text-text-2'}`}
-          style={isLiked ? { color: LIKE_PINK } : undefined}
-        >
-          <Heart
-            size={20}
-            strokeWidth={1.9}
-            fill={isLiked ? 'currentColor' : 'none'}
-            aria-hidden="true"
-            className={popping ? 'animate-[dsPop_200ms_var(--spring)]' : ''}
-            onAnimationEnd={onPopEnd}
-          />
-          {likesCount}
-        </button>
-        <button
-          type="button"
-          onClick={() => onShare(post)}
-          className="flex min-h-11 items-center gap-1.5 text-sm font-semibold text-text-2"
-        >
-          <Share size={20} strokeWidth={1.9} aria-hidden="true" />
-          Compartilhar
-        </button>
+      <div className={`flex items-center justify-between ${featured ? 'mt-3!' : 'mt-2.5!'}`}>
+        <div className="flex gap-5">
+          <button
+            type="button"
+            onClick={() => onLike(post)}
+            aria-pressed={!!isLiked}
+            aria-label={`Curtir · ${likesCount} curtida${likesCount === 1 ? '' : 's'}`}
+            className={`flex min-h-11 items-center gap-1.5 text-sm ${isLiked ? 'font-bold' : 'font-semibold text-text-2'}`}
+            style={isLiked ? { color: LIKE_PINK } : undefined}
+          >
+            <Heart
+              size={20}
+              strokeWidth={1.9}
+              fill={isLiked ? 'currentColor' : 'none'}
+              aria-hidden="true"
+              className={popping ? 'animate-[dsPop_200ms_var(--spring)]' : ''}
+              onAnimationEnd={onPopEnd}
+            />
+            {likesCount}
+          </button>
+          <button
+            type="button"
+            onClick={() => onShare(post)}
+            className="flex min-h-11 items-center gap-1.5 text-sm font-semibold text-text-2"
+          >
+            <Share size={20} strokeWidth={1.9} aria-hidden="true" />
+            Compartilhar
+          </button>
+        </div>
+        {canDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label="Excluir publicação"
+            className="flex min-h-11 items-center gap-1 text-xs font-semibold text-text-3 transition-colors hover:text-err"
+            title="Excluir publicação"
+          >
+            <Trash2 size={16} strokeWidth={1.9} aria-hidden="true" />
+            <span>Excluir</span>
+          </button>
+        )}
       </div>
     </article>
   );
@@ -233,15 +248,51 @@ export default function Feed() {
   }, []);
 
   const isAdminOrOrg = useMemo(() => {
-    const role = userProfile?.role || userProfile?.userRole || '';
-    return role === 'ADMIN' || role === 'ORGANIZATION';
-  }, [userProfile]);
+    if (user?.email && isAdminEmail(user.email)) return true;
+    const role = (userProfile?.role || userProfile?.userRole || '').toUpperCase();
+    return role === 'ADMIN' || role === 'ORGANIZATION' || role === 'STAFF';
+  }, [userProfile, user?.email]);
 
   const canCreatePost = useMemo(() => {
     if (!userProfile) return true; // Permite para testes/demonstração
-    const role = userProfile.role || userProfile.userRole || '';
+    const role = (userProfile.role || userProfile.userRole || '').toUpperCase();
     return role === 'ADMIN' || role === 'ORGANIZATION' || role === 'SPONSOR' || isAdminOrOrg;
   }, [userProfile, isAdminOrOrg]);
+
+  const isSponsor = useMemo(() => {
+    const role = (userProfile?.role || userProfile?.userRole || '').toUpperCase();
+    return role === 'SPONSOR';
+  }, [userProfile]);
+
+  const canDeletePost = (post) => {
+    if (!user) return false;
+    if (isAdminOrOrg) return true;
+    const uid = user.uid;
+    const isAuthor = (post.authorUid && post.authorUid === uid) || (post.authorId && post.authorId === uid);
+    const userSponsorId = userProfile?.sponsorId || userProfile?.companyId;
+    const postSponsorId = post.sponsorId || post.companyId;
+    const isCompanyAuthor = isSponsor && userSponsorId && postSponsorId === userSponsorId;
+    return Boolean(isAuthor || isCompanyAuthor);
+  };
+
+  const handleDeletePost = async (post) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta publicação?')) {
+      return;
+    }
+    setPosts((prev) => prev.filter((p) => p.id !== post.id));
+    try {
+      await deleteFeedPost(post.id);
+      setToast('Publicação excluída com sucesso.');
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      console.error('Erro ao excluir post:', err);
+      setToast('Não foi possível excluir a publicação.');
+      setTimeout(() => setToast(null), 3000);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('facom_feed_updated'));
+      }
+    }
+  };
 
   const filteredPosts = useMemo(() => {
     return posts.filter((p) => {
@@ -423,7 +474,7 @@ export default function Feed() {
         </div>
       )}
 
-      <header className="grid grid-cols-[44px_1fr_44px] items-center px-3 pt-[18px]">
+      <header className="grid grid-cols-[44px_1fr_44px] items-center px-3 pt-[max(18px,env(safe-area-inset-top))]">
         {isAdminOrOrg ? (
           <button type="button" onClick={() => navigate('/admin')} aria-label="Painel do organizador" className={iconBtn}>
             <ShieldCheck size={20} aria-hidden="true" />
@@ -486,6 +537,8 @@ export default function Feed() {
               onLike={handleLike}
               onPopEnd={() => setPopId(null)}
               onShare={handleShare}
+              canDelete={canDeletePost(post)}
+              onDelete={() => handleDeletePost(post)}
             />
           ))
         )}

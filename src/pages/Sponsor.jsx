@@ -40,10 +40,12 @@ import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityServic
 import { 
   subscribeToFeedPosts, 
   createFeedPost, 
+  deleteFeedPost,
   toggleLikeFeedPost, 
   uploadFeedMedia, 
   DEFAULT_FEED_POSTS 
 } from '../lib/feedService';
+import { isAdminEmail } from '../lib/userService';
 import ActivityModal, { categoryOf, describeDay } from '../components/ActivityModal';
 import { SPONSORS_CONFIG, TIER_STYLE } from '../components/PassportTab';
 import { ActivityRow, TYPE_FILTERS, dayOrder, getActivityTimingState } from './Agenda';
@@ -596,6 +598,36 @@ export default function Sponsor() {
     } else {
       navigator.clipboard.writeText(`${authorName}: ${post.content}`);
       showToast('Link e mensagem copiados para a área de transferência!', 'success');
+    }
+  };
+
+  const canDeleteFeedPost = (post) => {
+    if (!authUser) return false;
+    if (authUser?.email && isAdminEmail(authUser.email)) return true;
+    const role = (actualRole || userProfile?.role || '').toUpperCase();
+    if (role === 'ADMIN' || role === 'ORGANIZATION' || role === 'STAFF') return true;
+    const uid = authUser.uid;
+    const isAuthor = (post.authorUid && post.authorUid === uid) || (post.authorId && post.authorId === uid);
+    const userCompany = (activeCompanyId || userProfile?.sponsorId || userProfile?.companyId || '').toLowerCase();
+    const postCompany = (post.sponsorId || post.companyId || '').toLowerCase();
+    const isCompanyAuthor = Boolean(userCompany && postCompany && userCompany === postCompany);
+    return Boolean(isAuthor || isCompanyAuthor);
+  };
+
+  const handleDeleteFeedPost = async (post) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta publicação?')) {
+      return;
+    }
+    setFeedPosts((prev) => prev.filter((p) => p.id !== post.id));
+    try {
+      await deleteFeedPost(post.id);
+      showToast('Publicação excluída com sucesso.', 'success');
+    } catch (err) {
+      console.error('Erro ao excluir post no feed do patrocinador:', err);
+      showToast('Não foi possível excluir a publicação.', 'error');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('facom_feed_updated'));
+      }
     }
   };
 
@@ -1385,6 +1417,8 @@ export default function Sponsor() {
                     onLike={handleLikeFeed}
                     onPopEnd={() => setPopId(null)}
                     onShare={handleShareFeed}
+                    canDelete={canDeleteFeedPost(post)}
+                    onDelete={() => handleDeleteFeedPost(post)}
                   />
                 );
               })

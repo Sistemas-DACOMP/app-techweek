@@ -34,10 +34,19 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
   }
 
   let parsedUid = rawUid;
+  let payloadEmail: string | null = null;
+  let isGeneralAccess = false;
+
   if (typeof parsedUid === 'string' && parsedUid.trim().startsWith('{')) {
     try {
       const parsed = JSON.parse(parsedUid.trim());
-      parsedUid = parsed.uid || parsed.id || (parsed.username ? `@${parsed.username}` : (parsed.email || parsedUid));
+      if (parsed.type === 'GENERAL_ACCESS') {
+        isGeneralAccess = true;
+        parsedUid = parsed.uid || parsedUid;
+        payloadEmail = parsed.email ? String(parsed.email).toLowerCase().trim() : null;
+      } else {
+        parsedUid = parsed.uid || parsed.id || (parsed.username ? `@${parsed.username}` : (parsed.email || parsedUid));
+      }
     } catch (_e) {}
   }
 
@@ -123,6 +132,22 @@ router.post('/entrance', requireAuth, requireRole(['STAFF', 'ADMIN']), async (re
       const isOpenEvent = Boolean(activityData.isOpenEvent);
 
       const userData = userSnap?.exists ? userSnap.data() : null;
+
+      // Validação anti-forja: se o QR for do tipo GENERAL_ACCESS com e-mail informado,
+      // confere se o e-mail bate com o usuário cadastrado no banco de dados.
+      if (isGeneralAccess && payloadEmail && userData?.email) {
+        const dbEmail = String(userData.email).toLowerCase().trim();
+        if (dbEmail !== payloadEmail) {
+          return {
+            status: 400 as const,
+            body: {
+              error: 'INVALID_PAYLOAD',
+              message: 'QR Code inconsistente ou forjado (e-mail não confere com o usuário).'
+            }
+          };
+        }
+      }
+
       const hasSymplaTicket = Boolean(
         userData?.hasSymplaTicket ||
         userData?.symplaTicket ||

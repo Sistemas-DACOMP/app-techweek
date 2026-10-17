@@ -41,6 +41,7 @@ router.post('/:activityId/checkin', requireAuth, participantActionLimiter, async
     return;
   }
 
+  const userRef = db.collection('users').doc(uid);
   const activityRef = db.collection('activities').doc(activityId);
   // Id determinístico (usuário + tipo de evento + palestra) em vez de
   // auto-id: permite checar duplicidade dentro da própria transação, sem
@@ -49,9 +50,10 @@ router.post('/:activityId/checkin', requireAuth, participantActionLimiter, async
 
   try {
     const result = await db.runTransaction(async (tx) => {
-      const [activitySnap, pointEventSnap] = await Promise.all([
+      const [activitySnap, pointEventSnap, userSnap] = await Promise.all([
         tx.get(activityRef),
-        tx.get(pointEventRef)
+        tx.get(pointEventRef),
+        tx.get(userRef)
       ]);
 
       if (!activitySnap.exists) {
@@ -62,6 +64,7 @@ router.post('/:activityId/checkin', requireAuth, participantActionLimiter, async
       }
 
       const activityData = activitySnap.data() ?? {};
+      const userData = userSnap.data() ?? {};
 
       // KAN-51/D2: atividade com double-check usa /api/checkin/entrance +
       // /checkout (Staff registra entrada, aluno faz checkout via QR do
@@ -74,6 +77,26 @@ router.post('/:activityId/checkin', requireAuth, participantActionLimiter, async
         };
       }
 
+      // Validação estrita de credencial Sympla:
+      // Se a atividade NÃO for aberta/gratuita, exige ingresso oficial Sympla vinculado
+      const hasSymplaTicket = Boolean(
+        userData.hasSymplaTicket ||
+        userData.symplaTicket ||
+        userData.sympla_ticket ||
+        userData.ticketNumber
+      );
+      const isOpenEvent = Boolean(activityData.isOpenEvent);
+
+      if (!isOpenEvent && !hasSymplaTicket) {
+        return {
+          status: 403 as const,
+          body: {
+            error: 'SYMPLA_TICKET_REQUIRED',
+            message: 'Esta atividade é exclusiva para participantes com ingresso oficial do Sympla vinculado.'
+          }
+        };
+      }
+
       if (pointEventSnap.exists) {
         return {
           status: 409 as const,
@@ -81,19 +104,25 @@ router.post('/:activityId/checkin', requireAuth, participantActionLimiter, async
         };
       }
 
-      const points = typeof activityData.points === 'number' ? activityData.points : 0;
+      // Participantes sem Sympla em eventos abertos participam com 0 pontos no ranking/gamificação
+      const points = (!hasSymplaTicket && isOpenEvent)
+        ? 0
+        : (typeof activityData.points === 'number' ? activityData.points : 0);
 
       tx.set(pointEventRef, {
         userId: uid,
         eventType: 'lecture_attendance',
         referenceId: activityId,
         points,
-        metadata: typeof rating === 'number' ? { rating } : null,
+        metadata: {
+          ...(typeof rating === 'number' ? { rating } : {}),
+          isOpenEvent,
+          hasSymplaTicket
+        },
         createdAt: new Date()
       });
 
       if (points > 0) {
-        const userRef = db.collection('users').doc(uid);
         const rankingRef = db.collection('ranking').doc(uid);
         tx.set(userRef, {
           totalPoints: FieldValue.increment(points),

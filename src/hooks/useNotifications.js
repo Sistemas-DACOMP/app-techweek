@@ -291,8 +291,10 @@ export function useNotifications() {
     isNativeSupported: isNativeNotificationSupported(),
     permission,
     nativeEnabled,
+    enabled: nativeEnabled,
     requestPermission,
     toggleNativeNotifications,
+    toggleEnabled: toggleNativeNotifications,
     sendTestNotification,
   };
 }
