@@ -770,6 +770,70 @@ describe('POST /api/checkin/entrance (KAN-48) - Suite de Testes Unitarios', () =
       expect(tx.set).not.toHaveBeenCalled();
     });
 
+    it('aceita QR Code no padrao GENERAL_ACCESS ({ type: "GENERAL_ACCESS", uid, email }) em evento aberto', async () => {
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 20, isOpenEvent: true, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false },
+        userSnap: { exists: true, data: () => ({ hasSymplaTicket: false }) }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const generalAccessQr = JSON.stringify({
+        type: 'GENERAL_ACCESS',
+        uid: 'user-geral-123',
+        email: 'participante@ufu.br'
+      });
+
+      const req = makeReq({ participantUid: generalAccessQr, activityId: 'palestra-aberta-tech' });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({ success: true, points: 0 });
+      expect(tx.set).toHaveBeenCalledWith(
+        { path: 'pointEvents/user-geral-123_entrance_palestra-aberta-tech' },
+        expect.objectContaining({
+          userId: 'user-geral-123',
+          points: 0,
+          metadata: expect.objectContaining({ isOpenEvent: true, hasSymplaTicket: false })
+        })
+      );
+    });
+
+    it('bloqueia QR Code no padrao GENERAL_ACCESS em workshop exclusivo com 403 SYMPLA_TICKET_REQUIRED', async () => {
+      const tx = makeTx({
+        activitySnap: {
+          exists: true,
+          data: () => ({ entrancePoints: 40, isOpenEvent: false, requireRegistration: false })
+        },
+        pointEventSnap: { exists: false },
+        userSnap: { exists: true, data: () => ({ hasSymplaTicket: false }) }
+      });
+      db.runTransaction.mockImplementation((cb) => cb(tx));
+
+      const generalAccessQr = JSON.stringify({
+        type: 'GENERAL_ACCESS',
+        uid: 'user-geral-123',
+        email: 'participante@ufu.br'
+      });
+
+      const req = makeReq({ participantUid: generalAccessQr, activityId: 'workshop-exclusivo' });
+      const res = makeRes();
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        error: 'SYMPLA_TICKET_REQUIRED',
+        message: expect.stringContaining('ingresso oficial do Sympla')
+      }));
+      expect(tx.set).not.toHaveBeenCalled();
+    });
+
     it('concede pontos normalmente em evento aberto para participante que possui Sympla vinculado', async () => {
       const tx = makeTx({
         activitySnap: {
