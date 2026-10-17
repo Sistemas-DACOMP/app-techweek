@@ -97,6 +97,7 @@ import AdminInicio from './admin/AdminInicio';
 import AdminDados from './admin/AdminDados';
 import AdminProgramacao from './admin/AdminProgramacao';
 import ActivityForm from './admin/ActivityForm';
+import ActivityAttendeesModal from './admin/ActivityAttendeesModal';
 import AdminPessoas from './admin/AdminPessoas';
 import AdminPatrocinadores from './admin/patrocinadores/AdminPatrocinadores';
 import { ROLE_LABELS } from '../components/RoleSwitcher';
@@ -291,6 +292,8 @@ export default function Admin() {
 
   // Estados do Modo Projeção de Telão (Projector Mode)
   const [projectorActivity, setProjectorActivity] = useState(null);
+  // Estado do Modal de Inscritos e Fila de Espera
+  const [attendeesActivity, setAttendeesActivity] = useState(null);
 
   // Form Atividade
   const initialActivityForm = {
@@ -1373,6 +1376,7 @@ export default function Admin() {
               onEditSpeaker={handleOpenEditGuest}
               onDeleteSpeaker={handleDeleteSpeaker}
               onNewLocation={() => setIsLocationModalOpen(true)}
+              onViewAttendees={setAttendeesActivity}
             />
           )}
 
@@ -1743,6 +1747,15 @@ export default function Admin() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* MODAL: INSCRITOS E FILA DE ESPERA DA ATIVIDADE */}
+      {attendeesActivity && (
+        <ActivityAttendeesModal
+          activity={attendeesActivity}
+          usersList={usersList}
+          onClose={() => setAttendeesActivity(null)}
+        />
       )}
 
       {/* MODAL: ADICIONAR / EDITAR MISSÃO (KAN-104) */}
