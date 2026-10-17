@@ -105,6 +105,7 @@ import AdminMissoes from './admin/AdminMissoes';
 import AdminConta from './admin/AdminConta';
 import Telao from './admin/Telao';
 import AdminFeed from './admin/AdminFeed';
+import { SpeakerModal } from './admin/SpeakerModal';
 import { styleOfMission } from './admin/MissionPreview';
 import '../styles/admin.css';
 
@@ -325,25 +326,6 @@ export default function Admin() {
     attendanceMode: 'SELF_SCAN'
   };
   const [activityForm, setActivityForm] = useState(initialActivityForm);
-
-  // Form Convidado / Palestrante
-  const initialGuestForm = {
-    name: '',
-    email: '',
-    role: '',
-    institution: '',
-    classification: 'Convidado Externo',
-    bio: '',
-    photo: '',
-    socialLinks: {
-      linkedin: '',
-      github: '',
-      instagram: ''
-    },
-    inviteViaEmail: false,
-    inviteStatus: 'Aceito'
-  };
-  const [guestForm, setGuestForm] = useState(initialGuestForm);
 
   // Form Local
   const [locationForm, setLocationForm] = useState({ name: '', capacity: 100, description: '' });
@@ -1023,50 +1005,28 @@ export default function Admin() {
   // Abrir Modal de Edição de Palestrante
   const handleOpenEditGuest = (spk) => {
     setEditingSpeakerId(spk.id);
-    let socialObj = { linkedin: '', github: '', instagram: '' };
-    if (typeof spk.socialLinks === 'object' && spk.socialLinks !== null && !Array.isArray(spk.socialLinks)) {
-      socialObj = { ...socialObj, ...spk.socialLinks };
-    } else if (Array.isArray(spk.socialLinks)) {
-      socialObj.linkedin = spk.socialLinks[0] || '';
-      socialObj.github = spk.socialLinks[1] || '';
-      socialObj.instagram = spk.socialLinks[2] || '';
-    }
-
-    setGuestForm({
-      name: spk.name || '',
-      email: spk.email || '',
-      role: spk.role || '',
-      institution: spk.institution || spk.role || '',
-      classification: spk.classification || 'Convidado Externo',
-      bio: spk.bio || '',
-      photo: spk.photo || '',
-      socialLinks: socialObj,
-      inviteViaEmail: Boolean(spk.inviteViaEmail),
-      inviteStatus: spk.inviteStatus || 'Aceito'
-    });
     setIsGuestModalOpen(true);
   };
 
   // Salvar Convidado / Palestrante
-  const handleSaveGuest = async (e) => {
-    e.preventDefault();
-    if (!guestForm.name) {
+  const handleSaveGuest = async (payload) => {
+    if (!payload?.name) {
       alert('Informe o nome do palestrante.');
       return;
     }
 
     const speakerPayload = {
-      id: editingSpeakerId || `spk_${Date.now()}`,
-      name: guestForm.name,
-      email: guestForm.email,
-      role: guestForm.role,
-      institution: guestForm.institution || guestForm.role,
-      classification: guestForm.classification || 'Convidado Externo',
-      bio: guestForm.bio,
-      photo: guestForm.photo || SAMPLE_SPEAKER_PHOTOS[0].url,
-      socialLinks: guestForm.socialLinks,
-      inviteViaEmail: guestForm.inviteViaEmail,
-      inviteStatus: guestForm.inviteStatus
+      id: payload.id || editingSpeakerId || `spk_${Date.now()}`,
+      name: payload.name,
+      email: payload.email || '',
+      role: payload.role || '',
+      institution: payload.institution || payload.role || '',
+      classification: payload.classification || 'Convidado Externo',
+      bio: payload.bio || '',
+      photo: payload.photo || SAMPLE_SPEAKER_PHOTOS[0].url,
+      socialLinks: payload.socialLinks || {},
+      inviteViaEmail: Boolean(payload.inviteViaEmail),
+      inviteStatus: payload.inviteStatus || 'Aceito'
     };
 
     try {
@@ -1078,14 +1038,13 @@ export default function Admin() {
 
       setIsGuestModalOpen(false);
       setEditingSpeakerId(null);
-      setGuestForm(initialGuestForm);
       setFeedback({
         type: 'success',
         title: editingSpeakerId ? 'Palestrante atualizado' : 'Palestrante cadastrado',
-        message: `${guestForm.name} foi salvo na lista de palestrantes.`
+        message: `${speakerPayload.name} foi salvo na lista de palestrantes.`
       });
     } catch (err) {
-      alert('Erro ao salvar convidado: ' + err.message);
+      alert('Erro ao salvar palestrante: ' + err.message);
     }
   };
 
@@ -1097,15 +1056,6 @@ export default function Admin() {
     } catch (err) {
       alert('Erro ao excluir palestrante: ' + err.message);
     }
-  };
-
-  const handleAddSocialLink = () => {
-    if (!guestForm.socialInput.trim()) return;
-    setGuestForm(prev => ({
-      ...prev,
-      socialLinks: [...prev.socialLinks, prev.socialInput.trim()],
-      socialInput: ''
-    }));
   };
 
   // Salvar Local
@@ -1409,7 +1359,7 @@ export default function Admin() {
               onViewAttendees={setAttendeesActivity}
               onQr={setQrModalActivity}
               onExport={handleExportGrade}
-              onNewSpeaker={() => { setEditingSpeakerId(null); setGuestForm(initialGuestForm); setIsGuestModalOpen(true); }}
+              onNewSpeaker={() => { setEditingSpeakerId(null); setIsGuestModalOpen(true); }}
               onEditSpeaker={handleOpenEditGuest}
               onDeleteSpeaker={handleDeleteSpeaker}
               onNewLocation={() => setIsLocationModalOpen(true)}
@@ -1530,7 +1480,7 @@ export default function Admin() {
               activities={activities}
               onSubmit={handleSaveActivity}
               onCancel={() => setIsActivityModalOpen(false)}
-              onNewSpeaker={() => { setEditingSpeakerId(null); setGuestForm(initialGuestForm); setIsGuestModalOpen(true); }}
+              onNewSpeaker={() => { setEditingSpeakerId(null); setIsGuestModalOpen(true); }}
               onDelete={handleDeleteActivity}
             />
           )}
@@ -1558,185 +1508,18 @@ export default function Admin() {
       </AdminShell>
 
       {/* MODAL: CONVIDADO / PALESTRANTE */}
-      {isGuestModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '520px', backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: 'var(--text)' }}>
-            <div style={{ backgroundColor: 'var(--surface-raised)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--line-2)' }}>
-              <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700 }}>
-                {editingSpeakerId ? 'Editar Palestrante' : 'Cadastrar Convidado / Palestrante'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsGuestModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-2)', cursor: 'pointer', padding: '2px' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveGuest} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Nome Completo *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Dra. Maria Santos"
-                    value={guestForm.name}
-                    onChange={(e) => setGuestForm(prev => ({ ...prev, name: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>E-mail</label>
-                  <input
-                    type="email"
-                    placeholder="maria@ufu.br"
-                    value={guestForm.email}
-                    onChange={(e) => setGuestForm(prev => ({ ...prev, email: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Classificação do Palestrante</label>
-                  <select
-                    value={guestForm.classification}
-                    onChange={(e) => setGuestForm(prev => ({ ...prev, classification: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem' }}
-                  >
-                    {SPEAKER_CLASSIFICATIONS.map(cls => (
-                      <option key={cls.id} value={cls.id}>{cls.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Cargo / Função</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Professora Associada"
-                    value={guestForm.role}
-                    onChange={(e) => setGuestForm(prev => ({ ...prev, role: e.target.value }))}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Empresa / Instituição</label>
-                <input
-                  type="text"
-                  placeholder="Ex: FACOM / UFU"
-                  value={guestForm.institution}
-                  onChange={(e) => setGuestForm(prev => ({ ...prev, institution: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Foto / Avatar URL</label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={guestForm.photo}
-                  onChange={(e) => setGuestForm(prev => ({ ...prev, photo: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box', marginBottom: '6px' }}
-                />
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {SAMPLE_SPEAKER_PHOTOS.map((pic, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setGuestForm(prev => ({ ...prev, photo: pic.url }))}
-                      style={{ padding: '3px 6px', borderRadius: '4px', border: '1px solid var(--line-2)', backgroundColor: 'var(--surface-raised)', color: 'var(--text-2)', fontSize: '0.70rem', cursor: 'pointer' }}
-                    >
-                      {pic.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Redes Sociais */}
-              <div style={{ backgroundColor: 'var(--surface-raised)', border: '1px solid var(--surface-raised)', borderRadius: '8px', padding: '12px' }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)', display: 'block', marginBottom: '8px' }}>
-                  Redes Sociais
-                </span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ position: 'relative' }}>
-                    <LinkedinIcon size={14} color="#00D2FF" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-                    <input
-                      type="url"
-                      placeholder="LinkedIn URL..."
-                      value={guestForm.socialLinks.linkedin || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setGuestForm(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, linkedin: val } }));
-                      }}
-                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.78rem', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div style={{ position: 'relative' }}>
-                    <GithubIcon size={14} color="var(--text-2)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-                    <input
-                      type="url"
-                      placeholder="GitHub URL..."
-                      value={guestForm.socialLinks.github || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setGuestForm(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, github: val } }));
-                      }}
-                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.78rem', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div style={{ position: 'relative' }}>
-                    <InstagramIcon size={14} color="#E1306C" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-                    <input
-                      type="url"
-                      placeholder="Instagram URL..."
-                      value={guestForm.socialLinks.instagram || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setGuestForm(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, instagram: val } }));
-                      }}
-                      style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.78rem', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Mini Biografia</label>
-                <textarea
-                  rows={2}
-                  placeholder="Breve resumo da trajetória ou especialidades..."
-                  value={guestForm.bio}
-                  onChange={(e) => setGuestForm(prev => ({ ...prev, bio: e.target.value }))}
-                  style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--line-2)', paddingTop: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsGuestModalOpen(false)}
-                  style={{ padding: '7px 14px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--surface-raised)', color: 'var(--text-2)', fontSize: '0.80rem', cursor: 'pointer' }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  style={{ padding: '7px 16px', borderRadius: '6px', border: 'none', backgroundColor: 'var(--action)', color: '#FFFFFF', fontSize: '0.80rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                >
-                  <Check size={14} />
-                  <span>Salvar Palestrante</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <SpeakerModal
+        isOpen={isGuestModalOpen}
+        onClose={() => {
+          setIsGuestModalOpen(false);
+          setEditingSpeakerId(null);
+        }}
+        speaker={editingSpeakerId ? speakers.find(s => s.id === editingSpeakerId) : null}
+        classifications={SPEAKER_CLASSIFICATIONS}
+        samplePhotos={SAMPLE_SPEAKER_PHOTOS}
+        onSave={handleSaveGuest}
+        onDelete={handleDeleteSpeaker}
+      />
 
       {projectorActivity && (
         <Telao

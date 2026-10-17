@@ -9,7 +9,8 @@ import {
   deleteDoc,
   updateDoc
 } from 'firebase/firestore';
-import { db, auth } from './firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, auth, storage } from './firebase';
 import { apiRequest } from './api';
 import { getCachedUserProfile } from './userService';
 import { saveLocalPointEvent } from './gameplay';
@@ -1341,6 +1342,84 @@ export const DEFAULT_SPEAKERS = [
 ];
 
 const LOCAL_SPEAKERS_KEY = 'techweek_custom_speakers';
+const DELETED_SPEAKERS_KEY = 'techweek_deleted_speakers';
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Faz upload da foto do palestrante no Firebase Storage com fallback resiliente para Data URL.
+ * @param {File|Blob} file - Arquivo de imagem
+ * @param {string} speakerId - ID do palestrante (ou 'new')
+ * @returns {Promise<string>} URL de download da imagem ou Data URL
+ */
+export async function uploadSpeakerPhoto(file, speakerId = 'new') {
+  if (!file) throw new Error('Nenhum arquivo de imagem fornecido.');
+  if (!file.type || !file.type.startsWith('image/')) {
+    throw new Error('Formato inválido. Por favor, envie uma imagem (JPG, PNG, WebP ou GIF).');
+  }
+  const maxBytes = 10 * 1024 * 1024; // 10MB
+  if (file.size > maxBytes) {
+    throw new Error('A imagem deve ter no máximo 10MB.');
+  }
+
+  const ext = (file && typeof file.name === 'string') 
+    ? (file.name.split('.').pop() || 'jpg') 
+    : (file?.type ? file.type.split('/').pop() : 'jpg');
+  const path = `speakers/photos/${speakerId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.${ext}`;
+
+  try {
+    const storageRef = ref(storage, path);
+    const uploadTask = (async () => {
+      await uploadBytes(storageRef, file, { contentType: file.type || 'image/jpeg' });
+      return await getDownloadURL(storageRef);
+    })();
+
+    const timeoutTask = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Tempo limite excedido ao salvar foto no Storage.')), 15000);
+    });
+
+    return await Promise.race([uploadTask, timeoutTask]);
+  } catch (storageErr) {
+    console.warn('Aviso: Falha no upload para o Storage, usando Data URL local:', storageErr);
+    return await fileToDataUrl(file);
+  }
+}
+
+export function getDeletedSpeakerIds() {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(DELETED_SPEAKERS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch (_e) {
+    return new Set();
+  }
+}
+
+export function markSpeakerDeleted(id) {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const deleted = getDeletedSpeakerIds();
+    deleted.add(id);
+    localStorage.setItem(DELETED_SPEAKERS_KEY, JSON.stringify(Array.from(deleted)));
+  } catch (_e) {}
+}
+
+export function unmarkSpeakerDeleted(id) {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const deleted = getDeletedSpeakerIds();
+    deleted.delete(id);
+    localStorage.setItem(DELETED_SPEAKERS_KEY, JSON.stringify(Array.from(deleted)));
+  } catch (_e) {}
+}
 
 export function getLocalCustomSpeakers() {
   if (typeof window === 'undefined') return [];
@@ -1355,6 +1434,7 @@ export function getLocalCustomSpeakers() {
 export function saveLocalCustomSpeaker(speaker) {
   if (typeof window === 'undefined' || !speaker?.id) return;
   try {
+    unmarkSpeakerDeleted(speaker.id);
     const current = getLocalCustomSpeakers();
     const filtered = current.filter(s => s.id !== speaker.id);
     const updated = [speaker, ...filtered];
@@ -1366,6 +1446,7 @@ export function saveLocalCustomSpeaker(speaker) {
 export function removeLocalCustomSpeaker(id) {
   if (typeof window === 'undefined' || !id) return;
   try {
+    markSpeakerDeleted(id);
     const current = getLocalCustomSpeakers();
     const updated = current.filter(s => s.id !== id);
     localStorage.setItem(LOCAL_SPEAKERS_KEY, JSON.stringify(updated));
@@ -1380,18 +1461,17 @@ export function subscribeToSpeakers(callback) {
   let lastFirestoreList = [];
 
   const mergeAndNotify = (firestoreList) => {
-    const baseList = (firestoreList && firestoreList.length > 0) ? firestoreList : DEFAULT_SPEAKERS;
-    const customLocal = getLocalCustomSpeakers();
+    const deletedIds = getDeletedSpeakerIds();
+    const availableDefaults = DEFAULT_SPEAKERS.filter(ds => !deletedIds.has(ds.id));
+    const filteredFirestore = (firestoreList || []).filter(fs => !deletedIds.has(fs.id));
+
+    const baseList = (filteredFirestore.length > 0) ? filteredFirestore : availableDefaults;
+    const customLocal = getLocalCustomSpeakers().filter(s => !deletedIds.has(s.id));
     const map = new Map();
     baseList.forEach(item => map.set(item.id, item));
     customLocal.forEach(item => {
       const live = map.get(item.id);
       const merged = { ...live, ...item };
-      // Contadores de vaga são do servidor: a cópia salva no localStorage do admin
-      // ficou congelada no valor de quando a atividade foi criada/editada.
-      if (live) {
-        ['vagas_disponiveis', 'total_inscritos', 'total_espera'].forEach((k) => { merged[k] = live[k]; });
-      }
       map.set(item.id, merged);
     });
     callback(Array.from(map.values()));
@@ -1458,6 +1538,7 @@ export function filterSpeakers(speakers, search = '', classification = 'ALL') {
  */
 export async function createSpeaker(speakerData) {
   const id = speakerData.id || `spk_${Date.now()}`;
+  unmarkSpeakerDeleted(id);
   const docRef = doc(db, 'speakers', id);
   const payload = {
     id,
@@ -1475,7 +1556,11 @@ export async function createSpeaker(speakerData) {
     updatedAt: new Date().toISOString()
   };
 
-  await setDoc(docRef, payload, { merge: true });
+  try {
+    await setDoc(docRef, payload, { merge: true });
+  } catch (err) {
+    console.warn('Aviso ao salvar palestrante no Firestore (salvo localmente):', err);
+  }
   saveLocalCustomSpeaker(payload);
   return { success: true, speaker: payload };
 }
@@ -1484,9 +1569,14 @@ export async function createSpeaker(speakerData) {
  * Remove um convidado do Firestore.
  */
 export async function deleteSpeaker(id) {
-  const docRef = doc(db, 'speakers', id);
-  await deleteDoc(docRef);
+  markSpeakerDeleted(id);
   removeLocalCustomSpeaker(id);
+  try {
+    const docRef = doc(db, 'speakers', id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Aviso ao deletar palestrante no Firestore (marcado como deletado localmente):', err);
+  }
   return { success: true };
 }
 
