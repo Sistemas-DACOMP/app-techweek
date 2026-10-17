@@ -20,6 +20,7 @@ export function styleOfMission(m = {}) {
   if (m.isFlash) return 'relampago';
   if (m.triggerMode === 'secret') return 'secreta';
   if (m.triggerMode === 'quiz') return 'quiz';
+  if (m.triggerMode === 'share_instagram_story') return 'stories';
   return 'padrao';
 }
 
@@ -30,7 +31,8 @@ export const TIERS = {
 };
 
 export function ctaLabel(form) {
-  if (form.cardStyle === 'stories') return 'Criar story';
+  if (form.cardStyle === 'stories' || form.triggerMode === 'share_instagram_story') return 'Criar story';
+  if (form.triggerMode === 'share_whatsapp') return 'Compartilhar';
   if (form.triggerMode === 'secret') return 'Desvendar';
   if (form.triggerMode === 'quiz') return 'Fazer quiz';
   if (form.triggerMode === 'auto' || form.triggerMode === 'qr') return 'Escanear';

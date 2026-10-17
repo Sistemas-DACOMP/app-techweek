@@ -168,7 +168,9 @@ const MISSION_TRIGGER_MODES = [
   { id: 'secret', label: 'Palavra Secreta', desc: 'Validação presencial com palavra-chave no estande' },
   { id: 'qr', label: 'QR Code Físico / Estande', desc: 'Validação presencial por leitura de QR impresso no estande ou cartaz' },
   { id: 'quiz', label: 'Quiz / Pergunta', desc: 'Pergunta com opções e gabarito automático' },
-  { id: 'auto', label: 'Automático pelo App', desc: 'Concluído por ações do usuário (escanear, check-in)' }
+  { id: 'auto', label: 'Automático pelo App', desc: 'Concluído por ações do usuário (escanear, check-in)' },
+  { id: 'share_whatsapp', label: 'Compartilhar (WhatsApp)', desc: 'Compartilhar o evento via WhatsApp Web/App' },
+  { id: 'share_instagram_story', label: 'Compartilhar (Instagram Story)', desc: 'Gerar arte exclusiva e compartilhar no Instagram' }
 ];
 
 const VIEW_KEYS = ['inicio', 'dados', 'programacao', 'feed', 'pessoas', 'missoes', 'config', 'conta'];
@@ -384,7 +386,10 @@ export default function Admin() {
     flashMascotDialogue: '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!',
     qrCodeValue: '',
     cardStyle: 'padrao',
-    cardStyleOptions: {}
+    cardStyleOptions: {},
+    shareUrl: '',
+    shareText: '',
+    customHashtag: '#EuVou'
   };
   const [missionForm, setMissionForm] = useState(initialMissionForm);
 
@@ -525,7 +530,10 @@ export default function Admin() {
       flashMascotDialogue: mission.flashConfig?.mascotDialogue || '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!',
       qrCodeValue: mission.qrCodeValue || mission.qrCodeConfig?.qrCodeValue || '',
       cardStyle: styleOfMission(mission),
-      cardStyleOptions: mission.cardStyleOptions || {}
+      cardStyleOptions: mission.cardStyleOptions || {},
+      shareUrl: mission.shareUrl || '',
+      shareText: mission.shareText || '',
+      customHashtag: mission.customHashtag || '#EuVou'
     });
     setIsMissionModalOpen(true);
   };
@@ -569,6 +577,11 @@ export default function Admin() {
           eventType: missionForm.autoEventType,
           targetId: missionForm.autoTargetId
         };
+      } else if (missionForm.triggerMode === 'share_whatsapp') {
+        payload.shareUrl = missionForm.shareUrl;
+        payload.shareText = missionForm.shareText;
+      } else if (missionForm.triggerMode === 'share_instagram_story') {
+        payload.customHashtag = missionForm.customHashtag;
       }
 
       if (missionForm.isFlash) {

@@ -288,6 +288,34 @@ export const DEFAULT_MISSIONS = [
       { id: 'photo', type: 'photo', label: 'Envie a foto com os mascotes', required: true }
     ],
     order: 17
+  },
+  {
+    id: 'story_countdown_euvou',
+    title: 'Story Oficial #EuVou',
+    description: 'Gere seu card de contagem regressiva oficial da FACOM TechWeek e poste nos Stories!',
+    category: 'social',
+    points: 40,
+    icon: 'Camera',
+    status: 'active',
+    type: 'manual',
+    triggerMode: 'share_instagram_story',
+    cardStyle: 'stories',
+    customHashtag: '#EuVou',
+    order: 18
+  },
+  {
+    id: 'whatsapp_share_site',
+    title: 'Compartilhar no WhatsApp',
+    description: 'Convide seus amigos compartilhando o site oficial da FACOM TechWeek no WhatsApp.',
+    category: 'social',
+    points: 25,
+    icon: 'Share2',
+    status: 'active',
+    type: 'manual',
+    triggerMode: 'share_whatsapp',
+    shareUrl: 'https://facomtechweek.com.br',
+    shareText: 'Eu vou na FACOM TechWeek 2026! O maior evento Tech e inovação que a UFU já recebeu. Garanta sua presença:',
+    order: 19
   }
 ];
 
@@ -441,6 +469,15 @@ export async function createMission(missionData) {
 
   if (missionData.triggerMode === 'auto' && missionData.autoConfig) {
     cleanData.autoConfig = missionData.autoConfig;
+  }
+
+  if (missionData.triggerMode === 'share_whatsapp') {
+    if (missionData.shareUrl) cleanData.shareUrl = missionData.shareUrl;
+    if (missionData.shareText) cleanData.shareText = missionData.shareText;
+  }
+
+  if (missionData.triggerMode === 'share_instagram_story') {
+    if (missionData.customHashtag) cleanData.customHashtag = missionData.customHashtag;
   }
 
   if (missionData.isFlash && missionData.flashConfig) {
