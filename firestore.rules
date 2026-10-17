@@ -267,12 +267,31 @@ service cloud.firestore {
       allow delete: if isAuthenticated() || isAdminOrDocAdmin();
     }
 
-    // Regras de Reservas: leitura e criação/remoção pelo próprio participante autenticado com e-mail verificado ou ADMIN
+    // Regras de Reservas: leitura pelo próprio participante autenticado com e-mail verificado ou ADMIN.
+    // No fallback direto do cliente, impede criação de status CONFIRMED se a atividade já estiver esgotada (vagas_disponiveis <= 0).
     match /bookings/{bookingId} {
       allow read: if (isVerified() && resource.data.userId == request.auth.uid) || isAdmin();
-      allow create: if isVerified() && request.resource.data.userId == request.auth.uid;
+      allow create: if isVerified()
+        && request.resource.data.userId == request.auth.uid
+        && bookingId == request.auth.uid + '_' + request.resource.data.activityId
+        && request.resource.data.status in ['CONFIRMED', 'WAITING_LIST']
+        && (
+          request.resource.data.status == 'WAITING_LIST' ||
+          !exists(/databases/$(database)/documents/activities/$(request.resource.data.activityId)) ||
+          get(/databases/$(database)/documents/activities/$(request.resource.data.activityId)).data.vagas_disponiveis > 0
+        );
       allow delete: if (isVerified() && resource.data.userId == request.auth.uid) || isAdmin();
       allow update: if isAdmin();
+    }
+
+    // Histórico/Feed de notificações transacionais (ex: promoção na fila de espera WAITING_CONFIRMATION):
+    // escrita exclusiva pelo backend (Admin SDK); leitura e marcação de leitura pelo próprio destinatário.
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow create, delete: if false;
     }
 
     match /leads/{sponsorId}/contacts/{contactId} {

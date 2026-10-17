@@ -1,10 +1,11 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { onRequest } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { requireAuth, requireRole } from './middlewares/authMiddleware';
 import authRouter from './routes/auth';
 import checkinRouter from './routes/checkin';
-import bookingRouter from './routes/booking';
+import bookingRouter, { processExpiredWaitingBookings } from './routes/booking';
 import symplaRouter from './routes/symplaRoutes';
 import leadsRouter from './routes/leads';
 import screenTokenRouter from './routes/screenToken';
@@ -132,5 +133,16 @@ export const api = onRequest(
   app
 );
 
-
-
+// Job agendado (a cada 5 minutos) para expirar reservas WAITING_CONFIRMATION cujo
+// confirmationDeadline venceu e promover automaticamente o próximo da WAITING_LIST.
+export const expireWaitingConfirmations = onSchedule(
+  {
+    schedule: 'every 5 minutes',
+    region: 'us-east1',
+    memory: '256MiB',
+    timeZone: 'America/Campo_Grande'
+  },
+  async () => {
+    await processExpiredWaitingBookings(new Date());
+  }
+);

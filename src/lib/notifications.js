@@ -340,6 +340,7 @@ export async function registerFcmPushSubscription({ force = false } = {}) {
                   {
                     endpoint: webPushSubJson.endpoint,
                     keys: webPushSubJson.keys,
+                    uid: auth?.currentUser?.uid || null,
                     userId: auth?.currentUser?.uid || null,
                     userAgent: typeof navigator !== 'undefined' ? String(navigator.userAgent || '').slice(0, 300) : '',
                     updatedAt: new Date().toISOString(),
@@ -658,6 +659,7 @@ export function markAllAsRead(extraIds = []) {
 }
 
 export function addNotification({
+  id = null,
   title,
   message,
   type = 'system',
@@ -670,8 +672,12 @@ export function addNotification({
 }) {
   if (typeof window === 'undefined') return null;
   const notifications = getNotifications();
+  if (id) {
+    const existing = notifications.find((n) => n.id === id);
+    if (existing) return existing;
+  }
   const newNotification = {
-    id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    id: id || `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     title,
     message,
     type,
