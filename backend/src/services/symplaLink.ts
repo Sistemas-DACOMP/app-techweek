@@ -44,3 +44,39 @@ export async function linkSymplaTicket(uid: string, ticket: { ticketNumber: stri
     );
   });
 }
+
+/**
+ * Desvincula o ingresso Sympla do usuário, liberando o índice em `symplaTickets/{ticket}`
+ * e limpando as propriedades de ingresso no doc do usuário.
+ */
+export async function unlinkSymplaTicket(uid: string) {
+  const indexes = db.collection('symplaTickets');
+  const userRef = db.collection('users').doc(uid);
+
+  await db.runTransaction(async (tx) => {
+    const user = await tx.get(userRef);
+    if (!user.exists) return;
+
+    const currentTicket = user.data()?.symplaTicket?.ticketNumber || user.data()?.ticketId || user.data()?.symplaTicketCode;
+    if (currentTicket) {
+      const ticketRef = indexes.doc(indexId(currentTicket));
+      const ticketDoc = await tx.get(ticketRef);
+      if (ticketDoc.exists && ticketDoc.data()?.uid === uid) {
+        tx.delete(ticketRef);
+      }
+    }
+
+    tx.set(
+      userRef,
+      {
+        symplaTicket: null,
+        hasSymplaTicket: false,
+        ticketId: null,
+        symplaTicketCode: null,
+        updatedAt: new Date().toISOString()
+      },
+      { merge: true }
+    );
+  });
+}
+

@@ -139,36 +139,35 @@ function MyBadge({ badge, points, onZoom, hasTicket = true, onLink }) {
           {hasTicket ? (
             <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] bg-[rgba(111,216,166,0.14)] px-3 text-xs font-black text-ok">
               <Check size={14} strokeWidth={2.6} aria-hidden="true" />
-              Passaporte Completo Ativo
+              Ingresso Oficial
             </span>
           ) : (
             <span className="inline-flex h-[30px] items-center gap-1.5 rounded-[15px] border border-line-2 bg-surface px-3 text-xs font-extrabold text-text-2">
-              Acesso Entrada Livre
+              Acesso Geral
             </span>
           )}
         </div>
 
         {!hasTicket && (
-          <div className="mt-3.5 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-purple-500/10 to-transparent p-3.5 text-left shadow-[0_4px_16px_rgba(217,119,6,0.1)]">
+          <div className="mt-3.5 rounded-2xl border border-line-2 bg-surface/80 p-3.5 text-left">
             <div className="flex items-start gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-gold">
-                <Lock size={16} aria-hidden="true" />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-action/15 text-link">
+                <Ticket size={16} aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="m-0 text-[13px] font-black text-text leading-snug">
-                  Acesse workshops fechados e pontue no ranking oficial!
+                <p className="m-0 text-[13px] font-bold text-text leading-snug">
+                  Acesso a Atividades Abertas
                 </p>
                 <p className="mt-1 mb-0 text-[12px] text-text-2 leading-relaxed">
-                  Desbloqueie o seu Passaporte Completo para liberar todas as atividades exclusivas, missões e concorrer aos prêmios.
+                  Para workshops fechados e ranking, adquira ou vincule seu ingresso oficial.
                 </p>
                 <button
                   type="button"
                   onClick={onLink}
-                  className="press mt-2.5 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border-none px-3.5 text-xs font-black text-black shadow-[0_4px_12px_rgba(217,119,6,0.3)] transition hover:opacity-95"
-                  style={{ background: 'linear-gradient(135deg, #D97706, #B45309)' }}
+                  className="press mt-2.5 inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-line bg-surface-raised px-3 text-xs font-bold text-text transition hover:border-link"
                 >
-                  <Lock size={13} aria-hidden="true" />
-                  Desbloquear com Passaporte
+                  <Ticket size={13} aria-hidden="true" />
+                  Vincular ingresso
                 </button>
               </div>
             </div>
@@ -176,7 +175,14 @@ function MyBadge({ badge, points, onZoom, hasTicket = true, onLink }) {
         )}
 
         <div className="mt-3.5 flex items-center justify-between border-t border-dashed border-[#2A3460] pt-3 text-xs text-text-3">
-          {id ? <span>ID #{id}</span> : <span />}
+          {hasTicket && id ? (
+            <span>Ingresso #{id}</span>
+          ) : (
+            <div className="flex flex-col text-left">
+              <span>ID #{badge.uid ? badge.uid.slice(0, 8).toUpperCase() : 'GERAL'}</span>
+              {badge.email && <span className="text-[10px] text-text-3">{badge.email}</span>}
+            </div>
+          )}
           <span>
             <b className="text-[15px] text-[#C4B5FD]">{points}</b> pts
           </span>
@@ -186,38 +192,6 @@ function MyBadge({ badge, points, onZoom, hasTicket = true, onLink }) {
         Mostre na entrada e nos estandes. Toque no código para ampliar.
       </p>
     </>
-  );
-}
-
-// Sem ingresso (board CrachaBloqueado). O QR borrado é decorativo, não é o código da pessoa.
-function LockedBadge({ badge, onLink }) {
-  return (
-    <section aria-label="Meu crachá digital" className={`${cardClass} pb-[18px]`}>
-      <BadgeTop badge={badge} />
-      <div className="mt-3 flex flex-col items-center text-center">
-        <BadgeAvatar badge={badge} size={76} />
-        <div className="mt-2 text-xl font-black">{badge.name}</div>
-        {badge.username && <div className="text-sm font-bold text-link">@{badge.username}</div>}
-      </div>
-      <div className="relative mx-auto mt-3.5 h-[184px] w-[184px] overflow-hidden rounded-[18px] bg-[#F4F5FA]">
-        <div aria-hidden="true" className="opacity-55 blur-[6px]">
-          <QRCodeSVG value="facom-techweek" size={184} bgColor="#F4F5FA" fgColor="#0A0F24" />
-        </div>
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[rgba(10,15,36,0.55)] text-center">
-          <span className="flex h-[46px] w-[46px] items-center justify-center rounded-full bg-action">
-            <Lock size={22} strokeWidth={2.2} color="#fff" aria-hidden="true" />
-          </span>
-          <span className="text-sm font-black">QR bloqueado</span>
-        </div>
-      </div>
-      <p className="mt-3 mb-0 text-center text-[13px] leading-normal text-[#C3C9DE]">
-        Vincule seu ingresso Sympla para liberar o QR na entrada e nos estandes.
-      </p>
-      <button type="button" onClick={onLink} className="btn btn-primary btn-block mt-3.5 min-h-[54px] text-base">
-        <Ticket size={20} aria-hidden="true" />
-        Vincular ingresso
-      </button>
-    </section>
   );
 }
 
@@ -246,11 +220,11 @@ function OfflineBadge({ badge, hasTicket = true }) {
           {hasTicket ? (
             <span className="flex items-center gap-1.5 text-ok font-extrabold">
               <Check size={15} strokeWidth={2.6} aria-hidden="true" />
-              Passaporte Completo · offline
+              Ingresso Oficial · offline
             </span>
           ) : (
             <span className="text-text-2 font-semibold">
-              Entrada Livre · offline
+              Acesso Geral · offline
             </span>
           )}
         </div>

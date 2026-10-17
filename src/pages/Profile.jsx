@@ -11,7 +11,7 @@ import { getMyProfile, uploadAvatar } from '../lib/gameplay';
 import { logoutUser, onAuthChange, deleteCurrentUserAccount } from '../lib/auth';
 import { auth } from '../lib/firebase';
 import { validateAvatarFile, isValidEmail, formatFileSize, validateResumeFile } from '../lib/validators';
-import { SYMPLA_EVENT_URL, verifySymplaTicket } from '../lib/sympla';
+import { SYMPLA_EVENT_URL, verifySymplaTicket, unlinkUserSymplaTicket } from '../lib/sympla';
 import {
   getUserProfile, uploadUserAvatar, updateUserEmail, updateUserProfile, getCachedUserProfile,
   getLeaderboardUsers, checkUsernameAvailability, cancelPendingEmailChange, syncUserEmailWithAuth,
@@ -143,6 +143,7 @@ export default function Profile() {
   });
   const [savingProfile, setSavingProfile] = useState(false);
   const [verifyingTicket, setVerifyingTicket] = useState(false);
+  const [unlinkingTicket, setUnlinkingTicket] = useState(false);
   const [editFeedback, setEditFeedback] = useState(null);
   const [needsPassword, setNeedsPassword] = useState(false); // troca de e-mail pede a senha (re-autenticação)
   const [reauthPassword, setReauthPassword] = useState('');
@@ -595,6 +596,52 @@ export default function Profile() {
     }
   };
 
+  const handleUnlinkTicketInModal = async () => {
+    if (!window.confirm('Tem certeza que deseja desvincular seu ingresso Sympla desta conta?')) {
+      return;
+    }
+    setUnlinkingTicket(true);
+    setEditFeedback(null);
+    try {
+      const res = await unlinkUserSymplaTicket();
+      if (res.unlinked) {
+        setProfile(prev => ({
+          ...prev,
+          symplaTicket: null,
+          hasSymplaTicket: false,
+          ticketId: null,
+          symplaTicketCode: null
+        }));
+        setEditForm(prev => ({
+          ...prev,
+          ticketNumber: ''
+        }));
+        const uid = profile.id || auth.currentUser?.uid;
+        if (uid) {
+          try {
+            const cached = localStorage.getItem(`facom_profile_${uid}`);
+            const parsed = cached ? JSON.parse(cached) : {};
+            localStorage.setItem(`facom_profile_${uid}`, JSON.stringify({
+              ...parsed,
+              symplaTicket: null,
+              hasSymplaTicket: false,
+              ticketId: null,
+              symplaTicketCode: null
+            }));
+          } catch (_e) {}
+        }
+        setEditFeedback({ type: 'success', text: 'Ingresso desvinculado com sucesso.' });
+      } else {
+        setEditFeedback({ type: 'error', text: res.message || 'Erro ao desvincular ingresso.' });
+      }
+    } catch (err) {
+      console.error('[Profile] Erro ao desvincular ingresso:', err);
+      setEditFeedback({ type: 'error', text: 'Erro ao desvincular ingresso. Tente novamente.' });
+    } finally {
+      setUnlinkingTicket(false);
+    }
+  };
+
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
   };
@@ -920,8 +967,10 @@ export default function Profile() {
           editForm={editForm}
           setEditForm={setEditForm}
           verifying={verifyingTicket}
+          unlinking={unlinkingTicket}
           feedback={editFeedback}
           onVerify={handleVerifyTicketInModal}
+          onUnlink={handleUnlinkTicketInModal}
           onOpenBadge={() => navigate('/scanner')}
           onClose={() => setTicketSheetOpen(false)}
         />
@@ -1570,7 +1619,7 @@ function SocialField({ id, label, prefix, logo, value, onChange, placeholder }) 
 }
 
 // Folha "Ingresso Sympla": vincular (sem ingresso) ou ver o vínculo (com ingresso). Lógica é a do Profile.
-function TicketSheet({ confirmed, profile, editForm, setEditForm, verifying, feedback, onVerify, onOpenBadge, onClose }) {
+function TicketSheet({ confirmed, profile, editForm, setEditForm, verifying, unlinking, feedback, onVerify, onUnlink, onOpenBadge, onClose }) {
   const [keyboardStyle, setKeyboardStyle] = useState({});
 
   useEffect(() => {
@@ -1623,7 +1672,7 @@ function TicketSheet({ confirmed, profile, editForm, setEditForm, verifying, fee
           </span>
           <div className="min-w-0">
             <h2 id="pf-ticket-title" className="text-[20px] font-extrabold leading-tight">{confirmed ? 'Ingresso vinculado' : 'Vincule seu ingresso'}</h2>
-            <p className="text-[13px] text-text-2">{confirmed ? 'Seu crachá já está ativo.' : 'Leva menos de 1 minuto.'}</p>
+            <p className="text-[13px] text-text-2">{confirmed ? 'Seu crachá já está ativo.' : 'Nenhum ingresso vinculado.'}</p>
           </div>
         </div>
 
@@ -1637,10 +1686,25 @@ function TicketSheet({ confirmed, profile, editForm, setEditForm, verifying, fee
               <div className="flex justify-between gap-3 py-3"><dt className="text-text-3">E-mail</dt><dd className="break-all text-right font-bold">{profile.email}</dd></div>
             </dl>
             <p className="mt-3 text-[12.5px] leading-snug text-text-3">
-              E-mail e ingresso ficam travados para proteger seu crachá. Para transferir o ingresso, fale com a organização.
+              E-mail e ingresso ficam travados para proteger seu crachá. Se precisar transferir ou corrigir o vínculo, você pode desvincular abaixo.
             </p>
+            {feedback && (
+              <p role={feedback.type === 'error' ? 'alert' : 'status'}
+                className={`mt-3 text-[13px] font-semibold ${feedback.type === 'error' ? 'text-err' : feedback.type === 'warning' ? 'text-warn' : 'text-ok'}`}>
+                {feedback.text}
+              </p>
+            )}
             <button type="button" onClick={onOpenBadge} className="btn btn-primary btn-block mt-4">
               <QrCode size={18} aria-hidden="true" /> Ver meu crachá
+            </button>
+            <button
+              type="button"
+              onClick={onUnlink}
+              disabled={unlinking}
+              className="press mt-2.5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-err/30 bg-err/10 text-xs font-bold text-err transition hover:bg-err/15"
+            >
+              {unlinking ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Trash2 size={16} aria-hidden="true" />}
+              {unlinking ? 'Desvinculando ingresso...' : 'Desvincular ingresso'}
             </button>
           </>
         ) : (

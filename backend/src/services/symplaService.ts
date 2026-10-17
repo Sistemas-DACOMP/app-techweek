@@ -119,12 +119,17 @@ export class SymplaService {
    * Busca um participante pelo e-mail (usado no cadastro e sincronização de conta)
    */
   async findParticipantByEmail(email: string, eventId?: string): Promise<SymplaParticipant | null> {
+    const targetEventId = eventId || this.getEventId();
+    if (!targetEventId || !this.getToken()) {
+      return null;
+    }
+
     const normalizedEmail = email.trim().toLowerCase();
     let page = 1;
     let hasMore = true;
 
     while (hasMore && page <= 50) { // Limita a 50 páginas para eventos maiores
-      const result = await this.getParticipants(page, 100, eventId);
+      const result = await this.getParticipants(page, 100, targetEventId);
       const match = result.data.find(p => p.email?.trim().toLowerCase() === normalizedEmail);
       if (match) {
         return match;
@@ -141,8 +146,8 @@ export class SymplaService {
    */
   async findParticipantByTicket(ticketNumber: string, eventId?: string): Promise<SymplaParticipant | null> {
     const targetEventId = eventId || this.getEventId();
-    if (!targetEventId) {
-      throw new Error('Sympla Event ID não configurado.');
+    if (!targetEventId || !this.getToken()) {
+      return null;
     }
 
     const stripped = ticketNumber.replace(/^SYMPLA:/i, '').trim();

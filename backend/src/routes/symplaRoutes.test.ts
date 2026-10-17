@@ -201,6 +201,28 @@ describe('POST /verify-ticket (SEC-002: Proteção de PII e Ingressos Sympla)', 
       })
     );
   });
+
+  it('retorna 404 com hasTicket: false quando nenhum ingresso é localizado', async () => {
+    const req = {
+      user: { uid: 'user-1', email: 'sem@ufu.br', role: 'PARTICIPANT' },
+      body: { email: 'sem@ufu.br' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    vi.mocked(symplaService.findParticipantByEmail).mockResolvedValueOnce(null);
+
+    const finalHandler = verifyHandlers[verifyHandlers.length - 1];
+    await finalHandler(req, res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'not_found',
+        verified: false,
+        hasTicket: false
+      })
+    );
+  });
 });
 
 describe('POST /sync-user', () => {
@@ -210,6 +232,28 @@ describe('POST /sync-user', () => {
   });
 
   const syncHandlers = getRouteHandlers('/sync-user', 'post');
+
+  it('retorna 404 com hasTicket: false quando participante não possui ingresso no Sympla', async () => {
+    const req = {
+      user: { uid: 'user-sem-ingresso', email: 'sem@ufu.br', role: 'PARTICIPANT' },
+      body: {}
+    } as unknown as Request;
+    const res = makeRes();
+
+    vi.mocked(symplaService.findParticipantByEmail).mockResolvedValueOnce(null);
+
+    const finalHandler = syncHandlers[syncHandlers.length - 1];
+    await finalHandler(req, res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'not_found',
+        synced: false,
+        hasTicket: false
+      })
+    );
+  });
 
   it('sincroniza ingresso por ticketNumber diretamente com Firestore', async () => {
     const req = {
@@ -298,6 +342,91 @@ describe('KAN-108: ingresso Sympla único por conta', () => {
     await run('/verify-ticket', 'uid-1');
     expect(store.has('symplaTickets/TCK-7')).toBe(false);
     expect(store.get('symplaTickets/TCK-8')).toMatchObject({ uid: 'uid-1' });
+  });
+});
+
+describe('POST /unlink-ticket', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    store.clear();
+  });
+
+  const unlinkHandlers = getRouteHandlers('/unlink-ticket', 'post');
+
+  it('bloqueia requisição sem token (401 MISSING_TOKEN)', async () => {
+    const req = { headers: {} } as unknown as Request;
+    const res = makeRes();
+
+    await runChain(unlinkHandlers, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'UNAUTHORIZED' })
+    );
+  });
+
+  it('desvincula ingresso da própria conta e remove índice no Firestore', async () => {
+    store.set('users/user-1', {
+      symplaTicket: { ticketNumber: 'TCK-123' },
+      hasSymplaTicket: true,
+      ticketId: 'TCK-123'
+    });
+    store.set('symplaTickets/TCK-123', { uid: 'user-1' });
+
+    const req = {
+      user: { uid: 'user-1', email: 'user@ufu.br', role: 'PARTICIPANT' },
+      body: {}
+    } as unknown as Request;
+    const res = makeRes();
+
+    const finalHandler = unlinkHandlers[unlinkHandlers.length - 1];
+    await finalHandler(req, res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success',
+        unlinked: true
+      })
+    );
+    expect(store.has('symplaTickets/TCK-123')).toBe(false);
+    expect(store.get('users/user-1')).toMatchObject({
+      symplaTicket: null,
+      hasSymplaTicket: false,
+      ticketId: null
+    });
+  });
+
+  it('permite que ADMIN desvincule ingresso de outro usuário passando body.uid', async () => {
+    store.set('users/target-user', {
+      symplaTicket: { ticketNumber: 'TCK-999' },
+      hasSymplaTicket: true,
+      ticketId: 'TCK-999'
+    });
+    store.set('symplaTickets/TCK-999', { uid: 'target-user' });
+
+    const req = {
+      user: { uid: 'admin-1', email: 'admin@admin.com', role: 'ADMIN' },
+      body: { uid: 'target-user' }
+    } as unknown as Request;
+    const res = makeRes();
+
+    const finalHandler = unlinkHandlers[unlinkHandlers.length - 1];
+    await finalHandler(req, res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success',
+        unlinked: true
+      })
+    );
+    expect(store.has('symplaTickets/TCK-999')).toBe(false);
+    expect(store.get('users/target-user')).toMatchObject({
+      symplaTicket: null,
+      hasSymplaTicket: false,
+      ticketId: null
+    });
   });
 });
 
@@ -523,6 +652,11 @@ describe('Rotas Sympla - Rate Limiting (ERR-085)', () => {
 
   it('POST /sync-user possui symplaSyncLimiter na cadeia de middlewares', () => {
     const handlers = getRouteHandlers('/sync-user', 'post');
+    expect(handlers).toContain(symplaSyncLimiter);
+  });
+
+  it('POST /unlink-ticket possui symplaSyncLimiter na cadeia de middlewares', () => {
+    const handlers = getRouteHandlers('/unlink-ticket', 'post');
     expect(handlers).toContain(symplaSyncLimiter);
   });
 
