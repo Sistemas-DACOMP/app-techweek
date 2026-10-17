@@ -262,7 +262,7 @@ export function subscribeToActivities(onUpdate, onError) {
   let lastFirestoreList = [];
 
   const mergeAndNotify = (firestoreList) => {
-    const baseList = (firestoreList && firestoreList.length > 0) ? firestoreList : DEFAULT_ACTIVITIES;
+    const baseList = firestoreList && firestoreList.length > 0 ? [...DEFAULT_ACTIVITIES.filter(da => !firestoreList.some(fa => fa.id === da.id)), ...firestoreList] : DEFAULT_ACTIVITIES;
     const customLocal = getLocalCustomActivities();
     const map = new Map();
     baseList.forEach(item => map.set(item.id, item));
@@ -1430,7 +1430,33 @@ export function subscribeToActivityBookings(activityOrId, onUpdate, onError, opt
 
     // Suplementa com bookedActivities de usuários se a collection bookings ainda estiver vazia
     let effectiveBookings = [...rawBookings];
-    if (effectiveBookings.length === 0 && usersList.length > 0) {
+    if (effectiveBookings.length === 0 && usersList.length === 0) {
+      if (!isUnsubscribed) {
+        import('firebase/firestore').then(({ getDocs, collection }) => {
+          getDocs(collection(db, 'users')).then(snap => {
+            const fetchedList = snap.docs.map(d => ({id: d.id, ...d.data()}));
+            for (const u of fetchedList) {
+              const bEntry = u.bookedActivities?.[primaryId] || (secondaryId && u.bookedActivities?.[secondaryId]);
+              if (bEntry) {
+                effectiveBookings.push({
+                  id: `${u.uid || u.id}_${primaryId}`,
+                  userId: u.uid || u.id,
+                  activityId: primaryId,
+                  status: bEntry.status || 'CONFIRMED',
+                  position: bEntry.position || null,
+                  createdAt: bEntry.bookedAt || bEntry.createdAt || null
+                });
+                fetchedUsersMap.set(u.uid || u.id, u);
+              }
+            }
+            if (effectiveBookings.length > 0) {
+              rawBookings = effectiveBookings; // Update rawBookings so next emit uses it
+              emit();
+            }
+          });
+        });
+      }
+    } else if (effectiveBookings.length === 0 && usersList.length > 0) {
       for (const u of usersList) {
         const bEntry = u.bookedActivities?.[primaryId] || (secondaryId && u.bookedActivities?.[secondaryId]);
         if (bEntry) {

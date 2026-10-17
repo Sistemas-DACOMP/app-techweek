@@ -165,7 +165,7 @@ router.post('/:activityId/reserve', requireAuth, requireVerifiedEmail, participa
       }
 
       const activityData = activitySnap.exists ? (activitySnap.data() ?? {}) : defaultActivity;
-      const isOpenEvent = Boolean(activityData.isOpenEvent);
+      const isOpenEvent = Boolean(activityData.isOpenEvent !== undefined ? activityData.isOpenEvent : defaultActivity?.isOpenEvent);
 
       // Se não for evento aberto e o usuário não for ADMIN, exige ingresso Sympla (KAN-84)
       if (!isOpenEvent && req.user?.role !== 'ADMIN') {

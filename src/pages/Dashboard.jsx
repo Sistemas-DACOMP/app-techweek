@@ -298,6 +298,27 @@ export default function Dashboard() {
       return;
     }
 
+    // Check conflict
+    if (targetActivity) {
+      const myAgendaActivities = activities.filter((act) => {
+        const s = calculateActivityStatus(act.id, bookings, checkins, pointEvents);
+        return s === 'BOOKED' || s === 'CHECKED_IN' || s === 'COMPLETED';
+      });
+      const conflictingActivity = myAgendaActivities.find((bookedAct) => {
+        if (bookedAct.id === targetActivity.id) return false;
+        return bookedAct.day === targetActivity.day && bookedAct.time === targetActivity.time;
+      });
+      
+      if (conflictingActivity) {
+        setToastMessage({ 
+          type: 'warning', 
+          message: `Você já está inscrito em "${conflictingActivity.title}" neste mesmo horário. Cancele a anterior para reservar esta.` 
+        });
+        setTimeout(() => setToastMessage(null), 5000);
+        return;
+      }
+    }
+
     setReservingId(activityId);
     try {
       const res = await reserveActivity(activityId, targetActivity);

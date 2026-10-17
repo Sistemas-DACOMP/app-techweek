@@ -378,7 +378,7 @@ export default function ActivityForm({ form, setForm, editingId, types, speakers
           <Section title="Local e palestrante" subtitle="Avisamos se a sala já estiver ocupada.">
             <Field label="Local" hint={room ? `A sala comporta ${room.capacity}` : null}>
               {(id) => (
-                <select id={id} className="field font-bold" value={row0.location || form.location || ''} onChange={(e) => setRow(0, { location: e.target.value })}>
+                <select id={id} className="field font-bold" value={row0.location || form.location || ''} onChange={(e) => { const loc = e.target.value; setRow(0, { location: loc }); const locObj = locations.find(l => l.name === loc); if (locObj && locObj.capacity) { set({ capacity: locObj.capacity }); } }}>
                   {locations.map((l) => <option key={l.id} value={l.name}>{l.name} · {l.capacity} lugares</option>)}
                 </select>
               )}
