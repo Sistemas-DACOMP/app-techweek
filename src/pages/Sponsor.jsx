@@ -56,6 +56,7 @@ import {
 import SponsorLeadModal from '../components/SponsorLeadModal';
 import SponsorRoiDashboard from '../components/sponsor/SponsorRoiDashboard';
 import SponsorSettings from '../components/sponsor/SponsorSettings';
+import SponsorTeam from '../components/sponsor/SponsorTeam';
 import { getSponsorSettings } from '../lib/sponsorSettingsService';
 import Shell from './sponsor/Shell';
 import Inicio from './sponsor/Inicio';
@@ -859,6 +860,7 @@ export default function Sponsor() {
                 {activeTab === 'agenda' && 'Programação da TechWeek'}
                 {activeTab === 'feed' && 'Feed da Comunidade'}
                 {activeTab === 'settings' && 'Configurações do Estande'}
+                {activeTab === 'team' && 'Equipe do Estande'}
               </h1>
               <div
                 style={{
@@ -1400,7 +1402,21 @@ export default function Sponsor() {
           companyName={sponsorName}
           sponsorLogo={sponsorLogo}
           sponsorTier={sponsorTierInfo?.tier || 'GOLD'}
+          userProfile={userProfile}
+          authUser={authUser}
           onSettingsSaved={() => showToast('Configurações salvas e ativas no estande!', 'success')}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* ABA 7: EQUIPE DO ESTANDE, COTA DE CRACHÁS E CONVITES                      */}
+      {/* ========================================================================= */}
+      {activeTab === 'team' && (
+        <SponsorTeam
+          companyId={activeCompanyId}
+          companyName={sponsorName}
+          userProfile={userProfile}
+          authUser={authUser}
         />
       )}
 

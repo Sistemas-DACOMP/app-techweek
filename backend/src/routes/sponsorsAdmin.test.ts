@@ -22,7 +22,8 @@ import router, {
   updateSponsorHandler,
   createInvitesHandler,
   resendInviteHandler,
-  revokeInviteHandler
+  revokeInviteHandler,
+  removeSponsorMemberHandler
 } from './sponsorsAdmin';
 import * as sponsorInvitesService from '../services/sponsorInvites';
 import { acceptInvite, getInvitePreview, hashToken, resetInvalidAttempts, AcceptProfile } from '../services/sponsorInvites';
@@ -60,7 +61,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('rotas de admin de patrocinadores', () => {
   it('todas exigem ADMIN (403 para SPONSOR) e têm limiter', () => {
     const stack = (router as unknown as { stack: any[] }).stack.filter((l) => l.route);
-    expect(stack).toHaveLength(6);
+    expect(stack).toHaveLength(7);
     for (const layer of stack) {
       const handles = layer.route.stack.map((l: any) => l.handle);
       expect(handles).toContain(adminSponsorLimiter);
@@ -296,5 +297,45 @@ describe('PATCH, convites extras e listagem', () => {
     const found = body.sponsors.find((s: any) => s.sponsorId === sponsorId);
     expect(found).toBeDefined();
     expect(found.memberCount).toBeDefined();
+  });
+
+  describe('DELETE /api/admin/sponsors/:id/members/:memberUid', () => {
+    it('retorna 400 para id ou memberUid inválido', async () => {
+      const res = makeRes();
+      await removeSponsorMemberHandler(req({}, { id: 'invalid/id', memberUid: 'u1' }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('retorna 404 se sponsor não existir', async () => {
+      const res = makeRes();
+      await removeSponsorMemberHandler(req({}, { id: 'sp-not-found', memberUid: 'u1' }), res);
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(sent(res).error).toBe('SPONSOR_NOT_FOUND');
+    });
+
+    it('retorna 404 se membro não existir no sponsor', async () => {
+      fake.store.set('sponsors/sp-1', { name: 'Empresa' });
+      const res = makeRes();
+      await removeSponsorMemberHandler(req({}, { id: 'sp-1', memberUid: 'u1' }), res);
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(sent(res).error).toBe('MEMBER_NOT_FOUND');
+    });
+
+    it('remove membro com sucesso pelo admin, reverte role e atualiza auth claims', async () => {
+      fake.store.set('sponsors/sp-1', { name: 'Empresa' });
+      fake.store.set('sponsors/sp-1/members/u1', { uid: 'u1', jobTitle: 'Dev' });
+      fake.store.set('users/u1', { uid: 'u1', role: 'SPONSOR', sponsorId: 'sp-1' });
+
+      const res = makeRes();
+      await removeSponsorMemberHandler(req({}, { id: 'sp-1', memberUid: 'u1' }), res);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(sent(res).success).toBe(true);
+
+      expect(fake.store.has('sponsors/sp-1/members/u1')).toBe(false);
+      const user = fake.store.get('users/u1')!;
+      expect(user.role).toBe('PARTICIPANT');
+      expect(user.sponsorId).toBeUndefined();
+      expect(auth.setCustomUserClaims).toHaveBeenCalledWith('u1', expect.objectContaining({ role: 'PARTICIPANT' }));
+    });
   });
 });

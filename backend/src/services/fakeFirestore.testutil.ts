@@ -2,6 +2,8 @@
 // SERIALIZADAS por um mutex, o que imita o isolamento serializável do
 // Firestore: é isso que os testes de concorrência (N aceites, 1 vaga) provam.
 
+import * as admin from 'firebase-admin';
+
 type Data = Record<string, any>;
 
 export function createFakeDb() {
@@ -71,11 +73,16 @@ export function createFakeDb() {
       get: async () => snapOf(path),
       set: async (data: Data) => {
         store.set(path, { ...data });
+      },
+      delete: async () => {
+        store.delete(path);
       }
     };
   }
 
   const isIncrement = (v: any) => v && typeof v === 'object' && v.constructor?.name === 'NumericIncrementTransform';
+  const isDeleteTransform = (v: any) =>
+    v && typeof v === 'object' && (v.constructor?.name === 'DeleteTransform' || v === admin.firestore.FieldValue?.delete?.());
   void isIncrement;
 
   function applyWrites(writes: Array<() => void>) {
@@ -89,6 +96,9 @@ export function createFakeDb() {
       return {
         set(ref: any, data: Data) {
           writes.push(() => store.set(ref.path, { ...data }));
+        },
+        delete(ref: any) {
+          writes.push(() => store.delete(ref.path));
         },
         commit: async () => applyWrites(writes)
       };
@@ -108,7 +118,20 @@ export function createFakeDb() {
           update(ref: any, data: Data) {
             writes.push(() => {
               if (!store.has(ref.path)) throw new Error('update em doc inexistente');
-              store.set(ref.path, { ...store.get(ref.path)!, ...data });
+              const current = { ...store.get(ref.path)! };
+              for (const [key, val] of Object.entries(data)) {
+                if (isDeleteTransform(val)) {
+                  delete current[key];
+                } else {
+                  current[key] = val;
+                }
+              }
+              store.set(ref.path, current);
+            });
+          },
+          delete(ref: any) {
+            writes.push(() => {
+              store.delete(ref.path);
             });
           }
         };

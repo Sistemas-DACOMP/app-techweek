@@ -14,6 +14,7 @@ import adminRouter from './routes/admin';
 import entranceRouter from './routes/entrance';
 import sponsorsAdminRouter from './routes/sponsorsAdmin';
 import sponsorInvitesRouter from './routes/sponsorInvites';
+import sponsorTeamRouter from './routes/sponsorTeam';
 
 import { corsOptions } from './config/cors';
 import { debugClientIp } from './middlewares/rateLimiter';
@@ -117,6 +118,7 @@ app.use(['/api/admin', '/admin'], adminRouter);
 // Patrocinadores e convites (KAN-124): gestão pelo ADMIN + rotas públicas de aceite
 app.use(['/api/admin', '/admin'], sponsorsAdminRouter);
 app.use(['/api/sponsor-invites', '/sponsor-invites'], sponsorInvitesRouter);
+app.use(['/api/sponsor/team', '/sponsor/team'], sponsorTeamRouter);
 
 export { app };
 
