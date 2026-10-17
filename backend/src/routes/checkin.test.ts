@@ -208,7 +208,11 @@ describe('POST /:activityId/checkin — fluxos de negócio e erros (ERR-072)', (
       })
     );
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ success: true, points: 0 });
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      points: 0,
+      message: 'Presença confirmada no evento gratuito (pontos de ranking requerem Passaporte Completo)'
+    });
   });
 
   it('retorna 409 CHECKIN_DUPLICATE quando a presença já foi registrada anteriormente', async () => {
@@ -247,7 +251,11 @@ describe('POST /:activityId/checkin — fluxos de negócio e erros (ERR-072)', (
       })
     );
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ success: true, points: 25 });
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      points: 25,
+      message: 'Presença registrada com sucesso!'
+    });
   });
 
   it('registra presença com sucesso (201) quando rating não é informado', async () => {
@@ -270,7 +278,11 @@ describe('POST /:activityId/checkin — fluxos de negócio e erros (ERR-072)', (
       })
     );
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ success: true, points: 25 });
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      points: 25,
+      message: 'Presença registrada com sucesso!'
+    });
   });
 
   it('retorna 500 INTERNAL_ERROR quando a transação do Firestore falha inesperadamente', async () => {

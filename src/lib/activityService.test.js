@@ -608,7 +608,7 @@ describe('activityService (KAN-50)', () => {
               uid: 'u_1',
               activityId: 'act_workshop_ia',
               status: 'CHECKED_IN',
-              entranceAt: '2026-10-21T13:55:00.000Z'
+              entranceAt: new Date(2026, 9, 21, 10, 55, 0)
             })
           }
         ]
