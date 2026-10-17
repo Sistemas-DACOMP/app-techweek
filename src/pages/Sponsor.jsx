@@ -24,8 +24,10 @@ import {
   Send,
   Image as ImageIcon,
   Film,
-  TrendingUp
+  TrendingUp,
+  Trash2
 } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
 import { 
@@ -40,10 +42,12 @@ import { subscribeToActivities, DEFAULT_ACTIVITIES } from '../lib/activityServic
 import { 
   subscribeToFeedPosts, 
   createFeedPost, 
+  deleteFeedPost,
   toggleLikeFeedPost, 
   uploadFeedMedia, 
   DEFAULT_FEED_POSTS 
 } from '../lib/feedService';
+import { isAdminEmail } from '../lib/userService';
 import ActivityModal, { categoryOf, describeDay } from '../components/ActivityModal';
 import { SPONSORS_CONFIG, TIER_STYLE } from '../components/PassportTab';
 import { ActivityRow, TYPE_FILTERS, dayOrder, getActivityTimingState } from './Agenda';
@@ -56,6 +60,7 @@ import {
 import SponsorLeadModal from '../components/SponsorLeadModal';
 import SponsorRoiDashboard from '../components/sponsor/SponsorRoiDashboard';
 import SponsorSettings from '../components/sponsor/SponsorSettings';
+import SponsorTeam from '../components/sponsor/SponsorTeam';
 import { getSponsorSettings } from '../lib/sponsorSettingsService';
 import Shell from './sponsor/Shell';
 import Inicio from './sponsor/Inicio';
@@ -181,6 +186,8 @@ export default function Sponsor() {
   const [mediaPreview, setMediaPreview] = useState(null); // { url, type: 'image' | 'video', name }
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [feedPostToDelete, setFeedPostToDelete] = useState(null);
+  const [isDeletingFeedPost, setIsDeletingFeedPost] = useState(false);
   const fileInputRef = useRef(null);
 
   // Show Toast helper
@@ -598,6 +605,44 @@ export default function Sponsor() {
     }
   };
 
+  const canDeleteFeedPost = (post) => {
+    if (!authUser) return false;
+    if (authUser?.email && isAdminEmail(authUser.email)) return true;
+    const role = (actualRole || userProfile?.role || '').toUpperCase();
+    if (role === 'ADMIN' || role === 'ORGANIZATION' || role === 'STAFF') return true;
+    const uid = authUser.uid;
+    const isAuthor = (post.authorUid && post.authorUid === uid) || (post.authorId && post.authorId === uid);
+    const userCompany = (activeCompanyId || userProfile?.sponsorId || userProfile?.companyId || '').toLowerCase();
+    const postCompany = (post.sponsorId || post.companyId || '').toLowerCase();
+    const isCompanyAuthor = Boolean(userCompany && postCompany && userCompany === postCompany);
+    return Boolean(isAuthor || isCompanyAuthor);
+  };
+
+  const handleDeleteFeedPost = (post) => {
+    setFeedPostToDelete(post);
+  };
+
+  const handleConfirmDeleteFeedPost = async () => {
+    if (!feedPostToDelete) return;
+    const post = feedPostToDelete;
+    setIsDeletingFeedPost(true);
+    setFeedPosts((prev) => prev.filter((p) => p.id !== post.id));
+    try {
+      await deleteFeedPost(post.id);
+      setFeedPostToDelete(null);
+      showToast('Publicação excluída com sucesso.', 'success');
+    } catch (err) {
+      console.error('Erro ao excluir post no feed do patrocinador:', err);
+      setFeedPostToDelete(null);
+      showToast('Não foi possível excluir a publicação.', 'error');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('facom_feed_updated'));
+      }
+    } finally {
+      setIsDeletingFeedPost(false);
+    }
+  };
+
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -859,6 +904,7 @@ export default function Sponsor() {
                 {activeTab === 'agenda' && 'Programação da TechWeek'}
                 {activeTab === 'feed' && 'Feed da Comunidade'}
                 {activeTab === 'settings' && 'Configurações do Estande'}
+                {activeTab === 'team' && 'Equipe do Estande'}
               </h1>
               <div
                 style={{
@@ -1383,6 +1429,8 @@ export default function Sponsor() {
                     onLike={handleLikeFeed}
                     onPopEnd={() => setPopId(null)}
                     onShare={handleShareFeed}
+                    canDelete={canDeleteFeedPost(post)}
+                    onDelete={() => handleDeleteFeedPost(post)}
                   />
                 );
               })
@@ -1400,7 +1448,21 @@ export default function Sponsor() {
           companyName={sponsorName}
           sponsorLogo={sponsorLogo}
           sponsorTier={sponsorTierInfo?.tier || 'GOLD'}
+          userProfile={userProfile}
+          authUser={authUser}
           onSettingsSaved={() => showToast('Configurações salvas e ativas no estande!', 'success')}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* ABA 7: EQUIPE DO ESTANDE, COTA DE CRACHÁS E CONVITES                      */}
+      {/* ========================================================================= */}
+      {activeTab === 'team' && (
+        <SponsorTeam
+          companyId={activeCompanyId}
+          companyName={sponsorName}
+          userProfile={userProfile}
+          authUser={authUser}
         />
       )}
 
@@ -1578,6 +1640,23 @@ export default function Sponsor() {
         senderEmail={userProfile?.email || authUser?.email || ''}
         defaultLocation={`Estande ${sponsorName}`}
       />
+      {/* ========================================================================= */}
+      {/* MODAL 6: CONFIRMAÇÃO DE EXCLUSÃO DE PUBLICAÇÃO NO FEED                   */}
+      {/* ========================================================================= */}
+      {feedPostToDelete && (
+        <ConfirmModal
+          isOpen={Boolean(feedPostToDelete)}
+          title="Excluir publicação?"
+          message="Essa publicação será removida do Feed imediatamente e não poderá ser recuperada."
+          confirmLabel="Excluir publicação"
+          cancelLabel="Cancelar"
+          variant="danger"
+          Icon={Trash2}
+          isLoading={isDeletingFeedPost}
+          onConfirm={handleConfirmDeleteFeedPost}
+          onCancel={() => !isDeletingFeedPost && setFeedPostToDelete(null)}
+        />
+      )}
     </Shell>
   );
 }

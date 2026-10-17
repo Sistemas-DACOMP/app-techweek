@@ -16,11 +16,10 @@ describe('ticketService - Central de Chamados (Sponsor & Staff)', () => {
     resetTicketsStorage();
   });
 
-  it('retorna os chamados padrão iniciais quando vazio', () => {
+  it('retorna array vazio quando inicializado sem chamados (zero mock data)', () => {
     const tickets = getTickets();
-    expect(tickets.length).toBeGreaterThanOrEqual(3);
-    expect(tickets.some((t) => t.role === 'SPONSOR')).toBe(true);
-    expect(tickets.some((t) => t.role === 'STAFF')).toBe(true);
+    expect(Array.isArray(tickets)).toBe(true);
+    expect(tickets.length).toBe(0);
   });
 
   it('permite que patrocinador abra um chamado com localização e prioridade', () => {
@@ -120,12 +119,15 @@ describe('ticketService - Central de Chamados (Sponsor & Staff)', () => {
   });
 
   it('calcula estatísticas corretas de chamados com getTicketStats', () => {
+    createTicket({ role: 'SPONSOR', title: 'Stats 1', priority: 'urgente' });
+    createTicket({ role: 'STAFF', title: 'Stats 2', priority: 'alta' });
     const stats = getTicketStats();
-    expect(stats.total).toBeGreaterThanOrEqual(3);
+    expect(stats.total).toBeGreaterThanOrEqual(2);
     expect(typeof stats.open).toBe('number');
     expect(typeof stats.inProgress).toBe('number');
     expect(typeof stats.resolved).toBe('number');
     expect(typeof stats.active).toBe('number');
+    expect(stats.urgent).toBeGreaterThanOrEqual(1);
   });
 
   it('exclui chamado com deleteTicket', () => {

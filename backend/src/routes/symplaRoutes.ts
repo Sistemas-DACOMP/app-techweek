@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { symplaService } from '../services/symplaService';
-import { linkSymplaTicket, TicketInUseError, TICKET_IN_USE_MESSAGE } from '../services/symplaLink';
+import { linkSymplaTicket, unlinkSymplaTicket, TicketInUseError, TICKET_IN_USE_MESSAGE } from '../services/symplaLink';
 import { requireAuth, requireRole } from '../middlewares/authMiddleware';
 import { symplaPublicLimiter, symplaSyncLimiter, staffActionLimiter } from '../middlewares/rateLimiter';
 import { db } from '../config/firebaseAdmin';
@@ -57,6 +57,7 @@ router.post('/verify-ticket', requireAuth, symplaSyncLimiter, async (req: Reques
       res.status(404).json({
         status: 'not_found',
         verified: false,
+        hasTicket: false,
         message: 'Nenhum ingresso ativo encontrado no Sympla para os dados informados.'
       });
       return;
@@ -197,6 +198,7 @@ router.post('/sync-user', requireAuth, symplaSyncLimiter, async (req: Request, r
       res.status(404).json({
         status: 'not_found',
         synced: false,
+        hasTicket: false,
         message: 'Nenhum ingresso encontrado no Sympla para os dados informados.'
       });
       return;
@@ -239,6 +241,32 @@ router.post('/sync-user', requireAuth, symplaSyncLimiter, async (req: Request, r
 });
 
 /**
+ * POST /api/sympla/unlink-ticket
+ * Desvincula o ingresso do Sympla da conta autenticada (ou de outro usuário se for ADMIN)
+ */
+router.post('/unlink-ticket', requireAuth, symplaSyncLimiter, async (req: Request, res: Response) => {
+  try {
+    const isAdmin = req.user?.role === 'ADMIN';
+    const targetUid = (isAdmin && req.body?.uid) ? req.body.uid : req.user?.uid;
+
+    if (!targetUid) {
+      res.status(400).json({ status: 'error', message: 'Identificador do usuário indisponível.' });
+      return;
+    }
+
+    await unlinkSymplaTicket(targetUid);
+
+    res.status(200).json({
+      status: 'success',
+      unlinked: true,
+      message: 'Ingresso desvinculado com sucesso.'
+    });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message || 'Erro ao desvincular ingresso.' });
+  }
+});
+
+/**
  * POST /api/sympla/checkin
  * Realiza o Check-in oficial na portaria (Exclusivo para STAFF e ADMIN)
  */
@@ -263,4 +291,5 @@ router.post('/checkin', requireAuth, requireRole(['STAFF', 'ADMIN']), staffActio
 });
 
 export default router;
+
 

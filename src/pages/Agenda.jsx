@@ -16,6 +16,8 @@ import {
   subscribeToUserPointEvents, 
   reserveActivity, 
   cancelActivityReservation,
+  confirmWaitingActivity,
+  declineWaitingActivity,
   calculateActivityStatus, 
   DEFAULT_ACTIVITIES 
 } from '../lib/activityService';
@@ -43,6 +45,8 @@ export default function Agenda() {
   // Estados de UI e Agenda Pessoal
   const [reservingId, setReservingId] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
+  const [confirmingWaitingId, setConfirmingWaitingId] = useState(null);
+  const [decliningWaitingId, setDecliningWaitingId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
   // Modais
@@ -128,11 +132,11 @@ export default function Agenda() {
     });
   }, [activities, activityStatuses]);
 
-  // O que aparece na aba Minha agenda: inscrições + lista de espera
+  // O que aparece na aba Minha agenda: inscrições + lista de espera + aguardando confirmação
   const myListActivities = useMemo(() => {
     return activities.filter((act) => {
       const st = activityStatuses[act.id];
-      return st === 'BOOKED' || st === 'CHECKED_IN' || st === 'COMPLETED' || st === 'WAITING_LIST';
+      return st === 'BOOKED' || st === 'CHECKED_IN' || st === 'COMPLETED' || st === 'WAITING_LIST' || st === 'WAITING_CONFIRMATION';
     });
   }, [activities, activityStatuses]);
 
@@ -147,9 +151,15 @@ export default function Agenda() {
         if (!act.isOpenEvent) return false;
       } else if (selectedType !== 'all') {
         const actType = String(act.type || 'palestra').toLowerCase().trim();
-        if (actType !== selectedType) return false;
+        if (selectedType === 'ativacao' && (actType === 'estande' || actType === 'ativacao')) {
+          // allow
+        } else if (actType !== selectedType) return false;
       }
-      if (dayFilter !== 'all' && act.day !== dayFilter) return false;
+      
+      const isActivation = String(act.type || '').toLowerCase().trim() === 'ativacao' || String(act.type || '').toLowerCase().trim() === 'estande';
+      const isContinuous = isActivation && (!act.day || act.day.toLowerCase() === 'todos');
+      
+      if (dayFilter !== 'all' && act.day !== dayFilter && !isContinuous) return false;
       if (query) {
         const matchTitle = act.title?.toLowerCase().includes(query);
         const matchSpeaker = act.speaker?.toLowerCase().includes(query);
@@ -161,8 +171,11 @@ export default function Agenda() {
 
     const days = new Map();
     visible.forEach((act) => {
-      const dayKey = act.day || '';
-      const timeKey = act.time || '19:00';
+      const isActivation = String(act.type || '').toLowerCase().trim() === 'ativacao' || String(act.type || '').toLowerCase().trim() === 'estande';
+      const isContinuous = isActivation && (!act.day || act.day.toLowerCase() === 'todos');
+      
+      const dayKey = isContinuous && dayFilter !== 'all' ? dayFilter : (act.day || '');
+      const timeKey = isContinuous ? '00:00 - Todo o evento' : (act.time || '19:00');
       if (!days.has(dayKey)) days.set(dayKey, new Map());
       const times = days.get(dayKey);
       if (!times.has(timeKey)) times.set(timeKey, []);
@@ -199,6 +212,56 @@ export default function Agenda() {
     const t = setTimeout(() => setToastMessage(null), 4000);
     return () => clearTimeout(t);
   }, [toastMessage]);
+
+  // Confirma vaga liberada da lista de espera (WAITING_CONFIRMATION -> CONFIRMED)
+  const handleConfirmWaiting = async (activityId) => {
+    if (!currentUser?.uid) return;
+    setConfirmingWaitingId(activityId);
+    try {
+      await confirmWaitingActivity(activityId);
+      setBookings((prev) => prev.map((b) => {
+        const bActId = b.activityId || b.activity_id;
+        if (bActId === activityId || b.id === activityId || b.id?.endsWith(`_${activityId}`)) {
+          return { ...b, status: 'CONFIRMED', position: null, confirmationDeadline: null };
+        }
+        return b;
+      }));
+      setToastMessage({ type: 'success', message: 'Vaga confirmada com sucesso! Ela já está na Minha agenda.' });
+    } catch (err) {
+      if (err.status === 410 || err.code === 'CONFIRMATION_EXPIRED') {
+        setBookings((prev) => prev.map((b) => {
+          const bActId = b.activityId || b.activity_id;
+          if (bActId === activityId || b.id === activityId || b.id?.endsWith(`_${activityId}`)) {
+            return { ...b, status: 'EXPIRED' };
+          }
+          return b;
+        }));
+        setToastMessage({ type: 'error', message: 'O prazo para confirmar esta vaga expirou e ela foi repassada.' });
+      } else {
+        setToastMessage({ type: 'error', message: err.data?.message || err.message || 'Erro ao confirmar vaga.' });
+      }
+    } finally {
+      setConfirmingWaitingId(null);
+    }
+  };
+
+  // Recusa vaga liberada da lista de espera (WAITING_CONFIRMATION -> CANCELLED)
+  const handleDeclineWaiting = async (activityId) => {
+    if (!currentUser?.uid) return;
+    setDecliningWaitingId(activityId);
+    try {
+      await declineWaitingActivity(activityId);
+      setBookings((prev) => prev.filter((b) => {
+        const bActId = b.activityId || b.activity_id;
+        return bActId !== activityId && b.id !== activityId && !b.id?.endsWith(`_${activityId}`);
+      }));
+      setToastMessage({ type: 'info', message: 'Vaga liberada para o próximo participante da lista de espera.' });
+    } catch (err) {
+      setToastMessage({ type: 'error', message: err.data?.message || err.message || 'Erro ao recusar vaga.' });
+    } finally {
+      setDecliningWaitingId(null);
+    }
+  };
 
   // Alterna salvar atividade na agenda pessoal
   // Cancela reserva de vaga presencial
@@ -242,8 +305,10 @@ export default function Agenda() {
     if (conflictingActivity) {
       setToastMessage({ 
         type: 'warning', 
-        message: `Atenção: você já possui "${conflictingActivity.title}" neste mesmo horário.` 
+        message: `Você já está inscrito em "${conflictingActivity.title}" neste mesmo horário. Cancele a anterior para reservar esta.` 
       });
+      setTimeout(() => setToastMessage(null), 5000);
+      return; // Bloqueia a inscrição
     }
 
     setReservingId(activityId);
@@ -507,11 +572,16 @@ export default function Agenda() {
         <ActivityModal
           activity={activities.find((a) => a.id === selectedActivity.id) || selectedActivity}
           status={activityStatuses[selectedActivity.id] || 'NONE'}
+          confirmationDeadline={bookings.find((b) => (b.activityId || b.activity_id) === selectedActivity.id || b.id === selectedActivity.id || b.id?.endsWith(`_${selectedActivity.id}`))?.confirmationDeadline || null}
           isReserving={reservingId === selectedActivity.id}
           isCancelling={cancellingId === selectedActivity.id}
           hasTicket={hasSymplaTicket}
+          isConfirmingWaiting={confirmingWaitingId === selectedActivity.id}
+          isDecliningWaiting={decliningWaitingId === selectedActivity.id}
           onReserve={handleReserve}
           onCancelReserve={handleCancelReserve}
+          onConfirmWaiting={handleConfirmWaiting}
+          onDeclineWaiting={handleDeclineWaiting}
           onClose={() => setSelectedActivity(null)}
           onOpenCheckoutScanner={(a) => {
             setSelectedActivity(null);
@@ -572,6 +642,7 @@ const TOAST_ICON = {
 const STATUS_TEXT = {
   CHECKED_IN: { label: 'Entrada registrada', className: 'text-ok' },
   BOOKED: { label: 'Reservado', className: 'text-link' },
+  WAITING_CONFIRMATION: { label: 'Confirme sua vaga!', className: 'text-warn font-semibold' },
   WAITING_LIST: { label: 'Lista de espera', className: 'text-warn' }
 };
 
@@ -588,7 +659,7 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
   const isCurrent = timing === 'CURRENT';
   const isPast = timing === 'PAST';
   const hasSeat = !readOnly && (status === 'BOOKED' || status === 'CHECKED_IN' || status === 'COMPLETED');
-  const showLight = !hasSeat && status !== 'WAITING_LIST' && !isPast && !compact;
+  const showLight = !hasSeat && status !== 'WAITING_LIST' && status !== 'WAITING_CONFIRMATION' && !isPast && !compact;
   const soldOut = !(typeof act.vagas_disponiveis === 'number' && act.vagas_disponiveis > 0);
   const isLockedForUser = !readOnly && !hasTicket && !act.isOpenEvent && !hasSeat;
 
@@ -680,6 +751,10 @@ export function ActivityRow({ act, status, timing, compact, hasTicket, onOpen, o
             <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/15 px-2.5 py-0.5 text-[11px] font-extrabold text-gold shadow-[0_1px_4px_rgba(217,119,6,0.2)]">
               <Lock size={11} aria-hidden="true" />
               Desbloquear
+            </span>
+          ) : act.isOpenEvent ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-ok/40 bg-ok/15 px-2.5 py-0.5 text-[11px] font-extrabold text-ok">
+              Entrada Livre
             </span>
           ) : showLight ? (
             <span className="flex items-center gap-1.5">

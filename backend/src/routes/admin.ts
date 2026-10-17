@@ -250,6 +250,97 @@ export async function broadcastNotificationHandler(req: Request, res: Response):
 // POST /api/admin/notifications/broadcast - apenas ADMIN dispara aviso global (KAN-61).
 router.post('/notifications/broadcast', requireAuth, requireRole(['ADMIN']), adminBroadcastLimiter, broadcastNotificationHandler);
 
+export async function activityBroadcastHandler(req: Request, res: Response): Promise<void> {
+  if (!req.user?.uid) {
+    res.status(401).json({ error: 'UNAUTHENTICATED', message: 'Usuario nao autenticado.' });
+    return;
+  }
+  
+  const { activityId } = req.params;
+  const { title, body, message, targetAudience, urgent } = req.body ?? {};
+  
+  if (!activityId) {
+    res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'activityId é obrigatório.' });
+    return;
+  }
+
+  const resolvedTitle = typeof title === 'string' && title.trim() ? title.trim() : 'Aviso da Atividade';
+  const resolvedBody = typeof body === 'string' && body.trim() ? body.trim() : (typeof message === 'string' && message.trim() ? message.trim() : '');
+  
+  if (!resolvedBody) {
+    res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'O corpo (body/message) do comunicado é obrigatório.' });
+    return;
+  }
+
+  try {
+    const bookingsSnap = await db.collection('bookings').where('activityId', '==', activityId).get();
+    const targetUids = new Set<string>();
+    
+    if (bookingsSnap && !bookingsSnap.empty) {
+      bookingsSnap.docs.forEach(doc => {
+        const data = doc.data();
+        if (targetAudience === 'waiting') {
+          if (data.status === 'WAITING_LIST') targetUids.add(data.userId);
+        } else if (targetAudience === 'checked_in') {
+          if (data.status === 'CHECKED_IN' || data.status === 'COMPLETED') targetUids.add(data.userId);
+        } else if (targetAudience === 'pending') {
+          if (data.status === 'CONFIRMED') targetUids.add(data.userId);
+        } else {
+          // 'all'
+          targetUids.add(data.userId);
+        }
+      });
+    }
+
+    if (targetUids.size === 0) {
+      res.status(200).json({ success: true, message: 'Nenhum usuário correspondente ao público-alvo encontrado.', sent: 0 });
+      return;
+    }
+
+    const payload = {
+      title: resolvedTitle.substring(0, 150),
+      body: resolvedBody.substring(0, 1000),
+      message: resolvedBody.substring(0, 1000),
+      actionUrl: `/agenda?act=${activityId}`,
+      actionLabel: 'Ver atividade',
+      priority: urgent ? 'HIGH' : 'NORMAL',
+      urgent: !!urgent,
+      type: 'lecture'
+    };
+
+    let sent = 0;
+    
+    // Web Push
+    const subsSnap = await db.collection('push_subscriptions').get();
+    if (subsSnap && !subsSnap.empty) {
+      const targetSubs = subsSnap.docs
+        .map(d => d.data())
+        .filter(sub => sub.uid && targetUids.has(sub.uid) && sub.endpoint && sub.keys?.p256dh && sub.keys?.auth);
+        
+      if (targetSubs.length > 0) {
+        await Promise.allSettled(
+          targetSubs.map(async (sub: any) => {
+            const r = await sendWebPushToSubscription(sub, payload).catch(() => ({ ok: false }));
+            if (r.ok) sent += 1;
+          })
+        );
+      }
+    }
+
+    // In-app Notification (salvo no doc do usuario em notificações ou global)
+    // Para simplificar, não criaremos doc no Firestore de notificações in-app aqui,
+    // pois o App usa Web Push W3C ou Service Worker.
+    
+    res.status(200).json({ success: true, sent, targetedUsers: targetUids.size });
+  } catch (error: any) {
+    console.error('Erro no activityBroadcastHandler:', error);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Erro ao disparar avisos da atividade.' });
+  }
+}
+
+// POST /api/admin/activities/:activityId/broadcast
+router.post('/activities/:activityId/broadcast', requireAuth, requireRole(['ADMIN']), adminBroadcastLimiter, activityBroadcastHandler);
+
 /**
  * Handler do endpoint POST /api/admin/notifications/subscribe.
  * Registra a inscrição W3C Web Push (iOS Safari PWA APNs / Android FCM) em
@@ -363,7 +454,46 @@ export async function webPushBroadcastHandler(req: Request, res: Response): Prom
   res.status(200).json({ success: true, ...stats });
 }
 
-router.post('/notifications/webpush', requireAuth, requireRole(['ADMIN']), webPushBroadcastHandler);
+export async function releaseWalkinSeatsHandler(req: Request, res: Response): Promise<void> {
+  const { activityId } = req.params;
+  let { releasedSeats } = req.body ?? {};
+
+  if (!activityId) {
+    res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'activityId obrigatório' });
+    return;
+  }
+
+  if (typeof releasedSeats !== 'number' || releasedSeats <= 0) {
+     releasedSeats = 10;
+  }
+
+  const activityRef = db.collection('activities').doc(activityId);
+
+  try {
+    const result = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(activityRef);
+      if (!snap.exists) {
+        return { status: 404, body: { error: 'ACTIVITY_NOT_FOUND', message: 'Atividade não encontrada' } };
+      }
+
+      const actData = snap.data() ?? {};
+      const currentAvailable = typeof actData.vagas_disponiveis === 'number' ? actData.vagas_disponiveis : 0;
+      
+      tx.update(activityRef, {
+        vagas_disponiveis: currentAvailable + releasedSeats
+      });
+
+      return { status: 200, body: { success: true, releasedSeats, vagas_disponiveis: currentAvailable + releasedSeats } };
+    });
+
+    res.status(result.status).json(result.body);
+  } catch (err) {
+    console.error('Erro ao liberar walk-ins', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Erro ao liberar vagas ausentes' });
+  }
+}
+
+router.post('/activities/:activityId/release-walkins', requireAuth, requireRole(['ADMIN']), releaseWalkinSeatsHandler);
 
 export default router;
 

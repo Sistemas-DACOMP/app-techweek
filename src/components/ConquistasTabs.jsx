@@ -13,7 +13,7 @@ const TABS = [
 export default function ConquistasTabs({ active }) {
   const navigate = useNavigate();
   return (
-    <header className="pt-[18px]">
+    <header className="pt-[max(18px,env(safe-area-inset-top))]">
       <h1 className="screen-title mb-0! text-[22px]!">Conquistas</h1>
       <div role="tablist" aria-label="Conquistas" className="ds-tabs mt-6">
         {TABS.map((t) => (

@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Loader2, ScanLine, User, Star, Lock } from 'lucide-react';
+import { X, Check, Loader2, ScanLine, User, Star, Lock, Clock } from 'lucide-react';
 import { useScrollLock } from '../hooks/useScrollLock';
 import ConfirmModal from './ConfirmModal';
 import ActivityFeedbackModal from './ActivityFeedbackModal';
 import { isActivityEvaluated } from '../lib/liveOpsService';
+import { formatCountdownRemaining } from '../lib/activityService';
 import { CATEGORY_STYLES } from './Badge';
 import '../styles/agenda.css';
 
@@ -83,13 +84,18 @@ function Step({ state, title, hint }) {
 export default function ActivityModal({
   activity,
   status = 'NONE',
+  confirmationDeadline = null,
   isReserving = false,
   isCancelling = false,
+  isConfirmingWaiting = false,
+  isDecliningWaiting = false,
   readOnly = false,
   hasTicket = true,
   onClose,
   onReserve,
   onCancelReserve,
+  onConfirmWaiting,
+  onDeclineWaiting,
   onOpenCheckoutScanner,
   onOpenSelfScanner
 }) {
@@ -102,10 +108,17 @@ export default function ActivityModal({
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [evaluated, setEvaluated] = useState(() => isActivityEvaluated(activity?.id));
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     setEvaluated(isActivityEvaluated(activity?.id));
   }, [activity?.id]);
+
+  useEffect(() => {
+    if (status !== 'WAITING_CONFIRMATION') return undefined;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [status]);
 
   const touchStartY = useRef(0);
   const isDragging = useRef(false);
@@ -285,6 +298,55 @@ export default function ActivityModal({
         {cancelButton}
       </div>
     );
+  } else if (status === 'WAITING_CONFIRMATION') {
+    const rawCountdown = formatCountdownRemaining(confirmationDeadline, nowMs);
+    const countdownText =
+      typeof rawCountdown === 'object' && rawCountdown !== null
+        ? rawCountdown.formatted
+        : rawCountdown;
+    const isExpired =
+      countdownText === 'Prazo expirado' ||
+      countdownText === 'Expirado' ||
+      Boolean(typeof rawCountdown === 'object' && rawCountdown?.expired);
+    const busy = isConfirmingWaiting || isDecliningWaiting;
+    footer = (
+      <div className="flex flex-col gap-2.5">
+        <div
+          className="flex flex-col items-center gap-1 rounded-[14px] border border-warn/40 bg-warn/10 px-3.5 py-2.5 text-center"
+          role="status"
+        >
+          <span className="text-[13px] font-extrabold text-warn">
+            Uma vaga abriu para você!
+          </span>
+          {countdownText && (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-text-2" data-testid="modal-waiting-countdown">
+              <Clock size={13} className="text-warn" aria-hidden="true" />
+              {isExpired ? 'Prazo expirado' : `Tempo restante: ${countdownText}`}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => onConfirmWaiting && onConfirmWaiting(activity.id)}
+          disabled={busy || isExpired}
+          aria-busy={isConfirmingWaiting}
+          className={primaryClass}
+        >
+          {isConfirmingWaiting && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
+          {isConfirmingWaiting ? 'Confirmando...' : 'Confirmar Minha Vaga'}
+        </button>
+        <button
+          type="button"
+          onClick={() => (onDeclineWaiting ? onDeclineWaiting(activity.id) : onCancelReserve && onCancelReserve(activity.id))}
+          disabled={busy}
+          aria-busy={isDecliningWaiting}
+          className="btn btn-danger btn-sm btn-block"
+        >
+          {isDecliningWaiting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+          {isDecliningWaiting ? 'Liberando vaga...' : 'Não poderei ir (Liberar para outro)'}
+        </button>
+      </div>
+    );
   } else if (status === 'WAITING_LIST') {
     footer = (
       <div className="flex flex-col gap-2">
@@ -327,7 +389,13 @@ export default function ActivityModal({
           className={primaryClass}
         >
           {isReserving && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
-          {isReserving ? 'Reservando' : isSoldOut ? 'Entrar na lista de espera' : 'Reservar vaga'}
+          {isReserving
+            ? 'Reservando'
+            : isSoldOut
+            ? 'Entrar na lista de espera'
+            : !hasTicket && activity.isOpenEvent
+            ? 'Garantir minha vaga (Entrada Livre)'
+            : 'Reservar vaga'}
         </button>
       </>
     );

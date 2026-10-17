@@ -22,7 +22,9 @@ import {
   Heart,
   Share2,
   Loader2,
+  Users,
 } from 'lucide-react';
+import SponsorTeam from './SponsorTeam';
 import {
   getSponsorSettings,
   saveSponsorSettings,
@@ -92,7 +94,10 @@ export default function SponsorSettings({
   sponsorLogo = '',
   sponsorTier = 'GOLD',
   defaultSection = 'feed',
+  userProfile = {},
+  authUser = {},
   onSettingsSaved,
+  onTeamUpdated,
 }) {
   // Configurações persistidas
   const [settings, setSettings] = useState(() => getSponsorSettings(companyId));
@@ -427,14 +432,23 @@ export default function SponsorSettings({
     {
       id: 'feed',
       label: 'Perfil no Feed',
+      shortLabel: 'Feed',
       icon: AtSign,
       description: 'Foto de perfil e @handle no Feed',
     },
     {
       id: 'messages_tags',
       label: 'Mensagens & Tags',
+      shortLabel: 'Mensagens',
       icon: MessageSquare,
       description: 'Modelos de WhatsApp e tags de qualificação',
+    },
+    {
+      id: 'team',
+      label: 'Equipe do Estande',
+      shortLabel: 'Equipe',
+      icon: Users,
+      description: 'Membros da equipe, convites e cota de vagas',
     },
   ];
 
@@ -457,12 +471,12 @@ export default function SponsorSettings({
           Personalização do Estande
         </h1>
         <p className="text-[13px] text-text-3 mt-1 m-0">
-          Configure o perfil público no Feed, modelos de WhatsApp e tags para a equipe {companyName}.
+          Configure o perfil público no Feed, modelos de WhatsApp, tags e membros da equipe {companyName}.
         </p>
       </div>
 
-      {/* Navegação entre Sub-Abas (Segmented Control 2 Colunas - Sem corte no mobile) */}
-      <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-surface border border-line">
+      {/* Navegação entre Sub-Abas (Segmented Control 3 Colunas - Sem corte no mobile) */}
+      <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-surface border border-line">
         {SETTINGS_SECTIONS.map((sec) => {
           const isActive = activeSection === sec.id;
           const IconComp = sec.icon;
@@ -472,14 +486,15 @@ export default function SponsorSettings({
               type="button"
               onClick={() => setActiveSection(sec.id)}
               aria-pressed={isActive}
-              className={`press flex items-center justify-center gap-2 rounded-xl py-2.5 px-3 text-[13px] font-extrabold transition-all min-h-[44px] ${
+              className={`press flex items-center justify-center gap-2 rounded-xl py-2.5 px-2 sm:px-3 text-[13px] font-extrabold transition-all min-h-[44px] ${
                 isActive
                   ? 'bg-surface-selected border border-link text-text shadow-sm'
                   : 'text-text-3 hover:text-text hover:bg-surface-raised/50 border border-transparent'
               }`}
             >
               <IconComp size={16} className={isActive ? 'text-link' : 'text-text-4'} />
-              <span className="truncate">{sec.label}</span>
+              <span className="truncate hidden sm:inline">{sec.label}</span>
+              <span className="truncate sm:hidden">{sec.shortLabel}</span>
             </button>
           );
         })}
@@ -1163,6 +1178,22 @@ export default function SponsorSettings({
             </div>
           </section>
         </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SUB-ABA 3: EQUIPE DO ESTANDE (MEMBROS, CONVITES E COTA)                   */}
+      {/* ========================================================================= */}
+      <div
+        style={{ display: activeSection === 'team' ? 'block' : 'none' }}
+        className="w-full"
+      >
+        <SponsorTeam
+          companyId={companyId}
+          companyName={companyName}
+          userProfile={userProfile}
+          authUser={authUser}
+          onTeamUpdated={onTeamUpdated}
+        />
       </div>
     </div>
   );

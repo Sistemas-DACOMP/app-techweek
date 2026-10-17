@@ -4,6 +4,7 @@ import { Camera, Share2, ArrowLeft, Loader2, Image as ImageIcon, Lock, Ticket } 
 import { useUser } from '../hooks/useUser';
 import SymplaRequirementModal from '../components/SymplaRequirementModal';
 import SymplaStickyBanner from '../components/SymplaStickyBanner';
+import FeedbackModal from '../components/FeedbackModal';
 import logoTw from '../assets/logo-tw.png';
 import { stopAllMediaTracks } from '../lib/cameraUtils';
 import { uploadMissionPhoto } from '../lib/gameplay';
@@ -27,6 +28,7 @@ export default function InstagramMission() {
   const [isComplete, setIsComplete] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [showSymplaModal, setShowSymplaModal] = useState(false);
+  const [feedbackModal, setFeedbackModal] = useState(null);
   
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
@@ -61,7 +63,11 @@ export default function InstagramMission() {
       }
     } catch (err) {
       console.error("Camera access denied or error:", err);
-      alert("Não foi possível acessar a câmera. Tente enviar uma imagem da galeria.");
+      setFeedbackModal({
+        type: 'error',
+        title: 'Câmera Indisponível',
+        message: 'Não foi possível acessar a câmera. Verifique as permissões do navegador ou selecione uma imagem da galeria.'
+      });
       setIsCameraOpen(false);
     }
   };
@@ -421,7 +427,11 @@ export default function InstagramMission() {
     link.download = 'techweek-story.png';
     link.href = canvas.toDataURL();
     link.click();
-    alert('Imagem baixada! Agora você pode postar no seu Instagram Stories.');
+    setFeedbackModal({
+      type: 'success',
+      title: 'Imagem Salva',
+      message: 'Sua moldura oficial foi baixada com sucesso! Agora você já pode postar no seu Instagram Stories e marcar @facomufu.'
+    });
   };
 
   if (!hasSymplaTicket) {
@@ -645,6 +655,16 @@ export default function InstagramMission() {
         onClose={() => setShowSymplaModal(false)}
         featureName="o envio desta missão"
       />
+
+      {feedbackModal && (
+        <FeedbackModal
+          isOpen={Boolean(feedbackModal)}
+          type={feedbackModal.type}
+          title={feedbackModal.title}
+          message={feedbackModal.message}
+          onClose={() => setFeedbackModal(null)}
+        />
+      )}
     </div>
   );
 }

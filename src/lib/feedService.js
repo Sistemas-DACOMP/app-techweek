@@ -154,6 +154,35 @@ export async function uploadFeedMedia(file) {
 }
 
 const LOCAL_FEED_KEY = 'facom_local_feed_posts';
+const DELETED_FEED_KEY = 'facom_deleted_feed_posts';
+
+export function getDeletedFeedPostIds() {
+  if (typeof localStorage === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(DELETED_FEED_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch (_e) {
+    return new Set();
+  }
+}
+
+export function markFeedPostAsDeleted(postId) {
+  if (!postId || typeof localStorage === 'undefined') return;
+  try {
+    const deleted = getDeletedFeedPostIds();
+    deleted.add(postId);
+    localStorage.setItem(DELETED_FEED_KEY, JSON.stringify(Array.from(deleted)));
+  } catch (_e) {}
+}
+
+export function unmarkFeedPostAsDeleted(postId) {
+  if (!postId || typeof localStorage === 'undefined') return;
+  try {
+    const deleted = getDeletedFeedPostIds();
+    deleted.delete(postId);
+    localStorage.setItem(DELETED_FEED_KEY, JSON.stringify(Array.from(deleted)));
+  } catch (_e) {}
+}
 
 function getLocalFeedPosts() {
   if (typeof localStorage === 'undefined') return [];
@@ -178,13 +207,24 @@ function saveLocalFeedPost(post) {
 }
 
 function removeLocalFeedPost(postId) {
-  if (typeof localStorage === 'undefined') return;
+  if (!postId || typeof localStorage === 'undefined') return;
   try {
     const current = getLocalFeedPosts();
     const updated = current.filter((p) => p.id !== postId);
     localStorage.setItem(LOCAL_FEED_KEY, JSON.stringify(updated));
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('facom_feed_updated'));
+    }
+  } catch (_e) {}
+}
+
+function pruneLocalFeedPosts(activeFirestoreDocIds) {
+  if (typeof localStorage === 'undefined' || !activeFirestoreDocIds) return;
+  try {
+    const current = getLocalFeedPosts();
+    const updated = current.filter((p) => p.id?.startsWith('local_post_') || activeFirestoreDocIds.has(p.id));
+    if (updated.length !== current.length) {
+      localStorage.setItem(LOCAL_FEED_KEY, JSON.stringify(updated));
     }
   } catch (_e) {}
 }
@@ -203,13 +243,22 @@ function updateLocalFeedPostPin(postId, currentPinned) {
 
 function mergePosts(firestorePosts) {
   const localPosts = getLocalFeedPosts();
+  const deletedIds = getDeletedFeedPostIds();
   const map = new Map();
 
-  // Insere posts do Firestore
-  (firestorePosts || []).forEach((p) => map.set(p.id, p));
+  // Insere posts do Firestore (ignorando excluídos)
+  (firestorePosts || []).forEach((p) => {
+    if (!deletedIds.has(p.id)) {
+      map.set(p.id, p);
+    }
+  });
 
-  // Insere/sobrescreve posts locais
-  localPosts.forEach((p) => map.set(p.id, p));
+  // Insere/sobrescreve posts locais (ignorando excluídos)
+  localPosts.forEach((p) => {
+    if (!deletedIds.has(p.id)) {
+      map.set(p.id, p);
+    }
+  });
 
   const merged = Array.from(map.values());
   merged.sort((a, b) => {
@@ -230,7 +279,9 @@ export function subscribeToFeedPosts(callback) {
   let firestorePosts = [];
 
   const notify = () => {
-    const basePosts = firestorePosts.length > 0 ? firestorePosts : DEFAULT_FEED_POSTS;
+    const deletedIds = getDeletedFeedPostIds();
+    const availableDefaults = DEFAULT_FEED_POSTS.filter((p) => !deletedIds.has(p.id));
+    const basePosts = firestorePosts.length > 0 ? firestorePosts : availableDefaults;
     const merged = mergePosts(basePosts);
     callback(merged);
   };
@@ -249,6 +300,9 @@ export function subscribeToFeedPosts(callback) {
     const unsubFirestore = onSnapshot(
       feedCol,
       (snapshot) => {
+        const activeDocIds = new Set(snapshot.docs.map((d) => d.id));
+        pruneLocalFeedPosts(activeDocIds);
+
         firestorePosts = snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
           const mediaType = data.mediaType || (data.videoUrl ? 'video' : (data.imageUrl ? 'image' : ''));
@@ -295,33 +349,39 @@ export function subscribeToFeedPosts(callback) {
  * Retorna o último post do Feed para o Card de Resumo da Tela Inicial.
  */
 export async function getLatestFeedPost() {
-  const localPosts = getLocalFeedPosts();
+  const deletedIds = getDeletedFeedPostIds();
+  const localPosts = getLocalFeedPosts().filter((p) => !deletedIds.has(p.id));
   if (localPosts.length > 0) return localPosts[0];
 
   try {
     const snap = await getDocs(collection(db, 'feed_posts'));
     if (!snap.empty) {
-      const posts = snap.docs.map((docSnap) => {
-        const data = docSnap.data();
-        const mediaType = data.mediaType || (data.videoUrl ? 'video' : (data.imageUrl ? 'image' : ''));
-        return {
-          id: docSnap.id,
-          ...data,
-          imageUrl: data.imageUrl || (mediaType === 'image' ? data.mediaUrl : '') || '',
-          videoUrl: data.videoUrl || (mediaType === 'video' ? data.mediaUrl : '') || '',
-          mediaUrl: data.mediaUrl || data.videoUrl || data.imageUrl || '',
-          mediaType,
-          likes: Array.isArray(data.likes) ? data.likes : [],
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString()
-        };
-      });
+      const posts = snap.docs
+        .filter((docSnap) => !deletedIds.has(docSnap.id))
+        .map((docSnap) => {
+          const data = docSnap.data();
+          const mediaType = data.mediaType || (data.videoUrl ? 'video' : (data.imageUrl ? 'image' : ''));
+          return {
+            id: docSnap.id,
+            ...data,
+            imageUrl: data.imageUrl || (mediaType === 'image' ? data.mediaUrl : '') || '',
+            videoUrl: data.videoUrl || (mediaType === 'video' ? data.mediaUrl : '') || '',
+            mediaUrl: data.mediaUrl || data.videoUrl || data.imageUrl || '',
+            mediaType,
+            likes: Array.isArray(data.likes) ? data.likes : [],
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString()
+          };
+        });
 
-      posts.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-      return posts[0];
+      if (posts.length > 0) {
+        posts.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        return posts[0];
+      }
     }
   } catch (_e) {}
 
-  return DEFAULT_FEED_POSTS[0];
+  const availableDefaults = DEFAULT_FEED_POSTS.filter((p) => !deletedIds.has(p.id));
+  return availableDefaults[0] || null;
 }
 
 /**
@@ -331,11 +391,11 @@ export async function createFeedPost(postData) {
   const mediaType = postData.mediaType || (postData.videoUrl ? 'video' : (postData.imageUrl ? 'image' : ''));
   const nowIso = new Date().toISOString();
 
-  const currentUid = postData.authorId || auth?.currentUser?.uid || undefined;
+  const currentUid = auth?.currentUser?.uid || postData.authorId || postData.authorUid || undefined;
   const formattedPost = {
     // As regras do Firestore exigem authorUid == uid de quem escreve; é também o que
     // permite o autor apagar o próprio post.
-    authorUid: auth?.currentUser?.uid || '',
+    authorUid: String(auth?.currentUser?.uid || postData.authorUid || postData.authorId || ''),
     author: String(postData.author || 'Organização FACOM'),
     authorRole: String(postData.authorRole || 'ORGANIZATION'),
     authorAvatar: String(postData.authorAvatar || ''),
@@ -385,19 +445,27 @@ export async function toggleLikeFeedPost(postId, userId) {
 }
 
 /**
- * Remove uma publicação do Feed (exclusivo para Organizadores/Admin).
+ * Remove uma publicação do Feed (exclusivo para Organizadores/Admin/Autor).
  */
 export async function deleteFeedPost(postId) {
-  if (!postId) return;
-  removeLocalFeedPost(postId);
+  if (!postId) return { success: false, error: 'ID inválido' };
   try {
+    markFeedPostAsDeleted(postId);
+    removeLocalFeedPost(postId);
     if (!postId.startsWith('feed-') && !postId.startsWith('local_post_')) {
       await deleteDoc(doc(db, 'feed_posts', postId));
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('facom_feed_updated'));
+    }
     return { success: true };
   } catch (err) {
-    console.warn('Aviso ao excluir publicação no Firestore:', err);
-    return { success: true };
+    console.error('Erro ao excluir publicação no Firestore:', err);
+    unmarkFeedPostAsDeleted(postId);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('facom_feed_updated'));
+    }
+    throw err;
   }
 }
 

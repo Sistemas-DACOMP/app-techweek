@@ -16,13 +16,23 @@ import {
   updateSponsor,
   addSponsorInvites,
   resendSponsorInvite,
-  revokeSponsorInvite
+  revokeSponsorInvite,
+  getSponsorTeam,
+  createSponsorTeamInvites,
+  removeSponsorTeamMember,
+  revokeSponsorTeamInvite,
+  resendSponsorTeamInvite,
 } from './sponsorInviteService';
 import { apiRequest } from './api';
 
 describe('sponsorInviteService', () => {
   it('mapeia codigo do corpo e status HTTP', () => {
     expect(inviteErrorCode({ status: 409, data: { error: 'TEAM_FULL' } })).toBe('TEAM_FULL');
+    expect(inviteErrorCode({ status: 400, data: { error: 'CANNOT_REMOVE_SELF' } })).toBe('CANNOT_REMOVE_SELF');
+    expect(inviteErrorCode({ status: 404, data: { error: 'MEMBER_NOT_FOUND' } })).toBe('MEMBER_NOT_FOUND');
+    expect(inviteErrorCode({ status: 404, data: { error: 'SPONSOR_NOT_FOUND' } })).toBe('SPONSOR_NOT_FOUND');
+    expect(inviteErrorCode({ status: 400, data: { error: 'SPONSOR_DOMAIN_REQUIRED_FOR_LINK' } })).toBe('SPONSOR_DOMAIN_REQUIRED_FOR_LINK');
+    expect(inviteErrorCode({ status: 409, data: { error: 'INVITE_ALREADY_ACCEPTED' } })).toBe('INVITE_ALREADY_ACCEPTED');
     expect(inviteErrorCode({ status: 410, data: {} })).toBe('INVITE_EXPIRED');
     expect(inviteErrorCode({ status: 404, data: {} })).toBe('INVITE_INVALID');
     expect(inviteErrorCode({ status: 400, data: { error: 'X' } })).toBeNull();
@@ -130,6 +140,63 @@ describe('sponsorInviteService - Operações de API', () => {
       method: 'DELETE'
     });
     expect(result).toEqual({ revoked: true });
+  });
+
+  it('getSponsorTeam deve chamar rota GET de equipe com ou sem sponsorId', async () => {
+    apiRequest.mockResolvedValueOnce({ members: [] });
+    const res1 = await getSponsorTeam();
+    expect(apiRequest).toHaveBeenCalledWith('/api/sponsor/team');
+    expect(res1).toEqual({ members: [] });
+
+    apiRequest.mockResolvedValueOnce({ members: [{ uid: 'u1' }] });
+    const res2 = await getSponsorTeam('sp-kanastra');
+    expect(apiRequest).toHaveBeenCalledWith('/api/sponsor/team?sponsorId=sp-kanastra');
+    expect(res2).toEqual({ members: [{ uid: 'u1' }] });
+  });
+
+  it('createSponsorTeamInvites deve enviar payload de emails ou link genérico', async () => {
+    apiRequest.mockResolvedValueOnce({ success: true, invites: [{ inviteId: 'i-1' }] });
+    const res1 = await createSponsorTeamInvites({ emails: 'dev@empresa.com, lead@empresa.com', sponsorId: 'sp-1' });
+    expect(apiRequest).toHaveBeenCalledWith('/api/sponsor/team/invites?sponsorId=sp-1', {
+      method: 'POST',
+      body: JSON.stringify({ emails: ['dev@empresa.com', 'lead@empresa.com'] })
+    });
+    expect(res1.success).toBe(true);
+
+    apiRequest.mockResolvedValueOnce({ success: true, invites: [{ inviteId: 'i-link' }] });
+    const res2 = await createSponsorTeamInvites();
+    expect(apiRequest).toHaveBeenCalledWith('/api/sponsor/team/invites', {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+    expect(res2.success).toBe(true);
+  });
+
+  it('removeSponsorTeamMember deve chamar rota DELETE com memberUid', async () => {
+    apiRequest.mockResolvedValueOnce({ success: true, removedUid: 'user-99' });
+    const result = await removeSponsorTeamMember('user-99', 'sp-1');
+    expect(apiRequest).toHaveBeenCalledWith('/api/sponsor/team/members/user-99?sponsorId=sp-1', {
+      method: 'DELETE'
+    });
+    expect(result).toEqual({ success: true, removedUid: 'user-99' });
+  });
+
+  it('revokeSponsorTeamInvite deve chamar rota DELETE com inviteId', async () => {
+    apiRequest.mockResolvedValueOnce({ success: true, inviteId: 'inv-42' });
+    const result = await revokeSponsorTeamInvite('inv-42');
+    expect(apiRequest).toHaveBeenCalledWith('/api/sponsor/team/invites/inv-42', {
+      method: 'DELETE'
+    });
+    expect(result).toEqual({ success: true, inviteId: 'inv-42' });
+  });
+
+  it('resendSponsorTeamInvite deve chamar rota POST de reenvio', async () => {
+    apiRequest.mockResolvedValueOnce({ inviteId: 'new-inv', token: 'tok' });
+    const result = await resendSponsorTeamInvite('inv-42', 'sp-1');
+    expect(apiRequest).toHaveBeenCalledWith('/api/sponsor/team/invites/inv-42/resend?sponsorId=sp-1', {
+      method: 'POST'
+    });
+    expect(result).toEqual({ inviteId: 'new-inv', token: 'tok' });
   });
 
   it('deve propagar rejeição de apiRequest em falha na requisição', async () => {

@@ -54,50 +54,41 @@ export default function LectureScanner({
     setScanResult(result);
 
     try {
-      await apiRequest(`/activities/${lectureId}/checkin`, {
+      const res = await apiRequest(`/activities/${lectureId}/checkin`, {
         method: 'POST',
         body: JSON.stringify({ lectureId, rating: 5 })
       });
 
-      if (typeof window !== 'undefined') {
+      const awarded = typeof res?.points === 'number' ? res.points : points;
+
+      if (typeof window !== 'undefined' && awarded > 0) {
         window.dispatchEvent(
           new CustomEvent('facom_points_updated', {
-            detail: { delta: points, source: 'checkin' }
+            detail: { delta: awarded, source: 'checkin' }
           })
         );
       }
 
-      setEarnedPoints(points);
+      setEarnedPoints(awarded);
       setFeedbackState('success');
       setIsConfirmed(true);
     } catch (err) {
       if (err.status === 409) {
         setEarnedPoints(0);
-        setFeedbackState('success');
-        setIsConfirmed(true);
+        setFeedbackState('already_registered');
       } else if (
         err.status === 403 &&
         (err.data?.error === 'SYMPLA_TICKET_REQUIRED' || err.data?.code === 'SYMPLA_TICKET_REQUIRED')
       ) {
         setFeedbackState('ticket_required');
       } else {
-        // Fallback local caso servidor não responda no ambiente atual
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('facom_points_updated', {
-              detail: { delta: points, source: 'checkin' }
-            })
-          );
-        }
-        setEarnedPoints(points);
-        setFeedbackState('success');
-        setIsConfirmed(true);
+        setFeedbackState('error');
       }
     }
   };
 
   const startScanner = () => {
-    if (isConfirmed || feedbackState === 'already_registered' || feedbackState === 'ticket_required') {
+    if (isConfirmed || feedbackState === 'already_registered' || feedbackState === 'ticket_required' || feedbackState === 'error') {
       return;
     }
 
@@ -192,6 +183,11 @@ export default function LectureScanner({
           <div className="mt-4 text-center" role="alert">
             <p className="text-sm font-semibold text-err">Vincule seu ingresso Sympla para registrar presença.</p>
             <button type="button" onClick={onClose} className="btn btn-secondary btn-sm mt-3">Voltar</button>
+          </div>
+        ) : feedbackState === 'error' ? (
+          <div className="mt-4 text-center" role="alert">
+            <p className="text-sm font-semibold text-err">Não foi possível registrar a presença. Verifique sua conexão e tente novamente.</p>
+            <button type="button" onClick={handleRetry} className="btn btn-secondary btn-sm mt-3">Tentar novamente</button>
           </div>
         ) : feedbackState === 'submitting' ? (
           <p className="mt-4 text-center text-[13px] font-semibold text-link" role="status">Registrando sua presença...</p>

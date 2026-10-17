@@ -3,7 +3,9 @@
  */
 import { auth } from './firebase';
 
-export const SYMPLA_EVENT_URL = 'https://www.sympla.com.br/evento/teste-facom-tech-weak/3575331';
+export const SYMPLA_EVENT_URL =
+  import.meta.env?.VITE_SYMPLA_EVENT_URL ||
+  'https://www.sympla.com.br/evento/facom-tech-week-2026';
 
 export function hasSymplaTicket(userProfile) {
   if (!userProfile) return false;
@@ -201,9 +203,11 @@ export function getCachedSymplaByCode(rawCode) {
 }
 
 /**
- * Valor codificado no QR do crachá digital (KAN-47). Mesmo `ticketId`/`qrCodeData` do crachá
- * físico impresso quando o ingresso Sympla está vinculado; cai pra um identificador local só até
- * o participante vincular o ingresso (nunca bloqueia a tela por falta de ingresso).
+ * Valor codificado no QR do crachá digital.
+ * Se o participante possui ingresso Sympla confirmado, utiliza o QR / número oficial do Sympla.
+ * Se NÃO possui ingresso Sympla, gera o QR padronizado de Acesso Geral:
+ * { type: 'GENERAL_ACCESS', uid, email }
+ * (Sem menção ao Sympla ou códigos fictícios)
  */
 export function getBadgeQrValue(profile) {
   const ticket =
@@ -215,100 +219,21 @@ export function getBadgeQrValue(profile) {
   if (ticket?.ticketNumber) return ticket.ticketNumber;
   if (profile?.ticketId) return profile.ticketId;
 
-  const payload = {
-    username: (profile?.username || 'user').replace(/^@/, ''),
-    participantType: profile?.participantType || profile?.participant_type || 'Participante',
-    course: profile?.course || '',
-    period: profile?.period || null
-  };
-  if (profile?.uid || profile?.id) payload.uid = profile.uid || profile.id;
-  if (profile?.name) payload.name = profile.name;
-  if (profile?.email) payload.email = profile.email;
-  if (profile?.phone) payload.phone = profile.phone;
-  if (profile?.linkedin) payload.linkedin = profile.linkedin;
-  if (profile?.instagram) payload.instagram = profile.instagram;
-  if (profile?.github) payload.github = profile.github;
-  return JSON.stringify(payload);
+  return JSON.stringify({
+    type: 'GENERAL_ACCESS',
+    uid: profile?.uid || profile?.id || '',
+    email: profile?.email || ''
+  });
 }
 
 const getApiBaseUrl = () => {
   return import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '/api';
 };
 
-const SYMPLA_PUBLIC_TOKEN = 'ea3f626667739b2909c1208ed0c15eac41f59b53313cce349e7abf837f57b9b8';
-const SYMPLA_EVENT_ID = '3575331';
-
 /**
- * Consulta direta à API oficial do Sympla como fallback resiliente caso o backend Cloud Function
- * esteja offline ou ainda não implantado.
- */
-export async function verifySymplaDirectly({ email, ticketNumber }) {
-  try {
-    const res = await fetch(`https://api.sympla.com.br/public/v3/events/${SYMPLA_EVENT_ID}/participants?page_size=200`, {
-      headers: {
-        's_token': SYMPLA_PUBLIC_TOKEN
-      }
-    });
-
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    const participants = data?.data || [];
-
-    const cleanEmail = (email || '').trim().toLowerCase();
-    const cleanTicket = (ticketNumber || '').replace(/^SYMPLA:/i, '').trim().toUpperCase();
-    const normTicket = cleanTicket.replace(/[-\s]/g, '');
-
-    const participant = participants.find(p => {
-      const pEmail = (p.email || '').trim().toLowerCase();
-      const pTicket = (p.ticket_number || '').replace(/^SYMPLA:/i, '').trim().toUpperCase();
-      const pQr = (p.ticket_num_qr_code || p.qr_code || '').replace(/^SYMPLA:/i, '').trim().toUpperCase();
-      if (cleanEmail && pEmail === cleanEmail) return true;
-      if (cleanTicket) {
-        if (pTicket === cleanTicket || pQr === cleanTicket) return true;
-        if (normTicket && (pTicket.replace(/[-\s]/g, '') === normTicket || pQr.replace(/[-\s]/g, '') === normTicket)) {
-          return true;
-        }
-      }
-      return false;
-    });
-
-    if (participant) {
-      const qrCodeData = participant.ticket_num_qr_code || participant.ticket_number;
-      return {
-        status: 'success',
-        verified: true,
-        hasTicket: true,
-        participant: {
-          id: participant.id,
-          orderId: participant.order_id,
-          ticketNumber: participant.ticket_number,
-          ticketName: participant.ticket_name,
-          firstName: participant.first_name,
-          lastName: participant.last_name,
-          email: participant.email,
-          qrCodeData: qrCodeData,
-          checkInStatus: participant.checkin?.[0]?.check_in || false
-        },
-        symplaTicket: {
-          participantId: participant.id,
-          orderId: participant.order_id,
-          ticketNumber: participant.ticket_number,
-          ticketName: participant.ticket_name,
-          qrCodeData: qrCodeData,
-          syncedAt: new Date().toISOString()
-        }
-      };
-    }
-  } catch (directErr) {
-    console.warn('Aviso ao consultar Sympla API diretamente:', directErr);
-    throw directErr;
-  }
-  return null;
-}
-
-/**
- * Valida se um e-mail ou número de ingresso possui compra ativa no Sympla
+ * Valida se um e-mail ou número de ingresso possui compra ativa no Sympla.
+ * Consulta exclusivamente o backend autenticado da aplicação (/api/sympla/verify-ticket).
+ * Nenhuma requisição sai do navegador diretamente para a API do Sympla.
  */
 export async function verifySymplaTicket({ email, ticketNumber }) {
   const headers = {
@@ -322,9 +247,6 @@ export async function verifySymplaTicket({ email, ticketNumber }) {
     } catch (_e) {}
   }
 
-  let directLookupFailed = false;
-
-  // 1. Tenta via Backend Cloud Function primeiro (com timeout de 8s)
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -357,55 +279,45 @@ export async function verifySymplaTicket({ email, ticketNumber }) {
         return { ...json, hasTicket: true };
       }
     } else if (response.status === 409) {
-      // Ingresso já vinculado a outra conta (KAN-108): não tenta o fallback direto
       const json = await response.json().catch(() => ({}));
       return {
         status: 'conflict',
         verified: false,
+        hasTicket: false,
         message: json?.message || 'Este ingresso já está vinculado a outra conta.'
       };
+    } else if (response.status === 404) {
+      const json = await response.json().catch(() => ({}));
+      return {
+        status: 'not_found',
+        verified: false,
+        hasTicket: false,
+        message: json?.message || 'Ingresso não localizado no Sympla para os dados informados.'
+      };
     }
-  } catch (_backendErr) {
-    // Backend offline, timeout ou 404 - fallback direto garantido
-  }
-
-  // 2. Fallback resiliente direto para a API oficial do Sympla (api.sympla.com.br)
-  try {
-    const directResult = await verifySymplaDirectly({ email, ticketNumber });
-    if (directResult && directResult.verified) {
-      if (directResult.symplaTicket) {
-        const targetEmail = (email || directResult.participant?.email || '').trim().toLowerCase();
-        const currentUserEmail = (auth?.currentUser?.email || '').trim().toLowerCase();
-        const targetUid = (!currentUserEmail || targetEmail === currentUserEmail) ? auth?.currentUser?.uid : null;
-        setCachedSymplaTicket(targetEmail, targetUid, directResult.symplaTicket, directResult.participant);
-      }
-      return directResult;
-    }
-  } catch (_directErr) {
-    directLookupFailed = true;
-  }
-
-  if (directLookupFailed) {
-    return { 
-      status: 'error', 
-      verified: false, 
-      message: 'Serviço de validação temporariamente indisponível. Verifique sua conexão.' 
+  } catch (err) {
+    return {
+      status: 'error',
+      verified: false,
+      hasTicket: false,
+      message: 'Serviço de validação temporariamente indisponível. Verifique sua conexão.'
     };
   }
 
-  return { 
-    status: 'not_found', 
-    verified: false, 
-    message: 'Ingresso não localizado no Sympla para os dados informados.' 
+  return {
+    status: 'not_found',
+    verified: false,
+    hasTicket: false,
+    message: 'Ingresso não localizado no Sympla para os dados informados.'
   };
 }
 
 /**
- * Sincroniza o ingresso do Sympla do usuário logado diretamente com o Firestore
+ * Sincroniza o ingresso do Sympla do usuário logado via backend (/api/sympla/sync-user).
  */
 export async function syncUserSymplaTicket() {
   const user = auth?.currentUser;
-  if (!user) return { status: 'unauthenticated', synced: false };
+  if (!user) return { status: 'unauthenticated', synced: false, hasTicket: false };
 
   try {
     const token = await user.getIdToken(true);
@@ -420,21 +332,84 @@ export async function syncUserSymplaTicket() {
 
     if (response.ok) {
       const json = await response.json();
-      if (json?.synced) return json;
+      if (json?.synced) return { ...json, hasTicket: true };
+    } else if (response.status === 404) {
+      return { status: 'not_found', synced: false, hasTicket: false };
     }
-  } catch (_error) {}
-
-  // Fallback direto
-  const direct = await verifySymplaDirectly({ email: user.email });
-  if (direct?.verified && direct?.symplaTicket) {
-    return {
-      status: 'success',
-      synced: true,
-      ticket: direct.symplaTicket,
-      participant: direct.participant
-    };
+  } catch (_error) {
+    return { status: 'error', synced: false, hasTicket: false };
   }
 
-  return { status: 'not_found', synced: false };
+  return { status: 'not_found', synced: false, hasTicket: false };
 }
+
+/**
+ * Limpa todos os caches locais em memória e localStorage associados ao ingresso Sympla.
+ */
+export function clearCachedSymplaTicket(email, uid) {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (cleanEmail) {
+    memoryTicketCache.delete(`email:${cleanEmail}`);
+  }
+  if (uid) {
+    memoryTicketCache.delete(`uid:${uid}`);
+  }
+  if (typeof localStorage === 'undefined') return;
+  try {
+    if (cleanEmail) {
+      localStorage.removeItem(`facom_sympla_ticket_${cleanEmail}`);
+    }
+    if (uid) {
+      localStorage.removeItem(`facom_sympla_uid_${uid}`);
+      const rawP = localStorage.getItem(`facom_profile_${uid}`);
+      if (rawP) {
+        const parsed = JSON.parse(rawP);
+        parsed.symplaTicket = null;
+        parsed.hasSymplaTicket = false;
+        parsed.ticketId = null;
+        parsed.symplaTicketCode = null;
+        localStorage.setItem(`facom_profile_${uid}`, JSON.stringify(parsed));
+      }
+    }
+  } catch (_e) {}
+}
+
+/**
+ * Desvincula o ingresso Sympla do usuário logado através do backend (/api/sympla/unlink-ticket)
+ * e limpa o cache local.
+ */
+export async function unlinkUserSymplaTicket() {
+  const user = auth?.currentUser;
+  if (!user) return { status: 'unauthenticated', unlinked: false };
+
+  try {
+    const token = await user.getIdToken(true);
+    const response = await fetch(`${getApiBaseUrl()}/sympla/unlink-ticket`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ uid: user.uid })
+    });
+
+    if (response.ok) {
+      clearCachedSymplaTicket(user.email, user.uid);
+      return { status: 'success', unlinked: true };
+    }
+    const json = await response.json().catch(() => ({}));
+    return {
+      status: 'error',
+      unlinked: false,
+      message: json?.message || 'Falha ao desvincular ingresso.'
+    };
+  } catch (_error) {
+    return {
+      status: 'error',
+      unlinked: false,
+      message: 'Serviço temporariamente indisponível. Verifique sua conexão.'
+    };
+  }
+}
+
 

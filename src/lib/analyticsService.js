@@ -828,20 +828,12 @@ export function subscribeToLiveAnalytics({ onUpdate, onError, throttleMs = 300 }
   } catch (err) {
     console.warn('Erro ao configurar listeners de analytics:', err);
     if (!hasReceivedData) {
-      onUpdate(getMockAnalyticsData());
+      triggerUpdate();
     }
   }
 
-  // Se demorar mais de 1.5s sem resposta do Firestore (ex: offline), entrega mock data
-  const fallbackTimer = setTimeout(() => {
-    if (!hasReceivedData) {
-      onUpdate(getMockAnalyticsData());
-    }
-  }, 1500);
-
   return () => {
     if (timer) clearTimeout(timer);
-    if (fallbackTimer) clearTimeout(fallbackTimer);
     unsubActivities();
     unsubCheckins();
     unsubUsers();

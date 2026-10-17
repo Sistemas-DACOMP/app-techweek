@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 const mockUseUser = vi.fn();
@@ -55,6 +55,39 @@ vi.mock('../../src/lib/sponsorService', async (importOriginal) => {
     resolveParticipantFromQr: vi.fn(),
     submitLead: vi.fn(),
     updateLead: vi.fn(),
+  };
+});
+
+vi.mock('../../src/lib/sponsorInviteService', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getSponsorTeam: vi.fn().mockResolvedValue({
+      sponsorId: 'kanastra',
+      sponsorName: 'Kanastra',
+      tier: 'DIAMOND',
+      tierLabel: 'Diamante',
+      teamLimit: 10,
+      memberCount: 2,
+      pendingCount: 1,
+      availableSlots: 7,
+      allowedDomain: 'kanastra.com.br',
+      members: [
+        {
+          uid: 'user-recruiter-1',
+          name: 'Samuel Ferreira Amorim',
+          email: 'recrutador@kanastra.com.br',
+          role: 'SPONSOR',
+          jobTitle: 'Recruiter Lead',
+          joinedAt: 1729000000000,
+        },
+      ],
+      pendingInvites: [],
+    }),
+    createSponsorTeamInvites: vi.fn().mockResolvedValue({ success: true, created: 1, results: [] }),
+    removeSponsorTeamMember: vi.fn().mockResolvedValue({ success: true, memberUid: 'user-2' }),
+    revokeSponsorTeamInvite: vi.fn().mockResolvedValue({ success: true }),
+    resendSponsorTeamInvite: vi.fn().mockResolvedValue({ success: true }),
   };
 });
 
@@ -121,7 +154,7 @@ describe('Render Sponsor page with SPONSOR role', () => {
     expect(html).toContain('sponsor-shell');
   });
 
-  it('navega interativamente entre as abas de Leads (CRM), Relatório Executivo (ROI) e Configurações (ERR-049)', () => {
+  it('navega interativamente entre as abas de Leads (CRM), Relatório Executivo (ROI) e Configurações (ERR-049)', async () => {
     render(
       React.createElement(
         MemoryRouter,
@@ -146,6 +179,14 @@ describe('Render Sponsor page with SPONSOR role', () => {
     fireEvent.click(screen.getByRole('button', { name: /configurações/i }));
     expect(screen.getByText('Configurações do estande')).toBeDefined();
     expect(screen.getByText('Personalização do Estande')).toBeDefined();
+
+    // Navega para Equipe do estande
+    const teamNavBtns = screen.getAllByRole('button', { name: /equipe do estande/i });
+    fireEvent.click(teamNavBtns[0]);
+    expect(screen.getAllByText('Equipe do estande').length).toBeGreaterThanOrEqual(1);
+    await waitFor(() => {
+      expect(screen.getByText('Cota de Equipe do Estande')).toBeDefined();
+    });
   });
 
   it('abre o modal de Chamados e Suporte Técnico ao clicar em "Chamados e suporte" (ERR-049)', () => {

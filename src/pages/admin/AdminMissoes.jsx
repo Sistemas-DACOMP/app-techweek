@@ -6,7 +6,7 @@ import { CARD_STYLES, STYLE_BY_KEY, styleOfMission } from './MissionPreview';
 
 /* 2.05 Missões (lista). Mesmos filtros e ações de antes; só a apresentação mudou. */
 
-const TRIGGER_LABEL = { form: 'Formulário', secret: 'Palavra secreta', quiz: 'Quiz', auto: 'Automático', qr: 'QR Code Físico' };
+const TRIGGER_LABEL = { form: 'Formulário', secret: 'Palavra secreta', quiz: 'Quiz', auto: 'Automático', qr: 'QR Code Físico', share_whatsapp: 'Compartilhar Whats', share_instagram_story: 'Compartilhar Insta' };
 const howCompletes = (m) => (m.triggerMode === 'form' && (m.fields || []).some((f) => f.type === 'photo') ? 'Foto' : TRIGGER_LABEL[m.triggerMode] || 'Formulário');
 const isOn = (m) => (m.status || 'active') === 'active';
 

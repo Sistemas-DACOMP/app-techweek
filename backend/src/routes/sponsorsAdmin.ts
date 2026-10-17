@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import * as admin from 'firebase-admin';
-import { db } from '../config/firebaseAdmin';
+import { db, auth } from '../config/firebaseAdmin';
 import { requireAuth, requireRole } from '../middlewares/authMiddleware';
 import { adminSponsorLimiter } from '../middlewares/rateLimiter';
 import { isValidFirestoreId } from '../lib/firestoreId';
@@ -394,11 +394,66 @@ export async function revokeInviteHandler(req: Request, res: Response): Promise<
   res.status(200).json({ success: true, inviteId });
 }
 
+/** DELETE /api/admin/sponsors/:id/members/:memberUid — remove membro pelo admin */
+export async function removeSponsorMemberHandler(req: Request, res: Response): Promise<void> {
+  const { id, memberUid } = req.params;
+  if (!isValidFirestoreId(id) || !isValidFirestoreId(memberUid)) {
+    return bad(res, 'id ou memberUid inválido.');
+  }
+
+  const sponsorRef = db.collection('sponsors').doc(id);
+  const memberRef = sponsorRef.collection('members').doc(memberUid);
+  const userRef = db.collection('users').doc(memberUid);
+
+  try {
+    await db.runTransaction(async (tx) => {
+      const [sponsorSnap, memberSnap, userSnap] = await Promise.all([
+        tx.get(sponsorRef),
+        tx.get(memberRef),
+        tx.get(userRef)
+      ]);
+      if (!sponsorSnap.exists) throw new SponsorNotFoundError();
+      if (!memberSnap.exists) throw new Error('MEMBER_NOT_FOUND');
+
+      tx.delete(memberRef);
+      if (userSnap.exists) {
+        tx.update(userRef, {
+          role: 'PARTICIPANT',
+          sponsorId: admin.firestore.FieldValue.delete(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+    });
+
+    try {
+      const authUser = await auth.getUser(memberUid);
+      const claims = authUser.customClaims || {};
+      await auth.setCustomUserClaims(memberUid, { ...claims, role: 'PARTICIPANT' });
+    } catch (authErr: any) {
+      console.warn('Aviso: Falha ao atualizar custom claim no Auth:', authErr?.message);
+    }
+
+    res.status(200).json({ success: true, removedUid: memberUid });
+  } catch (error: any) {
+    if (error instanceof SponsorNotFoundError) {
+      res.status(404).json({ error: 'SPONSOR_NOT_FOUND', message: 'Patrocinador não encontrado.' });
+      return;
+    }
+    if (error?.message === 'MEMBER_NOT_FOUND') {
+      res.status(404).json({ error: 'MEMBER_NOT_FOUND', message: 'Membro não encontrado nesta empresa.' });
+      return;
+    }
+    console.error('Erro ao remover membro pelo admin:', error);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Não foi possível remover o membro.' });
+  }
+}
+
 const guard = [requireAuth, requireRole(['ADMIN']), adminSponsorLimiter];
 
 router.post('/sponsors', ...guard, createSponsorHandler);
 router.get('/sponsors', ...guard, listSponsorsHandler);
 router.patch('/sponsors/:id', ...guard, updateSponsorHandler);
+router.delete('/sponsors/:id/members/:memberUid', ...guard, removeSponsorMemberHandler);
 router.post('/sponsors/:id/invites', ...guard, createInvitesHandler);
 router.post('/sponsor-invites/:inviteId/resend', ...guard, resendInviteHandler);
 router.delete('/sponsor-invites/:inviteId', ...guard, revokeInviteHandler);

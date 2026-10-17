@@ -1,6 +1,6 @@
 import { auth, db } from './firebase';
 import { doc, getDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
-import { verifySymplaTicket, verifySymplaDirectly, getCachedSymplaByCode } from './sympla';
+import { verifySymplaTicket, getCachedSymplaByCode } from './sympla';
 
 const getApiBaseUrl = () => {
   return import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL || '/api';
@@ -411,13 +411,6 @@ export async function resolveParticipantFromQr(rawData) {
         mergePartial(up.uid, up);
         if (hasRealParticipantName(partialData) && (partialData.course || partialData.username || partialData.phone)) {
           return formatParticipant(up.uid, partialData, { ...(symplaParticipant || {}), ...(parsedJson || {}) });
-        }
-      }
-      if (!symplaParticipant) {
-        const directResult = await verifySymplaDirectly(verifyPayload).catch(() => null);
-        symplaParticipant = directResult?.participant || null;
-        if (symplaParticipant) {
-          mergePartial(null, symplaParticipant);
         }
       }
 

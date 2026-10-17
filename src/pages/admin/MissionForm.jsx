@@ -124,10 +124,11 @@ export default function MissionForm({ form, setForm, editingId, saving, triggerM
     if (key === 'secreta') patch.triggerMode = 'secret';
     else if (key === 'caca-qr') patch.triggerMode = 'qr';
     else if (key === 'quiz') patch.triggerMode = 'quiz';
+    else if (key === 'stories') patch.triggerMode = 'share_instagram_story';
     else if (form.triggerMode === 'secret') patch.triggerMode = 'form';
     set(patch);
   };
-  const pickTrigger = (mode) => set({ triggerMode: mode, ...(mode === 'secret' ? { cardStyle: 'secreta' } : mode === 'qr' ? { cardStyle: 'caca-qr' } : mode === 'quiz' ? { cardStyle: 'quiz' } : {}) });
+  const pickTrigger = (mode) => set({ triggerMode: mode, ...(mode === 'secret' ? { cardStyle: 'secreta' } : mode === 'qr' ? { cardStyle: 'caca-qr' } : mode === 'quiz' ? { cardStyle: 'quiz' } : mode === 'share_instagram_story' ? { cardStyle: 'stories' } : {}) });
 
   const setField = (i, patch) => set({ fields: form.fields.map((f, j) => (j === i ? { ...f, ...patch, ...(patch.type === 'select' && !f.options ? { options: ['Opção 1', 'Opção 2'] } : {}) } : f)) });
 
@@ -337,6 +338,23 @@ export default function MissionForm({ form, setForm, editingId, saving, triggerM
                       <option value="passport_complete">Completar o passaporte de patrocinadores</option>
                     </select>
                   )}
+                </Field>
+              )}
+
+              {form.triggerMode === 'share_whatsapp' && (
+                <div className="grid gap-3.5 lg:grid-cols-2">
+                  <Field label="URL a ser compartilhada" className="lg:col-span-2">
+                    {(id) => <input id={id} className="field" placeholder="https://..." value={form.shareUrl || ''} onChange={(e) => set({ shareUrl: e.target.value })} />}
+                  </Field>
+                  <Field label="Texto da mensagem (pré-preenchido)" className="lg:col-span-2">
+                    {(id) => <input id={id} className="field" placeholder="Estou participando da FACOM TechWeek!" value={form.shareText || ''} onChange={(e) => set({ shareText: e.target.value })} />}
+                  </Field>
+                </div>
+              )}
+
+              {form.triggerMode === 'share_instagram_story' && (
+                <Field label="Hashtag customizada na arte">
+                  {(id) => <input id={id} className="field" placeholder="#FACOMTECHWEEK" value={form.customHashtag || ''} onChange={(e) => set({ customHashtag: e.target.value })} />}
                 </Field>
               )}
 

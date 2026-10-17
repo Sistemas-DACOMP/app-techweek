@@ -16,6 +16,11 @@ export const INVITE_ERROR_MESSAGES = {
   EMAIL_NOT_VERIFIED: 'Confirme seu e-mail antes de aceitar o convite. Enviamos uma mensagem de confirmação; abra o link e toque em tentar de novo.',
   RATE_LIMITED: 'Muitas tentativas. Aguarde um momento e tente de novo.',
   TEAM_LIMIT_BELOW_MEMBERS: 'O limite não pode ser menor que o número de pessoas que já estão na equipe.',
+  CANNOT_REMOVE_SELF: 'Você não pode remover a si mesmo da equipe para evitar perda acidental de acesso.',
+  MEMBER_NOT_FOUND: 'Membro não encontrado nesta equipe.',
+  SPONSOR_NOT_FOUND: 'Patrocinador não encontrado.',
+  SPONSOR_DOMAIN_REQUIRED_FOR_LINK: 'Para gerar um link de convite rápido, informe e-mails nominais ou configure o domínio permitido da empresa.',
+  INVITE_ALREADY_ACCEPTED: 'Este convite já foi aceito e não pode ser alterado.',
 };
 
 // Erros em que a conta recém-criada fica válida e vale tentar o accept de novo (sem recriar a conta).
@@ -48,6 +53,15 @@ export function splitEmails(text) {
   return [...new Set(String(text || '').split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean))];
 }
 
+const withQuery = (path, params = {}) => {
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') sp.append(k, String(v));
+  });
+  const qs = sp.toString();
+  return qs ? `${path}?${qs}` : path;
+};
+
 /* ---------- Público ---------- */
 export const getInvite = (token) => apiRequest(`/api/sponsor-invites/${encodeURIComponent(token)}`);
 
@@ -64,3 +78,36 @@ export const resendSponsorInvite = (inviteId) =>
   apiRequest(`/api/admin/sponsor-invites/${encodeURIComponent(inviteId)}/resend`, { method: 'POST' });
 export const revokeSponsorInvite = (inviteId) =>
   apiRequest(`/api/admin/sponsor-invites/${encodeURIComponent(inviteId)}`, { method: 'DELETE' });
+
+/* ---------- Equipe do Patrocinador (KAN-124 / SPONSOR & ADMIN) ---------- */
+export const getSponsorTeam = (sponsorId) =>
+  apiRequest(withQuery('/api/sponsor/team', { sponsorId }));
+
+export const createSponsorTeamInvites = ({ emails, sponsorId } = {}) => {
+  let list = [];
+  if (Array.isArray(emails)) {
+    list = emails.map((e) => String(e).trim().toLowerCase()).filter(Boolean);
+  } else if (typeof emails === 'string') {
+    list = splitEmails(emails);
+  }
+  const body = emails !== undefined && emails !== null ? { emails: list } : {};
+  return apiRequest(withQuery('/api/sponsor/team/invites', { sponsorId }), {
+    method: 'POST',
+    body: JSON.stringify(body)
+  });
+};
+
+export const removeSponsorTeamMember = (memberUid, sponsorId) =>
+  apiRequest(withQuery(`/api/sponsor/team/members/${encodeURIComponent(memberUid)}`, { sponsorId }), {
+    method: 'DELETE'
+  });
+
+export const revokeSponsorTeamInvite = (inviteId, sponsorId) =>
+  apiRequest(withQuery(`/api/sponsor/team/invites/${encodeURIComponent(inviteId)}`, { sponsorId }), {
+    method: 'DELETE'
+  });
+
+export const resendSponsorTeamInvite = (inviteId, sponsorId) =>
+  apiRequest(withQuery(`/api/sponsor/team/invites/${encodeURIComponent(inviteId)}/resend`, { sponsorId }), {
+    method: 'POST'
+  });

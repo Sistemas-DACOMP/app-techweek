@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Crown, Ticket } from 'lucide-react';
-import { subscribeToLeaderboardUsers, getLeaderboardUsers, getUserProfile, getCachedUserProfile, syncUserRankingInFirestore } from '../lib/userService';
+import { subscribeToLeaderboardUsers, getLeaderboardUsers, getUserProfile, getCachedUserProfile } from '../lib/userService';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
 import ConquistasTabs from '../components/ConquistasTabs';
@@ -93,26 +93,6 @@ export default function Ranking() {
     Number(myProfileData?.pontuacaoTotal ?? myProfileData?.totalPoints ?? 0),
     Number(myProfileData?.total_points ?? 0)
   );
-
-  // Garante que a pontuação do usuário autenticado esteja sincronizada na coleção /ranking/{uid} do Firestore
-  useEffect(() => {
-    const activeRole = hookProfile?.role || myProfileData?.role || 'PARTICIPANT';
-    if (!myUserId || effectivePoints < 0 || activeRole === 'STAFF' || activeRole === 'SPONSOR') return;
-    if (typeof syncUserRankingInFirestore === 'function') {
-      const identitySource =
-        hookProfile ||
-        myProfileData ||
-        (authUser
-          ? {
-              uid: myUserId,
-              email: authUser.email || '',
-              displayName: authUser.displayName || '',
-              photoURL: authUser.photoURL || null
-            }
-          : null);
-      syncUserRankingInFirestore(myUserId, effectivePoints, identitySource).catch(() => {});
-    }
-  }, [myUserId, effectivePoints, hookProfile, myProfileData, authUser]);
 
   // Combina os dados do ranking remoto com a pontuação ao vivo do participante logado
   const displayedRanking = useMemo(() => {

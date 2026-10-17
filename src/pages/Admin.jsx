@@ -68,8 +68,7 @@ import {
   DEFAULT_SPEAKERS,
   subscribeToLocations,
   createLocation,
-  DEFAULT_LOCATIONS,
-  filterSpeakers
+  DEFAULT_LOCATIONS
 } from '../lib/activityService';
 import { 
   subscribeToFeedPosts, 
@@ -98,7 +97,7 @@ import AdminDados from './admin/AdminDados';
 import AdminProgramacao from './admin/AdminProgramacao';
 import ActivityForm from './admin/ActivityForm';
 import AdminPessoas from './admin/AdminPessoas';
-import AdminPatrocinadores from './admin/patrocinadores/AdminPatrocinadores';
+import ActivityAttendeesModal from './admin/ActivityAttendeesModal';
 import { ROLE_LABELS } from '../components/RoleSwitcher';
 import { Toast } from './admin/ui';
 import MissionForm from './admin/MissionForm';
@@ -169,17 +168,18 @@ const MISSION_TRIGGER_MODES = [
   { id: 'secret', label: 'Palavra Secreta', desc: 'Validação presencial com palavra-chave no estande' },
   { id: 'qr', label: 'QR Code Físico / Estande', desc: 'Validação presencial por leitura de QR impresso no estande ou cartaz' },
   { id: 'quiz', label: 'Quiz / Pergunta', desc: 'Pergunta com opções e gabarito automático' },
-  { id: 'auto', label: 'Automático pelo App', desc: 'Concluído por ações do usuário (escanear, check-in)' }
+  { id: 'auto', label: 'Automático pelo App', desc: 'Concluído por ações do usuário (escanear, check-in)' },
+  { id: 'share_whatsapp', label: 'Compartilhar (WhatsApp)', desc: 'Compartilhar o evento via WhatsApp Web/App' },
+  { id: 'share_instagram_story', label: 'Compartilhar (Instagram Story)', desc: 'Gerar arte exclusiva e compartilhar no Instagram' }
 ];
 
-const VIEW_KEYS = ['inicio', 'dados', 'programacao', 'feed', 'pessoas', 'patrocinadores', 'missoes', 'config', 'conta'];
+const VIEW_KEYS = ['inicio', 'dados', 'programacao', 'feed', 'pessoas', 'missoes', 'config', 'conta'];
 const MOBILE_TITLES = {
   inicio: 'Visão geral',
   dados: 'Dados & Ao Vivo',
   programacao: 'Programação',
   feed: 'Feed e avisos',
   pessoas: 'Pessoas',
-  patrocinadores: 'Patrocinadores',
   missoes: 'Missões',
   config: 'Configurações',
   conta: 'Sua conta',
@@ -292,6 +292,8 @@ export default function Admin() {
   // Estados do Modo Projeção de Telão (Projector Mode)
   const [projectorActivity, setProjectorActivity] = useState(null);
 
+  const [attendeesActivity, setAttendeesActivity] = useState(null);
+
   // Form Atividade
   const initialActivityForm = {
     title: '',
@@ -308,7 +310,6 @@ export default function Admin() {
     scheduleRows: [
       { date: '2026-10-21', startTime: '14:00', endTime: '15:30', location: 'Anfiteatro FACOM' }
     ],
-    speakersList: [],
     selectedSpeakerIds: [],
     speakerId: '',
     speakerName: '',
@@ -318,6 +319,7 @@ export default function Admin() {
     showExtraDetails: false,
     location: 'Anfiteatro FACOM',
     tags: 'Computação, Tecnologia, Geral',
+    isOpenEvent: false,
     hidden: false,
     value: 'Grátis',
     attendanceMode: 'SELF_SCAN'
@@ -384,7 +386,10 @@ export default function Admin() {
     flashMascotDialogue: '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!',
     qrCodeValue: '',
     cardStyle: 'padrao',
-    cardStyleOptions: {}
+    cardStyleOptions: {},
+    shareUrl: '',
+    shareText: '',
+    customHashtag: '#EuVou'
   };
   const [missionForm, setMissionForm] = useState(initialMissionForm);
 
@@ -525,7 +530,10 @@ export default function Admin() {
       flashMascotDialogue: mission.flashConfig?.mascotDialogue || '⚡ WEEKA: Atenção TechWeekers! Uma nova missão relâmpago acaba de começar!',
       qrCodeValue: mission.qrCodeValue || mission.qrCodeConfig?.qrCodeValue || '',
       cardStyle: styleOfMission(mission),
-      cardStyleOptions: mission.cardStyleOptions || {}
+      cardStyleOptions: mission.cardStyleOptions || {},
+      shareUrl: mission.shareUrl || '',
+      shareText: mission.shareText || '',
+      customHashtag: mission.customHashtag || '#EuVou'
     });
     setIsMissionModalOpen(true);
   };
@@ -569,6 +577,11 @@ export default function Admin() {
           eventType: missionForm.autoEventType,
           targetId: missionForm.autoTargetId
         };
+      } else if (missionForm.triggerMode === 'share_whatsapp') {
+        payload.shareUrl = missionForm.shareUrl;
+        payload.shareText = missionForm.shareText;
+      } else if (missionForm.triggerMode === 'share_instagram_story') {
+        payload.customHashtag = missionForm.customHashtag;
       }
 
       if (missionForm.isFlash) {
@@ -778,7 +791,6 @@ export default function Admin() {
   };
 
   const handleDeletePost = async (postId) => {
-    if (!window.confirm('Deseja excluir esta publicação do Feed?')) return;
     try {
       await deleteFeedPost(postId);
       setFeedPosts(prev => prev.filter(p => p.id !== postId));
@@ -880,27 +892,13 @@ export default function Admin() {
     const dayFormatted = firstSchedule.date ? firstSchedule.date.split('-').reverse().slice(0, 2).join('/') : '21/10';
 
     // Resolver palestrantes vinculados
-    let finalSpeakers = [];
-    if (Array.isArray(activityForm.speakersList) && activityForm.speakersList.length > 0) {
-      finalSpeakers = activityForm.speakersList;
-    } else {
-      finalSpeakers = (activityForm.selectedSpeakerIds || []).map(id => {
-        const spk = speakers.find(s => s.id === id);
-        return spk ? { id: spk.id, name: spk.name, role: spk.role || spk.institution || '', photo: spk.photo || '', classification: spk.classification || '' } : null;
-      }).filter(Boolean);
-      if (finalSpeakers.length === 0 && (activityForm.speakerName || activityForm.speaker)) {
-        finalSpeakers = [{
-          id: activityForm.speakerId || `spk_${Date.now()}`,
-          name: activityForm.speakerName || activityForm.speaker,
-          role: activityForm.speakerRole || '',
-          photo: activityForm.speakerPhoto || '',
-          bio: ''
-        }];
-      }
-    }
+    const selectedSpeakersList = (activityForm.selectedSpeakerIds || []).map(id => {
+      const spk = speakers.find(s => s.id === id);
+      return spk ? { id: spk.id, name: spk.name, role: spk.role || spk.institution || '', photo: spk.photo || '', classification: spk.classification || '' } : null;
+    }).filter(Boolean);
 
-    const primarySpeaker = finalSpeakers[0] || null;
-    const speakerNamesJoined = finalSpeakers.map(s => s.name).filter(Boolean).join(', ') || activityForm.speakerName || 'Comissão Organizadora FACOM';
+    const primarySpeaker = selectedSpeakersList[0] || null;
+    const speakerNamesJoined = selectedSpeakersList.map(s => s.name).join(', ') || activityForm.speakerName || 'Comissão Organizadora FACOM';
 
     const maxCap = activityForm.hasCapacityLimit ? Number(activityForm.capacity || 100) : 9999;
 
@@ -933,10 +931,11 @@ export default function Admin() {
       speakerRole: primarySpeaker?.role || activityForm.speakerRole || '',
       speakerPhoto: primarySpeaker?.photo || activityForm.speakerPhoto || '',
       speakerId: primarySpeaker?.id || activityForm.speakerId || '',
-      speakers: finalSpeakers,
-      speakerIds: finalSpeakers.map(s => s.id).filter(Boolean),
+      speakers: selectedSpeakersList,
+      speakerIds: activityForm.selectedSpeakerIds || [],
       location: firstSchedule.location || activityForm.location || 'Anfiteatro FACOM',
       tags: activityForm.tags,
+      isOpenEvent: Boolean(activityForm.isOpenEvent),
       hidden: activityForm.hidden,
       value: activityForm.value || 'Grátis',
       attendanceMode: activityForm.attendanceMode === 'DOUBLE_CHECK' ? 'DOUBLE_CHECK' : 'SELF_SCAN'
@@ -972,26 +971,13 @@ export default function Admin() {
         }))
       : [{ date: act.date || '2026-10-21', startTime: act.time || '14:00', endTime: act.endTime || '15:30', location: act.location || 'Anfiteatro FACOM' }];
 
-    let speakersList = [];
-    if (Array.isArray(act.speakers) && act.speakers.length > 0) {
-      speakersList = act.speakers;
-    } else if (Array.isArray(act.speakerIds) && act.speakerIds.length > 0) {
-      speakersList = act.speakerIds.map(id => {
-        const s = speakers.find(x => x.id === id);
-        return s ? { id: s.id, name: s.name, role: s.role || s.institution || '', photo: s.photo || '', bio: s.bio || '' } : null;
-      }).filter(Boolean);
-    } else if (act.speaker || act.speakerName) {
-      const names = (act.speaker || act.speakerName).split(',').map(s => s.trim()).filter(Boolean);
-      speakersList = names.map((name, i) => ({
-        id: i === 0 && act.speakerId ? act.speakerId : `spk_${i}_${Date.now()}`,
-        name,
-        role: i === 0 ? (act.speakerRole || '') : '',
-        photo: i === 0 ? (act.speakerPhoto || '') : '',
-        bio: ''
-      }));
+    let speakerIds = Array.isArray(act.speakerIds) ? act.speakerIds : [];
+    if (speakerIds.length === 0 && Array.isArray(act.speakers) && act.speakers.length > 0) {
+      speakerIds = act.speakers.map(s => s.id).filter(Boolean);
     }
-
-    const speakerIds = speakersList.map(s => s.id).filter(Boolean);
+    if (speakerIds.length === 0 && act.speakerId) {
+      speakerIds = [act.speakerId];
+    }
 
     setActivityForm({
       title: act.title || '',
@@ -1006,16 +992,16 @@ export default function Admin() {
       points: Number(act.points || 50),
       duration: act.duration || (rows.length > 1 ? `${rows.length} dias` : 'Um dia'),
       scheduleRows: rows,
-      speakersList,
       selectedSpeakerIds: speakerIds,
-      speakerId: act.speakerId || (speakersList[0]?.id || ''),
-      speakerName: act.speaker || (speakersList.map(s => s.name).join(', ') || ''),
-      speakerRole: act.speakerRole || (speakersList[0]?.role || ''),
-      speakerPhoto: act.speakerPhoto || (speakersList[0]?.photo || ''),
+      speakerId: act.speakerId || '',
+      speakerName: act.speaker || '',
+      speakerRole: act.speakerRole || '',
+      speakerPhoto: act.speakerPhoto || '',
       materials: act.materials || [],
       showExtraDetails: true,
       location: act.location || 'Anfiteatro FACOM',
       tags: Array.isArray(act.tags) ? act.tags.join(', ') : (act.tags || 'Computação, Tecnologia, Geral'),
+      isOpenEvent: Boolean(act.isOpenEvent),
       hidden: Boolean(act.hidden),
       value: act.value || 'Grátis',
       attendanceMode: act.attendanceMode === 'DOUBLE_CHECK' ? 'DOUBLE_CHECK' : 'SELF_SCAN'
@@ -1162,8 +1148,54 @@ export default function Admin() {
     });
   };
 
+  // Reconciliação em tempo real das atividades com os contadores de inscritos das coleções /bookings e /users
+  const reconciledActivities = useMemo(() => {
+    if (!activities || activities.length === 0) return [];
+    if (!usersList || usersList.length === 0) return activities;
+
+    const userBookingsCounts = {};
+    usersList.forEach(u => {
+      if (u && u.bookedActivities && typeof u.bookedActivities === 'object') {
+        Object.entries(u.bookedActivities).forEach(([actId, bEntry]) => {
+          if (!bEntry) return;
+          if (!userBookingsCounts[actId]) {
+            userBookingsCounts[actId] = { confirmed: 0, waiting: 0 };
+          }
+          const isWaiting = bEntry.status === 'WAITING_LIST' || bEntry.status === 'WAITING' || bEntry.status === 'FILA';
+          if (isWaiting) {
+            userBookingsCounts[actId].waiting += 1;
+          } else {
+            userBookingsCounts[actId].confirmed += 1;
+          }
+        });
+      }
+    });
+
+    return activities.map(act => {
+      const actId = act.id;
+      const numId = act.number ? String(act.number) : null;
+      const userCount = (actId && userBookingsCounts[actId]) || (numId && userBookingsCounts[numId]);
+
+      const confirmedCount = Math.max(Number(act.total_inscritos || 0), userCount?.confirmed || 0);
+      const waitingCount = Math.max(Number(act.total_espera || 0), userCount?.waiting || 0);
+
+      const total = Number(act.vagas_totais || act.maxCapacity || 0);
+      const vagasDisponiveis = total > 0 ? Math.max(0, total - confirmedCount) : Number(act.vagas_disponiveis || 0);
+
+      if (confirmedCount !== act.total_inscritos || waitingCount !== act.total_espera || vagasDisponiveis !== act.vagas_disponiveis) {
+        return {
+          ...act,
+          total_inscritos: confirmedCount,
+          total_espera: waitingCount,
+          vagas_disponiveis: vagasDisponiveis
+        };
+      }
+      return act;
+    });
+  }, [activities, usersList]);
+
   const handleExportGrade = () => {
-    const json = JSON.stringify(activities, null, 2);
+    const json = JSON.stringify(reconciledActivities, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1174,18 +1206,24 @@ export default function Admin() {
 
   // Filtros de Atividades
   const filteredActivities = useMemo(() => {
-    return activities.filter((act) => {
+    return reconciledActivities.filter((act) => {
       const matchText = (act.title || '').toLowerCase().includes(activitySearch.toLowerCase()) ||
                         (act.speaker || '').toLowerCase().includes(activitySearch.toLowerCase()) ||
                         (act.location || '').toLowerCase().includes(activitySearch.toLowerCase());
       const matchType = activityFilter === 'ALL' || (act.type || '').toLowerCase() === activityFilter.toLowerCase();
       return matchText && matchType;
     });
-  }, [activities, activitySearch, activityFilter]);
+  }, [reconciledActivities, activitySearch, activityFilter]);
 
   // Filtros de Palestrantes & Convidados
   const filteredSpeakers = useMemo(() => {
-    return filterSpeakers(speakers, speakerSearch, speakerClassificationFilter);
+    return (speakers || []).filter((spk) => {
+      const matchText = (spk.name || '').toLowerCase().includes((speakerSearch || '').toLowerCase()) ||
+                        (spk.institution || '').toLowerCase().includes((speakerSearch || '').toLowerCase()) ||
+                        (spk.role || '').toLowerCase().includes((speakerSearch || '').toLowerCase());
+      const matchClass = speakerClassificationFilter === 'ALL' || spk.classification === speakerClassificationFilter;
+      return matchText && matchClass;
+    });
   }, [speakers, speakerSearch, speakerClassificationFilter]);
 
   // Filtros de Missões & Desafios (KAN-106)
@@ -1306,7 +1344,6 @@ export default function Admin() {
         active={view}
         onNavigate={goTo}
         navigate={navigate}
-        onLogout={handleAdminLogout}
         me={me}
         search={sectionSearch ? sectionSearch[0] : globalSearch}
         onSearch={sectionSearch ? sectionSearch[1] : setGlobalSearch}
@@ -1319,7 +1356,7 @@ export default function Admin() {
           {view === 'inicio' && (
             <AdminInicio
               firstName={currentAdminFirstName}
-              activities={activities}
+              activities={reconciledActivities}
               usersList={usersList}
               missionsList={missionsList}
               feedPosts={feedPosts}
@@ -1333,7 +1370,7 @@ export default function Admin() {
 
           {view === 'dados' && (
             <AdminDados
-              activities={activities}
+              activities={reconciledActivities}
               usersList={usersList}
               missionsList={missionsList}
               onNavigate={goTo}
@@ -1347,7 +1384,7 @@ export default function Admin() {
             <AdminProgramacao
               progTab={progTab}
               setProgTab={setProgTab}
-              activities={activities}
+              activities={reconciledActivities}
               filteredActivities={filteredActivities}
               activityFilter={activityFilter}
               setActivityFilter={setActivityFilter}
@@ -1367,6 +1404,7 @@ export default function Admin() {
               onEdit={handleOpenEditActivity}
               onDelete={handleDeleteActivity}
               onTelao={setProjectorActivity}
+              onViewAttendees={setAttendeesActivity}
               onQr={setQrModalActivity}
               onExport={handleExportGrade}
               onNewSpeaker={() => { setEditingSpeakerId(null); setGuestForm(initialGuestForm); setIsGuestModalOpen(true); }}
@@ -1400,8 +1438,6 @@ export default function Admin() {
             />
           )}
 
-          {view === 'patrocinadores' && <AdminPatrocinadores />}
-
           {/* SEÇÃO: PARTICIPANTES & PERMISSÕES */}
           {view === 'pessoas' && (
             <AdminPessoas
@@ -1411,7 +1447,7 @@ export default function Admin() {
               userRoleFilter={userRoleFilter}
               setUserRoleFilter={setUserRoleFilter}
               onChangeRole={handleChangeRole}
-              activities={activities}
+              activities={reconciledActivities}
             />
           )}
 
@@ -1458,7 +1494,7 @@ export default function Admin() {
 
                 <div style={{ height: '1px', backgroundColor: 'var(--line-2)' }} />
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div>
                     <span style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '4px' }}>PERÍODO OFICIAL</span>
                     <div style={{ fontSize: '0.86rem', color: 'var(--text)' }}>21 de Outubro a 27 de Outubro de 2026</div>
@@ -1498,7 +1534,7 @@ export default function Admin() {
           {view === 'conta' && (
             <AdminConta
               me={me}
-              handle={profile?.username ? `@${profile.username}` : profile?.email ? `@${String(profile.email).split('@')[0]}` : ''}
+              handle={profile?.username ? `@${profile.username}` : profile?.email ? `@${profile.email.split('@')[0]}` : ''}
               role={profile?.role || 'ADMIN'}
               onProfile={() => navigate('/profile?edit=true')}
               onLogout={handleAdminLogout}
@@ -1520,9 +1556,9 @@ export default function Admin() {
 
       {/* MODAL: CONVIDADO / PALESTRANTE */}
       {isGuestModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px', overflowY: 'auto' }}>
-          <div style={{ width: '100%', maxWidth: '520px', maxHeight: '90vh', backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: 'var(--text)' }}>
-            <div style={{ backgroundColor: 'var(--surface-raised)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--line-2)', flexShrink: 0 }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '20px' }}>
+          <div style={{ width: '100%', maxWidth: '520px', backgroundColor: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column', color: 'var(--text)' }}>
+            <div style={{ backgroundColor: 'var(--surface-raised)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--line-2)' }}>
               <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700 }}>
                 {editingSpeakerId ? 'Editar Palestrante' : 'Cadastrar Convidado / Palestrante'}
               </h3>
@@ -1535,8 +1571,8 @@ export default function Admin() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveGuest} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <form onSubmit={handleSaveGuest} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Nome Completo *</label>
                   <input
@@ -1560,7 +1596,7 @@ export default function Admin() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>Classificação do Palestrante</label>
                   <select
@@ -1605,7 +1641,7 @@ export default function Admin() {
                   onChange={(e) => setGuestForm(prev => ({ ...prev, photo: e.target.value }))}
                   style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '0.82rem', boxSizing: 'border-box', marginBottom: '6px' }}
                 />
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                <div style={{ display: 'flex', gap: '6px' }}>
                   {SAMPLE_SPEAKER_PHOTOS.map((pic, idx) => (
                     <button
                       key={idx}
@@ -1710,6 +1746,15 @@ export default function Admin() {
         />
       )}
 
+      {/* MODAL: VER INSCRITOS */}
+      {attendeesActivity && (
+        <ActivityAttendeesModal
+          activity={attendeesActivity}
+          usersList={usersList}
+          onClose={() => setAttendeesActivity(null)}
+        />
+      )}
+
       {/* MODAL: QR CODE DE PRESENÇA */}
       {qrModalActivity && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120, padding: '20px' }}>
@@ -1811,7 +1856,7 @@ export default function Admin() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>
                     Duração (Minutos) *
@@ -1826,7 +1871,7 @@ export default function Admin() {
                     style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--line-2)', backgroundColor: 'var(--bg)', color: '#FDE68A', fontWeight: 700, fontSize: '0.84rem', boxSizing: 'border-box' }}
                   />
                 </div>
-                <div className="sm:col-span-2">
+                <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '4px' }}>
                     Fala do Mascote (Alerta em Tempo Real)
                   </label>
