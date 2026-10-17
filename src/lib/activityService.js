@@ -260,6 +260,7 @@ export function removeLocalCustomActivity(id) {
  */
 export function subscribeToActivities(onUpdate, onError) {
   let lastFirestoreList = [];
+  let lastBookingsCounts = {};
 
   const mergeAndNotify = (firestoreList) => {
     const baseList = firestoreList && firestoreList.length > 0 ? [...DEFAULT_ACTIVITIES.filter(da => !firestoreList.some(fa => fa.id === da.id)), ...firestoreList] : DEFAULT_ACTIVITIES;
@@ -276,7 +277,27 @@ export function subscribeToActivities(onUpdate, onError) {
       }
       map.set(item.id, merged);
     });
-    const combined = Array.from(map.values());
+    const combined = Array.from(map.values()).map(item => {
+      const actId = item.id;
+      const numId = item.number ? String(item.number) : null;
+      const bCount = (actId && lastBookingsCounts[actId]) || (numId && lastBookingsCounts[numId]);
+
+      if (bCount) {
+        const totalInscritos = bCount.confirmed;
+        const totalEspera = bCount.waiting;
+        const vagasTotais = typeof item.vagas_totais === 'number' 
+          ? item.vagas_totais 
+          : (typeof item.vagasTotais === 'number' ? item.vagasTotais : (typeof item.capacidade === 'number' ? item.capacidade : 0));
+        const vagasDisponiveis = vagasTotais > 0 ? Math.max(0, vagasTotais - totalInscritos) : (typeof item.vagas_disponiveis === 'number' ? item.vagas_disponiveis : 0);
+        return {
+          ...item,
+          total_inscritos: totalInscritos,
+          total_espera: totalEspera,
+          vagas_disponiveis: vagasDisponiveis
+        };
+      }
+      return item;
+    });
     combined.sort((a, b) => {
       const dayCompare = (a.date || a.day || '').localeCompare(b.date || b.day || '');
       if (dayCompare !== 0) return dayCompare;
@@ -293,19 +314,53 @@ export function subscribeToActivities(onUpdate, onError) {
     window.addEventListener('techweek_activities_updated', handleLocalUpdate);
   }
 
+  let unsubBookings = () => {};
+  try {
+    const bookingsRef = collection(db, 'bookings');
+    const unsubB = onSnapshot(
+      bookingsRef,
+      (snapshot) => {
+        if (!snapshot) return;
+        const counts = {};
+        const docs = snapshot.docs || [];
+        docs.forEach((docSnap) => {
+          const data = (typeof docSnap.data === 'function' ? docSnap.data() : docSnap) || {};
+          const actId = data.activityId;
+          if (!actId) return;
+          if (!counts[actId]) {
+            counts[actId] = { confirmed: 0, waiting: 0 };
+          }
+          const isWaiting = data.status === 'WAITING_LIST' || data.status === 'WAITING' || data.status === 'FILA';
+          const isConfirmed = data.status === 'CONFIRMED' || data.status === 'ACTIVE' || (!data.status && !data.position && !isWaiting);
+          if (isWaiting) {
+            counts[actId].waiting += 1;
+          } else if (isConfirmed) {
+            counts[actId].confirmed += 1;
+          }
+        });
+        lastBookingsCounts = counts;
+        mergeAndNotify(lastFirestoreList);
+      },
+      (_err) => {
+        // Silencioso se usuário não tiver permissão global para /bookings (ex: não-admin)
+      }
+    );
+    if (typeof unsubB === 'function') unsubBookings = unsubB;
+  } catch (_e) {}
+
   try {
     const activitiesRef = collection(db, 'activities');
     const unsub = onSnapshot(
       activitiesRef,
       (snapshot) => {
-        if (snapshot.empty) {
+        if (!snapshot || snapshot.empty) {
           lastFirestoreList = [];
           mergeAndNotify([]);
           return;
         }
 
-        const list = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data() || {};
+        const list = (snapshot.docs || []).map((docSnap) => {
+          const data = (typeof docSnap.data === 'function' ? docSnap.data() : docSnap) || {};
           return {
             ...data,
             id: docSnap.id,
@@ -344,7 +399,8 @@ export function subscribeToActivities(onUpdate, onError) {
     );
 
     return () => {
-      unsub();
+      if (typeof unsub === 'function') unsub();
+      if (typeof unsubBookings === 'function') unsubBookings();
       if (typeof window !== 'undefined') {
         window.removeEventListener('techweek_activities_updated', handleLocalUpdate);
       }
@@ -354,6 +410,7 @@ export function subscribeToActivities(onUpdate, onError) {
     if (onError) onError(err);
     mergeAndNotify([]);
     return () => {
+      if (typeof unsubBookings === 'function') unsubBookings();
       if (typeof window !== 'undefined') {
         window.removeEventListener('techweek_activities_updated', handleLocalUpdate);
       }
@@ -1005,6 +1062,9 @@ export async function createActivity(activityData) {
     points: Number(activityData.points || 20),
     tags: Array.isArray(activityData.tags) ? activityData.tags : (activityData.tags ? String(activityData.tags).split(',').map(t => t.trim()) : []),
     attendanceMode: activityData.attendanceMode || 'SELF_SCAN',
+    isOpenEvent: Boolean(activityData.isOpenEvent),
+    requiresRegistration: Boolean(activityData.requiresRegistration),
+    hasCapacityLimit: activityData.hasCapacityLimit !== undefined ? Boolean(activityData.hasCapacityLimit) : true,
     materials: Array.isArray(activityData.materials) ? activityData.materials : [],
     hidden: Boolean(activityData.hidden),
     value: activityData.value || 'Grátis',

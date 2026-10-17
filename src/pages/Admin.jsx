@@ -1135,8 +1135,54 @@ export default function Admin() {
     });
   };
 
+  // Reconciliação em tempo real das atividades com os contadores de inscritos das coleções /bookings e /users
+  const reconciledActivities = useMemo(() => {
+    if (!activities || activities.length === 0) return [];
+    if (!usersList || usersList.length === 0) return activities;
+
+    const userBookingsCounts = {};
+    usersList.forEach(u => {
+      if (u && u.bookedActivities && typeof u.bookedActivities === 'object') {
+        Object.entries(u.bookedActivities).forEach(([actId, bEntry]) => {
+          if (!bEntry) return;
+          if (!userBookingsCounts[actId]) {
+            userBookingsCounts[actId] = { confirmed: 0, waiting: 0 };
+          }
+          const isWaiting = bEntry.status === 'WAITING_LIST' || bEntry.status === 'WAITING' || bEntry.status === 'FILA';
+          if (isWaiting) {
+            userBookingsCounts[actId].waiting += 1;
+          } else {
+            userBookingsCounts[actId].confirmed += 1;
+          }
+        });
+      }
+    });
+
+    return activities.map(act => {
+      const actId = act.id;
+      const numId = act.number ? String(act.number) : null;
+      const userCount = (actId && userBookingsCounts[actId]) || (numId && userBookingsCounts[numId]);
+
+      const confirmedCount = Math.max(Number(act.total_inscritos || 0), userCount?.confirmed || 0);
+      const waitingCount = Math.max(Number(act.total_espera || 0), userCount?.waiting || 0);
+
+      const total = Number(act.vagas_totais || act.maxCapacity || 0);
+      const vagasDisponiveis = total > 0 ? Math.max(0, total - confirmedCount) : Number(act.vagas_disponiveis || 0);
+
+      if (confirmedCount !== act.total_inscritos || waitingCount !== act.total_espera || vagasDisponiveis !== act.vagas_disponiveis) {
+        return {
+          ...act,
+          total_inscritos: confirmedCount,
+          total_espera: waitingCount,
+          vagas_disponiveis: vagasDisponiveis
+        };
+      }
+      return act;
+    });
+  }, [activities, usersList]);
+
   const handleExportGrade = () => {
-    const json = JSON.stringify(activities, null, 2);
+    const json = JSON.stringify(reconciledActivities, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1147,14 +1193,14 @@ export default function Admin() {
 
   // Filtros de Atividades
   const filteredActivities = useMemo(() => {
-    return activities.filter((act) => {
+    return reconciledActivities.filter((act) => {
       const matchText = (act.title || '').toLowerCase().includes(activitySearch.toLowerCase()) ||
                         (act.speaker || '').toLowerCase().includes(activitySearch.toLowerCase()) ||
                         (act.location || '').toLowerCase().includes(activitySearch.toLowerCase());
       const matchType = activityFilter === 'ALL' || (act.type || '').toLowerCase() === activityFilter.toLowerCase();
       return matchText && matchType;
     });
-  }, [activities, activitySearch, activityFilter]);
+  }, [reconciledActivities, activitySearch, activityFilter]);
 
   // Filtros de Palestrantes & Convidados
   const filteredSpeakers = useMemo(() => {
@@ -1297,7 +1343,7 @@ export default function Admin() {
           {view === 'inicio' && (
             <AdminInicio
               firstName={currentAdminFirstName}
-              activities={activities}
+              activities={reconciledActivities}
               usersList={usersList}
               missionsList={missionsList}
               feedPosts={feedPosts}
@@ -1311,7 +1357,7 @@ export default function Admin() {
 
           {view === 'dados' && (
             <AdminDados
-              activities={activities}
+              activities={reconciledActivities}
               usersList={usersList}
               missionsList={missionsList}
               onNavigate={goTo}
@@ -1325,7 +1371,7 @@ export default function Admin() {
             <AdminProgramacao
               progTab={progTab}
               setProgTab={setProgTab}
-              activities={activities}
+              activities={reconciledActivities}
               filteredActivities={filteredActivities}
               activityFilter={activityFilter}
               setActivityFilter={setActivityFilter}
@@ -1388,7 +1434,7 @@ export default function Admin() {
               userRoleFilter={userRoleFilter}
               setUserRoleFilter={setUserRoleFilter}
               onChangeRole={handleChangeRole}
-              activities={activities}
+              activities={reconciledActivities}
             />
           )}
 

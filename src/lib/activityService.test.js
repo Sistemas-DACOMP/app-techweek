@@ -382,8 +382,10 @@ describe('activityService (KAN-50)', () => {
       const stale = { id: 'act_x', title: 'X', vagas_totais: 10, vagas_disponiveis: 10, total_inscritos: 0, total_espera: 0 };
       vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() });
       vi.stubGlobal('localStorage', { getItem: () => JSON.stringify([stale]), setItem: vi.fn() });
-      onSnapshot.mockImplementationOnce((_ref, onNext) => {
-        onNext({ empty: false, docs: [{ id: 'act_x', data: () => ({ ...stale, vagas_disponiveis: 7, total_inscritos: 3 }) }] });
+      onSnapshot.mockImplementation((ref, onNext) => {
+        if (ref?.path === 'activities') {
+          onNext({ empty: false, docs: [{ id: 'act_x', data: () => ({ ...stale, vagas_disponiveis: 7, total_inscritos: 3 }) }] });
+        }
         return vi.fn();
       });
       const onUpdate = vi.fn();
@@ -392,6 +394,60 @@ describe('activityService (KAN-50)', () => {
       const act = onUpdate.mock.calls.at(-1)[0].find((a) => a.id === 'act_x');
       expect(act.vagas_disponiveis).toBe(7);
       expect(act.total_inscritos).toBe(3);
+    });
+
+    it('subscribeToActivities atualiza total_inscritos e vagas_disponiveis ao receber snapshots de /bookings', async () => {
+      const { onSnapshot } = await import('firebase/firestore');
+      let bookingsCb = null;
+      let activitiesCb = null;
+
+      onSnapshot.mockImplementation((ref, onNext) => {
+        if (ref?.path === 'bookings') {
+          bookingsCb = onNext;
+        } else if (ref?.path === 'activities') {
+          activitiesCb = onNext;
+        }
+        return vi.fn();
+      });
+
+      const onUpdate = vi.fn();
+      subscribeToActivities(onUpdate);
+
+      // Emite activities
+      activitiesCb({
+        empty: false,
+        docs: [
+          {
+            id: 'act_test_cap',
+            data: () => ({
+              id: 'act_test_cap',
+              title: 'Workshop de Testes',
+              vagas_totais: 50,
+              vagas_disponiveis: 50,
+              total_inscritos: 0,
+              total_espera: 0
+            })
+          }
+        ]
+      });
+
+      let latest = onUpdate.mock.calls.at(-1)[0].find((a) => a.id === 'act_test_cap');
+      expect(latest.total_inscritos).toBe(0);
+      expect(latest.vagas_disponiveis).toBe(50);
+
+      // Emite bookings para act_test_cap (2 confirmados, 1 espera)
+      bookingsCb({
+        docs: [
+          { id: 'b1', data: () => ({ activityId: 'act_test_cap', status: 'CONFIRMED' }) },
+          { id: 'b2', data: () => ({ activityId: 'act_test_cap', status: 'CONFIRMED' }) },
+          { id: 'b3', data: () => ({ activityId: 'act_test_cap', status: 'WAITING_LIST' }) }
+        ]
+      });
+
+      latest = onUpdate.mock.calls.at(-1)[0].find((a) => a.id === 'act_test_cap');
+      expect(latest.total_inscritos).toBe(2);
+      expect(latest.total_espera).toBe(1);
+      expect(latest.vagas_disponiveis).toBe(48);
     });
   });
 
