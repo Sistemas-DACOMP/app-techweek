@@ -97,6 +97,7 @@ import AdminDados from './admin/AdminDados';
 import AdminProgramacao from './admin/AdminProgramacao';
 import ActivityForm from './admin/ActivityForm';
 import AdminPessoas from './admin/AdminPessoas';
+import ActivityAttendeesModal from './admin/ActivityAttendeesModal';
 import { ROLE_LABELS } from '../components/RoleSwitcher';
 import { Toast } from './admin/ui';
 import MissionForm from './admin/MissionForm';
@@ -289,6 +290,8 @@ export default function Admin() {
   // Estados do Modo Projeção de Telão (Projector Mode)
   const [projectorActivity, setProjectorActivity] = useState(null);
 
+  const [attendeesActivity, setAttendeesActivity] = useState(null);
+
   // Form Atividade
   const initialActivityForm = {
     title: '',
@@ -297,6 +300,7 @@ export default function Admin() {
     isMultiSession: false,
     registrationType: 'Não requer inscrição',
     requiresRegistration: false,
+    isOpenEvent: false,
     hasCapacityLimit: true,
     capacity: 100,
     points: 50,
@@ -893,6 +897,7 @@ export default function Admin() {
       isMultiSession: Boolean(activityForm.isMultiSession),
       registrationType: activityForm.requiresRegistration ? 'Gratuita' : 'Não requer inscrição',
       requiresRegistration: Boolean(activityForm.requiresRegistration),
+      isOpenEvent: Boolean(activityForm.isOpenEvent),
       hasCapacityLimit: Boolean(activityForm.hasCapacityLimit),
       vagas_totais: maxCap,
       maxCapacity: maxCap,
@@ -968,6 +973,7 @@ export default function Admin() {
       isMultiSession: Boolean(act.isMultiSession || rows.length > 1),
       registrationType: act.registrationType || 'Não requer inscrição',
       requiresRegistration: act.requiresRegistration !== undefined ? Boolean(act.requiresRegistration) : (act.registrationType !== 'Não requer inscrição'),
+      isOpenEvent: Boolean(act.isOpenEvent),
       hasCapacityLimit: act.hasCapacityLimit !== undefined ? Boolean(act.hasCapacityLimit) : (Number(act.vagas_totais) < 900),
       capacity: act.vagas_totais || act.maxCapacity || 100,
       points: Number(act.points || 50),
@@ -1339,6 +1345,7 @@ export default function Admin() {
               onEdit={handleOpenEditActivity}
               onDelete={handleDeleteActivity}
               onTelao={setProjectorActivity}
+              onViewAttendees={setAttendeesActivity}
               onQr={setQrModalActivity}
               onExport={handleExportGrade}
               onNewSpeaker={() => { setEditingSpeakerId(null); setGuestForm(initialGuestForm); setIsGuestModalOpen(true); }}
@@ -1677,6 +1684,15 @@ export default function Admin() {
           usersList={usersList}
           feedPosts={feedPosts}
           onClose={() => setProjectorActivity(null)}
+        />
+      )}
+
+      {/* MODAL: VER INSCRITOS */}
+      {attendeesActivity && (
+        <ActivityAttendeesModal
+          activity={attendeesActivity}
+          usersList={usersList}
+          onClose={() => setAttendeesActivity(null)}
         />
       )}
 

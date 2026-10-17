@@ -1456,13 +1456,18 @@ export function subscribeToActivityBookings(activityOrId, onUpdate, onError, opt
           });
         });
       }
-    } else if (effectiveBookings.length === 0 && usersList.length > 0) {
+    }
+    
+    if (usersList.length > 0) {
+      const existingUserIds = new Set(effectiveBookings.map(b => String(b.userId || b.uid || b.id)));
       for (const u of usersList) {
+        const uid = String(u.uid || u.id);
+        if (existingUserIds.has(uid)) continue;
         const bEntry = u.bookedActivities?.[primaryId] || (secondaryId && u.bookedActivities?.[secondaryId]);
         if (bEntry) {
           effectiveBookings.push({
-            id: `${u.uid || u.id}_${primaryId}`,
-            userId: u.uid || u.id,
+            id: `${uid}_${primaryId}`,
+            userId: uid,
             activityId: primaryId,
             status: bEntry.status || 'CONFIRMED',
             position: bEntry.position || null,
