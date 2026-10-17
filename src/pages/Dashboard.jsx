@@ -778,7 +778,7 @@ function HeroNow({ item, status, now, hasTicket = true, reserving, onValidate, o
   const cat = categoryOf(a.type);
   const enrolled = status === 'BOOKED' || status === 'CHECKED_IN';
   const isLocked = !hasTicket && !a.isOpenEvent && !enrolled;
-  const accessBadge = a.isOpenEvent ? 'Entrada Livre' : 'Passaporte Completo';
+  const accessBadge = a.isOpenEvent ? 'Entrada Livre' : (!hasTicket ? 'Exige Passaporte' : null);
   const meta = [cat.label, accessBadge, a.location, STATUS_TEXT[status]].filter(Boolean).join(' · ');
 
   let primary = { label: 'Ver detalhes', onClick: onDetails, isGold: false };

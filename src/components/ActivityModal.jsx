@@ -433,12 +433,12 @@ export default function ActivityModal({
                 <span className="rounded-[10px] bg-ok/20 px-2.5 py-1 text-xs font-bold text-ok">
                   Entrada Livre
                 </span>
-              ) : (
+              ) : !hasTicket && !readOnly ? (
                 <span className="inline-flex items-center gap-1 rounded-[10px] border border-gold/30 bg-gold/20 px-2.5 py-1 text-xs font-extrabold text-gold">
                   <Lock size={12} aria-hidden="true" />
                   Passaporte Completo
                 </span>
-              )}
+              ) : null}
               <span className="rounded-[10px] bg-[rgba(124,58,237,0.35)] px-2.5 py-1 text-xs font-extrabold text-white">
                 +{points} pts
               </span>
