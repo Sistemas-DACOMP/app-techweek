@@ -5,6 +5,9 @@ import {
   subscribeToUserCheckins, 
   subscribeToUserPointEvents,
   reserveActivity,
+  confirmWaitingActivity,
+  declineWaitingActivity,
+  formatCountdownRemaining,
   checkoutDoubleCheck,
   registerActivityAttendance,
   calculateActivityStatus,
@@ -72,6 +75,12 @@ describe('activityService (KAN-50)', () => {
       expect(status).toBe('WAITING_LIST');
     });
 
+    it('deve retornar WAITING_CONFIRMATION quando o usuário foi promovido da fila e aguarda confirmação', () => {
+      const bookings = [{ activityId: 'act_1', status: 'WAITING_CONFIRMATION', confirmationDeadline: '2026-10-18T15:00:00.000Z' }];
+      const status = calculateActivityStatus('act_1', bookings, [], []);
+      expect(status).toBe('WAITING_CONFIRMATION');
+    });
+
     it('deve retornar CHECKED_IN quando o Staff registrou entrada (double-check)', () => {
       const bookings = [{ activityId: 'act_1', status: 'CONFIRMED' }];
       const checkins = [{ activityId: 'act_1', status: 'CHECKED_IN' }];
@@ -90,6 +99,34 @@ describe('activityService (KAN-50)', () => {
       const pointEvents = [{ referenceId: 'act_1', eventType: 'lecture_attendance' }];
       const status = calculateActivityStatus('act_1', [], [], pointEvents);
       expect(status).toBe('COMPLETED');
+    });
+  });
+
+  describe('formatCountdownRemaining', () => {
+    it('retorna null quando deadline é nulo ou inválido', () => {
+      expect(formatCountdownRemaining(null)).toBeNull();
+      expect(formatCountdownRemaining('data-invalida')).toBeNull();
+    });
+
+    it('retorna string "Prazo expirado" quando o deadline já passou', () => {
+      const nowMs = Date.parse('2026-10-17T15:00:00.000Z');
+      const res = formatCountdownRemaining('2026-10-17T14:59:00.000Z', nowMs);
+      expect(typeof res).toBe('string');
+      expect(res).toBe('Prazo expirado');
+    });
+
+    it('retorna string formatada com horas, minutos e segundos quando faltam horas', () => {
+      const nowMs = Date.parse('2026-10-17T12:00:00.000Z');
+      const res = formatCountdownRemaining('2026-10-17T13:59:50.000Z', nowMs);
+      expect(typeof res).toBe('string');
+      expect(res).toBe('01h 59m 50s');
+    });
+
+    it('retorna string formatada apenas com minutos e segundos quando falta menos de 1 hora', () => {
+      const nowMs = Date.parse('2026-10-17T12:00:00.000Z');
+      const res = formatCountdownRemaining('2026-10-17T12:45:05.000Z', nowMs);
+      expect(typeof res).toBe('string');
+      expect(res).toBe('45m 05s');
     });
   });
 
@@ -142,6 +179,15 @@ describe('activityService (KAN-50)', () => {
       expect(res.bookingId).toBe('test_user_id_palestra_abertura');
     });
 
+    it('fallback de rede deve alocar em WAITING_LIST (e não CONFIRMED) se a atividade estiver esgotada (vagas_disponiveis = 0)', async () => {
+      vi.mocked(apiRequest).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+      const res = await reserveActivity('workshop_esgotado', { vagas_disponiveis: 0, total_espera: 3 });
+      expect(res.success).toBe(true);
+      expect(res.status).toBe('WAITING_LIST');
+      expect(res.position).toBe(4);
+    });
+
     it('deve repassar erro 401 (SESSION_EXPIRED) para a UI orientar nova autenticação (KAN-127)', async () => {
       const err = new Error('Sua sessão expirou ou é inválida. Por favor, faça login novamente para continuar.');
       err.status = 401;
@@ -179,6 +225,35 @@ describe('activityService (KAN-50)', () => {
       expect(apiRequest).toHaveBeenCalledWith('/activities/act_aberta/reserve', {
         method: 'POST'
       });
+    });
+  });
+
+  describe('confirmWaitingActivity & declineWaitingActivity', () => {
+    it('confirmWaitingActivity deve chamar POST /activities/:id/confirm-waiting', async () => {
+      vi.mocked(apiRequest).mockResolvedValueOnce({
+        status: 'CONFIRMED',
+        position: null
+      });
+
+      const res = await confirmWaitingActivity('act_1');
+      expect(apiRequest).toHaveBeenCalledWith('/activities/act_1/confirm-waiting', {
+        method: 'POST'
+      });
+      expect(res.status).toBe('CONFIRMED');
+    });
+
+    it('declineWaitingActivity deve chamar POST /activities/:id/decline-waiting', async () => {
+      vi.mocked(apiRequest).mockResolvedValueOnce({
+        status: 'CANCELLED',
+        promotedUserId: 'user_next'
+      });
+
+      const res = await declineWaitingActivity('act_1');
+      expect(apiRequest).toHaveBeenCalledWith('/activities/act_1/decline-waiting', {
+        method: 'POST'
+      });
+      expect(res.status).toBe('CANCELLED');
+      expect(res.promotedUserId).toBe('user_next');
     });
   });
 

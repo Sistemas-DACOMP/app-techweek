@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Clock, ChevronRight, Ticket, Smartphone, Bell, CheckCircle2, AlertCircle, AlertTriangle, Info, Lock } from 'lucide-react';
+import { Check, Clock, ChevronRight, Ticket, Smartphone, Bell, CheckCircle2, AlertCircle, AlertTriangle, Info, Lock, Loader2 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import ActivityModal from '../components/ActivityModal';
 import Mascot from '../components/Mascot';
@@ -16,8 +16,13 @@ import {
   subscribeToUserPointEvents,
   reserveActivity,
   cancelActivityReservation,
+  confirmWaitingActivity,
+  declineWaitingActivity,
+  parseConfirmationDeadlineMs,
+  formatCountdownRemaining,
   calculateActivityStatus
 } from '../lib/activityService';
+import { addNotification } from '../lib/notifications';
 import { calculateLevel, LEVEL_TIERS } from '../lib/level';
 import { useUser } from '../hooks/useUser';
 import icone from '../assets/icone.png';
@@ -77,6 +82,7 @@ const hhmm = (d) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-
 const STATUS_TEXT = {
   BOOKED: 'você está inscrito',
   CHECKED_IN: 'você está inscrito',
+  WAITING_CONFIRMATION: 'confirme sua vaga',
   WAITING_LIST: 'você está na lista de espera',
   COMPLETED: 'presença confirmada'
 };
@@ -102,8 +108,11 @@ export default function Dashboard() {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [reservingId, setReservingId] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
+  const [confirmingWaitingId, setConfirmingWaitingId] = useState(null);
+  const [decliningWaitingId, setDecliningWaitingId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
   const [now, setNow] = useState(() => new Date());
+  const [countdownNowMs, setCountdownNowMs] = useState(() => Date.now());
 
   const [loadTimedOut, setLoadTimedOut] = useState(false);
 
@@ -216,6 +225,63 @@ export default function Dashboard() {
 
   const statusOf = (act) => calculateActivityStatus(act.id, bookings, checkins, pointEvents);
 
+  // Vagas aguardando confirmação do participante (WAITING_CONFIRMATION)
+  const waitingConfirmationItems = useMemo(() => {
+    return bookings
+      .filter((b) => b.status === 'WAITING_CONFIRMATION')
+      .map((b) => {
+        const actId = b.activityId || b.activity_id || String(b.id || '').replace(/^[^_]+_/, '');
+        const act = activities.find((a) => a.id === actId) || {
+          id: actId,
+          title: b.activityTitle || actId || 'Atividade',
+          day: b.day || '',
+          time: b.time || '',
+          location: b.location || ''
+        };
+        return {
+          booking: b,
+          activity: act,
+          deadlineMs: parseConfirmationDeadlineMs(b.confirmationDeadline)
+        };
+      });
+  }, [bookings, activities]);
+
+  // Atualiza o contador regressivo a cada segundo enquanto houver vaga aguardando confirmação
+  useEffect(() => {
+    if (waitingConfirmationItems.length === 0) return undefined;
+    setCountdownNowMs(Date.now());
+    const id = setInterval(() => setCountdownNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [waitingConfirmationItems.length]);
+
+  // Registra o alerta no histórico/feed de notificações do usuário quando promovido para WAITING_CONFIRMATION
+  useEffect(() => {
+    waitingConfirmationItems.forEach(({ booking, activity, deadlineMs }) => {
+      const notifId = `waiting_conf_${booking.id || activity.id}_${deadlineMs || 'none'}`;
+      const deadlineStr = deadlineMs
+        ? new Date(deadlineMs).toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZone: 'America/Campo_Grande',
+          })
+        : '';
+      addNotification({
+        id: notifId,
+        title: `Vaga liberada: ${activity.title}`,
+        message: deadlineStr
+          ? `Uma vaga abriu para ${activity.title}! Você tem até às ${deadlineStr} para confirmar sua presença.`
+          : `Uma vaga abriu para ${activity.title}! Confirme sua presença para garantir a vaga.`,
+        type: 'waiting_confirmation',
+        actionUrl: '/',
+        actionLabel: 'Confirmar vaga',
+        urgent: true,
+        activityId: activity.id,
+        silent: true
+      });
+    });
+  }, [waitingConfirmationItems]);
+
   // Agora / próxima / a seguir, pelo horário real das atividades
   const { hero, upcoming } = useMemo(() => {
     const timed = activities
@@ -223,7 +289,7 @@ export default function Dashboard() {
       .filter((x) => x.w)
       .sort((x, y) => x.w.start - y.w.start);
     const live = timed.filter((x) => x.w.start <= now && now < x.w.end);
-    const mine = (x) => ['BOOKED', 'CHECKED_IN', 'WAITING_LIST', 'COMPLETED'].includes(
+    const mine = (x) => ['BOOKED', 'CHECKED_IN', 'WAITING_CONFIRMATION', 'WAITING_LIST', 'COMPLETED'].includes(
       calculateActivityStatus(x.a.id, bookings, checkins, pointEvents)
     );
     const future = timed.filter((x) => x.w.start > now);
@@ -256,6 +322,58 @@ export default function Dashboard() {
   const profileForPassport = hookProfile || userProfile;
   const visitedStands = Object.keys(profileForPassport?.visitedSponsors || {}).length;
   const standsLeft = profileForPassport?.goldenTicketAwarded ? 0 : Math.max(0, 5 - visitedStands);
+
+  // Confirma vaga liberada da lista de espera (WAITING_CONFIRMATION -> CONFIRMED)
+  const handleConfirmWaiting = async (activityId) => {
+    if (!currentUser?.uid) return;
+    setConfirmingWaitingId(activityId);
+    try {
+      await confirmWaitingActivity(activityId);
+      setBookings((prev) => prev.map((b) => {
+        const bActId = b.activityId || b.activity_id;
+        if (bActId === activityId || b.id === activityId || b.id?.endsWith(`_${activityId}`)) {
+          return { ...b, status: 'CONFIRMED', position: null, confirmationDeadline: null };
+        }
+        return b;
+      }));
+      setToastMessage({ type: 'success', message: 'Vaga confirmada com sucesso! Ela já está na sua agenda.' });
+    } catch (err) {
+      if (err.status === 410 || err.code === 'CONFIRMATION_EXPIRED') {
+        setBookings((prev) => prev.map((b) => {
+          const bActId = b.activityId || b.activity_id;
+          if (bActId === activityId || b.id === activityId || b.id?.endsWith(`_${activityId}`)) {
+            return { ...b, status: 'EXPIRED' };
+          }
+          return b;
+        }));
+        setToastMessage({ type: 'error', message: 'O prazo para confirmar esta vaga expirou e ela foi repassada.' });
+      } else {
+        setToastMessage({ type: 'error', message: err.data?.message || err.message || 'Erro ao confirmar vaga.' });
+      }
+    } finally {
+      setConfirmingWaitingId(null);
+      setTimeout(() => setToastMessage(null), 3500);
+    }
+  };
+
+  // Recusa vaga liberada da lista de espera (WAITING_CONFIRMATION -> CANCELLED)
+  const handleDeclineWaiting = async (activityId) => {
+    if (!currentUser?.uid) return;
+    setDecliningWaitingId(activityId);
+    try {
+      await declineWaitingActivity(activityId);
+      setBookings((prev) => prev.filter((b) => {
+        const bActId = b.activityId || b.activity_id;
+        return bActId !== activityId && b.id !== activityId && !b.id?.endsWith(`_${activityId}`);
+      }));
+      setToastMessage({ type: 'info', message: 'Vaga liberada para o próximo participante da lista de espera.' });
+    } catch (err) {
+      setToastMessage({ type: 'error', message: err.data?.message || err.message || 'Erro ao recusar vaga.' });
+    } finally {
+      setDecliningWaitingId(null);
+      setTimeout(() => setToastMessage(null), 3500);
+    }
+  };
 
   // Cancela Reserva de Vaga Presencial
   const handleCancelReserve = async (activityId) => {
@@ -351,6 +469,9 @@ export default function Dashboard() {
   const profileLoaded = Boolean(hookProfile || userProfile || loadTimedOut);
   const pending = profileLoaded && !hasSymplaTicket;
   const avatarUrl = userProfile?.avatarUrl || hookProfile?.avatarUrl || hookProfile?.avatar_url || null;
+  const selectedBooking = selectedActivity
+    ? bookings.find((b) => (b.activityId || b.activity_id) === selectedActivity.id || b.id === selectedActivity.id || b.id?.endsWith(`_${selectedActivity.id}`))
+    : null;
 
   return (
     <div className="page-container !p-0 font-sans text-text">
@@ -371,6 +492,18 @@ export default function Dashboard() {
             </span>
           </button>
         </header>
+
+        {waitingConfirmationItems.length > 0 && (
+          <WaitingConfirmationBanner
+            items={waitingConfirmationItems}
+            nowMs={countdownNowMs}
+            confirmingId={confirmingWaitingId}
+            decliningId={decliningWaitingId}
+            onConfirm={handleConfirmWaiting}
+            onDecline={handleDeclineWaiting}
+            onOpenDetails={setSelectedActivity}
+          />
+        )}
 
         {!profileLoaded ? (
           <div aria-busy="true" aria-label="Carregando" className="mx-5 mt-[26px] flex flex-col gap-3.5">
@@ -482,11 +615,16 @@ export default function Dashboard() {
         <ActivityModal
           activity={activities.find((a) => a.id === selectedActivity.id) || selectedActivity}
           status={calculateActivityStatus(selectedActivity.id, bookings, checkins, pointEvents)}
+          confirmationDeadline={selectedBooking?.confirmationDeadline || null}
           isReserving={reservingId === selectedActivity.id}
           isCancelling={cancellingId === selectedActivity.id}
           hasTicket={hasSymplaTicket}
+          isConfirmingWaiting={confirmingWaitingId === selectedActivity.id}
+          isDecliningWaiting={decliningWaitingId === selectedActivity.id}
           onReserve={handleReserve}
           onCancelReserve={handleCancelReserve}
+          onConfirmWaiting={handleConfirmWaiting}
+          onDeclineWaiting={handleDeclineWaiting}
           onClose={() => setSelectedActivity(null)}
         />
       )}
@@ -499,6 +637,113 @@ export default function Dashboard() {
       />
       <InstallAppSheet pwa={pwa} />
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Banner de Confirmação de Vaga da Lista de Espera (WAITING_CONFIRMATION) */
+/* ------------------------------------------------------------------ */
+export function WaitingConfirmationBanner({
+  items,
+  nowMs,
+  confirmingId,
+  decliningId,
+  onConfirm,
+  onDecline,
+  onOpenDetails
+}) {
+  if (!items || items.length === 0) return null;
+
+  return (
+    <section
+      aria-label="Vaga aguardando sua confirmação"
+      data-testid="waiting-confirmation-banner"
+      className="mx-5 mt-5 flex flex-col gap-3"
+    >
+      {items.map(({ booking, activity, deadlineMs }) => {
+        const rawCountdown = formatCountdownRemaining(booking.confirmationDeadline || deadlineMs, nowMs);
+        const countdown =
+          typeof rawCountdown === 'object' && rawCountdown !== null
+            ? rawCountdown.formatted
+            : rawCountdown;
+        const isExpired =
+          countdown === 'Prazo expirado' ||
+          countdown === 'Expirado' ||
+          Boolean(typeof rawCountdown === 'object' && rawCountdown?.expired);
+        const isConfirming = confirmingId === activity.id;
+        const isDeclining = decliningId === activity.id;
+        const busy = isConfirming || isDeclining;
+        const deadlineTimeStr = deadlineMs
+          ? new Date(deadlineMs).toLocaleTimeString('pt-BR', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+              timeZone: 'America/Campo_Grande',
+            })
+          : null;
+
+        return (
+          <div
+            key={booking.id || activity.id}
+            className="relative overflow-hidden rounded-[20px] border-2 border-warn/60 bg-[linear-gradient(155deg,rgba(251,191,36,0.16),var(--surface)_65%)] p-4 shadow-[0_10px_28px_rgba(245,158,11,0.18)]"
+          >
+            <div className="flex items-start justify-between gap-2.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-warn/20 px-2.5 py-1 text-xs font-extrabold text-warn">
+                <Bell size={13} strokeWidth={2.5} aria-hidden="true" />
+                Vaga liberada na fila de espera!
+              </span>
+              {countdown && (
+                <span
+                  data-testid="waiting-confirmation-countdown"
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-extrabold ${
+                    isExpired ? 'bg-err/20 text-err' : 'bg-surface-raised text-warn'
+                  }`}
+                >
+                  <Clock size={12} strokeWidth={2.5} aria-hidden="true" />
+                  {countdown}
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onOpenDetails && onOpenDetails(activity)}
+              className="mt-2.5 block w-full cursor-pointer border-0 bg-transparent p-0 text-left font-sans text-text"
+            >
+              <h2 className="m-0 text-[17px] font-extrabold leading-[1.3]">{activity.title}</h2>
+              <p className="m-0 mt-1 text-xs leading-[1.45] text-text-2">
+                {deadlineTimeStr
+                  ? `Uma vaga abriu para você! Confirme sua presença até às ${deadlineTimeStr} para garantir a vaga.`
+                  : 'Uma vaga abriu para você! Confirme sua presença antes que o prazo expire.'}
+              </p>
+            </button>
+
+            <div className="mt-3.5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => onConfirm && onConfirm(activity.id)}
+                disabled={busy || isExpired}
+                aria-busy={isConfirming}
+                className="btn btn-primary btn-block !min-h-[46px] !rounded-xl !text-sm !font-extrabold"
+              >
+                {isConfirming && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+                {isConfirming ? 'Confirmando...' : 'Confirmar Minha Vaga'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onDecline && onDecline(activity.id)}
+                disabled={busy}
+                aria-busy={isDeclining}
+                className="btn btn-secondary btn-block !min-h-[42px] !rounded-xl !text-xs !font-bold text-text-2"
+              >
+                {isDeclining && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}
+                {isDeclining ? 'Liberando vaga...' : 'Não poderei ir (Liberar para outro)'}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </section>
   );
 }
 

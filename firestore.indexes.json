@@ -15,8 +15,26 @@
         { "fieldPath": "role", "order": "ASCENDING" },
         { "fieldPath": "totalPoints", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "activityId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "position", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "confirmationDeadline", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
 }
+
 

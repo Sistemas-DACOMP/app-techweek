@@ -580,6 +580,16 @@ export async function reserveActivity(activityId, activityMeta = null) {
     throw err;
   }
 
+  const targetAct =
+    activityMeta ||
+    getLocalCustomActivities().find((a) => a.id === activityId) ||
+    DEFAULT_ACTIVITIES.find((a) => a.id === activityId) ||
+    null;
+  const hasAvailableSeats =
+    targetAct?.vagas_disponiveis === undefined || Number(targetAct.vagas_disponiveis) > 0;
+  const fallbackStatus = hasAvailableSeats ? 'CONFIRMED' : 'WAITING_LIST';
+  const fallbackPosition = hasAvailableSeats ? null : (Number(targetAct?.total_espera) || 0) + 1;
+
   const bookingId = `${currentUser.uid}_${activityId}`;
   const now = new Date().toISOString();
   const fallbackBooking = {
@@ -587,7 +597,8 @@ export async function reserveActivity(activityId, activityMeta = null) {
     bookingId,
     userId: currentUser.uid,
     activityId,
-    status: 'CONFIRMED',
+    status: fallbackStatus,
+    position: fallbackPosition,
     createdAt: now,
     updatedAt: now
   };
@@ -599,7 +610,9 @@ export async function reserveActivity(activityId, activityMeta = null) {
     });
     saveLocalBooking(currentUser.uid, {
       ...fallbackBooking,
-      status: apiRes?.status || 'CONFIRMED'
+      status: apiRes?.status || 'CONFIRMED',
+      position: apiRes?.position ?? null,
+      ...(apiRes?.confirmationDeadline ? { confirmationDeadline: apiRes.confirmationDeadline } : {})
     });
     return apiRes;
   } catch (apiErr) {
@@ -623,7 +636,8 @@ export async function reserveActivity(activityId, activityMeta = null) {
         const userRef = doc(db, 'users', currentUser.uid);
         await updateDoc(userRef, {
           [`bookedActivities.${activityId}`]: {
-            status: 'CONFIRMED',
+            status: fallbackStatus,
+            position: fallbackPosition,
             bookedAt: now
           }
         });
@@ -633,15 +647,19 @@ export async function reserveActivity(activityId, activityMeta = null) {
     return {
       success: true,
       bookingId,
-      status: 'CONFIRMED',
-      message: 'Inscrição confirmada com sucesso!'
+      status: fallbackStatus,
+      position: fallbackPosition,
+      message:
+        fallbackStatus === 'CONFIRMED'
+          ? 'Inscrição confirmada com sucesso!'
+          : 'Você entrou na lista de espera!'
     };
   }
 }
 
 /**
  * Cancela a reserva de vaga numa atividade via backend (DELETE /api/activities/:id/reserve)
- * com fallback no Firestore e cache local.
+ * com fallback no Firestore e cache local apenas se o backend estiver inacessível.
  */
 export async function cancelActivityReservation(activityId) {
   if (!activityId) {
@@ -663,8 +681,18 @@ export async function cancelActivityReservation(activityId) {
     await apiRequest(`/activities/${activityId}/reserve`, {
       method: 'DELETE'
     });
-  } catch (_apiErr) {
-    // 3. Tenta Firestore
+  } catch (apiErr) {
+    if (
+      apiErr?.status &&
+      apiErr.status !== 404 &&
+      apiErr.status !== 500 &&
+      apiErr.status !== 502 &&
+      apiErr.status !== 503 &&
+      apiErr.status !== 504
+    ) {
+      throw apiErr;
+    }
+    // 3. Fallback no Firestore apenas quando o backend está offline/indisponível
     try {
       await deleteDoc(doc(db, 'bookings', bookingId));
     } catch (_e) {}
@@ -677,6 +705,124 @@ export async function cancelActivityReservation(activityId) {
   }
 
   return { success: true, cancelled: true };
+}
+
+/**
+ * Converte qualquer formato de confirmationDeadline (Firestore Timestamp, Date, ISO string, number)
+ * para milissegundos epoch.
+ */
+export function parseConfirmationDeadlineMs(deadline) {
+  if (!deadline) return null;
+  if (deadline instanceof Date) {
+    const ms = deadline.getTime();
+    return Number.isNaN(ms) ? null : ms;
+  }
+  if (typeof deadline === 'number') {
+    return Number.isFinite(deadline) ? deadline : null;
+  }
+  if (typeof deadline === 'string') {
+    const ms = Date.parse(deadline);
+    return Number.isNaN(ms) ? null : ms;
+  }
+  if (typeof deadline === 'object') {
+    if (typeof deadline.toMillis === 'function') {
+      return deadline.toMillis();
+    }
+    if (typeof deadline.toDate === 'function') {
+      const d = deadline.toDate();
+      return d instanceof Date ? d.getTime() : null;
+    }
+    const secs = typeof deadline.seconds === 'number'
+      ? deadline.seconds
+      : typeof deadline._seconds === 'number'
+      ? deadline._seconds
+      : null;
+    if (secs !== null) return secs * 1000;
+  }
+  return null;
+}
+
+/**
+ * Calcula e formata o tempo restante até confirmationDeadline para exibição em contador regressivo.
+ * Retorna string ('01h 59m 50s', '59m 50s' ou 'Prazo expirado') ou null se deadline for inválido.
+ */
+export function formatCountdownRemaining(deadline, nowMs = Date.now()) {
+  const deadlineMs = parseConfirmationDeadlineMs(deadline);
+  if (deadlineMs === null) {
+    return null;
+  }
+
+  const diffMs = deadlineMs - nowMs;
+  if (diffMs <= 0) {
+    return 'Prazo expirado';
+  }
+
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const pad = (n) => String(n).padStart(2, '0');
+  return hours > 0
+    ? `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`
+    : `${pad(minutes)}m ${pad(seconds)}s`;
+}
+
+/**
+ * Confirma a vaga liberada na lista de espera (POST /api/activities/:id/confirm-waiting).
+ */
+export async function confirmWaitingActivity(activityId) {
+  if (!activityId) {
+    throw new Error('activityId é obrigatório para confirmar a vaga.');
+  }
+
+  const currentUser = auth?.currentUser;
+  if (!currentUser) {
+    throw new Error('Você precisa estar autenticado para confirmar sua vaga.');
+  }
+
+  const bookingId = `${currentUser.uid}_${activityId}`;
+  const apiRes = await apiRequest(`/activities/${activityId}/confirm-waiting`, {
+    method: 'POST'
+  });
+
+  const now = new Date().toISOString();
+  saveLocalBooking(currentUser.uid, {
+    id: bookingId,
+    bookingId,
+    userId: currentUser.uid,
+    activityId,
+    status: 'CONFIRMED',
+    position: null,
+    confirmationDeadline: null,
+    confirmedAt: now,
+    updatedAt: now
+  });
+
+  return apiRes;
+}
+
+/**
+ * Recusa voluntariamente a vaga liberada na lista de espera (POST /api/activities/:id/decline-waiting),
+ * liberando-a imediatamente para o próximo participante da fila.
+ */
+export async function declineWaitingActivity(activityId) {
+  if (!activityId) {
+    throw new Error('activityId é obrigatório para recusar a vaga.');
+  }
+
+  const currentUser = auth?.currentUser;
+  if (!currentUser) {
+    throw new Error('Você precisa estar autenticado para recusar a vaga.');
+  }
+
+  removeLocalBooking(currentUser.uid, activityId);
+
+  const apiRes = await apiRequest(`/activities/${activityId}/decline-waiting`, {
+    method: 'POST'
+  });
+
+  return apiRes;
 }
 
 /**
@@ -851,7 +997,7 @@ export async function registerActivityAttendance(activityId, sessionToken = null
 
 /**
  * Determina o status da atividade para o usuário:
- * 'COMPLETED' | 'CHECKED_IN' | 'BOOKED' | 'WAITING_LIST' | 'NONE'
+ * 'COMPLETED' | 'CHECKED_IN' | 'BOOKED' | 'WAITING_CONFIRMATION' | 'WAITING_LIST' | 'NONE'
  */
 export function calculateActivityStatus(activityOrId, bookings = [], checkins = [], pointEvents = []) {
   if (!activityOrId) return 'NONE';
@@ -886,7 +1032,7 @@ export function calculateActivityStatus(activityOrId, bookings = [], checkins = 
     return 'CHECKED_IN';
   }
 
-  // 3. Verifica se tem reserva confirmada ou lista de espera
+  // 3. Verifica se tem reserva confirmada, aguardando confirmação ou lista de espera
   const booking = bookings.find((b) => {
     const bActId = b.activityId || b.activity_id;
     return bActId === activityId || b.id === activityId || (typeof b.id === 'string' && b.id.endsWith(`_${activityId}`));
@@ -894,6 +1040,9 @@ export function calculateActivityStatus(activityOrId, bookings = [], checkins = 
   if (booking) {
     if (booking.status === 'CONFIRMED') {
       return 'BOOKED';
+    }
+    if (booking.status === 'WAITING_CONFIRMATION') {
+      return 'WAITING_CONFIRMATION';
     }
     if (booking.status === 'WAITING_LIST') {
       return 'WAITING_LIST';
@@ -962,6 +1111,16 @@ export async function createActivity(activityData) {
     } catch (_e) {}
   }
   const inscritos = Number(activityData.total_inscritos ?? existing.total_inscritos ?? 0);
+  const existingTotal = Number(existing.vagas_totais);
+  const existingDisp = Number(existing.vagas_disponiveis);
+  const existingInscritos = Number(existing.total_inscritos ?? 0);
+  // Vagas retidas em WAITING_CONFIRMATION (onde total_inscritos já desceu 1 mas a vaga segue bloqueada)
+  const heldSeats =
+    Number.isFinite(existingTotal) && Number.isFinite(existingDisp)
+      ? Math.max(0, existingTotal - existingInscritos - existingDisp)
+      : 0;
+  const totalEspera = Number(activityData.total_espera ?? existing.total_espera ?? 0);
+  const waitingSeq = Number(activityData.waiting_seq ?? existing.waiting_seq ?? totalEspera);
   const generatedNumber = activityData.number || String(Math.floor(1588000 + Math.random() * 9999));
 
   const payload = {
@@ -992,9 +1151,10 @@ export async function createActivity(activityData) {
     endTime: activityData.endTime || '15:30',
     location: activityData.location || 'Anfiteatro FACOM',
     vagas_totais: vagasTotais,
-    vagas_disponiveis: Math.max(0, vagasTotais - inscritos),
+    vagas_disponiveis: Math.max(0, vagasTotais - inscritos - heldSeats),
     total_inscritos: inscritos,
-    total_espera: Number(activityData.total_espera ?? existing.total_espera ?? 0),
+    total_espera: totalEspera,
+    waiting_seq: waitingSeq,
     points: Number(activityData.points || 20),
     tags: Array.isArray(activityData.tags) ? activityData.tags : (activityData.tags ? String(activityData.tags).split(',').map(t => t.trim()) : []),
     attendanceMode: activityData.attendanceMode || 'SELF_SCAN',
